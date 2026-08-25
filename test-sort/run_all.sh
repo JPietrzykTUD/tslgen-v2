@@ -110,14 +110,30 @@ echo "          $("$compiler" --version | head -1)"
 # --- 1. configure -------------------------------------------------------------
 have_dsa=$([[ -e /dev/dsa ]] && echo yes || echo no)
 have_iax=$([[ -e /dev/iax ]] && echo yes || echo no)
-if [[ "$have_dsa" == "yes" && "$baselines" == "yes" ]]; then
-  preset=bench-dsa-baselines
-elif [[ "$have_dsa" == "yes" ]]; then
+if [[ "$have_dsa" == "yes" ]]; then
   preset=bench-dsa
 elif [[ "$have_iax" == "yes" ]]; then
   preset=bench-iaa
 else
   preset=bench
+fi
+# Baselines are orthogonal to accelerators, and used not to be: the accelerator
+# preset was chosen first and only `bench-dsa-baselines` carried the flag, with
+# `bench-iaa` getting it from an extra argument further down. A host with neither
+# device landed on `bench`, which has no baselines variant and matched no branch, so
+# Q1's external comparisons were silently unbuildable there -- every ips4o, Arrow,
+# x86-simd-sort and std::sort row came out as "not built", hours into a run, on the
+# one question whose whole point is the comparison. `bench-iaa-baselines` existed
+# and was never selected.
+#
+# Prefer the preset variant where there is one, so the build directory name records
+# the choice; `bench` has no variant, so it takes the flag directly.
+extra=()
+if [[ "$baselines" == "yes" ]]; then
+  case "$preset" in
+    bench-dsa|bench-iaa) preset="$preset-baselines" ;;
+    bench) extra+=(-DTSL_COSORT_ENABLE_BASELINES=ON) ;;
+  esac
 fi
 # Where the binaries go. Overridable because a repository can be visible under two
 # paths at once -- a devcontainer bind-mounts the host checkout, so
@@ -129,6 +145,7 @@ fi
 #   TSL_COSORT_BUILD_DIR=~/bench-build ./run_all.sh ...
 build="${TSL_COSORT_BUILD_DIR:-$root/tslctmp/test-sort-$preset}"
 echo "accelerators: dsa=$have_dsa iax=$have_iax  ->  preset $preset"
+echo "external baselines (ips4o, Arrow, x86-simd-sort, TBB): $baselines"
 # The work queues are character devices, usually root-owned and mode 600. Without
 # access the accelerator rows come out as drops naming the reason, which is honest
 # but empty -- and the point of running on this host is those rows. Said here, once,
@@ -147,10 +164,6 @@ for _dev in /dev/dsa/wq* /dev/iax/wq*; do
 done
 echo
 echo "=== 1/4 configure"
-extra=()
-[[ "$preset" == "bench-iaa" && "$baselines" == "yes" ]] \
-  && extra+=(-DTSL_COSORT_ENABLE_BASELINES=ON)
-
 # A build directory carried over from another machine keeps a CMakeCache.txt whose
 # recorded source and binary paths are that machine's, and cmake refuses to reuse
 # it -- correctly, but fatally, and the message is about "reediting the cache"

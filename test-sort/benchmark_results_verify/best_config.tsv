@@ -1,0 +1,6 @@
+# written by bench_q0_tune; read by the reporting drivers
+# key: algorithm|style|width|element_bytes
+quicksort|clang_bool|512|4	k=16 buckets=adaptive base_policy=net base_case=256 fill=50 ids=byte movement=oop partition=3way leaf=hyb discovery=post partition_threshold=16384
+quicksort|clang_bool|512|8	k=16 buckets=adaptive base_policy=net base_case=256 fill=50 ids=byte movement=oop partition=3way leaf=hyb discovery=post partition_threshold=16384
+samplesort|clang_bool|512|4	k=8 buckets=adaptive base_policy=net base_case=256 fill=25 ids=byte movement=oop partition=3way leaf=net discovery=post partition_threshold=16384
+samplesort|clang_bool|512|8	k=16 buckets=adaptive base_policy=net base_case=256 fill=50 ids=byte movement=oop partition=3way leaf=net discovery=post partition_threshold=16384

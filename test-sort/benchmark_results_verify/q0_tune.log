@@ -1,0 +1,966 @@
+Q0 tuning / bench_q0_tune
+host=bolvar cores=24 governor=performance clock=4100MHz load=2.15 compiler=clang 24.0
+topology: 2 NUMA node(s), 6 physical core(s) per node, 6 logical cpu(s) available to this process [pinned], LLC 30 MiB
+  !! load average above 1.0: another process is competing and these numbers are not publishable
+instrumentation=off (counters compiled out)
+measure-cell=clang_bool/512-bit
+rows not given: using 8388608, about 192 MiB of live data against a 30 MiB LLC. Tuning inside the cache would choose knobs for a regime no reported figure measures.
+
+u32: tuning on 4 shapes
+  tpcds_q67_sf1_u32_n8388608_m4                8388608 rows x  4 columns
+  skewed_zipf_s1_u32_n8388608_m4               8388608 rows x  4 columns
+  low_cardinality_d4_u32_n8388608_m4           8388608 rows x  4 columns
+  independent_uniform_c1024_u32_n8388608_m4    8388608 rows x  4 columns
+
+u64: tuning on 4 shapes
+  tpcds_q67_sf1_u64_n8388608_m4                8388608 rows x  4 columns
+  skewed_zipf_s1_u64_n8388608_m4               8388608 rows x  4 columns
+  low_cardinality_d4_u64_n8388608_m4           8388608 rows x  4 columns
+  independent_uniform_c1024_u64_n8388608_m4    8388608 rows x  4 columns
+
+================ clang_bool / 512-bit / u32 = 16 lanes / 1 worker
+
+samplesort, clang_bool/512-bit — 15 candidates
+  axis         value                         ns/elem  vs best
+  cross        K8/net/f25                      51.37    1.00x  0.990d  <- beats the default on every shape, shipped
+  base_case    128                             51.37    1.00x  0.987d  <- tied with the fastest
+  cross        K8/net/f50                      51.55    1.00x  0.988d  <- beats the default on every shape
+  base_case    64                              51.69    1.01x  0.985d  <- beats the default on every shape
+  cross        K16/net/f25                     52.22    1.02x  0.998d  <- tied with the fastest
+  cross        K16/net/f75                     52.32    1.02x  0.997d  <- tied with the fastest
+  cross        K16/net/f50                     52.45    1.02x          <- default
+  cross        K32/net/f25                     52.71    1.03x  1.002d  <- tied with the fastest
+  cross        K16/ins                         53.04    1.03x  0.999d  <- tied with the fastest
+  cross        K32/net/f50                     53.33    1.04x  1.014d  <- tied with the fastest
+  cross        K8/ins                          53.49    1.04x  1.025d
+  cross        K32/ins                         53.96    1.05x  1.043d
+  ids          keywidth                        54.59    1.06x  1.025d
+  movement     inplace                         67.71    1.32x  1.346d
+  buckets      ordered                        123.91    2.41x  3.591d
+
+quicksort, clang_bool/512-bit — 6 candidates
+  axis         value                         ns/elem  vs best
+  discovery    3way/hyb/incremental            35.49    1.00x  0.982d  <- tied with the fastest
+  cross        3way/hyb/post                   36.80    1.04x          <- default
+  cross        3way/ins/post                   36.82    1.04x  0.984d  <- tied with the fastest
+  discovery    3way/net/incremental            52.57    1.48x  1.525d
+  cross        3way/net/post                   54.57    1.54x  1.512d
+  cross        2way/net/post                 SKIPPED  two-way is quadratic in the equal-run length above the working-set cap
+
+algorithm choice vs configuration choice — ns/element
+  the one global point is quicksort 3way/hyb/incremental
+  shape                          fixed/fixed fixed/tuned  pick/fixed  pick/tuned  picked
+  tpcds_q67_sf1_u32_n8388608_m4        26.77       26.77       26.77       26.77  quicksort
+  skewed_zipf_s1_u32_n8388608_m4       54.85       52.80       54.85       52.80  quicksort
+  low_cardinality_d4_u32_n8388608_m4       17.41       17.39       17.41       17.39  quicksort
+  independent_uniform_c1024_u32_n8388608_m4       62.09       60.29       62.09       60.29  quicksort
+  geometric mean                       35.49       34.89       35.49       34.89
+
+  re-tuning the fixed algorithm per shape    1.02x
+  picking the algorithm per shape            1.00x
+  both                                      1.02x
+  --> configuration is the larger lever here
+
+================ clang_bool / 512-bit / u32 = 16 lanes / 6 workers
+
+samplesort, clang_bool/512-bit — 15 candidates
+  axis         value                         ns/elem  vs best
+  base_case    128                             17.35    1.00x  0.979d  <- tied with the fastest
+  cross        K8/net/f25                      17.53    1.01x  0.970d  <- tied with the fastest
+  cross        K16/net/f25                     17.55    1.01x  0.984d  <- beats the default on every shape, shipped
+  base_case    64                              17.62    1.02x  0.988d  <- tied with the fastest
+  cross        K8/net/f50                      17.65    1.02x  0.976d  <- tied with the fastest
+  cross        K16/net/f75                     17.70    1.02x  0.989d  <- tied with the fastest
+  cross        K16/ins                         17.77    1.02x  0.995d  <- tied with the fastest
+  cross        K16/net/f50                     17.86    1.03x          <- default
+  cross        K32/net/f25                     17.90    1.03x  0.998d  <- tied with the fastest
+  cross        K32/net/f50                     18.16    1.05x  1.016d
+  cross        K32/ins                         18.20    1.05x  1.021d
+  cross        K8/ins                          18.25    1.05x  1.029d
+  ids          keywidth                        19.27    1.11x  1.077d
+  movement     inplace                         23.20    1.34x  1.286d
+  buckets      ordered                   OVER BUDGET  abandoned on time; cannot be a winner
+
+quicksort, clang_bool/512-bit — 6 candidates
+  axis         value                         ns/elem  vs best
+  discovery    3way/hyb/incremental            14.41    1.00x  0.938d  <- beats the default on every shape, shipped
+  discovery    3way/net/incremental            14.94    1.04x  1.011d  <- tied with the fastest
+  cross        3way/ins/post                   16.07    1.12x  0.983d
+  cross        3way/hyb/post                   16.20    1.12x          <- default
+  cross        3way/net/post                   16.60    1.15x  1.036d
+  cross        2way/net/post                 SKIPPED  two-way is quadratic in the equal-run length above the working-set cap
+
+algorithm choice vs configuration choice — ns/element
+  the one global point is quicksort 3way/hyb/incremental
+  shape                          fixed/fixed fixed/tuned  pick/fixed  pick/tuned  picked
+  tpcds_q67_sf1_u32_n8388608_m4         7.96        7.68        7.96        7.68  quicksort
+  skewed_zipf_s1_u32_n8388608_m4       19.88       19.88       19.88       19.88  quicksort
+  low_cardinality_d4_u32_n8388608_m4        5.96        5.96        5.96        5.96  quicksort
+  independent_uniform_c1024_u32_n8388608_m4       45.66       45.66       23.04       22.19  samplesort
+  geometric mean                       14.41       14.28       12.14       11.92
+
+  re-tuning the fixed algorithm per shape    1.01x
+  picking the algorithm per shape            1.19x
+  both                                      1.21x
+  --> algorithm choice is the larger lever here
+
+================ clang_bool / 512-bit / u64 = 8 lanes / 1 worker
+
+samplesort, clang_bool/512-bit — 15 candidates
+  axis         value                         ns/elem  vs best
+  base_case    128                             73.98    1.00x  0.998d  <- tied with the fastest
+  cross        K16/net/f75                     74.19    1.00x  0.998d  <- tied with the fastest
+  base_case    64                              74.30    1.00x  1.000d  <- tied with the fastest
+  cross        K16/net/f50                     74.49    1.01x          <- default
+  cross        K16/ins                         74.87    1.01x  1.002d  <- tied with the fastest
+  cross        K32/net/f50                     75.20    1.02x  1.002d  <- tied with the fastest
+  cross        K32/ins                         75.36    1.02x  1.005d  <- tied with the fastest
+  cross        K8/net/f50                      75.56    1.02x  1.014d  <- tied with the fastest
+  cross        K16/net/f25                     76.16    1.03x  1.033d  <- tied with the fastest
+  cross        K32/net/f25                     76.39    1.03x  1.038d  <- tied with the fastest
+  cross        K8/net/f25                      76.39    1.03x  1.027d  <- tied with the fastest
+  cross        K8/ins                          76.61    1.04x  1.031d  <- tied with the fastest
+  ids          keywidth                        79.57    1.08x  1.048d
+  movement     inplace                         83.07    1.12x  1.114d
+  buckets      ordered                        167.23    2.26x  3.064d
+
+quicksort, clang_bool/512-bit — 6 candidates
+  axis         value                         ns/elem  vs best
+  discovery    3way/hyb/incremental            58.63    1.00x  0.985d  <- tied with the fastest
+  cross        3way/ins/post                   59.58    1.02x  0.989d  <- tied with the fastest
+  cross        3way/hyb/post                   60.21    1.03x          <- default
+  discovery    3way/net/incremental            76.16    1.30x  1.292d
+  cross        3way/net/post                   78.43    1.34x  1.304d
+  cross        2way/net/post                 SKIPPED  two-way is quadratic in the equal-run length above the working-set cap
+
+algorithm choice vs configuration choice — ns/element
+  the one global point is quicksort 3way/hyb/incremental
+  shape                          fixed/fixed fixed/tuned  pick/fixed  pick/tuned  picked
+  tpcds_q67_sf1_u64_n8388608_m4        47.63       47.32       47.63       47.32  quicksort
+  skewed_zipf_s1_u64_n8388608_m4       81.34       79.31       81.34       79.31  quicksort
+  low_cardinality_d4_u64_n8388608_m4       32.63       32.63       32.63       32.63  quicksort
+  independent_uniform_c1024_u64_n8388608_m4       93.50       91.67       93.50       91.67  quicksort
+  geometric mean                       58.63       57.88       58.63       57.88
+
+  re-tuning the fixed algorithm per shape    1.01x
+  picking the algorithm per shape            1.00x
+  both                                      1.01x
+  --> configuration is the larger lever here
+
+================ clang_bool / 512-bit / u64 = 8 lanes / 6 workers
+
+samplesort, clang_bool/512-bit — 15 candidates
+  axis         value                         ns/elem  vs best
+  base_case    128                             26.91    1.00x  0.993d  <- tied with the fastest
+  cross        K32/ins                         26.98    1.00x  0.998d  <- tied with the fastest
+  cross        K32/net/f50                     27.01    1.00x  0.991d  <- tied with the fastest
+  cross        K32/net/f25                     27.03    1.00x  1.001d  <- tied with the fastest
+  cross        K16/net/f75                     27.11    1.01x  0.997d  <- tied with the fastest
+  base_case    64                              27.19    1.01x  1.008d  <- tied with the fastest
+  cross        K16/net/f50                     27.19    1.01x          <- default
+  cross        K16/ins                         27.31    1.01x  1.005d  <- tied with the fastest
+  cross        K16/net/f25                     27.46    1.02x  1.012d  <- tied with the fastest
+  cross        K8/net/f50                      27.87    1.04x  1.025d  <- tied with the fastest
+  cross        K8/ins                          28.00    1.04x  1.031d
+  cross        K8/net/f25                      28.02    1.04x  1.031d
+  ids          keywidth                        30.54    1.13x  1.127d
+  movement     inplace                         31.16    1.16x  1.154d
+  buckets      ordered                         56.05    2.08x  2.383d
+
+quicksort, clang_bool/512-bit — 6 candidates
+  axis         value                         ns/elem  vs best
+  discovery    3way/hyb/incremental            20.03    1.00x  0.915d  <- beats the default on every shape, shipped
+  discovery    3way/net/incremental            21.06    1.05x  1.010d
+  cross        3way/hyb/post                   22.55    1.13x          <- default
+  cross        3way/ins/post                   22.74    1.13x  0.995d
+  cross        3way/net/post                   23.65    1.18x  1.071d
+  cross        2way/net/post                 SKIPPED  two-way is quadratic in the equal-run length above the working-set cap
+
+algorithm choice vs configuration choice — ns/element
+  the one global point is quicksort 3way/hyb/incremental
+  shape                          fixed/fixed fixed/tuned  pick/fixed  pick/tuned  picked
+  tpcds_q67_sf1_u64_n8388608_m4        12.84       12.84       12.84       12.84  quicksort
+  skewed_zipf_s1_u64_n8388608_m4       23.93       23.93       23.93       23.93  quicksort
+  low_cardinality_d4_u64_n8388608_m4       11.13       10.81       11.13       10.81  quicksort
+  independent_uniform_c1024_u64_n8388608_m4       47.08       47.08       30.98       30.70  samplesort
+  geometric mean                       20.03       19.89       18.04       17.87
+
+  re-tuning the fixed algorithm per shape    1.01x
+  picking the algorithm per shape            1.11x
+  both                                      1.12x
+  --> algorithm choice is the larger lever here
+
+================ intr / 512-bit / u32 = 16 lanes / 1 worker
+  samplesort: best of 15 priced candidates is 36.26 ns/element, 2.09x the best u32 cell's 17.35, over the 1.50x prune factor -- this cell is not tuned
+  quicksort: best of 6 priced candidates is 27.68 ns/element, 1.92x the best u32 cell's 14.41, over the 1.50x prune factor -- this cell is not tuned
+
+================ intr / 512-bit / u32 = 16 lanes / 6 workers
+
+samplesort, intr/512-bit — 15 candidates
+  axis         value                         ns/elem  vs best
+  base_case    128                             17.31    1.00x  0.976d  <- beats the default on every shape
+  cross        K8/net/f25                      17.35    1.00x  0.975d  <- tied with the fastest
+  cross        K8/net/f50                      17.46    1.01x  0.978d  <- tied with the fastest
+  cross        K16/net/f25                     17.59    1.02x  0.989d  <- tied with the fastest
+  base_case    64                              17.70    1.02x  0.987d  <- beats the default on every shape, shipped
+  cross        K16/net/f75                     17.73    1.02x  0.990d  <- tied with the fastest
+  cross        K32/net/f25                     17.78    1.03x  0.995d  <- tied with the fastest
+  cross        K16/ins                         17.86    1.03x  0.997d  <- tied with the fastest
+  cross        K16/net/f50                     17.92    1.04x          <- default
+  cross        K32/net/f50                     18.06    1.04x  1.007d
+  cross        K8/ins                          18.08    1.04x  1.010d
+  cross        K32/ins                         18.18    1.05x  1.015d
+  ids          keywidth                        19.33    1.12x  1.070d
+  movement     inplace                         23.28    1.35x  1.283d
+  buckets      ordered                   OVER BUDGET  abandoned on time; cannot be a winner
+
+quicksort, intr/512-bit — 6 candidates
+  axis         value                         ns/elem  vs best
+  discovery    3way/hyb/incremental            14.24    1.00x  0.927d  <- beats the default on every shape, shipped
+  discovery    3way/net/incremental            14.87    1.04x  0.998d
+  cross        3way/hyb/post                   15.82    1.11x          <- default
+  cross        3way/ins/post                   16.07    1.13x  0.986d
+  cross        3way/net/post                   16.32    1.15x  1.042d
+  cross        2way/net/post                 SKIPPED  two-way is quadratic in the equal-run length above the working-set cap
+
+algorithm choice vs configuration choice — ns/element
+  the one global point is quicksort 3way/hyb/incremental
+  shape                          fixed/fixed fixed/tuned  pick/fixed  pick/tuned  picked
+  tpcds_q67_sf1_u32_n8388608_m4         7.89        7.89        7.89        7.89  quicksort
+  skewed_zipf_s1_u32_n8388608_m4       19.54       19.54       19.54       19.54  quicksort
+  low_cardinality_d4_u32_n8388608_m4        5.86        5.85        5.86        5.85  quicksort
+  independent_uniform_c1024_u32_n8388608_m4       45.51       45.51       23.47       21.97  samplesort
+  geometric mean                       14.24       14.23       12.07       11.87
+
+  re-tuning the fixed algorithm per shape    1.00x
+  picking the algorithm per shape            1.18x
+  both                                      1.20x
+  --> algorithm choice is the larger lever here
+
+================ intr / 512-bit / u64 = 8 lanes / 1 worker
+  samplesort: best of 15 priced candidates is 55.83 ns/element, 2.07x the best u64 cell's 26.91, over the 1.50x prune factor -- this cell is not tuned
+  quicksort: best of 6 priced candidates is 50.16 ns/element, 2.50x the best u64 cell's 20.03, over the 1.50x prune factor -- this cell is not tuned
+
+================ intr / 512-bit / u64 = 8 lanes / 6 workers
+
+samplesort, intr/512-bit — 15 candidates
+  axis         value                         ns/elem  vs best
+  base_case    128                             26.66    1.00x  0.989d  <- tied with the fastest
+  cross        K16/net/f75                     26.88    1.01x  1.002d  <- tied with the fastest
+  cross        K32/net/f50                     26.98    1.01x  0.995d  <- tied with the fastest
+  cross        K16/net/f50                     26.99    1.01x          <- default
+  cross        K32/ins                         27.04    1.01x  1.007d  <- tied with the fastest
+  cross        K16/ins                         27.11    1.02x  1.008d  <- tied with the fastest
+  base_case    64                              27.12    1.02x  1.008d  <- tied with the fastest
+  cross        K32/net/f25                     27.14    1.02x  1.011d  <- tied with the fastest
+  cross        K16/net/f25                     27.27    1.02x  1.017d  <- tied with the fastest
+  cross        K8/net/f50                      27.76    1.04x  1.025d
+  cross        K8/net/f25                      27.89    1.05x  1.029d
+  cross        K8/ins                          27.92    1.05x  1.036d
+  ids          keywidth                        30.40    1.14x  1.126d
+  movement     inplace                         31.01    1.16x  1.149d
+  buckets      ordered                         56.18    2.11x  2.417d
+
+quicksort, intr/512-bit — 6 candidates
+  axis         value                         ns/elem  vs best
+  discovery    3way/hyb/incremental            19.99    1.00x  0.917d  <- beats the default on every shape, shipped
+  discovery    3way/net/incremental            20.66    1.03x  0.989d  <- tied with the fastest
+  cross        3way/ins/post                   22.31    1.12x  0.995d
+  cross        3way/hyb/post                   22.35    1.12x          <- default
+  cross        3way/net/post                   23.31    1.17x  1.064d
+  cross        2way/net/post                 SKIPPED  two-way is quadratic in the equal-run length above the working-set cap
+
+algorithm choice vs configuration choice — ns/element
+  the one global point is quicksort 3way/hyb/incremental
+  shape                          fixed/fixed fixed/tuned  pick/fixed  pick/tuned  picked
+  tpcds_q67_sf1_u64_n8388608_m4        12.56       12.56       12.56       12.56  quicksort
+  skewed_zipf_s1_u64_n8388608_m4       24.34       24.34       24.34       24.34  quicksort
+  low_cardinality_d4_u64_n8388608_m4       11.11       10.23       11.11       10.23  quicksort
+  independent_uniform_c1024_u64_n8388608_m4       46.98       46.98       31.12       31.11  samplesort
+  geometric mean                       19.99       19.58       18.03       17.66
+
+  re-tuning the fixed algorithm per shape    1.02x
+  picking the algorithm per shape            1.11x
+  both                                      1.13x
+  --> algorithm choice is the larger lever here
+
+================ clang / 512-bit / u32 = 16 lanes / 1 worker
+  samplesort: best of 15 priced candidates is 36.09 ns/element, 2.09x the best u32 cell's 17.31, over the 1.50x prune factor -- this cell is not tuned
+  quicksort: best of 6 priced candidates is 27.11 ns/element, 1.90x the best u32 cell's 14.24, over the 1.50x prune factor -- this cell is not tuned
+
+================ clang / 512-bit / u32 = 16 lanes / 6 workers
+
+samplesort, clang/512-bit — 15 candidates
+  axis         value                         ns/elem  vs best
+  base_case    128                             17.31    1.00x  0.987d  <- tied with the fastest
+  cross        K8/net/f25                      17.42    1.01x  0.986d  <- tied with the fastest
+  cross        K16/net/f25                     17.46    1.01x  0.993d  <- tied with the fastest
+  cross        K8/net/f50                      17.53    1.01x  0.994d  <- tied with the fastest
+  cross        K32/net/f25                     17.55    1.01x  0.994d  <- tied with the fastest
+  cross        K16/net/f75                     17.64    1.02x  0.994d  <- tied with the fastest
+  base_case    64                              17.67    1.02x  0.993d  <- tied with the fastest
+  cross        K16/net/f50                     17.72    1.02x          <- default
+  cross        K16/ins                         17.81    1.03x  0.999d  <- tied with the fastest
+  cross        K32/net/f50                     17.91    1.03x  1.015d  <- tied with the fastest
+  cross        K8/ins                          18.05    1.04x  1.015d
+  cross        K32/ins                         18.09    1.04x  1.023d
+  ids          keywidth                        19.29    1.11x  1.076d
+  movement     inplace                         23.10    1.33x  1.286d
+  buckets      ordered                         37.61    2.17x  2.680d
+
+quicksort, clang/512-bit — 6 candidates
+  axis         value                         ns/elem  vs best
+  discovery    3way/hyb/incremental            14.25    1.00x  0.922d  <- beats the default on every shape, shipped
+  discovery    3way/net/incremental            14.92    1.05x  1.015d
+  cross        3way/ins/post                   15.99    1.12x  0.989d
+  cross        3way/hyb/post                   16.00    1.12x          <- default
+  cross        3way/net/post                   16.47    1.16x  1.045d
+  cross        2way/net/post                 SKIPPED  two-way is quadratic in the equal-run length above the working-set cap
+
+algorithm choice vs configuration choice — ns/element
+  the one global point is quicksort 3way/hyb/incremental
+  shape                          fixed/fixed fixed/tuned  pick/fixed  pick/tuned  picked
+  tpcds_q67_sf1_u32_n8388608_m4         8.03        8.03        8.03        8.03  quicksort
+  skewed_zipf_s1_u32_n8388608_m4       19.35       19.35       19.35       19.35  quicksort
+  low_cardinality_d4_u32_n8388608_m4        5.84        5.69        5.84        5.69  quicksort
+  independent_uniform_c1024_u32_n8388608_m4       45.44       45.44       23.25       21.90  samplesort
+  geometric mean                       14.25       14.16       12.05       11.80
+
+  re-tuning the fixed algorithm per shape    1.01x
+  picking the algorithm per shape            1.18x
+  both                                      1.21x
+  --> algorithm choice is the larger lever here
+
+================ clang / 512-bit / u64 = 8 lanes / 1 worker
+  samplesort: best of 15 priced candidates is 55.92 ns/element, 2.10x the best u64 cell's 26.66, over the 1.50x prune factor -- this cell is not tuned
+  quicksort: best of 6 priced candidates is 49.12 ns/element, 2.46x the best u64 cell's 19.99, over the 1.50x prune factor -- this cell is not tuned
+
+================ clang / 512-bit / u64 = 8 lanes / 6 workers
+
+samplesort, clang/512-bit — 15 candidates
+  axis         value                         ns/elem  vs best
+  base_case    128                             26.45    1.00x  0.993d  <- tied with the fastest
+  cross        K16/net/f75                     26.57    1.00x  1.001d  <- tied with the fastest
+  cross        K16/net/f50                     26.67    1.01x          <- default
+  base_case    64                              26.73    1.01x  1.003d  <- tied with the fastest
+  cross        K32/net/f50                     26.73    1.01x  1.012d  <- tied with the fastest
+  cross        K16/ins                         26.81    1.01x  1.005d  <- tied with the fastest
+  cross        K32/ins                         26.85    1.02x  1.014d  <- tied with the fastest
+  cross        K32/net/f25                     27.02    1.02x  1.022d  <- tied with the fastest
+  cross        K16/net/f25                     27.08    1.02x  1.017d  <- tied with the fastest
+  cross        K8/net/f50                      27.95    1.06x  1.052d
+  cross        K8/ins                          28.04    1.06x  1.064d
+  cross        K8/net/f25                      28.04    1.06x  1.051d
+  ids          keywidth                        30.13    1.14x  1.125d
+  movement     inplace                         31.16    1.18x  1.192d
+  buckets      ordered                         55.04    2.08x  2.384d
+
+quicksort, clang/512-bit — 6 candidates
+  axis         value                         ns/elem  vs best
+  discovery    3way/hyb/incremental            19.79    1.00x  0.914d  <- beats the default on every shape, shipped
+  discovery    3way/net/incremental            21.49    1.09x  1.005d
+  cross        3way/hyb/post                   22.39    1.13x          <- default
+  cross        3way/ins/post                   22.74    1.15x  1.000d
+  cross        3way/net/post                   23.76    1.20x  1.086d
+  cross        2way/net/post                 SKIPPED  two-way is quadratic in the equal-run length above the working-set cap
+
+algorithm choice vs configuration choice — ns/element
+  the one global point is quicksort 3way/hyb/incremental
+  shape                          fixed/fixed fixed/tuned  pick/fixed  pick/tuned  picked
+  tpcds_q67_sf1_u64_n8388608_m4        12.96       12.96       12.96       12.96  quicksort
+  skewed_zipf_s1_u64_n8388608_m4       23.77       23.77       23.77       23.77  quicksort
+  low_cardinality_d4_u64_n8388608_m4       10.63       10.63       10.63       10.63  quicksort
+  independent_uniform_c1024_u64_n8388608_m4       46.84       46.84       30.09       29.81  samplesort
+  geometric mean                       19.79       19.79       17.72       17.68
+
+  re-tuning the fixed algorithm per shape    1.00x
+  picking the algorithm per shape            1.12x
+  both                                      1.12x
+  --> algorithm choice is the larger lever here
+
+================ clang_bool / 256-bit / u32 = 8 lanes / 1 worker
+  samplesort: best of 15 priced candidates is 37.27 ns/element, 2.15x the best u32 cell's 17.31, over the 1.50x prune factor -- this cell is not tuned
+  quicksort: best of 6 priced candidates is 28.32 ns/element, 1.99x the best u32 cell's 14.24, over the 1.50x prune factor -- this cell is not tuned
+
+================ clang_bool / 256-bit / u32 = 8 lanes / 6 workers
+
+samplesort, clang_bool/256-bit — 15 candidates
+  axis         value                         ns/elem  vs best
+  cross        K8/net/f25                      17.34    1.00x  0.966d  <- tied with the fastest
+  base_case    128                             17.39    1.00x  0.989d  <- tied with the fastest
+  cross        K8/net/f50                      17.51    1.01x  0.990d  <- tied with the fastest
+  cross        K16/net/f25                     17.68    1.02x  1.003d  <- tied with the fastest
+  cross        K16/net/f50                     17.75    1.02x          <- default
+  base_case    64                              17.75    1.02x  0.994d  <- tied with the fastest
+  cross        K16/net/f75                     17.76    1.02x  0.997d  <- tied with the fastest
+  cross        K16/ins                         17.83    1.03x  1.002d  <- tied with the fastest
+  cross        K32/net/f25                     17.92    1.03x  1.013d  <- tied with the fastest
+  cross        K8/ins                          18.08    1.04x  1.013d
+  cross        K32/net/f50                     18.20    1.05x  1.027d
+  cross        K32/ins                         18.28    1.05x  1.032d
+  ids          keywidth                        19.34    1.12x  1.084d
+  movement     inplace                         23.37    1.35x  1.295d
+  buckets      ordered                   OVER BUDGET  abandoned on time; cannot be a winner
+
+quicksort, clang_bool/256-bit — 6 candidates
+  axis         value                         ns/elem  vs best
+  discovery    3way/hyb/incremental            14.41    1.00x  0.930d  <- beats the default on every shape, shipped
+  discovery    3way/net/incremental            15.21    1.06x  1.011d
+  cross        3way/hyb/post                   16.14    1.12x          <- default
+  cross        3way/ins/post                   16.23    1.13x  0.994d
+  cross        3way/net/post                   16.86    1.17x  1.039d
+  cross        2way/net/post                 SKIPPED  two-way is quadratic in the equal-run length above the working-set cap
+
+algorithm choice vs configuration choice — ns/element
+  the one global point is quicksort 3way/hyb/incremental
+  shape                          fixed/fixed fixed/tuned  pick/fixed  pick/tuned  picked
+  tpcds_q67_sf1_u32_n8388608_m4         8.15        8.15        8.15        8.15  quicksort
+  skewed_zipf_s1_u32_n8388608_m4       19.55       19.55       19.55       19.55  quicksort
+  low_cardinality_d4_u32_n8388608_m4        5.96        5.96        5.96        5.96  quicksort
+  independent_uniform_c1024_u32_n8388608_m4       45.45       45.45       21.90       21.90  samplesort
+  geometric mean                       14.41       14.41       12.01       12.01
+
+  re-tuning the fixed algorithm per shape    1.00x
+  picking the algorithm per shape            1.20x
+  both                                      1.20x
+  --> algorithm choice is the larger lever here
+
+================ clang_bool / 256-bit / u64 = 4 lanes / 1 worker
+  samplesort: best of 15 priced candidates is 57.19 ns/element, 2.16x the best u64 cell's 26.45, over the 1.50x prune factor -- this cell is not tuned
+  quicksort: best of 6 priced candidates is 49.89 ns/element, 2.52x the best u64 cell's 19.79, over the 1.50x prune factor -- this cell is not tuned
+
+================ clang_bool / 256-bit / u64 = 4 lanes / 6 workers
+
+samplesort, clang_bool/256-bit — 15 candidates
+  axis         value                         ns/elem  vs best
+  cross        K16/net/f50                     26.89    1.00x          <- default
+  cross        K32/net/f50                     26.90    1.00x  1.001d  <- tied with the fastest
+  base_case    128                             26.92    1.00x  1.002d  <- tied with the fastest
+  cross        K16/net/f75                     26.94    1.00x  0.999d  <- tied with the fastest
+  base_case    64                              26.99    1.00x  1.009d  <- tied with the fastest
+  cross        K32/ins                         27.03    1.01x  0.995d  <- tied with the fastest
+  cross        K16/ins                         27.12    1.01x  1.005d  <- tied with the fastest
+  cross        K32/net/f25                     27.35    1.02x  1.020d  <- tied with the fastest
+  cross        K16/net/f25                     27.41    1.02x  1.024d  <- tied with the fastest
+  cross        K8/net/f50                      27.95    1.04x  1.046d  <- tied with the fastest
+  cross        K8/ins                          28.05    1.04x  1.054d
+  cross        K8/net/f25                      28.16    1.05x  1.053d
+  ids          keywidth                        30.68    1.14x  1.127d
+  movement     inplace                         31.08    1.16x  1.176d
+  buckets      ordered                         55.25    2.05x  2.484d
+
+quicksort, clang_bool/256-bit — 6 candidates
+  axis         value                         ns/elem  vs best
+  discovery    3way/hyb/incremental            20.06    1.00x  0.911d  <- beats the default on every shape, shipped
+  discovery    3way/net/incremental            21.36    1.06x  0.990d
+  cross        3way/ins/post                   22.37    1.12x  0.992d
+  cross        3way/hyb/post                   22.77    1.14x          <- default
+  cross        3way/net/post                   23.81    1.19x  1.074d
+  cross        2way/net/post                 SKIPPED  two-way is quadratic in the equal-run length above the working-set cap
+
+algorithm choice vs configuration choice — ns/element
+  the one global point is quicksort 3way/hyb/incremental
+  shape                          fixed/fixed fixed/tuned  pick/fixed  pick/tuned  picked
+  tpcds_q67_sf1_u64_n8388608_m4        12.95       12.94       12.95       12.94  quicksort
+  skewed_zipf_s1_u64_n8388608_m4       24.06       24.06       24.06       24.06  quicksort
+  low_cardinality_d4_u64_n8388608_m4       11.06       11.04       11.06       11.04  quicksort
+  independent_uniform_c1024_u64_n8388608_m4       46.97       46.97       29.72       29.67  samplesort
+  geometric mean                       20.06       20.04       17.89       17.87
+
+  re-tuning the fixed algorithm per shape    1.00x
+  picking the algorithm per shape            1.12x
+  both                                      1.12x
+  --> algorithm choice is the larger lever here
+
+================ intr / 256-bit / u32 = 8 lanes / 1 worker
+  samplesort: best of 15 priced candidates is 39.99 ns/element, 2.31x the best u32 cell's 17.31, over the 1.50x prune factor -- this cell is not tuned
+  quicksort: best of 6 priced candidates is 37.86 ns/element, 2.66x the best u32 cell's 14.24, over the 1.50x prune factor -- this cell is not tuned
+
+================ intr / 256-bit / u32 = 8 lanes / 6 workers
+
+samplesort, intr/256-bit — 15 candidates
+  axis         value                         ns/elem  vs best
+  cross        K32/net/f50                     19.50    1.00x  0.992d  <- tied with the fastest
+  base_case    128                             19.52    1.00x  0.985d  <- tied with the fastest
+  cross        K32/ins                         19.68    1.01x  1.003d  <- tied with the fastest
+  cross        K16/net/f75                     19.72    1.01x  1.000d  <- tied with the fastest
+  cross        K16/net/f50                     19.75    1.01x          <- default
+  base_case    64                              19.81    1.02x  1.005d  <- tied with the fastest
+  ids          keywidth                        19.81    1.02x  1.006d  <- tied with the fastest
+  cross        K8/net/f50                      19.83    1.02x  1.004d  <- tied with the fastest
+  cross        K32/net/f25                     19.85    1.02x  1.006d  <- tied with the fastest
+  cross        K16/ins                         19.89    1.02x  1.003d  <- tied with the fastest
+  cross        K8/ins                          19.91    1.02x  1.009d  <- tied with the fastest
+  cross        K8/net/f25                      20.12    1.03x  1.008d  <- tied with the fastest
+  cross        K16/net/f25                     20.17    1.03x  1.017d  <- tied with the fastest
+  movement     inplace                         27.27    1.40x  1.357d
+  buckets      ordered                         43.93    2.25x  2.681d
+
+quicksort, intr/256-bit — 6 candidates
+  axis         value                         ns/elem  vs best
+  discovery    3way/hyb/incremental            17.18    1.00x  0.909d  <- beats the default on every shape, shipped
+  discovery    3way/net/incremental            17.89    1.04x  0.979d
+  cross        3way/hyb/post                   19.26    1.12x          <- default
+  cross        3way/ins/post                   19.44    1.13x  1.001d
+  cross        3way/net/post                   19.56    1.14x  1.018d
+  cross        2way/net/post                 SKIPPED  two-way is quadratic in the equal-run length above the working-set cap
+
+algorithm choice vs configuration choice — ns/element
+  the one global point is quicksort 3way/hyb/incremental
+  shape                          fixed/fixed fixed/tuned  pick/fixed  pick/tuned  picked
+  tpcds_q67_sf1_u32_n8388608_m4        11.29       11.25       11.29       11.25  quicksort
+  skewed_zipf_s1_u32_n8388608_m4       21.43       21.43       21.43       21.43  quicksort
+  low_cardinality_d4_u32_n8388608_m4        7.76        7.76        7.76        7.76  quicksort
+  independent_uniform_c1024_u32_n8388608_m4       46.44       46.44       24.01       24.01  samplesort
+  geometric mean                       17.18       17.17       14.57       14.56
+
+  re-tuning the fixed algorithm per shape    1.00x
+  picking the algorithm per shape            1.18x
+  both                                      1.18x
+  --> algorithm choice is the larger lever here
+
+================ intr / 256-bit / u64 = 4 lanes / 1 worker
+  samplesort: best of 15 priced candidates is 65.76 ns/element, 2.49x the best u64 cell's 26.45, over the 1.50x prune factor -- this cell is not tuned
+  quicksort: best of 6 priced candidates is 65.86 ns/element, 3.33x the best u64 cell's 19.79, over the 1.50x prune factor -- this cell is not tuned
+
+================ intr / 256-bit / u64 = 4 lanes / 6 workers
+
+samplesort, intr/256-bit — 15 candidates
+  axis         value                         ns/elem  vs best
+  base_case    128                             30.96    1.00x  0.984d  <- tied with the fastest
+  cross        K16/net/f75                     30.97    1.00x  0.987d  <- tied with the fastest
+  ids          keywidth                        31.27    1.01x  0.994d  <- tied with the fastest
+  cross        K16/ins                         31.34    1.01x  0.993d  <- tied with the fastest
+  base_case    64                              31.34    1.01x  0.995d  <- tied with the fastest
+  cross        K32/ins                         31.38    1.01x  0.993d  <- tied with the fastest
+  cross        K16/net/f50                     31.41    1.01x          <- default
+  cross        K32/net/f50                     31.50    1.02x  1.003d  <- tied with the fastest
+  cross        K16/net/f25                     32.10    1.04x  1.016d  <- tied with the fastest
+  cross        K32/net/f25                     32.19    1.04x  1.027d  <- tied with the fastest
+  cross        K8/net/f50                      32.63    1.05x  1.041d
+  cross        K8/ins                          32.79    1.06x  1.042d
+  cross        K8/net/f25                      33.91    1.10x  1.076d
+  movement     inplace                         38.00    1.23x  1.240d
+  buckets      ordered                         66.30    2.14x  2.492d
+
+quicksort, intr/256-bit — 6 candidates
+  axis         value                         ns/elem  vs best
+  discovery    3way/hyb/incremental            24.02    1.00x  0.891d  <- beats the default on every shape, shipped
+  discovery    3way/net/incremental            24.95    1.04x  0.957d  <- beats the default on every shape
+  cross        3way/hyb/post                   27.44    1.14x          <- default
+  cross        3way/ins/post                   27.46    1.14x  1.000d
+  cross        3way/net/post                   28.16    1.17x  1.033d
+  cross        2way/net/post                 SKIPPED  two-way is quadratic in the equal-run length above the working-set cap
+
+algorithm choice vs configuration choice — ns/element
+  the one global point is quicksort 3way/hyb/incremental
+  shape                          fixed/fixed fixed/tuned  pick/fixed  pick/tuned  picked
+  tpcds_q67_sf1_u64_n8388608_m4        17.22       17.22       17.22       17.22  quicksort
+  skewed_zipf_s1_u64_n8388608_m4       27.06       27.06       27.06       27.06  quicksort
+  low_cardinality_d4_u64_n8388608_m4       14.54       14.54       14.54       14.54  quicksort
+  independent_uniform_c1024_u64_n8388608_m4       49.12       49.12       33.50       33.44  samplesort
+  geometric mean                       24.02       24.02       21.83       21.82
+
+  re-tuning the fixed algorithm per shape    1.00x
+  picking the algorithm per shape            1.10x
+  both                                      1.10x
+  --> algorithm choice is the larger lever here
+
+================ clang / 256-bit / u32 = 8 lanes / 1 worker
+  samplesort: best of 15 priced candidates is 37.21 ns/element, 2.15x the best u32 cell's 17.31, over the 1.50x prune factor -- this cell is not tuned
+  quicksort: best of 6 priced candidates is 27.88 ns/element, 1.96x the best u32 cell's 14.24, over the 1.50x prune factor -- this cell is not tuned
+
+================ clang / 256-bit / u32 = 8 lanes / 6 workers
+
+samplesort, clang/256-bit — 15 candidates
+  axis         value                         ns/elem  vs best
+  cross        K8/net/f25                      17.46    1.00x  0.972d  <- tied with the fastest
+  base_case    128                             17.52    1.00x  0.995d  <- tied with the fastest
+  cross        K8/net/f50                      17.59    1.01x  0.982d  <- tied with the fastest
+  cross        K16/net/f25                     17.63    1.01x  0.991d  <- tied with the fastest
+  cross        K32/net/f25                     17.72    1.01x  0.991d  <- tied with the fastest
+  base_case    64                              17.81    1.02x  0.996d  <- tied with the fastest
+  cross        K16/net/f50                     17.89    1.02x          <- default
+  cross        K16/net/f75                     17.90    1.03x  0.997d  <- tied with the fastest
+  cross        K32/net/f50                     17.91    1.03x  1.011d  <- tied with the fastest
+  cross        K16/ins                         17.96    1.03x  1.003d  <- tied with the fastest
+  cross        K32/ins                         18.07    1.03x  1.015d  <- tied with the fastest
+  cross        K8/ins                          18.09    1.04x  1.011d  <- tied with the fastest
+  ids          keywidth                        19.37    1.11x  1.077d
+  movement     inplace                         23.39    1.34x  1.296d
+  buckets      ordered                         39.18    2.24x  2.655d
+
+quicksort, clang/256-bit — 6 candidates
+  axis         value                         ns/elem  vs best
+  discovery    3way/hyb/incremental            14.43    1.00x  0.920d  <- beats the default on every shape, shipped
+  discovery    3way/net/incremental            15.14    1.05x  1.013d
+  cross        3way/ins/post                   16.21    1.12x  0.980d
+  cross        3way/hyb/post                   16.44    1.14x          <- default
+  cross        3way/net/post                   16.54    1.15x  1.022d
+  cross        2way/net/post                 SKIPPED  two-way is quadratic in the equal-run length above the working-set cap
+
+algorithm choice vs configuration choice — ns/element
+  the one global point is quicksort 3way/hyb/incremental
+  shape                          fixed/fixed fixed/tuned  pick/fixed  pick/tuned  picked
+  tpcds_q67_sf1_u32_n8388608_m4         8.28        8.16        8.28        8.16  quicksort
+  skewed_zipf_s1_u32_n8388608_m4       19.77       19.77       19.77       19.77  quicksort
+  low_cardinality_d4_u32_n8388608_m4        5.84        5.84        5.84        5.84  quicksort
+  independent_uniform_c1024_u32_n8388608_m4       45.33       45.33       21.94       21.94  samplesort
+  geometric mean                       14.43       14.38       12.03       11.99
+
+  re-tuning the fixed algorithm per shape    1.00x
+  picking the algorithm per shape            1.20x
+  both                                      1.20x
+  --> algorithm choice is the larger lever here
+
+================ clang / 256-bit / u64 = 4 lanes / 1 worker
+  samplesort: best of 15 priced candidates is 55.84 ns/element, 2.11x the best u64 cell's 26.45, over the 1.50x prune factor -- this cell is not tuned
+  quicksort: best of 6 priced candidates is 48.93 ns/element, 2.47x the best u64 cell's 19.79, over the 1.50x prune factor -- this cell is not tuned
+
+================ clang / 256-bit / u64 = 4 lanes / 6 workers
+
+samplesort, clang/256-bit — 15 candidates
+  axis         value                         ns/elem  vs best
+  base_case    128                             26.86    1.00x  0.995d  <- tied with the fastest
+  cross        K16/net/f75                     27.10    1.01x  0.991d  <- tied with the fastest
+  cross        K16/ins                         27.18    1.01x  1.001d  <- tied with the fastest
+  cross        K16/net/f50                     27.20    1.01x          <- default
+  cross        K32/net/f50                     27.22    1.01x  0.999d  <- tied with the fastest
+  cross        K32/ins                         27.23    1.01x  1.003d  <- tied with the fastest
+  base_case    64                              27.27    1.02x  1.002d  <- tied with the fastest
+  cross        K32/net/f25                     27.57    1.03x  1.014d  <- tied with the fastest
+  cross        K16/net/f25                     27.61    1.03x  1.018d  <- tied with the fastest
+  cross        K8/net/f50                      28.22    1.05x  1.039d
+  cross        K8/net/f25                      28.46    1.06x  1.042d
+  cross        K8/ins                          28.48    1.06x  1.053d
+  ids          keywidth                        30.69    1.14x  1.126d
+  movement     inplace                         31.73    1.18x  1.189d
+  buckets      ordered                         56.90    2.12x  2.466d
+
+quicksort, clang/256-bit — 6 candidates
+  axis         value                         ns/elem  vs best
+  discovery    3way/hyb/incremental            20.07    1.00x  0.911d  <- beats the default on every shape, shipped
+  discovery    3way/net/incremental            21.15    1.05x  1.016d
+  cross        3way/hyb/post                   22.34    1.11x          <- default
+  cross        3way/ins/post                   22.60    1.13x  0.997d
+  cross        3way/net/post                   23.45    1.17x  1.079d
+  cross        2way/net/post                 SKIPPED  two-way is quadratic in the equal-run length above the working-set cap
+
+algorithm choice vs configuration choice — ns/element
+  the one global point is quicksort 3way/hyb/incremental
+  shape                          fixed/fixed fixed/tuned  pick/fixed  pick/tuned  picked
+  tpcds_q67_sf1_u64_n8388608_m4        12.90       12.79       12.90       12.79  quicksort
+  skewed_zipf_s1_u64_n8388608_m4       23.63       23.63       23.63       23.63  quicksort
+  low_cardinality_d4_u64_n8388608_m4       11.37       11.18       11.37       11.18  quicksort
+  independent_uniform_c1024_u64_n8388608_m4       46.83       46.83       31.01       31.01  samplesort
+  geometric mean                       20.07       19.94       18.11       17.99
+
+  re-tuning the fixed algorithm per shape    1.01x
+  picking the algorithm per shape            1.11x
+  both                                      1.12x
+  --> algorithm choice is the larger lever here
+
+================ clang_bool / 128-bit / u32 = 4 lanes / 1 worker
+  samplesort: best of 15 priced candidates is 36.57 ns/element, 2.11x the best u32 cell's 17.31, over the 1.50x prune factor -- this cell is not tuned
+  quicksort: best of 6 priced candidates is 27.31 ns/element, 1.92x the best u32 cell's 14.24, over the 1.50x prune factor -- this cell is not tuned
+
+================ clang_bool / 128-bit / u32 = 4 lanes / 6 workers
+
+samplesort, clang_bool/128-bit — 15 candidates
+  axis         value                         ns/elem  vs best
+  cross        K8/net/f25                      17.45    1.00x  0.973d  <- tied with the fastest
+  cross        K32/net/f25                     17.47    1.00x  0.983d  <- beats the default on every shape, shipped
+  base_case    128                             17.50    1.00x  0.986d  <- tied with the fastest
+  cross        K8/net/f50                      17.61    1.01x  0.997d  <- tied with the fastest
+  cross        K16/net/f25                     17.74    1.02x  0.989d  <- tied with the fastest
+  base_case    64                              17.79    1.02x  0.996d  <- tied with the fastest
+  cross        K16/net/f50                     17.87    1.02x          <- default
+  cross        K32/net/f50                     17.87    1.02x  0.998d  <- tied with the fastest
+  cross        K16/ins                         17.90    1.03x  1.002d  <- tied with the fastest
+  cross        K16/net/f75                     17.91    1.03x  0.998d  <- tied with the fastest
+  cross        K32/ins                         18.02    1.03x  1.015d  <- tied with the fastest
+  cross        K8/ins                          18.17    1.04x  1.010d
+  ids          keywidth                        19.45    1.11x  1.081d
+  movement     inplace                         23.37    1.34x  1.288d
+  buckets      ordered                   OVER BUDGET  abandoned on time; cannot be a winner
+
+quicksort, clang_bool/128-bit — 6 candidates
+  axis         value                         ns/elem  vs best
+  discovery    3way/hyb/incremental            14.50    1.00x  0.931d  <- beats the default on every shape, shipped
+  discovery    3way/net/incremental            15.23    1.05x  1.013d
+  cross        3way/ins/post                   16.37    1.13x  0.987d
+  cross        3way/hyb/post                   16.45    1.13x          <- default
+  cross        3way/net/post                   16.96    1.17x  1.048d
+  cross        2way/net/post                 SKIPPED  two-way is quadratic in the equal-run length above the working-set cap
+
+algorithm choice vs configuration choice — ns/element
+  the one global point is quicksort 3way/hyb/incremental
+  shape                          fixed/fixed fixed/tuned  pick/fixed  pick/tuned  picked
+  tpcds_q67_sf1_u32_n8388608_m4         8.27        8.27        8.27        8.27  quicksort
+  skewed_zipf_s1_u32_n8388608_m4       19.76       19.76       19.76       19.76  quicksort
+  low_cardinality_d4_u32_n8388608_m4        5.95        5.95        5.95        5.95  quicksort
+  independent_uniform_c1024_u32_n8388608_m4       45.53       45.53       21.91       21.91  samplesort
+  geometric mean                       14.50       14.50       12.08       12.08
+
+  re-tuning the fixed algorithm per shape    1.00x
+  picking the algorithm per shape            1.20x
+  both                                      1.20x
+  --> algorithm choice is the larger lever here
+
+================ clang_bool / 128-bit / u64 = 2 lanes / 1 worker
+  samplesort: best of 15 priced candidates is 55.63 ns/element, 2.10x the best u64 cell's 26.45, over the 1.50x prune factor -- this cell is not tuned
+  quicksort: best of 6 priced candidates is 50.32 ns/element, 2.54x the best u64 cell's 19.79, over the 1.50x prune factor -- this cell is not tuned
+
+================ clang_bool / 128-bit / u64 = 2 lanes / 6 workers
+
+samplesort, clang_bool/128-bit — 15 candidates
+  axis         value                         ns/elem  vs best
+  base_case    128                             26.77    1.00x  0.986d  <- beats the default on every shape, shipped
+  cross        K16/net/f75                     27.09    1.01x  0.995d  <- tied with the fastest
+  cross        K16/net/f50                     27.15    1.01x          <- default
+  base_case    64                              27.15    1.01x  1.005d  <- tied with the fastest
+  cross        K32/net/f50                     27.23    1.02x  1.001d  <- tied with the fastest
+  cross        K16/ins                         27.24    1.02x  1.004d  <- tied with the fastest
+  cross        K32/ins                         27.37    1.02x  1.007d  <- tied with the fastest
+  cross        K16/net/f25                     27.47    1.03x  1.013d  <- tied with the fastest
+  cross        K32/net/f25                     27.56    1.03x  1.015d  <- tied with the fastest
+  cross        K8/net/f50                      28.07    1.05x  1.029d
+  cross        K8/ins                          28.22    1.05x  1.048d
+  cross        K8/net/f25                      28.25    1.06x  1.036d
+  ids          keywidth                        30.63    1.14x  1.119d
+  movement     inplace                         31.46    1.18x  1.168d
+  buckets      ordered                         57.05    2.13x  2.518d
+
+quicksort, clang_bool/128-bit — 6 candidates
+  axis         value                         ns/elem  vs best
+  discovery    3way/hyb/incremental            19.88    1.00x  0.899d  <- beats the default on every shape, shipped
+  discovery    3way/net/incremental            21.03    1.06x  0.990d
+  cross        3way/ins/post                   22.45    1.13x  0.994d
+  cross        3way/hyb/post                   22.47    1.13x          <- default
+  cross        3way/net/post                   23.44    1.18x  1.070d
+  cross        2way/net/post                 SKIPPED  two-way is quadratic in the equal-run length above the working-set cap
+
+algorithm choice vs configuration choice — ns/element
+  the one global point is quicksort 3way/hyb/incremental
+  shape                          fixed/fixed fixed/tuned  pick/fixed  pick/tuned  picked
+  tpcds_q67_sf1_u64_n8388608_m4        12.66       12.59       12.66       12.59  quicksort
+  skewed_zipf_s1_u64_n8388608_m4       23.77       23.77       23.77       23.77  quicksort
+  low_cardinality_d4_u64_n8388608_m4       11.14       11.12       11.14       11.12  quicksort
+  independent_uniform_c1024_u64_n8388608_m4       46.63       46.63       30.75       30.61  samplesort
+  geometric mean                       19.88       19.85       17.92       17.86
+
+  re-tuning the fixed algorithm per shape    1.00x
+  picking the algorithm per shape            1.11x
+  both                                      1.11x
+  --> algorithm choice is the larger lever here
+
+================ intr / 128-bit / u32 = 4 lanes / 1 worker
+  samplesort: best of 15 priced candidates is 45.76 ns/element, 2.64x the best u32 cell's 17.31, over the 1.50x prune factor -- this cell is not tuned
+  quicksort: best of 6 priced candidates is 54.08 ns/element, 3.80x the best u32 cell's 14.24, over the 1.50x prune factor -- this cell is not tuned
+
+================ intr / 128-bit / u32 = 4 lanes / 6 workers
+
+samplesort, intr/128-bit — 15 candidates
+  axis         value                         ns/elem  vs best
+  base_case    128                             21.03    1.00x  0.993d  <- tied with the fastest
+  cross        K32/net/f50                     21.14    1.01x  1.000d  <- tied with the fastest
+  cross        K16/net/f50                     21.18    1.01x          <- default
+  cross        K16/ins                         21.18    1.01x  1.001d  <- tied with the fastest
+  cross        K32/ins                         21.19    1.01x  1.003d  <- tied with the fastest
+  base_case    64                              21.22    1.01x  1.004d  <- tied with the fastest
+  cross        K16/net/f75                     21.22    1.01x  0.999d  <- tied with the fastest
+  ids          keywidth                        21.33    1.01x  1.001d  <- tied with the fastest
+  cross        K8/net/f50                      21.37    1.02x  1.006d  <- tied with the fastest
+  cross        K8/ins                          21.45    1.02x  1.020d  <- tied with the fastest
+  cross        K16/net/f25                     21.63    1.03x  1.010d  <- tied with the fastest
+  cross        K32/net/f25                     21.64    1.03x  1.017d  <- tied with the fastest
+  cross        K8/net/f25                      22.03    1.05x  1.030d
+  movement     inplace                         27.92    1.33x  1.297d
+  buckets      ordered                   OVER BUDGET  abandoned on time; cannot be a winner
+
+quicksort, intr/128-bit — 6 candidates
+  axis         value                         ns/elem  vs best
+  discovery    3way/hyb/incremental            22.09    1.00x  0.897d  <- beats the default on every shape
+  discovery    3way/net/incremental            22.69    1.03x  0.928d  <- beats the default on every shape, shipped
+  cross        3way/hyb/post                   25.07    1.13x          <- default
+  cross        3way/net/post                   25.07    1.14x  1.006d
+  cross        3way/ins/post                   25.10    1.14x  1.003d
+  cross        2way/net/post                 SKIPPED  two-way is quadratic in the equal-run length above the working-set cap
+
+algorithm choice vs configuration choice — ns/element
+  the one global point is samplesort 128
+  shape                          fixed/fixed fixed/tuned  pick/fixed  pick/tuned  picked
+  tpcds_q67_sf1_u32_n8388608_m4        16.32       16.21       15.96       15.96  quicksort
+  skewed_zipf_s1_u32_n8388608_m4       27.97       27.97       26.18       26.18  quicksort
+  low_cardinality_d4_u32_n8388608_m4       16.04       15.18       11.79       11.79  quicksort
+  independent_uniform_c1024_u32_n8388608_m4       26.75       26.67       26.75       26.67  samplesort
+  geometric mean                       21.03       20.70       19.05       19.04
+
+  re-tuning the fixed algorithm per shape    1.02x
+  picking the algorithm per shape            1.10x
+  both                                      1.10x
+  --> algorithm choice is the larger lever here
+
+================ intr / 128-bit / u64 = 2 lanes / 1 worker
+  samplesort: best of 15 priced candidates is 69.11 ns/element, 2.61x the best u64 cell's 26.45, over the 1.50x prune factor -- this cell is not tuned
+  quicksort: best of 6 priced candidates is 92.88 ns/element, 4.69x the best u64 cell's 19.79, over the 1.50x prune factor -- this cell is not tuned
+
+================ intr / 128-bit / u64 = 2 lanes / 6 workers
+
+samplesort, intr/128-bit — 15 candidates
+  axis         value                         ns/elem  vs best
+  cross        K16/net/f75                     32.79    1.00x  0.988d  <- tied with the fastest
+  cross        K16/ins                         32.80    1.00x  0.993d  <- tied with the fastest
+  ids          keywidth                        32.82    1.00x  0.995d  <- tied with the fastest
+  base_case    128                             32.87    1.00x  0.994d  <- tied with the fastest
+  cross        K16/net/f50                     33.08    1.01x          <- default
+  base_case    64                              33.17    1.01x  1.004d  <- tied with the fastest
+  cross        K8/ins                          33.18    1.01x  1.007d  <- tied with the fastest
+  cross        K32/net/f50                     33.44    1.02x  1.013d  <- tied with the fastest
+  cross        K32/ins                         33.66    1.03x  1.016d  <- tied with the fastest
+  cross        K8/net/f50                      33.76    1.03x  1.022d  <- tied with the fastest
+  cross        K16/net/f25                     34.59    1.05x  1.027d
+  cross        K32/net/f25                     35.08    1.07x  1.058d
+  cross        K8/net/f25                      35.75    1.09x  1.071d
+  movement     inplace                         39.46    1.20x  1.215d
+  buckets      ordered                         72.80    2.22x  2.630d
+
+quicksort, intr/128-bit — 6 candidates
+  axis         value                         ns/elem  vs best
+  discovery    3way/hyb/incremental            31.47    1.00x  0.884d  <- beats the default on every shape, shipped
+  discovery    3way/net/incremental            32.21    1.02x  0.934d  <- beats the default on every shape
+  cross        3way/ins/post                   35.15    1.12x  0.992d
+  cross        3way/hyb/post                   35.57    1.13x          <- default
+  cross        3way/net/post                   36.05    1.15x  1.006d
+  cross        2way/net/post                 SKIPPED  two-way is quadratic in the equal-run length above the working-set cap
+
+algorithm choice vs configuration choice — ns/element
+  the one global point is quicksort 3way/hyb/incremental
+  shape                          fixed/fixed fixed/tuned  pick/fixed  pick/tuned  picked
+  tpcds_q67_sf1_u64_n8388608_m4        25.16       25.04       25.16       25.04  quicksort
+  skewed_zipf_s1_u64_n8388608_m4       34.91       34.91       34.91       34.91  quicksort
+  low_cardinality_d4_u64_n8388608_m4       21.46       20.58       21.46       20.58  quicksort
+  independent_uniform_c1024_u64_n8388608_m4       52.00       52.00       35.82       35.49  samplesort
+  geometric mean                       31.47       31.10       28.67       28.27
+
+  re-tuning the fixed algorithm per shape    1.01x
+  picking the algorithm per shape            1.10x
+  both                                      1.11x
+  --> algorithm choice is the larger lever here
+
+================ clang / 128-bit / u32 = 4 lanes / 1 worker
+  samplesort: best of 15 priced candidates is 36.08 ns/element, 2.08x the best u32 cell's 17.31, over the 1.50x prune factor -- this cell is not tuned
+  quicksort: best of 6 priced candidates is 27.32 ns/element, 1.92x the best u32 cell's 14.24, over the 1.50x prune factor -- this cell is not tuned
+
+================ clang / 128-bit / u32 = 4 lanes / 6 workers
+
+samplesort, clang/128-bit — 15 candidates
+  axis         value                         ns/elem  vs best
+  cross        K8/net/f25                      17.45    1.00x  0.963d  <- tied with the fastest
+  cross        K8/net/f50                      17.55    1.01x  0.980d  <- tied with the fastest
+  base_case    128                             17.61    1.01x  0.988d  <- tied with the fastest
+  cross        K32/net/f25                     17.66    1.01x  0.991d  <- tied with the fastest
+  cross        K16/net/f25                     17.69    1.01x  0.993d  <- tied with the fastest
+  cross        K16/net/f75                     17.84    1.02x  0.995d  <- tied with the fastest
+  cross        K16/net/f50                     17.87    1.02x          <- default
+  base_case    64                              17.90    1.03x  0.994d  <- tied with the fastest
+  cross        K32/net/f50                     17.95    1.03x  1.006d  <- tied with the fastest
+  cross        K16/ins                         18.03    1.03x  1.008d  <- tied with the fastest
+  cross        K32/ins                         18.04    1.03x  1.015d  <- tied with the fastest
+  cross        K8/ins                          18.09    1.04x  1.016d  <- tied with the fastest
+  ids          keywidth                        19.39    1.11x  1.087d
+  movement     inplace                         23.39    1.34x  1.272d
+  buckets      ordered                         38.84    2.23x  2.748d
+
+quicksort, clang/128-bit — 6 candidates
+  axis         value                         ns/elem  vs best
+  discovery    3way/hyb/incremental            14.51    1.00x  0.918d  <- beats the default on every shape, shipped
+  discovery    3way/net/incremental            15.34    1.06x  1.029d
+  cross        3way/ins/post                   16.40    1.13x  0.994d
+  cross        3way/hyb/post                   16.45    1.13x          <- default
+  cross        3way/net/post                   17.02    1.17x  1.044d
+  cross        2way/net/post                 SKIPPED  two-way is quadratic in the equal-run length above the working-set cap
+
+algorithm choice vs configuration choice — ns/element
+  the one global point is quicksort 3way/hyb/incremental
+  shape                          fixed/fixed fixed/tuned  pick/fixed  pick/tuned  picked
+  tpcds_q67_sf1_u32_n8388608_m4         8.26        8.26        8.26        8.26  quicksort
+  skewed_zipf_s1_u32_n8388608_m4       19.77       19.77       19.77       19.77  quicksort
+  low_cardinality_d4_u32_n8388608_m4        5.94        5.94        5.94        5.94  quicksort
+  independent_uniform_c1024_u32_n8388608_m4       45.73       45.73       21.84       21.84  samplesort
+  geometric mean                       14.51       14.51       12.07       12.07
+
+  re-tuning the fixed algorithm per shape    1.00x
+  picking the algorithm per shape            1.20x
+  both                                      1.20x
+  --> algorithm choice is the larger lever here
+
+================ clang / 128-bit / u64 = 2 lanes / 1 worker
+  samplesort: best of 15 priced candidates is 55.92 ns/element, 2.11x the best u64 cell's 26.45, over the 1.50x prune factor -- this cell is not tuned
+  quicksort: best of 6 priced candidates is 49.13 ns/element, 2.48x the best u64 cell's 19.79, over the 1.50x prune factor -- this cell is not tuned
+
+================ clang / 128-bit / u64 = 2 lanes / 6 workers
+
+samplesort, clang/128-bit — 15 candidates
+  axis         value                         ns/elem  vs best
+  base_case    128                             27.04    1.00x  0.991d  <- tied with the fastest
+  cross        K32/ins                         27.32    1.01x  0.993d  <- tied with the fastest
+  cross        K16/net/f50                     27.34    1.01x          <- default
+  cross        K32/net/f50                     27.39    1.01x  0.991d  <- tied with the fastest
+  cross        K16/net/f75                     27.46    1.02x  0.999d  <- tied with the fastest
+  base_case    64                              27.47    1.02x  1.005d  <- tied with the fastest
+  cross        K16/ins                         27.49    1.02x  1.002d  <- tied with the fastest
+  cross        K32/net/f25                     27.66    1.02x  1.004d  <- tied with the fastest
+  cross        K16/net/f25                     27.92    1.03x  1.017d  <- tied with the fastest
+  cross        K8/ins                          28.08    1.04x  1.031d  <- tied with the fastest
+  cross        K8/net/f50                      28.18    1.04x  1.035d
+  cross        K8/net/f25                      28.38    1.05x  1.049d
+  ids          keywidth                        31.03    1.15x  1.125d
+  movement     inplace                         31.64    1.17x  1.169d
+  buckets      ordered                         57.54    2.13x  2.445d
+
+quicksort, clang/128-bit — 6 candidates
+  axis         value                         ns/elem  vs best
+  discovery    3way/hyb/incremental            19.81    1.00x  0.899d  <- beats the default on every shape, shipped
+  discovery    3way/net/incremental            20.95    1.06x  0.990d
+  cross        3way/hyb/post                   22.18    1.12x          <- default
+  cross        3way/ins/post                   22.23    1.12x  0.993d
+  cross        3way/net/post                   23.20    1.17x  1.057d
+  cross        2way/net/post                 SKIPPED  two-way is quadratic in the equal-run length above the working-set cap
+
+algorithm choice vs configuration choice — ns/element
+  the one global point is quicksort 3way/hyb/incremental
+  shape                          fixed/fixed fixed/tuned  pick/fixed  pick/tuned  picked
+  tpcds_q67_sf1_u64_n8388608_m4        12.32       12.32       12.32       12.32  quicksort
+  skewed_zipf_s1_u64_n8388608_m4       23.97       23.97       23.97       23.97  quicksort
+  low_cardinality_d4_u64_n8388608_m4       11.06       10.67       11.06       10.67  quicksort
+  independent_uniform_c1024_u64_n8388608_m4       47.13       47.13       29.88       29.88  samplesort
+  geometric mean                       19.81       19.63       17.68       17.52
+
+  re-tuning the fixed algorithm per shape    1.01x
+  picking the algorithm per shape            1.12x
+  both                                      1.13x
+  --> algorithm choice is the larger lever here
+
+wrote /home/pietrzyk/tslgen-v99/test-sort/benchmark_results_verify/best_config.tsv (4 configurations)
+  quicksort|clang_bool|512|4         3way/hyb/post
+  quicksort|clang_bool|512|8         3way/hyb/post
+  samplesort|clang_bool|512|4        K=8/adaptive/net/base256/fill25/byteid/oop
+  samplesort|clang_bool|512|8        K=16/adaptive/net/base256/fill50/byteid/oop
+
+best configuration per (style, width) cell
+  u32:  clang_bool/512 35.49 (1.00x)
+       the reporting drivers are built for clang_bool/512, 1.00x the best cell (clang_bool/512)
+  u64:  clang_bool/512 58.63 (1.00x)
+       the reporting drivers are built for clang_bool/512, 1.00x the best cell (clang_bool/512)
+
+cell ranking, geometric mean over key widths (ns/element)
+  clang_bool    512-bit      45.62   0.000x vs incumbent
+
+no intrinsics cell was measured; naming the ranking's leader
+
+TSL_COSORT_BEST_CELL clang_bool 512 45.6177
+
+395 measured, 361 dropped, 0 incorrect
+
+wrote /home/pietrzyk/tslgen-v99/test-sort/benchmark_results_verify/q0_tune.csv (756 rows)

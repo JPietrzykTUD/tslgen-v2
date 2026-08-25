@@ -1,0 +1,734 @@
+[bench_q4_scaling] 1/384 (0%) 6s elapsed, ~41m55s left | tpcds_q67_sf1 x4col w1   
+Q4 scaling / bench_q4_scaling
+host=bolvar cores=24 governor=performance clock=4100MHz load=2.17 compiler=clang 24.0
+topology: 2 NUMA node(s), 6 physical core(s) per node, 6 logical cpu(s) available to this process [pinned], LLC 30 MiB
+  !! load average above 1.0: another process is competing and these numbers are not publishable
+instrumentation=off (counters compiled out)
+measure-cell=clang_bool/512-bit
+rows=8388608 (derived from this machine)
+thread sweep capped at 6 (physical cores per NUMA node, within the affinity mask); override with --max-workers
+tuned configurations from /home/pietrzyk/tslgen-v99/test-sort/benchmark_results_verify/best_config.tsv
+
+-- threads, tpcds_q67_sf1, 8388608 rows, 4 columns, u32 --
+
+shape                      params        cols     rows algorithm                detector       workers    ns/elem      iqr
+tpcds_q67_sf1                               4  8388608 samplesort               scalar               1      36.12     0.4%
+tpcds_q67_sf1                               4  8388608 quicksort                scalar               1      27.84     0.4%
+tpcds_q67_sf1                               4  8388608 samplesort               scalar               2      25.63     2.4%
+                                                                             speedup 1.41x vs its own 1 worker
+tpcds_q67_sf1                               4  8388608 quicksort                scalar               2      19.29     1.5%
+                                                                             speedup 1.44x vs its own 1 worker
+tpcds_q67_sf1                               4  8388608 samplesort               scalar               4      17.27     2.0%
+                                                                             speedup 2.09x vs its own 1 worker
+tpcds_q67_sf1                               4  8388608 quicksort                scalar               4      12.51     0.8%
+                                                                             speedup 2.23x vs its own 1 worker
+tpcds_q67_sf1                               4  8388608 samplesort               scalar               6      14.07     1.2%
+                                                                             speedup 2.57x vs its own 1 worker
+tpcds_q67_sf1                               4  8388608 quicksort                scalar               6      10.09     0.3%
+                                                                             speedup 2.76x vs its own 1 worker
+
+-- rows, tpcds_q67_sf1, 4 columns, u32 --
+tpcds_q67_sf1                               4   262144 samplesort               scalar               1      33.69     1.6%
+tpcds_q67_sf1                               4   262144 quicksort                scalar               1      21.59     0.8%
+tpcds_q67_sf1                               4   262144 samplesort               scalar               6      12.26     1.0%
+                                                                             speedup 2.75x vs its own 1 worker
+tpcds_q67_sf1                               4   262144 quicksort                scalar               6      12.53     4.1%
+                                                                             speedup 1.72x vs its own 1 worker
+tpcds_q67_sf1                               4  1048576 samplesort               scalar               1      25.30     1.3%
+tpcds_q67_sf1                               4  1048576 quicksort                scalar               1      24.03     0.8%
+tpcds_q67_sf1                               4  1048576 samplesort               scalar               6       9.23     2.3%
+                                                                             speedup 2.74x vs its own 1 worker
+tpcds_q67_sf1                               4  1048576 quicksort                scalar               6       8.70     2.8%
+                                                                             speedup 2.76x vs its own 1 worker
+tpcds_q67_sf1                               4  4194304 samplesort               scalar               1      31.59     1.0%
+tpcds_[bench_q4_scaling] 21/384 (5%) 40s elapsed, ~11m36s left | tpcds_q67_sf1 x4col w1   
+[bench_q4_scaling] 33/384 (9%) 1m30s elapsed, ~15m58s left | tpcds_q67_sf1 x8col w1   
+[bench_q4_scaling] 37/384 (10%) 2m28s elapsed, ~23m09s left | tpcds_q67_sf1 x16col w1   
+[bench_q4_scaling] 40/384 (10%) 3m03s elapsed, ~26m21s left | tpcds_q67_sf1 x16col w6   
+q67_sf1                               4  4194304 quicksort                scalar               1      26.65     0.4%
+tpcds_q67_sf1                               4  4194304 samplesort               scalar               6      12.12     3.7%
+                                                                             speedup 2.61x vs its own 1 worker
+tpcds_q67_sf1                               4  4194304 quicksort                scalar               6       9.10     2.8%
+                                                                             speedup 2.93x vs its own 1 worker
+tpcds_q67_sf1                               4 16777216 samplesort               scalar               1      38.60     3.0%
+tpcds_q67_sf1                               4 16777216 quicksort                scalar               1      32.07     0.4%
+tpcds_q67_sf1                               4 16777216 samplesort               scalar               6      14.39     3.6%
+                                                                             speedup 2.68x vs its own 1 worker
+tpcds_q67_sf1                               4 16777216 quicksort                scalar               6       9.50     6.4%
+                                                                             speedup 3.38x vs its own 1 worker
+
+-- columns, tpcds_q67_sf1, 8388608 rows, u32 --
+tpcds_q67_sf1                               1  8388608 -                        scalar               1   dropped: no such dataset at this size and column count
+tpcds_q67_sf1                               1  8388608 -                        scalar               6   dropped: no such dataset at this size and column count
+tpcds_q67_sf1                               2  8388608 -                        scalar               1   dropped: no such dataset at this size and column count
+tpcds_q67_sf1                               2  8388608 -                        scalar               6   dropped: no such dataset at this size and column count
+tpcds_q67_sf1                               4  8388608 samplesort               scalar               1      37.38     0.6%
+tpcds_q67_sf1                               4  8388608 quicksort                scalar               1      28.49     0.7%
+tpcds_q67_sf1                               4  8388608 samplesort               scalar               6      14.06     1.1%
+                                                                             speedup 2.66x vs its own 1 worker
+tpcds_q67_sf1                               4  8388608 quicksort                scalar               6       9.38     8.2%
+                                                                             speedup 3.04x vs its own 1 worker
+tpcds_q67_sf1                               8  8388608 samplesort               scalar               1     212.91     0.1%
+tpcds_q67_sf1                               8  8388608 quicksort                scalar               1     128.34     0.6%
+tpcds_q67_sf1                               8  8388608 samplesort               scalar               6      46.75     1.4%
+                                                                             speedup 4.55x vs its own 1 worker
+tpcds_q67_sf1                               8  8388608 quicksort                scalar               6     132.86     0.5%
+                                                                             speedup 0.97x vs its own 1 worker
+tpcds_q67_sf1                              16  8388608 samplesort               scalar               1     268.81     0.2%
+tpcds_q67_sf1                              16  8388608 quicksort                scalar               1     149.92     0.3%
+tpcds_q67_sf1                              16  8388608 samplesort               scalar               6      57.64     1.3%
+                                                                             speedup 4.66x vs its own 1 worker
+tpcds_q67_sf1                              16  8388608 quicksort                scalar               6     187.03     0.1%
+                                                                             [bench_q4_scaling] 61/384 (16%) 3m39s elapsed, ~19m23s left | low_cardinality_d4 x4col w1   
+speedup 0.80x vs its own 1 worker
+
+-- threads, low_cardinality_d4, 8388608 rows, 4 columns, u32 --
+low_cardinality_d4                          4  8388608 samplesort               scalar               1      28.03     0.4%
+low_cardinality_d4                          4  8388608 quicksort                scalar               1      19.18     0.6%
+low_cardinality_d4                          4  8388608 samplesort               scalar               2      19.41     2.3%
+                                                                             speedup 1.44x vs its own 1 worker
+low_cardinality_d4                          4  8388608 quicksort                scalar               2      12.01     2.6%
+                                                                             speedup 1.60x vs its own 1 worker
+low_cardinality_d4                          4  8388608 samplesort               scalar               4      13.80     1.7%
+                                                                             speedup 2.03x vs its own 1 worker
+low_cardinality_d4                          4  8388608 quicksort                scalar               4       7.69     5.0%
+                                                                             speedup 2.50x vs its own 1 worker
+low_cardinality_d4                          4  8388608 samplesort               scalar               6      13.19     1.0%
+                                                                             speedup 2.12x vs its own 1 worker
+low_cardinality_d4                          4  8388608 quicksort                scalar               6       6.77     9.9%
+                                                                             speedup 2.84x vs its own 1 worker
+
+-- rows, low_cardinality_d4, 4 columns, u32 --
+low_cardinality_d4                          4   262144 samplesort               scalar               1      13.03     2.1%
+low_cardinality_d4                          4   262144 quicksort                scalar               1      10.00     0.8%
+low_cardinality_d4                          4   262144 samplesort               scalar               6       9.72     2.0%
+                                                                             speedup 1.34x vs its own 1 worker
+low_cardinality_d4                          4   262144 quicksort                scalar               6       7.50     7.1%
+                                                                             speedup 1.33x vs its own 1 worker
+low_cardinality_d4                          4  1048576 samplesort               scalar               1      14.05     1.6%
+low_cardinality_d4                          4  1048576 quicksort                scalar               1      12.17     0.6%
+low_cardinality_d4                          4  1048576 samplesort               scalar               6       8.11     1.9%
+                                                                             speedup 1.73x vs its own 1 worker
+low_cardinality_d4                          4  1048576 quicksort                scalar               6       5.25     4.9%
+                                                                             speedup 2.32x vs its own 1 worker
+low_cardinality_d4                          4  4194304 samplesort               scalar               1      23.97     1.1%
+low_cardinality_d4                          4  4194304 quicksort                scalar               1      15.70     0.8%
+low_cardinality_d4                          4  4194304 samplesort               scalar               6      11.83     2.3%
+                                                                             speedup 2.03x vs its own 1 worker
+low_cardinality_d4                          4  4194304 quicksort                scalar               6       5.76     2.3%
+                                                                             speedup 2.73x vs its own 1 worker
+low_cardinality_d4                          4 16777216 samplesort               scalar               1      29.31     0.1%
+low_cardinality_d4                [bench_q4_scaling] 77/384 (20%) 4m16s elapsed, ~17m03s left | low_cardinality_d4 x8col w1   
+[bench_q4_scaling] 81/384 (21%) 5m05s elapsed, ~19m02s left | low_cardinality_d4 x16col w1   
+[bench_q4_scaling] 84/384 (22%) 5m48s elapsed, ~20m44s left | low_cardinality_d4 x16col w6   
+          4 16777216 quicksort                scalar               1      22.25     0.7%
+low_cardinality_d4                          4 16777216 samplesort               scalar               6      13.36     2.3%
+                                                                             speedup 2.19x vs its own 1 worker
+low_cardinality_d4                          4 16777216 quicksort                scalar               6       6.97     3.2%
+                                                                             speedup 3.19x vs its own 1 worker
+
+-- columns, low_cardinality_d4, 8388608 rows, u32 --
+low_cardinality_d4                          1  8388608 samplesort               scalar               1       7.82     3.6%
+low_cardinality_d4                          1  8388608 quicksort                scalar               1       3.15     0.6%
+low_cardinality_d4                          1  8388608 samplesort               scalar               6       9.84     2.1%
+                                                                             speedup 0.79x vs its own 1 worker
+low_cardinality_d4                          1  8388608 quicksort                scalar               6       2.90     2.8%
+                                                                             speedup 1.08x vs its own 1 worker
+low_cardinality_d4                          2  8388608 samplesort               scalar               1      12.73     0.7%
+low_cardinality_d4                          2  8388608 quicksort                scalar               1       6.57     1.3%
+low_cardinality_d4                          2  8388608 samplesort               scalar               6       9.85     4.4%
+                                                                             speedup 1.29x vs its own 1 worker
+low_cardinality_d4                          2  8388608 quicksort                scalar               6       4.59     1.2%
+                                                                             speedup 1.43x vs its own 1 worker
+low_cardinality_d4                          4  8388608 samplesort               scalar               1      27.15     0.8%
+low_cardinality_d4                          4  8388608 quicksort                scalar               1      19.16     0.4%
+low_cardinality_d4                          4  8388608 samplesort               scalar               6      13.01     2.4%
+                                                                             speedup 2.09x vs its own 1 worker
+low_cardinality_d4                          4  8388608 quicksort                scalar               6       6.58     4.4%
+                                                                             speedup 2.91x vs its own 1 worker
+low_cardinality_d4                          8  8388608 samplesort               scalar               1      76.09     0.3%
+low_cardinality_d4                          8  8388608 quicksort                scalar               1      52.55     0.4%
+low_cardinality_d4                          8  8388608 samplesort               scalar               6      22.34     1.7%
+                                                                             speedup 3.41x vs its own 1 worker
+low_cardinality_d4                          8  8388608 quicksort                scalar               6      15.81     2.6%
+                                                                             speedup 3.32x vs its own 1 worker
+low_cardinality_d4                         16  8388608 samplesort               scalar               1     330.66     0.5%
+low_cardinality_d4                         16  8388608 quicksort                scalar               1     175.20     1.3%
+low_cardinality_d4                         16  8388608 samplesort               scalar               6      72.55     0.6%
+                                                                             speedup 4.56x vs its own 1 worker
+low_cardinality_d4                         16  8388608 quicksort                scalar               6     232.20     0.4%
+                          [bench_q4_scaling] 90/384 (23%) 6m19s elapsed, ~20m38s left | independent_uniform_c1024 x4col w4   
+                                                   speedup 0.75x vs its own 1 worker
+
+-- threads, independent_uniform_c1024, 8388608 rows, 4 columns, u32 --
+independent_uniform_c1024                   4  8388608 samplesort               scalar               1      87.65     1.2%
+independent_uniform_c1024                   4  8388608 quicksort                scalar               1      59.03     0.9%
+independent_uniform_c1024                   4  8388608 samplesort               scalar               2      50.88     0.7%
+                                                                             speedup 1.72x vs its own 1 worker
+independent_uniform_c1024                   4  8388608 quicksort                scalar               2      45.28     3.6%
+                                                                             speedup 1.30x vs its own 1 worker
+independent_uniform_c1024                   4  8388608 samplesort               scalar               4      29.18     0.9%
+                                                                             speedup 3.00x vs its own 1 worker
+independent_uniform_c1024                   4  8388608 quicksort                scalar               4      39.29     1.4%
+                                                                             speedup 1.50x vs its own 1 worker
+independent_uniform_c1024                   4  8388608 samplesort               scalar               6      22.22     0.7%
+                                                                             speedup 3.94x vs its own 1 worker
+independent_uniform_c1024                   4  8388608 quicksort                scalar               6      49.44     0.6%
+                                                                             speedup 1.19x vs its own 1 worker
+
+-- rows, independent_uniform_c1024, 4 columns, u32 --
+independent_uniform_c1024                   4   262144 samplesort               scalar               1      43.75     2.0%
+independent_uniform_c1024                   4   262144 quicksort                scalar               1      25.75     4.5%
+independent_uniform_c1024                   4   262144 samplesort               scalar               6      15.16     2.9%
+                                                                             speedup 2.89x vs its own 1 worker
+independent_uniform_c1024                   4   262144 quicksort                scalar               6      35.04     1.5%
+                                                                             speedup 0.73x vs its own 1 worker
+independent_uniform_c1024                   4  1048576 samplesort               scalar               1      77.60     1.4%
+independent_uniform_c1024                   4  1048576 quicksort                scalar               1      44.12     1.2%
+independent_uniform_c1024                   4  1048576 samplesort               scalar               6      19.15     6.8%
+                                                                             speedup 4.05x vs its own 1 worker
+independent_uniform_c1024                   4  1048576 quicksort                scalar               6      89.92     0.6%
+                                                                             speedup 0.49x vs its own 1 worker
+independent_uniform_c1024                   4  4194304 samplesort               scalar               1     102.31     0.6%
+independent_uniform_c1024                   4  4194304 quicksort                scalar               1      56.00     0.3%
+independent_uniform_c1024                   4  4194304 samplesort               scalar               6      24.22     1.8%
+                                                                             speedup 4.22x vs its own 1 worker
+independent_uniform_c1024                   4  4194304 quicksort                scalar               6      82.31     0.8%
+                                                                             speedup 0.68x vs its own 1 worker
+independent_uniform_c1024                   4 16777216 samplesort               scalar      [bench_q4_scaling] 105/384 (27%) 7m03s elapsed, ~18m44s left | independent_uniform_c1024 x4col w1   
+[bench_q4_scaling] 114/384 (30%) 7m35s elapsed, ~17m58s left | independent_uniform_c1024 x2col w1   
+[bench_q4_scaling] 121/384 (32%) 8m08s elapsed, ~17m41s left | independent_uniform_c1024 x8col w1   
+[bench_q4_scaling] 126/384 (33%) 8m38s elapsed, ~17m42s left | independent_uniform_c1024 x16col w1   
+         1      80.25     0.2%
+independent_uniform_c1024                   4 16777216 quicksort                scalar               1      61.30     0.3%
+independent_uniform_c1024                   4 16777216 samplesort               scalar               6      20.49     1.3%
+                                                                             speedup 3.92x vs its own 1 worker
+independent_uniform_c1024                   4 16777216 quicksort                scalar               6      27.32     1.3%
+                                                                             speedup 2.24x vs its own 1 worker
+
+-- columns, independent_uniform_c1024, 8388608 rows, u32 --
+independent_uniform_c1024                   1  8388608 samplesort               scalar               1      11.55     0.4%
+independent_uniform_c1024                   1  8388608 quicksort                scalar               1      10.45     1.3%
+independent_uniform_c1024                   1  8388608 samplesort               scalar               6      10.64     1.7%
+                                                                             speedup 1.08x vs its own 1 worker
+independent_uniform_c1024                   1  8388608 quicksort                scalar               6       4.57     4.1%
+                                                                             speedup 2.29x vs its own 1 worker
+independent_uniform_c1024                   2  8388608 samplesort               scalar               1      31.65     0.6%
+independent_uniform_c1024                   2  8388608 quicksort                scalar               1      28.58     0.7%
+independent_uniform_c1024                   2  8388608 samplesort               scalar               6      12.32     1.2%
+                                                                             speedup 2.57x vs its own 1 worker
+independent_uniform_c1024                   2  8388608 quicksort                scalar               6       7.68     4.7%
+                                                                             speedup 3.72x vs its own 1 worker
+independent_uniform_c1024                   4  8388608 samplesort               scalar               1      87.26     0.7%
+independent_uniform_c1024                   4  8388608 quicksort                scalar               1      58.96     1.5%
+independent_uniform_c1024                   4  8388608 samplesort               scalar               6      22.33     0.6%
+                                                                             speedup 3.91x vs its own 1 worker
+independent_uniform_c1024                   4  8388608 quicksort                scalar               6      49.46     0.9%
+                                                                             speedup 1.19x vs its own 1 worker
+independent_uniform_c1024                   8  8388608 samplesort               scalar               1      87.25     0.3%
+independent_uniform_c1024                   8  8388608 quicksort                scalar               1      59.54     1.4%
+independent_uniform_c1024                   8  8388608 samplesort               scalar               6      22.18     2.0%
+                                                                             speedup 3.93x vs its own 1 worker
+independent_uniform_c1024                   8  8388608 quicksort                scalar               6      49.26     0.6%
+                                                                             speedup 1.21x vs its own 1 worker
+independent_uniform_c1024                  16  8388608 samplesort               scalar               1      88.16     1.5%
+independent_uniform_c1024                  16  8388608 quicksort                scalar               1      59.13     1.6%
+independent_uniform_c1024                  16  8388608 samplesort               scalar               6      22.41     2.0%
+                                                                             speedup 3.93x vs its own 1 worker
+independent_uniform_c1024                  16  8388608 quicksort             [bench_q4_scaling] 132/384 (34%) 9m08s elapsed, ~17m28s left | skewed_zipf_s1 x4col w2   
+   scalar               6      49.40     0.7%
+                                                                             speedup 1.20x vs its own 1 worker
+
+-- threads, skewed_zipf_s1, 8388608 rows, 4 columns, u32 --
+skewed_zipf_s1                              4  8388608 samplesort               scalar               1      72.71     0.8%
+skewed_zipf_s1                              4  8388608 quicksort                scalar               1      54.42     0.7%
+skewed_zipf_s1                              4  8388608 samplesort               scalar               2      45.10     0.7%
+                                                                             speedup 1.61x vs its own 1 worker
+skewed_zipf_s1                              4  8388608 quicksort                scalar               2      37.23     1.0%
+                                                                             speedup 1.46x vs its own 1 worker
+skewed_zipf_s1                              4  8388608 samplesort               scalar               4      28.84     1.2%
+                                                                             speedup 2.52x vs its own 1 worker
+skewed_zipf_s1                              4  8388608 quicksort                scalar               4      23.36     1.2%
+                                                                             speedup 2.33x vs its own 1 worker
+skewed_zipf_s1                              4  8388608 samplesort               scalar               6      23.28     1.1%
+                                                                             speedup 3.12x vs its own 1 worker
+skewed_zipf_s1                              4  8388608 quicksort                scalar               6      20.99     1.7%
+                                                                             speedup 2.59x vs its own 1 worker
+
+-- rows, skewed_zipf_s1, 4 columns, u32 --
+skewed_zipf_s1                              4   262144 samplesort               scalar               1      62.24     1.6%
+skewed_zipf_s1                              4   262144 quicksort                scalar               1      39.91     3.4%
+skewed_zipf_s1                              4   262144 samplesort               scalar               6      21.63     0.9%
+                                                                             speedup 2.88x vs its own 1 worker
+skewed_zipf_s1                              4   262144 quicksort                scalar               6      47.57     0.9%
+                                                                             speedup 0.84x vs its own 1 worker
+skewed_zipf_s1                              4  1048576 samplesort               scalar               1      56.65     0.3%
+skewed_zipf_s1                              4  1048576 quicksort                scalar               1      41.98     1.3%
+skewed_zipf_s1                              4  1048576 samplesort               scalar               6      18.05     2.5%
+                                                                             speedup 3.14x vs its own 1 worker
+skewed_zipf_s1                              4  1048576 quicksort                scalar               6      33.55     1.5%
+                                                                             speedup 1.25x vs its own 1 worker
+skewed_zipf_s1                              4  4194304 samplesort               scalar               1      69.39     0.7%
+skewed_zipf_s1                              4  4194304 quicksort                scalar               1      48.32     3.0%
+skewed_zipf_s1                              4  4194304 samplesort               scalar               6      22.10     0.6%
+                                                                             speedup 3.14x vs its own 1 worker
+skewed_zipf_s1                              4  4194304 quicksort                scalar               6      25.08     1.4%
+                                                                             speedup 1.93x vs its own 1 worker
+skewed_zipf_s1                            [bench_q4_scaling] 149/384 (39%) 9m51s elapsed, ~15m32s left | skewed_zipf_s1 x4col w1   
+[bench_q4_scaling] 158/384 (41%) 10m22s elapsed, ~14m50s left | skewed_zipf_s1 x2col w1   
+[bench_q4_scaling] 165/384 (43%) 11m07s elapsed, ~14m46s left | skewed_zipf_s1 x8col w1   
+[bench_q4_scaling] 169/384 (44%) 12m31s elapsed, ~15m56s left | skewed_zipf_s1 x16col w1   
+[bench_q4_scaling] 171/384 (45%) 13m03s elapsed, ~16m16s left | skewed_zipf_s1 x16col w6   
+  4 16777216 samplesort               scalar               1      72.24     0.3%
+skewed_zipf_s1                              4 16777216 quicksort                scalar               1      60.78     0.1%
+skewed_zipf_s1                              4 16777216 samplesort               scalar               6      23.66     0.3%
+                                                                             speedup 3.05x vs its own 1 worker
+skewed_zipf_s1                              4 16777216 quicksort                scalar               6      17.97     0.7%
+                                                                             speedup 3.38x vs its own 1 worker
+
+-- columns, skewed_zipf_s1, 8388608 rows, u32 --
+skewed_zipf_s1                              1  8388608 samplesort               scalar               1      11.09     0.7%
+skewed_zipf_s1                              1  8388608 quicksort                scalar               1       8.10     0.9%
+skewed_zipf_s1                              1  8388608 samplesort               scalar               6      10.36     1.2%
+                                                                             speedup 1.07x vs its own 1 worker
+skewed_zipf_s1                              1  8388608 quicksort                scalar               6       4.38     4.3%
+                                                                             speedup 1.85x vs its own 1 worker
+skewed_zipf_s1                              2  8388608 samplesort               scalar               1      33.19     0.6%
+skewed_zipf_s1                              2  8388608 quicksort                scalar               1      27.56     0.5%
+skewed_zipf_s1                              2  8388608 samplesort               scalar               6      15.42     1.6%
+                                                                             speedup 2.15x vs its own 1 worker
+skewed_zipf_s1                              2  8388608 quicksort                scalar               6       9.69     6.5%
+                                                                             speedup 2.84x vs its own 1 worker
+skewed_zipf_s1                              4  8388608 samplesort               scalar               1      71.75     0.4%
+skewed_zipf_s1                              4  8388608 quicksort                scalar               1      53.77     0.3%
+skewed_zipf_s1                              4  8388608 samplesort               scalar               6      23.78     0.8%
+                                                                             speedup 3.02x vs its own 1 worker
+skewed_zipf_s1                              4  8388608 quicksort                scalar               6      20.96     1.5%
+                                                                             speedup 2.57x vs its own 1 worker
+skewed_zipf_s1                              8  8388608 samplesort               scalar               1     216.74     0.1%
+skewed_zipf_s1                              8  8388608 quicksort                scalar               1     128.05     0.4%
+skewed_zipf_s1                              8  8388608 samplesort               scalar               6      57.64     0.6%
+                                                                             speedup 3.76x vs its own 1 worker
+skewed_zipf_s1                              8  8388608 quicksort                scalar               6     133.81     0.5%
+                                                                             speedup 0.96x vs its own 1 worker
+skewed_zipf_s1                             16  8388608 samplesort               scalar               1     500.63     0.2%
+skewed_zipf_s1                             16  8388608 quicksort                scalar               1     257.01     0.6%
+skewed_zipf_s1                             16  8388608 samplesort               scalar               6     103.10     0.4%
+                                                                             speedup 4.86x vs its own 1 worker
+skewed_zipf_s1                        [bench_q4_scaling] 172/384 (45%) 13m34s elapsed, ~16m43s left | skewed_zipf_s1 x16col w6   
+[bench_q4_scaling] 174/384 (45%) 14m16s elapsed, ~17m13s left | tpcds_q010_u32_n26558236_m8 x8col w1   
+[bench_q4_scaling] 178/384 (46%) 14m50s elapsed, ~17m10s left | tpcds_q010_u32_n26558236_m8 x8col w4   
+[bench_q4_scaling] 182/384 (47%) 15m22s elapsed, ~17m03s left | tpcds_q050_u32_n27504853_m10 x10col w1   
+[bench_q4_scaling] 185/384 (48%) 16m05s elapsed, ~17m18s left | tpcds_q050_u32_n27504853_m10 x10col w4   
+[bench_q4_scaling] 189/384 (49%) 17m37s elapsed, ~18m11s left | tpcds_q064_u32_n26532108_m9 x9col w1   
+[bench_q4_scaling] 190/384 (49%) 18m18s elapsed, ~18m41s left | tpcds_q064_u32_n26532108_m9 x9col w1   
+     16  8388608 quicksort                scalar               6     356.46     0.3%
+                                                                             speedup 0.72x vs its own 1 worker
+
+-- threads, tpcds_q010_u32_n26558236_m8, 26558236 rows, 8 columns, u32 (measured) --
+tpcds_q010_u32_n26558236_m8                  8 26558236 samplesort               scalar               1      60.38     0.1%
+tpcds_q010_u32_n26558236_m8                  8 26558236 quicksort                scalar               1      47.52     0.1%
+tpcds_q010_u32_n26558236_m8                  8 26558236 samplesort               scalar               2      39.27     2.7%
+                                                                             speedup 1.54x vs its own 1 worker
+tpcds_q010_u32_n26558236_m8                  8 26558236 quicksort                scalar               2      28.27     1.0%
+                                                                             speedup 1.68x vs its own 1 worker
+tpcds_q010_u32_n26558236_m8                  8 26558236 samplesort               scalar               4      27.22     2.0%
+                                                                             speedup 2.22x vs its own 1 worker
+tpcds_q010_u32_n26558236_m8                  8 26558236 quicksort                scalar               4      16.53     1.7%
+                                                                             speedup 2.87x vs its own 1 worker
+tpcds_q010_u32_n26558236_m8                  8 26558236 samplesort               scalar               6      20.48     1.5%
+                                                                             speedup 2.95x vs its own 1 worker
+tpcds_q010_u32_n26558236_m8                  8 26558236 quicksort                scalar               6      13.18     2.1%
+                                                                             speedup 3.61x vs its own 1 worker
+
+-- threads, tpcds_q050_u32_n27504853_m10, 27504853 rows, 10 columns, u32 (measured) --
+tpcds_q050_u32_n27504853_m10                 10 27504853 samplesort               scalar               1      41.62     1.7%
+tpcds_q050_u32_n27504853_m10                 10 27504853 quicksort                scalar               1      19.69     0.4%
+tpcds_q050_u32_n27504853_m10                 10 27504853 samplesort               scalar               2      34.06     2.4%
+                                                                             speedup 1.22x vs its own 1 worker
+tpcds_q050_u32_n27504853_m10                 10 27504853 quicksort                scalar               2      12.34     2.3%
+                                                                             speedup 1.60x vs its own 1 worker
+tpcds_q050_u32_n27504853_m10                 10 27504853 samplesort               scalar               4      31.37     7.1%
+                                                                             speedup 1.33x vs its own 1 worker
+tpcds_q050_u32_n27504853_m10                 10 27504853 quicksort                scalar               4      11.05     2.5%
+                                                                             speedup 1.78x vs its own 1 worker
+tpcds_q050_u32_n27504853_m10                 10 27504853 samplesort               scalar               6      32.29     1.5%
+                                                                             speedup 1.29x vs its own 1 worker
+tpcds_q050_u32_n27504853_m10                 10 27504853 quicksort                scalar               6      11.02     1.8%
+                                                                             speedup 1.79x vs its own 1 worker
+
+-- threads, tpcds_q064_u32_n26532108_m9, 26532108 rows, 9 columns, u32 (measured) --
+tpcds_q064_u32_n26532108_m9                  9 26532108 samplesort               scalar               1     201.64     0.1%
+tpcds_q064_u32_n26532108_m9                  9 26532108 quicksort                scalar               1     144.08     0.1%
+tpcds_q064_u32_n26532108_m9                  9 26532108 samplesort  [bench_q4_scaling] 191/384 (50%) 18m49s elapsed, ~19m01s left | tpcds_q064_u32_n26532108_m9 x9col w2   
+[bench_q4_scaling] 192/384 (50%) 19m21s elapsed, ~19m21s left | tpcds_q064_u32_n26532108_m9 x9col w2   
+[bench_q4_scaling] 194/384 (51%) 20m11s elapsed, ~19m46s left | tpcds_q064_u32_n26532108_m9 x9col w4   
+[bench_q4_scaling] 196/384 (51%) 21m02s elapsed, ~20m11s left | tpcds_q064_u32_n26532108_m9 x9col w6   
+[bench_q4_scaling] 197/384 (51%) 21m55s elapsed, ~20m48s left | tpcds_q067_u32_n26856871_m8 x8col w1   
+[bench_q4_scaling] 199/384 (52%) 22m46s elapsed, ~21m10s left | tpcds_q067_u32_n26856871_m8 x8col w2   
+[bench_q4_scaling] 201/384 (52%) 23m19s elapsed, ~21m14s left | tpcds_q067_u32_n26856871_m8 x8col w4   
+[bench_q4_scaling] 204/384 (53%) 24m03s elapsed, ~21m13s left | tpcds_q067_u32_n26856871_m8 x8col w6   
+             scalar               2     112.13     0.8%
+                                                                             speedup 1.80x vs its own 1 worker
+tpcds_q064_u32_n26532108_m9                  9 26532108 quicksort                scalar               2     109.80     0.4%
+                                                                             speedup 1.31x vs its own 1 worker
+tpcds_q064_u32_n26532108_m9                  9 26532108 samplesort               scalar               4      60.87     0.4%
+                                                                             speedup 3.31x vs its own 1 worker
+tpcds_q064_u32_n26532108_m9                  9 26532108 quicksort                scalar               4     111.51     1.1%
+                                                                             speedup 1.29x vs its own 1 worker
+tpcds_q064_u32_n26532108_m9                  9 26532108 samplesort               scalar               6      44.55     0.7%
+                                                                             speedup 4.53x vs its own 1 worker
+tpcds_q064_u32_n26532108_m9                  9 26532108 quicksort                scalar               6     132.44     0.8%
+                                                                             speedup 1.09x vs its own 1 worker
+
+-- threads, tpcds_q067_u32_n26856871_m8, 26856871 rows, 8 columns, u32 (measured) --
+tpcds_q067_u32_n26856871_m8                  8 26856871 samplesort               scalar               1     131.18     1.1%
+tpcds_q067_u32_n26856871_m8                  8 26856871 quicksort                scalar               1     103.16     0.3%
+tpcds_q067_u32_n26856871_m8                  8 26856871 samplesort               scalar               2      76.16     0.4%
+                                                                             speedup 1.72x vs its own 1 worker
+tpcds_q067_u32_n26856871_m8                  8 26856871 quicksort                scalar               2      69.37     1.0%
+                                                                             speedup 1.49x vs its own 1 worker
+tpcds_q067_u32_n26856871_m8                  8 26856871 samplesort               scalar               4      42.65     0.7%
+                                                                             speedup 3.08x vs its own 1 worker
+tpcds_q067_u32_n26856871_m8                  8 26856871 quicksort                scalar               4      52.52     1.7%
+                                                                             speedup 1.96x vs its own 1 worker
+tpcds_q067_u32_n26856871_m8                  8 26856871 samplesort               scalar               6      34.01     2.3%
+                                                                             speedup 3.86x vs its own 1 worker
+tpcds_q067_u32_n26856871_m8                  8 26856871 quicksort                scalar               6      59.03     1.8%
+                                                                             speedup 1.75x vs its own 1 worker
+
+-- threads, tpcds_q081_u32_n500000_m15, 500000 rows, 15 columns, u32 (measured) --
+tpcds_q081_u32_n500000_m15                 15   500000 samplesort               scalar               1      19.18     3.2%
+tpcds_q081_u32_n500000_m15                 15   500000 quicksort                scalar               1      16.60     0.9%
+tpcds_q081_u32_n500000_m15                 15   500000 samplesort               scalar               2      15.36     4.1%
+                                                                             speedup 1.25x vs its own 1 worker
+tpcds_q081_u32_n500000_m15                 15   500000 quicksort                scalar               2      12.73     1.8%
+                                                                             speedup 1.30x vs its own 1 worker
+tpcds_q081_u32_n500000_m15                 15   500000 samplesort               scalar               4      11.48     5.0%
+                                                                             speedup 1.67[bench_q4_scaling] 219/384 (57%) 24m35s elapsed, ~18m31s left | tpcds_q67_sf1 x4col w6   
+x vs its own 1 worker
+tpcds_q081_u32_n500000_m15                 15   500000 quicksort                scalar               4       8.58     4.4%
+                                                                             speedup 1.93x vs its own 1 worker
+tpcds_q081_u32_n500000_m15                 15   500000 samplesort               scalar               6       9.90     2.8%
+                                                                             speedup 1.94x vs its own 1 worker
+tpcds_q081_u32_n500000_m15                 15   500000 quicksort                scalar               6       8.03     1.6%
+                                                                             speedup 2.07x vs its own 1 worker
+
+-- threads, tpcds_q67_sf1, 8388608 rows, 4 columns, u64 --
+tpcds_q67_sf1                               4  8388608 samplesort               scalar               1      55.72     2.5%
+tpcds_q67_sf1                               4  8388608 quicksort                scalar               1      49.26     0.3%
+tpcds_q67_sf1                               4  8388608 samplesort               scalar               2      38.82     3.1%
+                                                                             speedup 1.44x vs its own 1 worker
+tpcds_q67_sf1                               4  8388608 quicksort                scalar               2      30.03     0.3%
+                                                                             speedup 1.64x vs its own 1 worker
+tpcds_q67_sf1                               4  8388608 samplesort               scalar               4      26.82     1.0%
+                                                                             speedup 2.08x vs its own 1 worker
+tpcds_q67_sf1                               4  8388608 quicksort                scalar               4      17.91     6.4%
+                                                                             speedup 2.75x vs its own 1 worker
+tpcds_q67_sf1                               4  8388608 samplesort               scalar               6      22.11     2.3%
+                                                                             speedup 2.52x vs its own 1 worker
+tpcds_q67_sf1                               4  8388608 quicksort                scalar               6      15.38     5.0%
+                                                                             speedup 3.20x vs its own 1 worker
+
+-- rows, tpcds_q67_sf1, 4 columns, u64 --
+tpcds_q67_sf1                               4   262144 samplesort               scalar               1      38.14     3.6%
+tpcds_q67_sf1                               4   262144 quicksort                scalar               1      37.17     0.2%
+tpcds_q67_sf1                               4   262144 samplesort               scalar               6      13.85     2.4%
+                                                                             speedup 2.75x vs its own 1 worker
+tpcds_q67_sf1                               4   262144 quicksort                scalar               6      15.52     2.6%
+                                                                             speedup 2.40x vs its own 1 worker
+tpcds_q67_sf1                               4  1048576 samplesort               scalar               1      43.25     1.5%
+tpcds_q67_sf1                               4  1048576 quicksort                scalar               1      39.66     0.9%
+tpcds_q67_sf1                               4  1048576 samplesort               scalar               6      14.01     1.5%
+                                                                             speedup 3.09x vs its own 1 worker
+tpcds_q67_sf1                               4  1048576 quicksort                scalar               6      12.66     3.0%
+                                                                             speedup 3.13x vs its own 1 worker
+tpcds_q67_sf1                               4  4194304 samplesort               scalar               1      57.25     1.0%
+tpcds_q67_sf1                               4  4194304 quicksort    [bench_q4_scaling] 233/384 (61%) 25m07s elapsed, ~16m16s left | tpcds_q67_sf1 x4col w1   
+[bench_q4_scaling] 244/384 (64%) 25m38s elapsed, ~14m42s left | tpcds_q67_sf1 x4col w6   
+[bench_q4_scaling] 246/384 (64%) 26m22s elapsed, ~14m47s left | tpcds_q67_sf1 x8col w1   
+[bench_q4_scaling] 249/384 (65%) 27m15s elapsed, ~14m46s left | tpcds_q67_sf1 x16col w1   
+[bench_q4_scaling] 252/384 (66%) 27m58s elapsed, ~14m39s left | tpcds_q67_sf1 x16col w6   
+            scalar               1      44.91     1.4%
+tpcds_q67_sf1                               4  4194304 samplesort               scalar               6      22.16     1.0%
+                                                                             speedup 2.58x vs its own 1 worker
+tpcds_q67_sf1                               4  4194304 quicksort                scalar               6      15.15     1.6%
+                                                                             speedup 2.96x vs its own 1 worker
+tpcds_q67_sf1                               4 16777216 samplesort               scalar               1      58.12     0.2%
+tpcds_q67_sf1                               4 16777216 quicksort                scalar               1      52.81     0.0%
+tpcds_q67_sf1                               4 16777216 samplesort               scalar               6      23.05     1.7%
+                                                                             speedup 2.52x vs its own 1 worker
+tpcds_q67_sf1                               4 16777216 quicksort                scalar               6      15.66     2.8%
+                                                                             speedup 3.37x vs its own 1 worker
+
+-- columns, tpcds_q67_sf1, 8388608 rows, u64 --
+tpcds_q67_sf1                               1  8388608 -                        scalar               1   dropped: no such dataset at this size and column count
+tpcds_q67_sf1                               1  8388608 -                        scalar               6   dropped: no such dataset at this size and column count
+tpcds_q67_sf1                               2  8388608 -                        scalar               1   dropped: no such dataset at this size and column count
+tpcds_q67_sf1                               2  8388608 -                        scalar               6   dropped: no such dataset at this size and column count
+tpcds_q67_sf1                               4  8388608 samplesort               scalar               1      55.66     0.3%
+tpcds_q67_sf1                               4  8388608 quicksort                scalar               1      48.61     0.4%
+tpcds_q67_sf1                               4  8388608 samplesort               scalar               6      22.19     1.0%
+                                                                             speedup 2.51x vs its own 1 worker
+tpcds_q67_sf1                               4  8388608 quicksort                scalar               6      15.26     2.5%
+                                                                             speedup 3.19x vs its own 1 worker
+tpcds_q67_sf1                               8  8388608 samplesort               scalar               1     232.96     0.1%
+tpcds_q67_sf1                               8  8388608 quicksort                scalar               1     178.55     0.1%
+tpcds_q67_sf1                               8  8388608 samplesort               scalar               6      56.28     1.2%
+                                                                             speedup 4.14x vs its own 1 worker
+tpcds_q67_sf1                               8  8388608 quicksort                scalar               6     141.26     0.9%
+                                                                             speedup 1.26x vs its own 1 worker
+tpcds_q67_sf1                              16  8388608 samplesort               scalar               1     290.01     0.1%
+tpcds_q67_sf1                              16  8388608 quicksort                scalar               1     205.18     0.1%
+tpcds_q67_sf1                              16  8388608 samplesort               scalar               6      66.55     0.7%
+                                                                             speedup 4.36x vs its own 1 worker
+tpcds_q67_sf1                              16  8388608 quicksort                scalar               6     192.03     0.3%
+                                                                             speedup 1.07x vs its own 1 worker
+
+-- threads, low_cardinality[bench_q4_scaling] 269/384 (70%) 28m29s elapsed, ~12m10s left | low_cardinality_d4 x4col w1   
+_d4, 8388608 rows, 4 columns, u64 --
+low_cardinality_d4                          4  8388608 samplesort               scalar               1      50.16     0.4%
+low_cardinality_d4                          4  8388608 quicksort                scalar               1      36.34     0.5%
+low_cardinality_d4                          4  8388608 samplesort               scalar               2      32.58     0.7%
+                                                                             speedup 1.54x vs its own 1 worker
+low_cardinality_d4                          4  8388608 quicksort                scalar               2      22.91     1.9%
+                                                                             speedup 1.59x vs its own 1 worker
+low_cardinality_d4                          4  8388608 samplesort               scalar               4      22.96     0.9%
+                                                                             speedup 2.18x vs its own 1 worker
+low_cardinality_d4                          4  8388608 quicksort                scalar               4      15.24     1.6%
+                                                                             speedup 2.39x vs its own 1 worker
+low_cardinality_d4                          4  8388608 samplesort               scalar               6      22.72     1.8%
+                                                                             speedup 2.21x vs its own 1 worker
+low_cardinality_d4                          4  8388608 quicksort                scalar               6      13.44     1.4%
+                                                                             speedup 2.70x vs its own 1 worker
+
+-- rows, low_cardinality_d4, 4 columns, u64 --
+low_cardinality_d4                          4   262144 samplesort               scalar               1      20.45     0.9%
+low_cardinality_d4                          4   262144 quicksort                scalar               1      17.49     2.2%
+low_cardinality_d4                          4   262144 samplesort               scalar               6      14.21     1.4%
+                                                                             speedup 1.44x vs its own 1 worker
+low_cardinality_d4                          4   262144 quicksort                scalar               6      11.13     5.0%
+                                                                             speedup 1.57x vs its own 1 worker
+low_cardinality_d4                          4  1048576 samplesort               scalar               1      27.36     0.4%
+low_cardinality_d4                          4  1048576 quicksort                scalar               1      22.86     1.3%
+low_cardinality_d4                          4  1048576 samplesort               scalar               6      13.72     2.6%
+                                                                             speedup 1.99x vs its own 1 worker
+low_cardinality_d4                          4  1048576 quicksort                scalar               6       9.40     1.6%
+                                                                             speedup 2.43x vs its own 1 worker
+low_cardinality_d4                          4  4194304 samplesort               scalar               1      45.13     0.3%
+low_cardinality_d4                          4  4194304 quicksort                scalar               1      30.60     0.5%
+low_cardinality_d4                          4  4194304 samplesort               scalar               6      22.79     0.8%
+                                                                             speedup 1.98x vs its own 1 worker
+low_cardinality_d4                          4  4194304 quicksort                scalar               6      11.40     1.5%
+                                                                             speedup 2.68x vs its own 1 worker
+low_cardinality_d4                          4 16777216 samplesort               scalar               1      50.51     0.2%
+low_cardinality_d4                          4 16777216 quicksort                scalar          [bench_q4_scaling] 275/384 (72%) 29m02s elapsed, ~11m30s left | low_cardinality_d4 x4col w6   
+[bench_q4_scaling] 289/384 (75%) 29m50s elapsed, ~9m48s left | low_cardinality_d4 x8col w1   
+[bench_q4_scaling] 293/384 (76%) 30m50s elapsed, ~9m34s left | low_cardinality_d4 x16col w1   
+[bench_q4_scaling] 295/384 (77%) 31m21s elapsed, ~9m27s left | low_cardinality_d4 x16col w6   
+     1      37.15     2.9%
+low_cardinality_d4                          4 16777216 samplesort               scalar               6      23.68     0.9%
+                                                                             speedup 2.13x vs its own 1 worker
+low_cardinality_d4                          4 16777216 quicksort                scalar               6      13.62     1.4%
+                                                                             speedup 2.73x vs its own 1 worker
+
+-- columns, low_cardinality_d4, 8388608 rows, u64 --
+low_cardinality_d4                          1  8388608 samplesort               scalar               1      14.17     1.3%
+low_cardinality_d4                          1  8388608 quicksort                scalar               1       5.87     0.5%
+low_cardinality_d4                          1  8388608 samplesort               scalar               6      17.63     1.9%
+                                                                             speedup 0.80x vs its own 1 worker
+low_cardinality_d4                          1  8388608 quicksort                scalar               6       6.03     2.3%
+                                                                             speedup 0.97x vs its own 1 worker
+low_cardinality_d4                          2  8388608 samplesort               scalar               1      25.44     0.6%
+low_cardinality_d4                          2  8388608 quicksort                scalar               1      13.85     0.5%
+low_cardinality_d4                          2  8388608 samplesort               scalar               6      16.77     1.7%
+                                                                             speedup 1.52x vs its own 1 worker
+low_cardinality_d4                          2  8388608 quicksort                scalar               6       8.00     7.5%
+                                                                             speedup 1.73x vs its own 1 worker
+low_cardinality_d4                          4  8388608 samplesort               scalar               1      50.00     0.3%
+low_cardinality_d4                          4  8388608 quicksort                scalar               1      36.35     0.7%
+low_cardinality_d4                          4  8388608 samplesort               scalar               6      22.27     2.3%
+                                                                             speedup 2.25x vs its own 1 worker
+low_cardinality_d4                          4  8388608 quicksort                scalar               6      12.26     2.9%
+                                                                             speedup 2.96x vs its own 1 worker
+low_cardinality_d4                          8  8388608 samplesort               scalar               1     105.54     0.2%
+low_cardinality_d4                          8  8388608 quicksort                scalar               1      87.42     0.2%
+low_cardinality_d4                          8  8388608 samplesort               scalar               6      33.37     1.9%
+                                                                             speedup 3.16x vs its own 1 worker
+low_cardinality_d4                          8  8388608 quicksort                scalar               6      21.94     4.2%
+                                                                             speedup 3.98x vs its own 1 worker
+low_cardinality_d4                         16  8388608 samplesort               scalar               1     374.11     0.2%
+low_cardinality_d4                         16  8388608 quicksort                scalar               1     245.05     0.2%
+low_cardinality_d4                         16  8388608 samplesort               scalar               6      86.94     0.5%
+                                                                             speedup 4.30x vs its own 1 worker
+low_cardinality_d4                         16  8388608 quicksort                scalar               6     238.45     0.3%
+                                                                             speedup 1.0[bench_q4_scaling] 297/384 (77%) 31m56s elapsed, ~9m21s left | independent_uniform_c1024 x4col w1   
+[bench_q4_scaling] 304/384 (79%) 32m30s elapsed, ~8m33s left | independent_uniform_c1024 x4col w6   
+[bench_q4_scaling] 317/384 (83%) 33m16s elapsed, ~7m02s left | independent_uniform_c1024 x4col w1   
+3x vs its own 1 worker
+
+-- threads, independent_uniform_c1024, 8388608 rows, 4 columns, u64 --
+independent_uniform_c1024                   4  8388608 samplesort               scalar               1     109.53     0.4%
+independent_uniform_c1024                   4  8388608 quicksort                scalar               1      90.44     0.3%
+independent_uniform_c1024                   4  8388608 samplesort               scalar               2      62.69     1.2%
+                                                                             speedup 1.75x vs its own 1 worker
+independent_uniform_c1024                   4  8388608 quicksort                scalar               2      57.67     2.5%
+                                                                             speedup 1.57x vs its own 1 worker
+independent_uniform_c1024                   4  8388608 samplesort               scalar               4      39.85     1.1%
+                                                                             speedup 2.75x vs its own 1 worker
+independent_uniform_c1024                   4  8388608 quicksort                scalar               4      44.32     2.1%
+                                                                             speedup 2.04x vs its own 1 worker
+independent_uniform_c1024                   4  8388608 samplesort               scalar               6      29.73     4.5%
+                                                                             speedup 3.68x vs its own 1 worker
+independent_uniform_c1024                   4  8388608 quicksort                scalar               6      52.50     1.5%
+                                                                             speedup 1.72x vs its own 1 worker
+
+-- rows, independent_uniform_c1024, 4 columns, u64 --
+independent_uniform_c1024                   4   262144 samplesort               scalar               1      49.28     1.5%
+independent_uniform_c1024                   4   262144 quicksort                scalar               1      40.68     4.4%
+independent_uniform_c1024                   4   262144 samplesort               scalar               6      17.95     4.3%
+                                                                             speedup 2.74x vs its own 1 worker
+independent_uniform_c1024                   4   262144 quicksort                scalar               6      39.91     1.6%
+                                                                             speedup 1.02x vs its own 1 worker
+independent_uniform_c1024                   4  1048576 samplesort               scalar               1      99.87     0.7%
+independent_uniform_c1024                   4  1048576 quicksort                scalar               1      69.74     0.9%
+independent_uniform_c1024                   4  1048576 samplesort               scalar               6      25.02     1.4%
+                                                                             speedup 3.99x vs its own 1 worker
+independent_uniform_c1024                   4  1048576 quicksort                scalar               6      95.68     1.8%
+                                                                             speedup 0.73x vs its own 1 worker
+independent_uniform_c1024                   4  4194304 samplesort               scalar               1     129.91     1.0%
+independent_uniform_c1024                   4  4194304 quicksort                scalar               1      90.89     0.9%
+independent_uniform_c1024                   4  4194304 samplesort               scalar               6      33.65     3.6%
+                                                                             speedup 3.86x vs its own 1 worker
+independent_uniform_c1024                   4  4194304 quicksort                scalar               6      89.00     0.8%
+                                                                             speedup 1.02x vs its own 1 worker
+independent_uniform_c1024                   4 16777216 samplesort               scalar               1      98.20     0.1%
+independent_uniform_c1024      [bench_q4_scaling] 321/384 (84%) 33m47s elapsed, ~6m37s left | independent_uniform_c1024 x1col w1   
+[bench_q4_scaling] 329/384 (86%) 34m21s elapsed, ~5m44s left | independent_uniform_c1024 x4col w1   
+[bench_q4_scaling] 334/384 (87%) 34m59s elapsed, ~5m14s left | independent_uniform_c1024 x8col w1   
+[bench_q4_scaling] 338/384 (88%) 35m33s elapsed, ~4m50s left | independent_uniform_c1024 x16col w1   
+             4 16777216 quicksort                scalar               1      87.72     0.2%
+independent_uniform_c1024                   4 16777216 samplesort               scalar               6      28.55     0.8%
+                                                                             speedup 3.44x vs its own 1 worker
+independent_uniform_c1024                   4 16777216 quicksort                scalar               6      31.21     3.4%
+                                                                             speedup 2.81x vs its own 1 worker
+
+-- columns, independent_uniform_c1024, 8388608 rows, u64 --
+independent_uniform_c1024                   1  8388608 samplesort               scalar               1      19.99     0.7%
+independent_uniform_c1024                   1  8388608 quicksort                scalar               1      20.29     0.8%
+independent_uniform_c1024                   1  8388608 samplesort               scalar               6      18.70     2.9%
+                                                                             speedup 1.07x vs its own 1 worker
+independent_uniform_c1024                   1  8388608 quicksort                scalar               6       8.69     9.5%
+                                                                             speedup 2.33x vs its own 1 worker
+independent_uniform_c1024                   2  8388608 samplesort               scalar               1      52.93     0.4%
+independent_uniform_c1024                   2  8388608 quicksort                scalar               1      51.22     1.0%
+independent_uniform_c1024                   2  8388608 samplesort               scalar               6      19.63     7.5%
+                                                                             speedup 2.70x vs its own 1 worker
+independent_uniform_c1024                   2  8388608 quicksort                scalar               6      13.77     0.7%
+                                                                             speedup 3.72x vs its own 1 worker
+independent_uniform_c1024                   4  8388608 samplesort               scalar               1     107.81     0.2%
+independent_uniform_c1024                   4  8388608 quicksort                scalar               1      90.27     1.1%
+independent_uniform_c1024                   4  8388608 samplesort               scalar               6      29.61     1.6%
+                                                                             speedup 3.64x vs its own 1 worker
+independent_uniform_c1024                   4  8388608 quicksort                scalar               6      52.51     0.7%
+                                                                             speedup 1.72x vs its own 1 worker
+independent_uniform_c1024                   8  8388608 samplesort               scalar               1     109.79     0.2%
+independent_uniform_c1024                   8  8388608 quicksort                scalar               1      89.64     0.5%
+independent_uniform_c1024                   8  8388608 samplesort               scalar               6      31.29     1.1%
+                                                                             speedup 3.51x vs its own 1 worker
+independent_uniform_c1024                   8  8388608 quicksort                scalar               6      51.68     1.6%
+                                                                             speedup 1.73x vs its own 1 worker
+independent_uniform_c1024                  16  8388608 samplesort               scalar               1     109.66     0.2%
+independent_uniform_c1024                  16  8388608 quicksort                scalar               1      89.63     0.5%
+independent_uniform_c1024                  16  8388608 samplesort               scalar               6      30.92     1.2%
+                                                                             speedup 3.55x vs its own 1 worker
+independent_uniform_c1024                  16  8388608 quicksort                scalar               6      52.17     0.9%
+                [bench_q4_scaling] 343/384 (89%) 36m08s elapsed, ~4m19s left | skewed_zipf_s1 x4col w2   
+[bench_q4_scaling] 359/384 (93%) 36m39s elapsed, ~2m33s left | skewed_zipf_s1 x4col w6   
+                                                             speedup 1.72x vs its own 1 worker
+
+-- threads, skewed_zipf_s1, 8388608 rows, 4 columns, u64 --
+skewed_zipf_s1                              4  8388608 samplesort               scalar               1      89.88     0.2%
+skewed_zipf_s1                              4  8388608 quicksort                scalar               1      79.81     0.3%
+skewed_zipf_s1                              4  8388608 samplesort               scalar               2      56.82     2.1%
+                                                                             speedup 1.58x vs its own 1 worker
+skewed_zipf_s1                              4  8388608 quicksort                scalar               2      48.91     0.6%
+                                                                             speedup 1.63x vs its own 1 worker
+skewed_zipf_s1                              4  8388608 samplesort               scalar               4      39.84     0.9%
+                                                                             speedup 2.26x vs its own 1 worker
+skewed_zipf_s1                              4  8388608 quicksort                scalar               4      29.92     1.3%
+                                                                             speedup 2.67x vs its own 1 worker
+skewed_zipf_s1                              4  8388608 samplesort               scalar               6      32.83     0.9%
+                                                                             speedup 2.74x vs its own 1 worker
+skewed_zipf_s1                              4  8388608 quicksort                scalar               6      26.26     4.0%
+                                                                             speedup 3.04x vs its own 1 worker
+
+-- rows, skewed_zipf_s1, 4 columns, u64 --
+skewed_zipf_s1                              4   262144 samplesort               scalar               1      69.54     2.4%
+skewed_zipf_s1                              4   262144 quicksort                scalar               1      55.77     2.2%
+skewed_zipf_s1                              4   262144 samplesort               scalar               6      24.91     3.3%
+                                                                             speedup 2.79x vs its own 1 worker
+skewed_zipf_s1                              4   262144 quicksort                scalar               6      51.18     0.9%
+                                                                             speedup 1.09x vs its own 1 worker
+skewed_zipf_s1                              4  1048576 samplesort               scalar               1      76.48     0.6%
+skewed_zipf_s1                              4  1048576 quicksort                scalar               1      61.30     0.7%
+skewed_zipf_s1                              4  1048576 samplesort               scalar               6      25.56     0.9%
+                                                                             speedup 2.99x vs its own 1 worker
+skewed_zipf_s1                              4  1048576 quicksort                scalar               6      36.40     1.9%
+                                                                             speedup 1.68x vs its own 1 worker
+skewed_zipf_s1                              4  4194304 samplesort               scalar               1      91.16     0.7%
+skewed_zipf_s1                              4  4194304 quicksort                scalar               1      74.29     1.1%
+skewed_zipf_s1                              4  4194304 samplesort               scalar               6      32.99     1.5%
+                                                                             speedup 2.76x vs its own 1 worker
+skewed_zipf_s1                              4  4194304 quicksort                scalar               6      27.60     1.5%
+                                                                             speedup 2.69x vs its own 1 worker
+skewed_zipf_s1                              4 16777216 samplesort               scalar               1  [bench_q4_scaling] 362/384 (94%) 37m22s elapsed, ~2m16s left | skewed_zipf_s1 x4col w1   
+[bench_q4_scaling] 370/384 (96%) 37m52s elapsed, ~1m26s left | skewed_zipf_s1 x2col w1   
+[bench_q4_scaling] 377/384 (98%) 38m50s elapsed, ~43s left | skewed_zipf_s1 x8col w1   
+[bench_q4_scaling] 380/384 (99%) 39m25s elapsed, ~24s left | skewed_zipf_s1 x8col w6   
+[bench_q4_scaling] 381/384 (99%) 40m28s elapsed, ~19s left | skewed_zipf_s1 x16col w1   
+[bench_q4_scaling] 383/384 (100%) 41m09s elapsed, ~6s left | skewed_zipf_s1 x16col w6   
+    90.12     0.4%
+skewed_zipf_s1                              4 16777216 quicksort                scalar               1      84.46     0.2%
+skewed_zipf_s1                              4 16777216 samplesort               scalar               6      33.20     1.9%
+                                                                             speedup 2.71x vs its own 1 worker
+skewed_zipf_s1                              4 16777216 quicksort                scalar               6      25.15     4.0%
+                                                                             speedup 3.36x vs its own 1 worker
+
+-- columns, skewed_zipf_s1, 8388608 rows, u64 --
+skewed_zipf_s1                              1  8388608 samplesort               scalar               1      18.13     0.2%
+skewed_zipf_s1                              1  8388608 quicksort                scalar               1      15.98     0.7%
+skewed_zipf_s1                              1  8388608 samplesort               scalar               6      18.18     2.2%
+                                                                             speedup 1.00x vs its own 1 worker
+skewed_zipf_s1                              1  8388608 quicksort                scalar               6       8.21     2.2%
+                                                                             speedup 1.95x vs its own 1 worker
+skewed_zipf_s1                              2  8388608 samplesort               scalar               1      51.42     0.4%
+skewed_zipf_s1                              2  8388608 quicksort                scalar               1      50.79     0.8%
+skewed_zipf_s1                              2  8388608 samplesort               scalar               6      24.08     2.1%
+                                                                             speedup 2.14x vs its own 1 worker
+skewed_zipf_s1                              2  8388608 quicksort                scalar               6      17.02     6.4%
+                                                                             speedup 2.98x vs its own 1 worker
+skewed_zipf_s1                              4  8388608 samplesort               scalar               1      91.97     0.2%
+skewed_zipf_s1                              4  8388608 quicksort                scalar               1      80.95     1.7%
+skewed_zipf_s1                              4  8388608 samplesort               scalar               6      33.17     1.2%
+                                                                             speedup 2.77x vs its own 1 worker
+skewed_zipf_s1                              4  8388608 quicksort                scalar               6      25.33     4.1%
+                                                                             speedup 3.20x vs its own 1 worker
+skewed_zipf_s1                              8  8388608 samplesort               scalar               1     241.68     0.2%
+skewed_zipf_s1                              8  8388608 quicksort                scalar               1     181.01     0.3%
+skewed_zipf_s1                              8  8388608 samplesort               scalar               6      67.41     0.5%
+                                                                             speedup 3.59x vs its own 1 worker
+skewed_zipf_s1                              8  8388608 quicksort                scalar               6     140.55     0.4%
+                                                                             speedup 1.29x vs its own 1 worker
+skewed_zipf_s1                             16  8388608 samplesort               scalar               1     541.75     0.4%
+skewed_zipf_s1                             16  8388608 quicksort                scalar               1     341.41     0.2%
+skewed_zipf_s1                             16  8388608 samplesort               scalar               6     115.13     0.7%
+                                                                             speedup 4.71x vs its own 1 worker
+skewed_zipf_s1                             16  8388608 quicksort                scalar              [bench_q4_scaling] 384/384 (100%) 41m41s elapsed, ~0s left | skewed_zipf_s1 x16col w6   
+ 6     362.31     0.3%
+                                                                             speedup 0.94x vs its own 1 worker
+
+376 measured, 8 dropped, 0 incorrect
+  !! 13 row(s) still spread wider than 5% after 33 repetitions: the machine would not settle on those, and their medians should not be compared at fine margins
+
+wrote /home/pietrzyk/tslgen-v99/test-sort/benchmark_results_verify/q4_scaling.csv (384 rows)

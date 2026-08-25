@@ -1,0 +1,121 @@
+[bench_q3_detection] 1/120 (1%) 3s elapsed, ~6m16s left   
+[bench_q3_detection] 10/120 (8%) 46s elapsed, ~8m35s left   
+[bench_q3_detection] 18/120 (15%) 1m17s elapsed, ~7m19s left   
+Q3 detection / bench_q3_detection
+host=bolvar cores=24 governor=performance clock=4218MHz load=1.28 compiler=clang 24.0
+topology: 2 NUMA node(s), 6 physical core(s) per node, 6 logical cpu(s) available to this process [pinned], LLC 30 MiB
+  !! load average above 1.0: another process is competing and these numbers are not publishable
+instrumentation=off (counters compiled out)
+measure-cell=clang_bool/512-bit
+workers=1..6, rows=8388608 (derived from this machine)
+detectors=scalar dsa_hw (explicit list; --paths ignored)
+min_offload=4096  backends compiled in: scalar dml_sw dsa_hw dml_sw_async dsa_hw_async 
+
+shape                      params        cols     rows algorithm                detector       workers    ns/elem      iqr
+independent_uniform_c16    c=16             2  8388608 samplesort               scalar               1      16.77     0.5%
+independent_uniform_c16    c=16             2  8388608 samplesort               dsa_hw               1      15.70     1.5%
+independent_uniform_c16    c=16             2  8388608 samplesort               dml_sw_async         1   dropped: asynchronous: this driver never polls
+independent_uniform_c16    c=16             2  8388608 samplesort               dsa_hw_async         1   dropped: asynchronous: this driver never polls
+independent_uniform_c16    c=16             2  8388608 samplesort               scalar               6       9.50     4.3%
+independent_uniform_c16    c=16             2  8388608 samplesort               dsa_hw               6       8.85     2.3%
+independent_uniform_c16    c=16             2  8388608 samplesort               dml_sw_async         6   dropped: asynchronous: this driver never polls
+independent_uniform_c16    c=16             2  8388608 samplesort               dsa_hw_async         6   dropped: asynchronous: this driver never polls
+independent_uniform_c16    c=16             8  8388608 samplesort               scalar               1     195.84     0.3%
+independent_uniform_c16    c=16             8  8388608 samplesort               dsa_hw               1     204.90     0.1%
+independent_uniform_c16    c=16             8  8388608 samplesort               dml_sw_async         1   dropped: asynchronous: this driver never polls
+independent_uniform_c16    c=16             8  8388608 samplesort               dsa_hw_async         1   dropped: asynchronous: this driver never polls
+independent_uniform_c16    c=16             8  8388608 samplesort               scalar               6      49.37     2.2%
+independent_uniform_c16    c=16             8  8388608 samplesort               dsa_hw               6     212.50     0.1%
+independent_uniform_c16    c=16             8  8388608 samplesort               dml_sw_async         6   dropped: asynchronous: this driver never polls
+independent_uniform_c16    c=16             8  8388608 samplesort               dsa_hw_async         6   dropped: asynchronous: this driver never polls
+independent_uniform_c1024  c=1024           2  8388608 samplesort               scalar               1      32.22     0.8%
+independent_uniform_c1024  c=1024           2  8388608 samplesort               dsa_hw               1      31.98     0.5%
+independent_uniform_c1024  c=1024           2  8388608 samplesort               dml_sw_async         1   dropped: asynchronous: this driver never polls
+independent_uniform_c1024  c=1024           2  8388608 samplesort               dsa_hw_async         1   dropped: asynchronous: this driver never polls
+independent_uniform_c1024  c=1024           2  8388608 samplesort               scalar               6      11.90     2.8%
+independent_uniform_c1024  c=1024           2  8388608 samplesort               dsa_hw               6      11.33     1.9%
+independent_uniform_c1024  c=1024           2  8388608 samplesort               dml_sw_async         6   dropped: asynchronous: this driver never polls
+independent_uniform_c1024  c=1024           2  8388608 samplesort               dsa_hw_async         6   dropped: asynchronous: this driver never polls
+independent_uniform_c1024  c=1024           8  8388608 sample[bench_q3_detection] 30/120 (25%) 1m51s elapsed, ~5m33s left   
+[bench_q3_detection] 50/120 (42%) 2m23s elapsed, ~3m21s left   
+sort               scalar               1      93.70     0.7%
+independent_uniform_c1024  c=1024           8  8388608 samplesort               dsa_hw               1      97.78     0.4%
+independent_uniform_c1024  c=1024           8  8388608 samplesort               dml_sw_async         1   dropped: asynchronous: this driver never polls
+independent_uniform_c1024  c=1024           8  8388608 samplesort               dsa_hw_async         1   dropped: asynchronous: this driver never polls
+independent_uniform_c1024  c=1024           8  8388608 samplesort               scalar               6      24.46     0.9%
+independent_uniform_c1024  c=1024           8  8388608 samplesort               dsa_hw               6      96.13     0.7%
+independent_uniform_c1024  c=1024           8  8388608 samplesort               dml_sw_async         6   dropped: asynchronous: this driver never polls
+independent_uniform_c1024  c=1024           8  8388608 samplesort               dsa_hw_async         6   dropped: asynchronous: this driver never polls
+independent_uniform_c65536 c=65536          2  8388608 samplesort               scalar               1      35.44     1.1%
+independent_uniform_c65536 c=65536          2  8388608 samplesort               dsa_hw               1      35.40     0.5%
+independent_uniform_c65536 c=65536          2  8388608 samplesort               dml_sw_async         1   dropped: asynchronous: this driver never polls
+independent_uniform_c65536 c=65536          2  8388608 samplesort               dsa_hw_async         1   dropped: asynchronous: this driver never polls
+independent_uniform_c65536 c=65536          2  8388608 samplesort               scalar               6      15.13     0.5%
+independent_uniform_c65536 c=65536          2  8388608 samplesort               dsa_hw               6      14.82     0.8%
+independent_uniform_c65536 c=65536          2  8388608 samplesort               dml_sw_async         6   dropped: asynchronous: this driver never polls
+independent_uniform_c65536 c=65536          2  8388608 samplesort               dsa_hw_async         6   dropped: asynchronous: this driver never polls
+independent_uniform_c65536 c=65536          8  8388608 samplesort               scalar               1      36.57     0.7%
+independent_uniform_c65536 c=65536          8  8388608 samplesort               dsa_hw               1      36.73     1.1%
+independent_uniform_c65536 c=65536          8  8388608 samplesort               dml_sw_async         1   dropped: asynchronous: this driver never polls
+independent_uniform_c65536 c=65536          8  8388608 samplesort               dsa_hw_async         1   dropped: asynchronous: this driver never polls
+independent_uniform_c65536 c=65536          8  8388608 samplesort               scalar               6      15.59     1.3%
+independent_uniform_c65536 c=65536          8  8388608 samplesort               dsa_hw               6      16.64     1.4%
+independent_uniform_c65536 c=65536          8  8388608 samplesort               dml_sw_async         6   dropped: asynchronous: this driver never polls
+independent_uniform_c65536 c=65536          8  8388608 samplesort               dsa_hw_async         6   dropped: asynchronous: this driver never polls
+independent_uniform_c16    c=16             2  8388608 samplesort               scalar               1      29.19     0.5%
+independent_uniform_c16    c=16             2  8388608 samplesort               dsa_hw               1      28.71     0.2%
+independent_uniform_c16    c=16             2  8388608 samplesort               dml_sw_async         1   dropped: asynchronous: this driver never polls
+independent_uniform_c16    c=16             2  8388608 samplesort               dsa_hw_async         1   dropped: asynchronous: this driver never polls
+independent_uniform_c16    c=16             2  8388608 samplesort               scalar               6      17.07     0.3%
+independent_uniform_c16    c=16             2  8388608 samplesort               dsa_hw               6      16.49     0.8%
+independent_uniform_c16    c=16             2  8388608 sample[bench_q3_detection] 57/120 (48%) 2m53s elapsed, ~3m11s left   
+[bench_q3_detection] 62/120 (52%) 3m41s elapsed, ~3m27s left   
+[bench_q3_detection] 73/120 (61%) 4m12s elapsed, ~2m42s left   
+[bench_q3_detection] 81/120 (68%) 4m44s elapsed, ~2m16s left   
+sort               dml_sw_async         6   dropped: asynchronous: this driver never polls
+independent_uniform_c16    c=16             2  8388608 samplesort               dsa_hw_async         6   dropped: asynchronous: this driver never polls
+independent_uniform_c16    c=16             8  8388608 samplesort               scalar               1     229.25     0.2%
+independent_uniform_c16    c=16             8  8388608 samplesort               dsa_hw               1     237.00     0.3%
+independent_uniform_c16    c=16             8  8388608 samplesort               dml_sw_async         1   dropped: asynchronous: this driver never polls
+independent_uniform_c16    c=16             8  8388608 samplesort               dsa_hw_async         1   dropped: asynchronous: this driver never polls
+independent_uniform_c16    c=16             8  8388608 samplesort               scalar               6      60.79     1.4%
+independent_uniform_c16    c=16             8  8388608 samplesort               dsa_hw               6     252.08     0.4%
+independent_uniform_c16    c=16             8  8388608 samplesort               dml_sw_async         6   dropped: asynchronous: this driver never polls
+independent_uniform_c16    c=16             8  8388608 samplesort               dsa_hw_async         6   dropped: asynchronous: this driver never polls
+independent_uniform_c1024  c=1024           2  8388608 samplesort               scalar               1      51.89     3.2%
+independent_uniform_c1024  c=1024           2  8388608 samplesort               dsa_hw               1      51.10     0.6%
+independent_uniform_c1024  c=1024           2  8388608 samplesort               dml_sw_async         1   dropped: asynchronous: this driver never polls
+independent_uniform_c1024  c=1024           2  8388608 samplesort               dsa_hw_async         1   dropped: asynchronous: this driver never polls
+independent_uniform_c1024  c=1024           2  8388608 samplesort               scalar               6      20.89     1.9%
+independent_uniform_c1024  c=1024           2  8388608 samplesort               dsa_hw               6      19.95     0.7%
+independent_uniform_c1024  c=1024           2  8388608 samplesort               dml_sw_async         6   dropped: asynchronous: this driver never polls
+independent_uniform_c1024  c=1024           2  8388608 samplesort               dsa_hw_async         6   dropped: asynchronous: this driver never polls
+independent_uniform_c1024  c=1024           8  8388608 samplesort               scalar               1     114.35     0.4%
+independent_uniform_c1024  c=1024           8  8388608 samplesort               dsa_hw               1     115.37     0.3%
+independent_uniform_c1024  c=1024           8  8388608 samplesort               dml_sw_async         1   dropped: asynchronous: this driver never polls
+independent_uniform_c1024  c=1024           8  8388608 samplesort               dsa_hw_async         1   dropped: asynchronous: this driver never polls
+independent_uniform_c1024  c=1024           8  8388608 samplesort               scalar               6      32.80     3.2%
+independent_uniform_c1024  c=1024           8  8388608 samplesort               dsa_hw               6     111.96     0.7%
+independent_uniform_c1024  c=1024           8  8388608 samplesort               dml_sw_async         6   dropped: asynchronous: this driver never polls
+independent_uniform_c1024  c=1024           8  8388608 samplesort               dsa_hw_async         6   dropped: asynchronous: this driver never polls
+independent_uniform_c65536 c=65536          2  8388608 samplesort               scalar               1      59.73     0.2%
+independent_uniform_c65536 c=65536          2  8388608 samplesort               dsa_hw               1      59.83     1.1%
+independent_uniform_c65536 c=65536          2  8388608 samplesort               dml_sw_async         1   dropped: asynchronous: this driver never polls
+independent_uniform_c65536 c=65536          2  8388608 samplesort               dsa_hw_async         1   dropped: asynchronous: this driver never polls
+ind[bench_q3_detection] 94/120 (78%) 5m14s elapsed, ~1m27s left   
+ependent_uniform_c65536 c=65536          2  8388608 samplesort               scalar               6      24.41     1.7%
+independent_uniform_c65536 c=65536          2  8388608 samplesort               dsa_hw               6      23.92     1.7%
+independent_uniform_c65536 c=65536          2  8388608 samplesort               dml_sw_async         6   dropped: asynchronous: this driver never polls
+independent_uniform_c65536 c=65536          2  8388608 samplesort               dsa_hw_async         6   dropped: asynchronous: this driver never polls
+independent_uniform_c65536 c=65536          8  8388608 samplesort               scalar               1      60.86     1.1%
+independent_uniform_c65536 c=65536          8  8388608 samplesort               dsa_hw               1      60.47     0.1%
+independent_uniform_c65536 c=65536          8  8388608 samplesort               dml_sw_async         1   dropped: asynchronous: this driver never polls
+independent_uniform_c65536 c=65536          8  8388608 samplesort               dsa_hw_async         1   dropped: asynchronous: this driver never polls
+independent_uniform_c65536 c=65536          8  8388608 samplesort               scalar               6      24.40     4.7%
+independent_uniform_c65536 c=65536          8  8388608 samplesort               dsa_hw               6      25.05     1.7%
+independent_uniform_c65536 c=65536          8  8388608 samplesort               dml_sw_async         6   dropped: asynchronous: this driver never polls
+independent_uniform_c65536 c=65536          8  8388608 samplesort               dsa_hw_async         6   dropped: asynchronous: this driver never polls
+
+48 measured, 48 dropped, 0 incorrect
+
+wrote /home/pietrzyk/tslgen-v99/test-sort/benchmark_results_verify/q3_detection.csv (96 rows)
