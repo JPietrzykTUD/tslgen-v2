@@ -62,7 +62,11 @@ def _compiler_basename(command: str) -> str:
 
 
 def _native_clangxx() -> str | None:
-    candidates = ("/usr/bin/clang++", shutil.which("clang++"))
+    candidates = (
+        shutil.which("clang++-22"),
+        "/usr/bin/clang++",
+        shutil.which("clang++"),
+    )
     for candidate in candidates:
         if candidate is None or not Path(candidate).is_file():
             continue

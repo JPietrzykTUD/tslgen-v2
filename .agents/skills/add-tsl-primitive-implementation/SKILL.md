@@ -28,11 +28,13 @@ description: Add, complete, or refactor a specialization of an existing TSL prim
 4. Choose the implementation strategy in this priority order:
    - A direct exact leaf when one operation implements the complete primitive
      contract for the concrete extension/type/backend: a hardware intrinsic for
-     a hardware extension, or a compiler-capability-gated builtin for a
-     compiler-vector overlay.
+     a hardware extension, or a compiler-capability-gated builtin or documented
+     vector operator for a compiler-vector overlay. Do not set
+     `prefer_fixed_native` on this compiler-operation leaf; native delegation
+     precedes authored-body lowering and would incorrectly preempt the leaf.
    - For the fixed-width C++ compiler-vector overlays (`clang_v128`,
      `clang_v256`, `clang_v512`, and their `_bool` mask-policy variants), use
-     an exact compiler builtin under the first rule when one is available.
+     an exact compiler operation under the first rule when one is available.
      Otherwise, always prefer a feature-gated call through the selector's
      exact-width `vector::fixed` hardware facade when that hardware primitive
      has a native leaf. Keep an overlay-owned lane/generic body as the final
@@ -61,7 +63,7 @@ description: Add, complete, or refactor a specialization of an existing TSL prim
 - Complete supported coverage is the target; unsupported coverage must remain explicit, deterministic, and explainable.
 - Prefer an exact intrinsic at a semantic leaf, but do not use an intrinsic unless its semantics match the TSL primitive contract.
 - For each fixed-width Clang overlay and `_bool` variant, verify the ordered
-  choice directly: capability-gated exact builtin, otherwise feature-gated
+  choice directly: capability-gated exact compiler operation, otherwise feature-gated
   exact-width native facade, otherwise an overlay-owned portable fallback.
   Include selection provenance plus generated Clang value evidence for both
   comparison-vector and Boolean-vector mask policies.

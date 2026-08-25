@@ -11,6 +11,48 @@ from _select_lower_core_support import (
 )
 
 
+@pytest.mark.parametrize("profile", ("scalar", "skylake"))
+@pytest.mark.parametrize(
+    "extension",
+    (
+        "clang_v128",
+        "clang_v256",
+        "clang_v512",
+        "clang_v128_bool",
+        "clang_v256_bool",
+        "clang_v512_bool",
+    ),
+)
+def test_clang_select_prefers_exact_compiler_vector_operation(
+    catalog: Catalog,
+    machine_profiles,
+    profile: str,
+    extension: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles[profile],
+            "select",
+            ("si32",),
+            backend_id="cpp",
+        )
+        .selected
+        if selected.extension.name == extension
+    )
+
+    assert not slot.implementation.prefer_fixed_native
+
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert lowered is not None
+    assert lowered.body_text == "return mask ? true_values : false_values;"
+
+
 @pytest.mark.parametrize("primitive", ["hadd", "hand", "hor"])
 @pytest.mark.parametrize("type_tag", ["ui8", "ui16"])
 def test_knl_masked_small_reductions_use_sse_quarter_composition(
