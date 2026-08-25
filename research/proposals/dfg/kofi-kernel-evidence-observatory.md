@@ -69,6 +69,47 @@ The observatory would manage:
 TSL is one producer and early design partner. It must not define the
 infrastructure's private ontology or control admissibility.
 
+## Showcase experiment: blind evidence replay
+
+The Observatory's lever is reproducibility across institutions. The showcase
+therefore measures whether its schema, validators, and replay tooling make a
+real result easier to reproduce than today's best-effort archive, rather than
+counting uploaded artifacts.
+
+### Corpus and blinded replay
+
+Create twelve packages from four representative kernels—nullable filter and
+compact, dictionary-index decode and gather, masked reduction, and
+scatter/update—produced by three routes: TSL-generated code, hand-written SIMD,
+and an independent data-processing library. Each package contains a correctness
+claim and a performance claim such as “variant A exceeds B by at least 10%” on
+a named machine/compiler pair. Preserve the raw inputs and binaries needed to
+check both claims.
+
+For each underlying experiment, prepare either (O) an Observatory package with
+typed hardware, compiler, source, build, runner, and measurement provenance or
+(A) a carefully written conventional archive with README and scripts. Two
+external sites receive a balanced, randomized mix without being told the
+original result. After the first replay, formats are crossed over for matched
+experiments. A separate fault-injection set omits one critical fact—such as CPU
+frequency policy, compiler flag, RVV VLEN, or input seed—and tests whether the
+validator blocks the claim with an actionable diagnostic. It never alters the
+scientific data silently.
+
+### Measurements and decision rule
+
+Record minutes to first correct build, time to reproduce or reject the claim,
+author interventions, exact-output agreement, effect-size and confidence-
+interval agreement, replay success, schema extensions, metadata-completion
+effort, and validator precision/recall on injected omissions. The infrastructure
+lever is present if at least 80% of O packages replay without author help,
+median diagnosis/replay time is at least halved relative to A, validators catch
+at least 90% of critical omissions with no more than 10% false alarms, and no
+producer-specific schema fork is required. It is absent if README archives
+perform equivalently, essential facts cannot be represented, or curation costs
+more time than it saves. These numbers are pilot go/no-go criteria to be
+pre-registered before the replay campaign.
+
 ## Infrastructure work programme
 
 ### Phase I — Needs, landscape, and governance

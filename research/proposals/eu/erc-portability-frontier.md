@@ -93,6 +93,49 @@ at least two GPU architectures, and at least one FPGA platform. Emulators and
 simulators may extend correctness coverage but will not substitute for real
 performance and energy measurements.
 
+## Showcase experiment: the select-compact portability cliff
+
+The first decisive microbenchmark isolates a mechanism that differs sharply
+between fixed-width and scalable vectors: predicate creation followed by
+compaction. It asks whether semantic portability is cheap, whether a small
+capability-aware strategy layer recovers the loss, or whether native algorithms
+remain irreducibly different.
+
+### Workload and variants
+
+Process a nullable `int32` column whose working set is at least four times the
+last-level cache. Each iteration loads values, combines validity with an
+inclusive range predicate, compact-stores qualifying values, and computes a
+count and checksum. Sweep selectivity over 0.1%, 1%, 10%, 50%, 90%, and 99%;
+mean value/null run lengths over 1, 16, and 256; null density over 0% and 10%;
+and inputs resident in L2, LLC, and DRAM. Every output is compared bit-for-bit
+with an independent scalar oracle.
+
+Run three pre-declared implementations on AVX2, AVX-512, SVE, and RVV hardware:
+
+- **U — uniform:** one unchanged algorithm and control structure;
+- **S — semantic strategy:** one semantic contract with capability-selected
+  mask representation, tail policy, and compaction mechanism;
+- **N — native:** an independently reviewed expert implementation for each ISA.
+
+Compiler, frequency policy, allocation, and input order are fixed; variants are
+randomly interleaved after warm-up and measured over repeated trials. Fit the
+strategy-selection model without one machine/compiler pair, then unseal that
+pair as a held-out prediction test.
+
+### Measurements and falsification
+
+Measure rows/s, cycles/row, joules/row, bytes written per selected row, branch
+and cache counters, code size, and native-normalized regret
+`(N - variant) / N`. Also count semantic source locations and target-specific
+decisions. The proposed lever exists if S halves U's median regret, remains
+within 15% of N in at least 75% of pre-registered cells, and predicts held-out
+regret within ten percentage points without target-name conditionals. It is
+weaker than claimed if U already matches N, and falsified for this mechanism if
+S loses unpredictably or merely hides native forks. All cells, including
+negative results, feed the portability-frontier model; the numerical thresholds
+are pilot decision rules frozen before measurement.
+
 ## Evaluation model
 
 The primary quantitative measure is **native-normalised regret**: how far U and

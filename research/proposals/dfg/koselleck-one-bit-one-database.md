@@ -79,6 +79,53 @@ partitioning must compensate before that exponential dominates.
 A negative answer—an experimentally and formally characterised boundary beyond
 which the representation loses—is an intended scientific outcome.
 
+## Showcase experiment: exhaustive 18-fact join-rewrite check
+
+This is the smallest experiment that can decisively expose the proposed
+representation's gain and its failure modes. Let the domain be
+`D = {0, 1, 2}` and let `R(a,b)` and `S(b,c)` each admit all nine possible
+ground tuples. The 18 optional facts define exactly `2^18 = 262,144` database
+worlds.
+
+### Equivalence task and baselines
+
+Evaluate, under set semantics, the equivalence of:
+
+`Q1 = pi[a,c](sigma[a < 2](R join[R.b = S.b] S))`
+
+and the valid selection-pushdown rewrite:
+
+`Q2 = pi[a,c]((sigma[a < 2](R)) join[R.b = S.b] S)`.
+
+Seed twelve non-equivalent one-operator mutants, including changing `<` to
+`<=`, changing the join columns, and removing the selection. For every output
+tuple, the proposed engine computes a bit mask whose set bits identify the
+worlds containing that tuple; equivalence is mask equality, and the least
+differing bit decodes to a concrete counterexample database.
+
+Compare (B) the bit-parallel engine, including mask construction and result
+decoding, with (E) scalar enumeration of all worlds and (S) a mature SAT/SMT or
+BDD formulation of the same bounded problem. Repeat for restricted universes of
+12, 15, and 18 optional facts and exploratory 21/24-fact cases; vary world-tile
+size and simple integrity constraints. Use identical query parsing, output
+semantics, timeouts, and correctness oracles, and report setup time separately
+as well as end to end. A TSL-generated fixed/scalable-vector mask kernel is also
+compared with a reviewed native mask kernel, but cannot rescue a failed
+representation-level result.
+
+### Measurements and decision rule
+
+Measure worlds/s, end-to-end equivalence time, peak memory, intermediate-mask
+volume, time to first counterexample, counterexample size, seeded-mutant recall,
+and generated/native kernel regret. The central lever exists if B proves the
+valid rewrite, detects all twelve mutants, and is at least 10x faster than E at
+18 facts without superlinear intermediate-mask growth dominating the run. A
+useful research frontier also requires B to beat S on at least one pre-declared
+query/constraint family; otherwise the result is an informative no-go or a
+narrow hybrid case. The architecture-level claim is rejected if ordinary
+word-batched enumeration comes within 2x or joins destroy the expected
+bit-parallel advantage. Thresholds are frozen before running the showcase.
+
 ## Five-year work programme
 
 ### WP1 — Core model and kill experiment (months 1–9)

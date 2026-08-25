@@ -141,6 +141,52 @@ data-governance partners define threat models, identity, policy enforcement,
 privacy, and provenance. Optimisation may not trade away correctness,
 security, privacy, or latency silently.
 
+## Showcase experiment: evidence-aware placement crossover
+
+This experiment tests the system-level lever behind RV-CONTINUUM: whether
+portable kernel semantics and their evidence change a distributed placement
+decision in a useful, safe way. A speedup measured after manually choosing the
+best node would not establish that claim.
+
+### Workload and controlled placement policies
+
+Run an 8 GiB optional `int32` sensor column through a fixed pipeline: decode its
+validity map, apply a range filter, compact qualifying values, compute windowed
+features, and feed the compact feature batch to the same small inference model.
+The data stage has scalar, TSL-generated RVV, x86/Arm SIMD, and accelerator
+implementations where available; the inference stage and numerical tolerance
+are identical. Candidate execution sites are a near-data RVV edge node, a
+conventional cloud CPU, and an HPC/GPU node.
+
+Compare three schedulers over selectivities of 1%, 10%, 50%, and 90%, batch
+sizes of 1 MiB to 1 GiB, and emulated WAN bandwidth/latency and node-energy
+profiles:
+
+- **L:** labels and nominal compute capacity only;
+- **E:** L plus measured data locality, transfer cost, and energy;
+- **V:** E plus semantic compatibility, compiler/target evidence, and
+  uncertainty bounds.
+
+At pre-declared trials, withdraw the evidence for one compiler/vector-length
+combination and later provide a freshly validated package. This is a safety
+test: V should refuse or revalidate an ineligible placement, not silently use a
+historical performance number. Input order, node availability, cache state,
+model version, and output checksums are controlled, and scheduler overhead is
+measured separately.
+
+### Measurements and decision rule
+
+Measure end-to-end joules/job, WAN bytes, median and P95 latency, deadline and
+policy violations, invalid placements, semantic mismatches, scheduler CPU time,
+and time to revalidation. The lever is demonstrated if V selects a different
+safe placement in at least one pre-registered crossover region and either cuts
+energy or WAN traffic by 20%, or meets a deadline that L/E miss, while adding
+less than 5% control overhead and producing zero invalid results. There is no
+useful placement lever if semantic evidence never changes a decision, its
+uncertainty is too large to act on, or orchestration cost erases the gain. The
+pilot thresholds are frozen before execution and do not substitute for the
+larger demonstrator KPIs.
+
 ## Illustrative work packages
 
 | WP | Lead profile | Output |
