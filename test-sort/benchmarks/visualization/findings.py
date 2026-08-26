@@ -527,6 +527,12 @@ def _contended_count(measured: pd.DataFrame) -> int:
     return int(((preempted * 2) > total).fillna(False).sum())
 
 
+def _count_word(count: int) -> str:
+    """Small counts as words, because "the 3 styles" reads as a defect. Used where
+    the number comes from what a build could compile rather than from the plan."""
+    return {1: "one", 2: "two", 3: "three", 4: "four"}.get(count, str(count))
+
+
 def numeric_or(text: str, fallback: int) -> int:
     """An int from a key field, or the fallback. Key fields come from a file a
     previous run wrote, so a malformed one should narrow a table rather than end
@@ -1540,10 +1546,31 @@ def q6_portability(results: Results) -> Answer:
     if measured.empty:
         return Answer(qid, asks, binary, "q6_portability.csv is not in this directory.")
 
-    cells = measured[measured["style"].notna() & measured["register_bits"].notna()].copy()
-    cells["key width"] = "u" + (cells["element_bytes"] * 8).astype(int).astype(str)
+    everything = measured[measured["style"].notna()
+                          & measured["register_bits"].notna()].copy()
+    everything["key width"] = ("u" + (everything["element_bytes"] * 8)
+                               .astype(int).astype(str))
+
+    # The scalar style is not a narrow vector register, and it must not be treated
+    # as one. `register_bits` is `lanes * key_bits`, so one lane over u32 comes out
+    # as "32-bit" and lands on the register-width axis below the real widths --
+    # which makes the width statistic report "32-bit to 512-bit" (vector against
+    # non-vector, not narrow against wide) and makes the style tax at that width a
+    # comparison of scalar against nothing, reported as `scalar` being a style
+    # outlier at 1.00x. Both readings are wrong.
+    #
+    # Q6 asks two questions about *vector* code -- how wide, and how written -- so
+    # the scalar rows are held out of both axes and answer a third question of their
+    # own: what vectorising bought at all. Same rows, three separate claims.
+    is_scalar = everything["style"].astype(str).str.lower() == "scalar"
+    cells = everything[~is_scalar].copy()
+    scalar_rows = everything[is_scalar].copy()
     cells["register"] = cells["register_bits"].astype(int).astype(str) + "-bit"
     tables = {"cells": cells}
+    if cells.empty:
+        return Answer(qid, asks, binary,
+                      "q6_portability.csv holds only scalar rows, so there is no "
+                      "register-width or style axis to report.")
 
     # What the register width buys, paired inside one (style, shape, size, key
     # width, algorithm) cell so the style axis cannot leak into the width claim.
@@ -1583,32 +1610,83 @@ def q6_portability(results: Results) -> Answer:
             f"({width_gain['gain'].min():.2f}x–{width_gain['gain'].max():.2f}x). "
             "Lanes, not bits, is the axis the algorithm's structure follows — the "
             "same eight lanes is 256-bit over u32 or 512-bit over u64.")
+    # The style axis needs at least two styles in the same cell to say anything. A
+    # build where the compiler could not compile the clang families has one, and a
+    # spread of "0% against itself" is not a portability result -- it is an absent
+    # measurement, and it read as the strongest possible answer.
+    styles_present = sorted(tax["style"].dropna().unique())
     widest = tax[tax["register_bits"] == tax["register_bits"].max()]
-    if not widest.empty:
-        spread = widest.groupby("style")["ratio"].median()
-        stats.append(Stat(f"Style spread at {int(tax['register_bits'].max())}-bit",
-                          f"{(spread.max() - 1) * 100:.0f}%",
-                          "worst style against the best, median cell"))
-        support.append(
-            f"At the widest register width the three styles sit within "
-            f"{(spread.max() - 1) * 100:.0f}% of each other — "
-            + ", ".join(f"`{style}` {value:.3f}x" for style, value in
-                        spread.sort_values().items())
-            + ". That is the portability result stated positively: at the width that "
-              "matters, expressing the kernel through the abstraction costs nothing.")
     narrowest = tax[tax["register_bits"] == tax["register_bits"].min()]
-    if not narrowest.empty:
-        spread_narrow = narrowest.groupby("style")["ratio"].median()
-        worst = spread_narrow.idxmax()
-        stats.append(Stat(f"Style spread at {int(tax['register_bits'].min())}-bit",
-                          f"{(spread_narrow.max() - 1) * 100:.0f}%",
-                          f"`{worst}` is the outlier"))
+    style_axis = len(styles_present) > 1
+    if not style_axis:
+        only = styles_present[0] if styles_present else "none"
+        stats.append(Stat("Style axis", "not measurable",
+                          f"only `{only}` compiled in this build"))
         support.append(
-            f"At the narrowest width they do not: `{worst}` costs "
-            f"{spread_narrow.max():.2f}x the best style in the same cell. A narrow "
-            "register is where the mask representation and the compiler's freedom to "
-            "schedule show up, and it is the reason the style axis is swept rather "
-            "than assumed.")
+            f"The style axis is not answered by this directory: only `{only}` "
+            "compiled, so there is nothing to compare it against. The other styles "
+            "are dropped with `StyleUnavailable` rather than omitted, so the drop "
+            "table says which and why -- on this host the clang families need a "
+            "newer clang than the one that built it.")
+    else:
+        if not widest.empty:
+            spread = widest.groupby("style")["ratio"].median()
+            stats.append(Stat(f"Style spread at {int(tax['register_bits'].max())}-bit",
+                              f"{(spread.max() - 1) * 100:.0f}%",
+                              "worst style against the best, median cell"))
+            support.append(
+                f"At the widest register width the {_count_word(len(spread))} styles "
+                f"sit within {(spread.max() - 1) * 100:.0f}% of each other — "
+                + ", ".join(f"`{style}` {value:.3f}x" for style, value in
+                            spread.sort_values().items())
+                + ". That is the portability result stated positively: at the width "
+                  "that matters, expressing the kernel through the abstraction costs "
+                  "nothing.")
+        if not narrowest.empty:
+            spread_narrow = narrowest.groupby("style")["ratio"].median()
+            worst = spread_narrow.idxmax()
+            stats.append(Stat(f"Style spread at {int(tax['register_bits'].min())}-bit",
+                              f"{(spread_narrow.max() - 1) * 100:.0f}%",
+                              f"`{worst}` is the outlier"))
+            support.append(
+                f"At the narrowest width they do not: `{worst}` costs "
+                f"{spread_narrow.max():.2f}x the best style in the same cell. A "
+                "narrow register is where the mask representation and the compiler's "
+                "freedom to schedule show up, and it is the reason the style axis is "
+                "swept rather than assumed.")
+
+    # What vectorising bought. The scalar style is the same sorter sources at one
+    # lane, so this is a like-for-like ratio rather than a comparison against a
+    # different algorithm -- which is what `std_lex_argsort` was, and why it could
+    # never answer this.
+    simd_cell = ["shape", "shape_params", "size_level", "element_bytes", "algorithm",
+                 "move"]
+    if not scalar_rows.empty:
+        base = (scalar_rows.groupby(simd_cell, dropna=False)["ns_per_row"]
+                .median().rename("scalar"))
+        vector = (cells.groupby(simd_cell + ["lanes"], dropna=False)["ns_per_row"]
+                  .median().rename("vector").reset_index())
+        simd = vector.join(base, on=simd_cell, how="inner").dropna(
+            subset=["scalar", "vector"])
+        if not simd.empty:
+            simd["gain"] = simd["scalar"] / simd["vector"]
+            tables["simd_gain"] = simd
+            per_lane = simd.groupby("lanes")["gain"].median()
+            widest_lanes = int(per_lane.index.max())
+            stats.append(Stat(f"Scalar → {widest_lanes} lanes",
+                              f"{per_lane.loc[per_lane.index.max()]:.2f}x",
+                              f"median over {len(simd[simd['lanes'] == per_lane.index.max()])}"
+                              " paired cells, same sources at one lane"))
+            ladder = ", ".join(f"{int(lanes)} lanes {gain:.2f}x"
+                              for lanes, gain in per_lane.items())
+            losing = per_lane[per_lane < 1.0]
+            support.append(
+                "What vectorising bought, against the same sorter sources compiled "
+                f"at one lane: {ladder}. This is the axis the style sweep cannot "
+                "see -- its narrowest cell is still SIMD."
+                + (f" It is a *loss* at {', '.join(str(int(l)) + ' lanes' for l in losing.index)}"
+                   ", where the mask work and register pressure cost more than the "
+                   "lanes save." if not losing.empty else ""))
 
     per_style = (tax.groupby(["style", "register_bits"])["ratio"]
                  .median().reset_index())
@@ -1618,17 +1696,34 @@ def q6_portability(results: Results) -> Answer:
                                                 'element_bytes']).ngroups)),
                          "style x register width x key width"))
 
-    verdict = (
-        "The width buys most of it and the abstraction is not a tax. "
-        + (f"{int(available[0])}-bit to {int(available[-1])}-bit is "
-           f"{width_gain['gain'].median():.2f}x" if not width_gain.empty else "")
-        + (f", while at the widest width the three implementation styles are within "
-           f"{(widest.groupby('style')['ratio'].median().max() - 1) * 100:.0f}% of "
-           "each other. The exception is the narrowest register, where one style "
-           "collapses — which is what makes sweeping the axis worth doing."
-           if not widest.empty else ""))
+    width_claim = (f"{int(available[0])}-bit to {int(available[-1])}-bit is "
+                   f"{width_gain['gain'].median():.2f}x"
+                   if not width_gain.empty else "")
+    if style_axis and not widest.empty:
+        verdict = (
+            "The width buys most of it and the abstraction is not a tax. "
+            + width_claim
+            + f", while at the widest width the {_count_word(len(styles_present))} "
+              "implementation styles are within "
+              f"{(widest.groupby('style')['ratio'].median().max() - 1) * 100:.0f}% of "
+              "each other. The exception is the narrowest register, where one style "
+              "collapses — which is what makes sweeping the axis worth doing.")
+    else:
+        verdict = (
+            "The width buys it; the abstraction is untested here. " + width_claim
+            + (", and vectorising at all is worth "
+               f"{tables['simd_gain'].groupby('lanes')['gain'].median().iloc[-1]:.2f}x "
+               "at the widest lane count" if "simd_gain" in tables else "")
+            + ". Only one implementation style compiled in this build, so this "
+              "directory cannot say what the mask representation costs — that half "
+              "of the question needs a build where the clang families compile.")
 
     caveats = [
+        "The scalar style is held out of both axes above. One lane has no register "
+        "width -- `register_bits` is lanes x key bits, so scalar would appear as a "
+        "32-bit or 64-bit *vector* register and put vector-against-non-vector on an "
+        "axis that is supposed to be narrow-against-wide. Its rows answer the "
+        "separate question above: what vectorising bought.",
         "Lanes = register bits / (8 x key bytes), so the two widths are not "
         "independent axes: u32 reaches sixteen lanes at 512-bit, u64 only eight. "
         "Every comparison here is inside one (register width, key width) cell.",
