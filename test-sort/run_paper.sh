@@ -74,6 +74,9 @@ What to build with:
 What to measure:
   --stages LIST      Comma-separated stage names, or `all`. Default: all.
                      `--list-stages` prints them.
+  --scale N          TPC-DS/DSB scale factor: shorthand for
+                     --datasets <source>/TMP/tpcds_keys/sfN. The keys have to be
+                     extracted already -- run_all.sh --scale N does that.
   --datasets DIR     Directory of extracted TPC-DS/DSB keys (*.tsldset). Default:
                      $TPCDS_KEYS, else a search under <source>/TMP/tpcds_keys.
   --workers N        Worker count for the reporting drivers.
@@ -102,6 +105,7 @@ want_baselines="no"
 reconfigure="no"
 stages_requested="all"
 datasets="${TPCDS_KEYS:-}"
+scale=""
 quick=""
 allow_busy="no"
 # Whether any build-time flag was passed *explicitly*. The defaults come from the
@@ -121,6 +125,7 @@ while [[ $# -gt 0 ]]; do
     --jobs)         jobs="${2:?--jobs needs a count}"; shift 2 ;;
     --stages)       stages_requested="${2:?--stages needs a list}"; shift 2 ;;
     --datasets)     datasets="${2:?--datasets needs a directory}"; shift 2 ;;
+    --scale)        scale="${2:?--scale needs a number}"; shift 2 ;;
     --workers)      COSORT_WORKERS="${2:?--workers needs a count}"; shift 2 ;;
     --max-workers)  COSORT_MAX_WORKERS="${2:?--max-workers needs a count}"; shift 2 ;;
     --baselines)    want_baselines="yes"; shift ;;
@@ -129,7 +134,16 @@ while [[ $# -gt 0 ]]; do
     --allow-busy)   allow_busy="yes"; shift ;;
     --list-stages)  printf '%s\n' "${all_stages[@]}"; exit 0 ;;
     -h|--help)      usage; exit 0 ;;
-    --*)            echo "unknown argument: $1" >&2; usage >&2; exit 2 ;;
+    # Anything starting with a dash is a mistyped flag, never a path. This used
+    # to test `--*`, so a single-dash `-cxx` fell through to the positional arm
+    # and became the build directory -- which `--reconfigure` then handed to
+    # `rm -rf`.
+    -*)             echo "unknown argument: $1" >&2
+                    case "$1" in
+                      -[a-z]*[a-z])
+                        echo "did you mean -$1?" >&2 ;;
+                    esac
+                    usage >&2; exit 2 ;;
     *)              positional+=("$1"); shift ;;
   esac
 done
@@ -149,6 +163,31 @@ if [[ -z "$results" ]]; then
   usage >&2
   exit 2
 fi
+
+# A compiler that is not there should say so now, not as a CMake error twelve
+# seconds into a configure. Only a named one is checked: an empty value means
+# "whatever CMake picks", which is CMake's business.
+for named in "cxx:$cxx" "cc:$cc"; do
+  flag="${named%%:*}"
+  path="${named#*:}"
+  [[ -z "$path" ]] && continue
+  # A value may carry arguments -- `CXX="zig c++"` is a real thing -- so only the
+  # first word is the program, and a bare name is looked up on PATH.
+  program="${path%% *}"
+  if [[ "$program" == */* ]]; then
+    [[ -x "$program" ]] && continue
+  else
+    command -v "$program" >/dev/null 2>&1 && continue
+  fi
+  echo "--$flag: no such compiler: $program" >&2
+  if [[ "$program" == */* ]]; then
+    similar="$(ls "$(dirname "$program")" 2>/dev/null \
+               | grep -E "^$(basename "${program%%-*}")(\+\+)?(-[0-9]+)?$" \
+               | sort | tr '\n' ' ')"
+    [[ -n "$similar" ]] && echo "  this host has: $similar" >&2
+  fi
+  exit 2
+done
 # Absolute from here on. Several steps run the drivers from inside the build
 # directory -- `(cd "$build" && ./bench_q2_algorithms --csv "$results/...")` -- so a
 # relative results path put the CSVs in the build tree while `tee` wrote the logs
@@ -157,6 +196,39 @@ mkdir -p "$results"
 results="$(cd "$results" && pwd)"
 source_dir="$(cd "$source_dir" && pwd)"
 [[ -z "$build" ]] && build="$results/build"
+
+# `--scale N` names the key set the way run_all.sh does. It selects, it does not
+# generate: extraction needs the DSB generator and is run_all.sh's step 2. A scale
+# that was never extracted is an error rather than a silent fall back to whichever
+# one happens to be on disk -- measuring scale 1 while the log says 10 is the worst
+# kind of wrong, because every row looks fine.
+if [[ -n "$scale" ]]; then
+  if [[ ! "$scale" =~ ^[0-9]+$ ]]; then
+    echo "--scale takes a number, not '$scale'" >&2
+    exit 2
+  fi
+  if [[ -n "$datasets" ]]; then
+    echo "--scale and --datasets both given; --datasets wins" >&2
+  else
+    datasets="$source_dir/TMP/tpcds_keys/sf$scale"
+    if [[ ! -d "$datasets" ]] || ! compgen -G "$datasets/*.tsldset" > /dev/null; then
+      echo "--scale $scale: no extracted keys in $datasets" >&2
+      available="$(for candidate in "$source_dir"/TMP/tpcds_keys/sf*; do
+                     [[ -d "$candidate" ]] \
+                       && compgen -G "$candidate/*.tsldset" > /dev/null \
+                       && basename "$candidate"
+                   done | tr '\n' ' ' || true)"
+      if [[ -n "${available// /}" ]]; then
+        echo "  extracted here: $available" >&2
+      else
+        echo "  none are extracted. Produce them with:" >&2
+        echo "    ./run_all.sh --scale $scale" >&2
+        echo "  or measure synthetic shapes only by omitting --scale." >&2
+      fi
+      exit 2
+    fi
+  fi
+fi
 [[ -n "$datasets" ]] && export TPCDS_KEYS="$datasets"
 
 # Which stages to run. Named rather than positional so a re-run of one question
@@ -193,8 +265,23 @@ want() { [[ -n "${run_stage[$1]:-}" ]]; }
 # mid-build is how a directory came out resolved to the scalar profile once, with
 # no symptom but an unrelated compile error.
 if [[ "$reconfigure" == "yes" ]]; then
-  echo "removing $build to configure it again"
-  rm -rf "$build"
+  # `rm -rf` on a path that came from the command line, so it is checked first.
+  # A mistyped flag reaching this line is not hypothetical: `-cxx` did, before
+  # the parser above learned that a leading dash is always a flag.
+  if [[ -e "$build" ]]; then
+    if [[ ! -f "$build/CMakeCache.txt" ]]; then
+      echo "refusing to remove $build: it is not a CMake build tree." >&2
+      echo "  --reconfigure deletes the build directory, so it only ever deletes" >&2
+      echo "  one this script could have made. Remove it by hand if you meant it." >&2
+      exit 2
+    fi
+    if [[ "$build" -ef "$source_dir" || "$build" -ef "$results" ]]; then
+      echo "refusing to remove $build: it is the source or results directory." >&2
+      exit 2
+    fi
+    echo "removing $build to configure it again"
+    rm -rf -- "$build"
+  fi
 fi
 
 if [[ ! -f "$build/CMakeCache.txt" ]]; then

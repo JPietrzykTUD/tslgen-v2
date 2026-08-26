@@ -4,7 +4,7 @@ TMP/
 
 # Paper results are per-host and per-run; regenerate with run_paper.sh.
 results/
-benchmark_results/
+benchmark_results*/
 
 # Extracted TPC-DS / DSB key columns: large, per scale factor, regenerate with
 # benchmarks/datagen/tpcds/extract_keys.py

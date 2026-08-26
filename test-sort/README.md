@@ -131,15 +131,16 @@ tree from this checkout, builds it, measures, and writes the report.
 ./run_paper.sh --results results/<host> --quick                  # prove the pipeline
 ./run_paper.sh --results results/<host> --stages q3_detection,report
 ./run_paper.sh --results results/<host> --cxx clang++ --profile sapphire_emerald_granite_rapids
-./run_paper.sh --results results/<host> --datasets TMP/tpcds_keys/sf10
+./run_paper.sh --results results/<host> --scale 10               # real TPC-DS keys
 ./run_paper.sh --list-stages                                     # the stage names
 ./run_paper.sh --help                                            # every flag
 ```
 
 The build tree defaults to `<results>/build`; `--build DIR` reuses an existing
 one. `--source`, `--cxx`, `--cc`, `--profile`, `--tsl-version`, `--jobs`,
-`--baselines` and `--reconfigure` cover the build; `--stages`, `--datasets`,
-`--workers` and `--max-workers` cover the measurement. The older positional form
+`--baselines` and `--reconfigure` cover the build; `--stages`, `--scale` /
+`--datasets`, `--workers` and `--max-workers` cover the measurement. The TSL
+profile is auto-detected; `--profile` is for overriding that deliberately. The older positional form
 `run_paper.sh <build-dir> <results-dir>` still works.
 
 It refuses to measure from a build whose fetched TSL is not the version it was

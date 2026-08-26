@@ -527,6 +527,16 @@ def _contended_count(measured: pd.DataFrame) -> int:
     return int(((preempted * 2) > total).fillna(False).sum())
 
 
+def numeric_or(text: str, fallback: int) -> int:
+    """An int from a key field, or the fallback. Key fields come from a file a
+    previous run wrote, so a malformed one should narrow a table rather than end
+    the analysis."""
+    try:
+        return int(text)
+    except (TypeError, ValueError):
+        return fallback
+
+
 def provenance(results: Results) -> Provenance:
     frames = list(results.frames.values())
     all_rows = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
@@ -657,12 +667,22 @@ def q0_tuning(results: Results) -> Answer:
     # 1. What shipped, and what the reporting drivers therefore measured.
     shipped_rows = []
     for key, config in results.best_config.items():
-        algorithm, _, rest = key.partition("|")
-        style_key, _, rest = rest.partition("|")
-        width_key, _, bytes_key = rest.partition("|")
+        # `algorithm|style|width|element_bytes` with an optional trailing worker
+        # count: the tuner publishes one entry per worker count it measured plus a
+        # worker-agnostic one, because its parallel winner differs from its serial
+        # one and a file with no worker field cannot say so. Split from the left
+        # and treat the tail as optional, so both forms read -- an older directory
+        # has four fields and a current one has five.
+        fields = key.split("|")
+        if len(fields) < 4:
+            continue
+        algorithm, style_key, width_key, bytes_key = fields[:4]
+        workers = fields[4] if len(fields) > 4 else ""
         shipped_rows.append({
             "algorithm": algorithm, "cell": f"{style_key}/{width_key}",
-            "key width": f"u{int(bytes_key) * 8}", "configuration": config})
+            "key width": f"u{numeric_or(bytes_key, 0) * 8}",
+            "workers": workers or "any",
+            "configuration": config})
     tables["shipped"] = pd.DataFrame(shipped_rows)
 
     # 2. What each knob is worth, inside the cell that measures the paper, read
