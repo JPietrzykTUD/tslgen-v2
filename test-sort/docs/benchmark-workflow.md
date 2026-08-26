@@ -94,12 +94,22 @@ scheduler may put somebody else on the same cores, and it cannot -- that is a
 property of the cpuset, not of the process. On a shared machine they are separate
 layers, and the exclusivity layer has to be one that actually evicts:
 
-| mechanism | excludes others? | cost |
-| --- | --- | --- |
-| `isolcpus=` + `nohz_full=` + `rcu_nocbs=` at boot | yes -- the CPUs leave the scheduling domains, and the tick and RCU callbacks leave too | a reboot |
-| `./isolate_cpus.sh setup <list>` (cgroup v2 isolated partition) | yes -- that is what `cpuset.cpus.partition` is for | root |
-| `cset shield` | **cannot run** on a cgroup v2 host -- it is a v1 tool | — |
-| `taskset`, `numactl`, `systemd-run -p AllowedCPUs=` | **no** -- confines this run, leaves the CPUs open to everyone else | none |
+| mechanism | excludes others? | still load-balances? | cost |
+| --- | --- | --- | --- |
+| `./isolate_cpus.sh setup <list>` (`cpuset.cpus.partition=root`) | yes | **yes** | root |
+| `isolcpus=` at boot, or `--isolated` | yes | **no** -- threads must be pinned individually | a reboot / root |
+| `cset shield` | **cannot run** on a cgroup v2 host -- it is a v1 tool | — | — |
+| `taskset`, `numactl`, `systemd-run -p AllowedCPUs=` | **no** -- confines this run, leaves the CPUs open to everyone else | yes | none |
+
+The load-balancing column is the one that cost a tuning run. Exclusivity and load
+balancing are separate properties, and `isolated` / `isolcpus` give the first by
+removing the second: the kernel then never spreads a sort's worker threads, so every
+worker inherits its creator's CPU and six of them share one core. The symptom is
+not a crash but a *measurement*: one busy core in htop, an aggregate near 100%, and
+six workers coming out uniformly a few percent **slower** than one. The same tuner
+on the same shapes gave 2.87x (index quicksort) and 1.92x (samplesort) from one
+worker to six under a plain `taskset`, and 0.93x / 0.96x inside an isolated
+partition.
 
 Two traps in that table, both of which cost time here.
 
@@ -119,11 +129,14 @@ unchecked setup looks like it worked.
 So the shape of a publishable run is exclusivity outside, locality inside:
 
 ```bash
-sudo ./isolate_cpus.sh setup <list>
+sudo ./isolate_cpus.sh setup <list>          # partition=root: exclusive, balanced
 sudo ./isolate_cpus.sh run -- numactl --physcpubind=<list> --membind=0 \
   ./run_paper.sh --results results/$(hostname)
 sudo ./isolate_cpus.sh reset
 ```
+
+`status` prints the partition mode, so a run that produced no parallel speedup can
+be checked against it afterwards.
 
 Where none of them is available, run under `numactl` alone and read
 `preempted_passes` afterwards: the harness counts what the kernel took away from

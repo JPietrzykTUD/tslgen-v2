@@ -608,13 +608,15 @@ if [[ -z "${isolated//[[:space:]]/}" ]]; then
   echo "             somebody else on the same cores." >&2
   echo "" >&2
   echo "  What actually excludes other work, strongest first:" >&2
-  echo "    isolcpus=<list> nohz_full=<list> rcu_nocbs=<list> at boot -- the" >&2
-  echo "      kernel keeps those CPUs out of the general scheduling domains and" >&2
-  echo "      moves the timer tick and RCU callbacks off them too, which nothing" >&2
-  echo "      at runtime can. Needs a reboot." >&2
-  echo "    ./isolate_cpus.sh setup <list> -- a cgroup v2 isolated partition." >&2
-  echo "      No reboot; needs root. This is the runtime answer on any current" >&2
-  echo "      distribution." >&2
+  echo "    ./isolate_cpus.sh setup <list> -- a cgroup v2 partition root: those" >&2
+  echo "      CPUs become exclusive AND the scheduler still balances across them," >&2
+  echo "      which is what a sort spawning worker threads needs. No reboot." >&2
+  echo "    isolcpus=<list> nohz_full=<list> rcu_nocbs=<list> at boot -- stronger" >&2
+  echo "      about the timer tick and RCU callbacks, but it also removes those" >&2
+  echo "      CPUs from the scheduling domains, so worker threads are NOT spread" >&2
+  echo "      and have to be pinned one by one. Same caveat as an *isolated*" >&2
+  echo "      partition: exclusivity without load balancing put six workers on one" >&2
+  echo "      core here and made six of them measure slower than one." >&2
   echo "" >&2
   echo "  Two things that look like they belong on that list and do not:" >&2
   echo "    cset shield is a cgroup *v1* tool. It mounts a cpuset filesystem at" >&2

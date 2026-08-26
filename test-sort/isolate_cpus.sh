@@ -3,6 +3,7 @@
 #
 #   sudo ./isolate_cpus.sh setup 0-5,12-17
 #        ./isolate_cpus.sh status
+#   sudo ./isolate_cpus.sh setup 0-5,12-17 --isolated   # only if you pin threads
 #   sudo ./isolate_cpus.sh run  -- numactl --physcpubind=0-5 --membind=0 \
 #                                 ./run_paper.sh --results results/$(hostname)
 #   sudo ./isolate_cpus.sh reset
@@ -25,18 +26,37 @@
 # Check with `cat /proc/cgroups`: a `0` in the hierarchy column for cpuset means
 # it lives on v2 and cset has nothing to work with.
 #
-# On v2 the mechanism is `cpuset.cpus.partition`. Setting it to `isolated` on a
-# cgroup takes that cgroup's CPUs *out* of its parent's effective set, so nothing
-# else can be scheduled there, and removes them from the scheduler's load-balancing
-# domains the way `isolcpus=` does at boot. Two things make it fiddly enough to be
-# worth a script: the order matters (cpus and mems before partition), and a failure
-# reports itself by reading back as `isolated invalid` rather than by returning an
-# error. Both are handled below.
+# On v2 the mechanism is `cpuset.cpus.partition`, and *which value* matters more
+# than it looks:
 #
-# `isolcpus=<list> nohz_full=<list> rcu_nocbs=<list>` on the kernel command line is
-# still stronger -- it also moves the timer tick and RCU callbacks off those CPUs,
-# which no runtime mechanism can. Use that where a reboot is possible; this is the
-# no-reboot answer.
+#   root      the CPUs become exclusive to this cgroup, and the scheduler still
+#             load-balances across them.
+#   isolated  exclusive as well, and load balancing is turned OFF -- the same state
+#             `isolcpus=` produces at boot.
+#
+# `isolated` is the wrong one for a multithreaded benchmark, and getting this wrong
+# cost a whole tuning run. With load balancing off the kernel does not spread
+# threads across the partition: every worker the sort spawns inherits its creator's
+# CPU and stays there. Six threads then share one core, which looks like
+#
+#   * htop showing a single busy core with six threads in the process,
+#   * an aggregate near 100% instead of near 600%,
+#   * and -- the part that matters -- six workers measuring *slower* than one, by a
+#     uniform few percent, because they contend instead of dividing the work.
+#
+# The same tuner and the same shapes gave 2.87x (index quicksort) and 1.92x
+# (samplesort) from one worker to six under a plain `taskset`, and 0.93x / 0.96x
+# inside an `isolated` partition. Exclusivity was never the problem; load balancing
+# was. So `root` is the default here, and `--isolated` exists for a caller who pins
+# each thread itself.
+#
+# The same caveat applies to `isolcpus=<list>` at boot: it also removes those CPUs
+# from the scheduling domains, so it wants per-thread pinning too. `nohz_full=` and
+# `rcu_nocbs=` are the parts of a boot-time setup worth having on their own.
+#
+# Two more things make this fiddly enough to be worth a script: the order matters
+# (cpus and mems before partition), and a failure reports itself by reading back as
+# `... invalid` rather than by returning an error.
 set -euo pipefail
 
 root="/sys/fs/cgroup"
@@ -62,6 +82,18 @@ require_v2() {
 
 setup() {
   local cpus="${1:?usage: setup <cpu-list>, e.g. 0-5,12-17}"
+  shift || true
+  # Load-balanced by default. See the note at the top: `isolated` stops the
+  # scheduler spreading a sort's worker threads, which turns a parallel
+  # measurement into six threads on one core.
+  local mode="root"
+  for argument in "$@"; do
+    case "$argument" in
+      --isolated) mode="isolated" ;;
+      --root) mode="root" ;;
+      *) echo "setup: unknown option $argument" >&2; exit 2 ;;
+    esac
+  done
   require_v2
   # The parent has to delegate cpuset before a child can use it.
   if ! grep -qw cpuset "$root/cgroup.subtree_control"; then
@@ -75,14 +107,14 @@ setup() {
   local mems
   mems="$(cat "$root/cpuset.mems.effective" 2>/dev/null || echo 0)"
   echo "$mems" > "$group/cpuset.mems"
-  echo "isolated" > "$group/cpuset.cpus.partition"
+  echo "$mode" > "$group/cpuset.cpus.partition"
 
   local state
   state="$(cat "$group/cpuset.cpus.partition")"
-  if [[ "$state" != "isolated" ]]; then
+  if [[ "$state" != "$mode" ]]; then
     echo "the partition did not form: cpuset.cpus.partition reads '$state'" >&2
     echo "" >&2
-    echo "  'isolated invalid' means the kernel would not give these CPUs up" >&2
+    echo "  '$mode invalid' means the kernel would not give these CPUs up" >&2
     echo "  exclusively; the parenthesis above is its own reason. What each means:" >&2
     echo "" >&2
     echo "  'Parent is not a partition root' -- $root is itself only a member of" >&2
@@ -101,8 +133,15 @@ setup() {
     echo "  Nothing has been isolated. Run '$0 reset' to remove the group." >&2
     exit 1
   fi
-  echo "isolated $cpus"
+  echo "exclusive: $cpus (partition=$mode)"
   echo "  the rest of the machine now sees: $(cat "$root/cpuset.cpus.effective")"
+  if [[ "$mode" == "isolated" ]]; then
+    echo "  !! load balancing is OFF in an isolated partition. Threads this run" >&2
+    echo "     spawns will NOT be spread across these CPUs -- they inherit their" >&2
+    echo "     creator's CPU. Pin them yourself, or use the default (root)." >&2
+  else
+    echo "  load balancing is on, so a sort's worker threads will spread"
+  fi
   echo "  run a measurement inside it with: sudo $0 run -- <command>"
 }
 
