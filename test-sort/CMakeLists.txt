@@ -418,9 +418,49 @@ if(TSL_COSORT_ENABLE_BASELINES)
       else()
         set(_arrow_target arrow)
       endif()
-      find_library(TSL_ARROW_COMPUTE NAMES arrow_compute)
-      if(TSL_ARROW_COMPUTE)
-        list(APPEND _arrow_target ${TSL_ARROW_COMPUTE})
+      # The compute kernels, which recent Arrow ships as a *separate CMake package*
+      # rather than inside libarrow. `find_package(ArrowCompute)` is how it is meant
+      # to be found; the bare `find_library` below is a fallback for a distribution
+      # that installs the library without the package files, and it is why a host
+      # whose Arrow is laid out the modern way produced
+      #
+      #   undefined reference to `arrow::compute::Initialize()'
+      #
+      # -- the header was found, the library never was, and nothing noticed until
+      # the link.
+      find_package(ArrowCompute QUIET)
+      set(_arrow_compute "")
+      if(ArrowCompute_FOUND)
+        foreach(_candidate ArrowCompute::arrow_compute_shared
+                           ArrowCompute::arrow_compute_static
+                           ArrowCompute::arrow_compute)
+          if(TARGET ${_candidate} AND NOT _arrow_compute)
+            set(_arrow_compute ${_candidate})
+          endif()
+        endforeach()
+      endif()
+      if(NOT _arrow_compute)
+        # Look beside libarrow itself, not only on the default search path: a
+        # non-system prefix (a module install, a conda or spack tree) puts both
+        # libraries somewhere find_library does not reach by default.
+        set(_arrow_hints "")
+        if(TARGET Arrow::arrow_shared)
+          get_target_property(_arrow_loc Arrow::arrow_shared IMPORTED_LOCATION)
+          if(NOT _arrow_loc)
+            get_target_property(_arrow_loc Arrow::arrow_shared
+                                IMPORTED_LOCATION_RELEASE)
+          endif()
+          if(_arrow_loc)
+            get_filename_component(_arrow_hints "${_arrow_loc}" DIRECTORY)
+          endif()
+        endif()
+        find_library(TSL_ARROW_COMPUTE NAMES arrow_compute HINTS ${_arrow_hints})
+        if(TSL_ARROW_COMPUTE)
+          set(_arrow_compute ${TSL_ARROW_COMPUTE})
+        endif()
+      endif()
+      if(_arrow_compute)
+        list(APPEND _arrow_target ${_arrow_compute})
       endif()
       set(_arrow_label "Arrow ${Arrow_VERSION} (system)")
     else()
@@ -462,6 +502,21 @@ if(TSL_COSORT_ENABLE_BASELINES)
       SOURCE_SUBDIR  cpp
     )
     FetchContent_MakeAvailable(arrow)
+    # Arrow's BUNDLED third-party machinery reads `thirdparty/versions.txt` from the
+    # *repository root*, which is one level above the `cpp` SOURCE_SUBDIR. A clone
+    # that does not contain it -- a partial or filtered clone, a git configured with
+    # `clone.filter` or sparse checkout, an interrupted fetch -- fails deep inside
+    # ThirdpartyToolchain.cmake with `file STRINGS file ... cannot be read`, which
+    # says nothing about the cause. Checked here, where it can.
+    if(NOT EXISTS "${arrow_SOURCE_DIR}/../thirdparty/versions.txt")
+      message(FATAL_ERROR
+        "the fetched Arrow is missing thirdparty/versions.txt, which its BUNDLED "
+        "dependency resolution needs. The clone is incomplete -- most often a "
+        "partial or sparse clone from a global git setting (clone.filter, "
+        "core.sparseCheckout), or an interrupted fetch. Remove "
+        "${arrow_SOURCE_DIR}/.. and configure again, or use the host's Arrow "
+        "instead (run_paper.sh --arrow system, the default).")
+    endif()
     if(TARGET arrow_static)
       set(_arrow_target arrow_static)
     elseif(TARGET arrow_shared)
