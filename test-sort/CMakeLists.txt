@@ -422,7 +422,7 @@ if(TSL_COSORT_ENABLE_BASELINES)
       if(TSL_ARROW_COMPUTE)
         list(APPEND _arrow_target ${TSL_ARROW_COMPUTE})
       endif()
-      list(APPEND _q1_present "Arrow ${Arrow_VERSION} (system)")
+      set(_arrow_label "Arrow ${Arrow_VERSION} (system)")
     else()
       list(APPEND _q1_absent
            "Arrow -- TSL_COSORT_ARROW_FROM_SYSTEM=ON but none found. Its rows will "
@@ -473,7 +473,7 @@ if(TSL_COSORT_ENABLE_BASELINES)
       list(APPEND _arrow_target arrow_compute_shared)
     endif()
     if(_arrow_target)
-      list(APPEND _q1_present "Arrow ${TSL_COSORT_ARROW_TAG} (fetched)")
+      set(_arrow_label "Arrow ${TSL_COSORT_ARROW_TAG} (fetched)")
     else()
       list(APPEND _q1_absent
            "Arrow -- the fetch produced no usable target. Its rows will be drops.")
@@ -481,13 +481,32 @@ if(TSL_COSORT_ENABLE_BASELINES)
   endif()
 
   if(_arrow_target)
-    target_compile_definitions(bench_q1_baselines PRIVATE TSL_COSORT_HAVE_ARROW=1)
-    target_link_libraries(bench_q1_baselines PRIVATE ${_arrow_target})
+    # Probed by *linking*, not by looking for a header.
+    #
     # `arrow/compute/initialize.h` arrived in Arrow 14; before that libarrow
-    # registered the kernels itself and there is nothing to call. Probed rather
-    # than assumed, because a system Arrow can be either.
+    # registered the kernels itself and there is nothing to call. So the call has to
+    # be conditional -- but the previous test asked whether the header exists while
+    # the link line added `libarrow_compute` only `if(TSL_ARROW_COMPUTE)` found it.
+    # Two different questions, and nothing checked they agreed. On a host whose
+    # Arrow has the header but keeps compute in a library CMake did not find, the
+    # call was compiled and could not be linked:
+    #
+    #   undefined reference to `arrow::compute::Initialize()'
+    #
+    # at 100% of the build, after everything else had compiled. `check_cxx_source_
+    # compiles` builds an executable, so it answers the question that matters --
+    # can this call be linked with these libraries -- and covers the split-library
+    # case, an ABI change, and a wrong-arch library equally.
+    # Only on the system path. A fetched Arrow's `arrow_static` is a target *this*
+    # build produces, so no library file exists while CMake is configuring and any
+    # link probe against it fails for a reason that has nothing to do with Arrow --
+    # which would drop the one path that reliably works. There the header probe is
+    # both sufficient and all that is possible: the tag is pinned and
+    # `ARROW_COMPUTE=ON` is forced above, so compute is there by construction.
     include(CheckIncludeFileCXX)
-    set(CMAKE_REQUIRED_INCLUDES_SAVED "${CMAKE_REQUIRED_INCLUDES}")
+    include(CheckCXXSourceCompiles)
+    set(_arrow_saved_includes "${CMAKE_REQUIRED_INCLUDES}")
+    set(_arrow_saved_libraries "${CMAKE_REQUIRED_LIBRARIES}")
     foreach(_t IN LISTS _arrow_target)
       if(TARGET ${_t})
         get_target_property(_inc ${_t} INTERFACE_INCLUDE_DIRECTORIES)
@@ -496,12 +515,69 @@ if(TSL_COSORT_ENABLE_BASELINES)
         endif()
       endif()
     endforeach()
-    check_include_file_cxx("arrow/compute/initialize.h" TSL_ARROW_HAS_INITIALIZE)
-    set(CMAKE_REQUIRED_INCLUDES "${CMAKE_REQUIRED_INCLUDES_SAVED}")
-    if(TSL_ARROW_HAS_INITIALIZE)
-      target_compile_definitions(
-        bench_q1_baselines PRIVATE TSL_COSORT_ARROW_HAS_INITIALIZE=1
-      )
+    if(TSL_COSORT_ARROW_FROM_SYSTEM)
+      list(APPEND CMAKE_REQUIRED_LIBRARIES ${_arrow_target})
+      check_cxx_source_compiles("
+        #include <arrow/compute/initialize.h>
+        int main() { return arrow::compute::Initialize().ok() ? 0 : 1; }
+      " TSL_ARROW_INITIALIZE_LINKS)
+      # And the call the baseline exists for, so a broken Arrow is found here
+      # rather than at 100% of the build or, worse, at runtime.
+      check_cxx_source_compiles("
+        #include <arrow/api.h>
+        #include <arrow/compute/api_vector.h>
+        int main() {
+          arrow::compute::SortOptions options;
+          auto result = arrow::compute::SortIndices(arrow::Datum{}, options);
+          return result.ok() ? 0 : 1;
+        }
+      " TSL_ARROW_SORT_INDICES_LINKS)
+    else()
+      # Read off the pinned tag, not probed. A FetchContent target expresses its
+      # include directories as `$<BUILD_INTERFACE:...>` generator expressions, which
+      # `CMAKE_REQUIRED_INCLUDES` cannot evaluate while CMake is still configuring --
+      # so the probe got no `-I` at all and reported the header missing every time,
+      # on every host, for a tree that plainly contains it. The consequence was not
+      # a build failure but a quiet one: `Initialize()` went uncalled against a
+      # *static* Arrow, which is exactly where it is needed, because nothing else
+      # pulls the compute kernels' registration objects out of the archive.
+      #
+      # The tag is ours and pinned, so its version is known rather than discovered.
+      string(REGEX MATCH "([0-9]+)\\.[0-9]+\\.[0-9]+" _arrow_ver
+             "${TSL_COSORT_ARROW_TAG}")
+      set(_arrow_major "${CMAKE_MATCH_1}")
+      if(_arrow_major AND _arrow_major GREATER_EQUAL 14)
+        set(TSL_ARROW_INITIALIZE_LINKS TRUE)
+      else()
+        # Before Arrow 14 libarrow registered the kernels itself and there is
+        # nothing to call.
+        set(TSL_ARROW_INITIALIZE_LINKS FALSE)
+      endif()
+      set(TSL_ARROW_SORT_INDICES_LINKS TRUE)
+    endif()
+    set(CMAKE_REQUIRED_INCLUDES "${_arrow_saved_includes}")
+    set(CMAKE_REQUIRED_LIBRARIES "${_arrow_saved_libraries}")
+
+    if(NOT TSL_ARROW_SORT_INDICES_LINKS)
+      # Arrow is present but its compute kernels cannot be linked. Dropped rather
+      # than allowed to break the build: the other Q1 baselines are independent of
+      # it, and a row that says why is worth more than a build that stops.
+      list(APPEND _q1_absent
+           "${_arrow_label} -- found, but arrow::compute::SortIndices does not link. Modern "
+           "Arrow keeps the kernels in a separate libarrow_compute; if this host "
+           "has none, configure with -DTSL_COSORT_ARROW_FETCH=ON to build a pinned "
+           "one. Its rows will be drops.")
+    else()
+      # Announced only now: whether Arrow is *usable* is what the reader needs,
+      # and until the probe above ran, "found" and "usable" were the same claim.
+      list(APPEND _q1_present "${_arrow_label}")
+      target_compile_definitions(bench_q1_baselines PRIVATE TSL_COSORT_HAVE_ARROW=1)
+      target_link_libraries(bench_q1_baselines PRIVATE ${_arrow_target})
+      if(TSL_ARROW_INITIALIZE_LINKS)
+        target_compile_definitions(
+          bench_q1_baselines PRIVATE TSL_COSORT_ARROW_HAS_INITIALIZE=1
+        )
+      endif()
     endif()
   endif()
 

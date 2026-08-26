@@ -67,7 +67,14 @@ What to build with:
                      scalar fallback whatever the style column says.
   --tsl-version TAG  Generated TSL release tag. Default: the pin in CMakeLists.txt.
   --baselines        Also build Q1's external baselines (needs network: ips4o,
-                     x86-simd-sort, TBB).
+                     x86-simd-sort, TBB, Arrow).
+  --arrow WHICH      Where Q1's Arrow baseline comes from: `system` (default) or
+                     `fetch` to build a pinned one. Fetch it when the host's
+                     Arrow keeps its compute kernels in a library CMake cannot
+                     find -- the symptom is a link error at the very end of the
+                     build, `undefined reference to arrow::compute::Initialize()`
+                     -- or when two machines must compare against the same Arrow.
+                     Slow: Arrow is built from source with bundled dependencies.
   --jobs N           Build parallelism. Default: online CPUs minus two.
   --reconfigure      Delete and re-create the build tree first.
 
@@ -102,6 +109,7 @@ profile="${TSL_PROFILE:-auto}"
 tsl_version="${COSORT_TSL_VERSION_PIN:-}"
 jobs=""
 want_baselines="no"
+arrow_source=""
 reconfigure="no"
 stages_requested="all"
 datasets="${TPCDS_KEYS:-}"
@@ -129,6 +137,13 @@ while [[ $# -gt 0 ]]; do
     --workers)      COSORT_WORKERS="${2:?--workers needs a count}"; shift 2 ;;
     --max-workers)  COSORT_MAX_WORKERS="${2:?--max-workers needs a count}"; shift 2 ;;
     --baselines)    want_baselines="yes"; shift ;;
+    --arrow)        arrow_source="${2:?--arrow needs system or fetch}"
+                    case "$arrow_source" in
+                      system|fetch) ;;
+                      *) echo "--arrow takes system or fetch, not '$arrow_source'" >&2
+                         exit 2 ;;
+                    esac
+                    want_baselines="yes"; build_flags="yes"; shift 2 ;;
     --reconfigure)  reconfigure="yes"; shift ;;
     --quick)        quick="--quick"; shift ;;
     --allow-busy)   allow_busy="yes"; shift ;;
@@ -315,6 +330,7 @@ if [[ ! -f "$build/CMakeCache.txt" ]]; then
   [[ -n "$cc" ]]  && configure+=(-DCMAKE_C_COMPILER="$cc")
   [[ -n "$tsl_version" ]] && configure+=(-DTSL_RELEASE_VERSION="$tsl_version")
   [[ "$want_baselines" == "yes" ]] && configure+=(-DTSL_COSORT_ENABLE_BASELINES=ON)
+  [[ "$arrow_source" == "fetch" ]] && configure+=(-DTSL_COSORT_ARROW_FETCH=ON)
   if ! "${configure[@]}" 2>&1 | tee "$results/configure.log" | tail -5; then
     echo "configure failed; the whole log is in $results/configure.log" >&2
     grep -m1 -A 4 "CMake Error" "$results/configure.log" >&2 || true
