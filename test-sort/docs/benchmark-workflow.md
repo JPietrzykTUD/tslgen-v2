@@ -88,6 +88,25 @@ core, one NUMA node. Everything downstream runs under
 node boundary; that is what made the parallel numbers appear to degrade past four
 workers.
 
+`numactl` is the whole of the *locality* answer and none of the *exclusivity* one.
+It decides where this process runs and allocates; it says nothing about whether the
+scheduler may put somebody else on the same cores, and it cannot -- that is a
+property of the cpuset, not of the process. On a shared machine the two are
+separate layers:
+
+```bash
+systemd-run --scope -p AllowedCPUs=<list> --same-dir --collect \
+  numactl --physcpubind=<list> --membind=0 \
+  ./run_paper.sh --results results/$(hostname)
+```
+
+`AllowedCPUs` keeps other work off those cores, `numactl` keeps this run on them
+and on node 0's memory. `cset shield` does the same and also moves kernel threads;
+`isolcpus` at boot is the strongest and the least convenient. Where none of them is
+available, run under `numactl` alone and read `preempted_passes` afterwards: the
+harness counts what the kernel took away from each timed pass, which is the only
+part of this a userspace program can do.
+
 ### 1. Build the tuner only
 
 The preset is always a *measurement* preset: `TSL_COSORT_NO_INSTRUMENTATION=ON`, so

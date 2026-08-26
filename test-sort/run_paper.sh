@@ -496,12 +496,28 @@ if [[ -z "${isolated//[[:space:]]/}" ]]; then
   echo
   echo "note: no isolated CPUs on this host, so the scheduler may place other work" >&2
   echo "  on the cores this run measures. The harness records that per row" >&2
-  echo "  (preempted_passes) but cannot prevent it. To prevent it:" >&2
-  echo "    * boot with isolcpus=<list> nohz_full=<list> rcu_nocbs=<list>, or" >&2
-  echo "    * put the run in an exclusive cpuset:" >&2
-  echo "        sudo cset shield --cpu=0-5 --kthread=on" >&2
-  echo "        sudo cset shield --exec -- ./run_paper.sh $build $results" >&2
-  echo "  and pin memory too: numactl --cpunodebind=0 --membind=0." >&2
+  echo "  (preempted_passes) but cannot prevent it." >&2
+  echo "" >&2
+  echo "  numactl and an exclusive cpuset answer different questions, and a" >&2
+  echo "  publishable run wants both:" >&2
+  echo "    numactl  decides where THIS process runs and allocates -- one NUMA" >&2
+  echo "             node's cores, that node's memory. It is what keeps the" >&2
+  echo "             parallel numbers about the sort instead of about cross-node" >&2
+  echo "             latency, and it is already how every figure here is taken." >&2
+  echo "    a cpuset decides who ELSE may run there. numactl cannot do this: it" >&2
+  echo "             restricts this process, not the scheduler's freedom to put" >&2
+  echo "             somebody else on the same cores." >&2
+  echo "" >&2
+  echo "  Exclusivity, in increasing order of setup:" >&2
+  echo "    systemd-run --scope -p AllowedCPUs=0-5 --same-dir --collect \\" >&2
+  echo "      numactl --cpunodebind=0 --membind=0 \\" >&2
+  echo "      $0 --results $results" >&2
+  echo "    sudo cset shield --cpu=0-5 --kthread=on   # also moves kernel threads" >&2
+  echo "    isolcpus=<list> nohz_full=<list> rcu_nocbs=<list> at boot" >&2
+  echo "" >&2
+  echo "  The first needs nothing installed on a systemd host and is enough for" >&2
+  echo "  most of it. Without any of them, run under numactl anyway and read" >&2
+  echo "  preempted_passes afterwards." >&2
 fi
 
 # Elapsed per stage and since the start, printed either side of each driver. A
