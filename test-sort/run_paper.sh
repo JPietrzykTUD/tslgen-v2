@@ -437,12 +437,23 @@ if [[ -n "$pinned_tsl" && -n "$fetched_tsl" ]]; then
   echo "generated TSL: $fetched_tsl (matches the pin)"
 fi
 
+# Everything from here to the load gate is about Q3's detector axis, so it only
+# applies when a Q3 stage is actually going to run. `--stages q0_tune` reported the
+# host's accelerators and then refused the run over a missing libaccel-config, for
+# a question it was never going to measure.
+runs_q3="no"
+for _stage in q3_detection q3_ladder q3_pressure q3_run_length; do
+  want "$_stage" && runs_q3="yes"
+done
+
 # Which accelerator rows this machine can contribute. No host here has both, so
 # the paper's accelerator table is assembled from more than one run and each row
 # records where it came from.
 have_dsa=$([[ -e /dev/dsa ]] && echo yes || echo no)
 have_iax=$([[ -e /dev/iax ]] && echo yes || echo no)
-echo "accelerators: dsa=$have_dsa iax=$have_iax"
+if [[ "$runs_q3" == "yes" ]]; then
+  echo "accelerators: dsa=$have_dsa iax=$have_iax"
+fi
 # Ask only for what this host has. `--paths hw` would ask for every compiled
 # hardware backend and drop the absent ones as unavailable, which is honest but
 # fills the accelerator table with rows from the wrong machine. Override with
@@ -457,9 +468,11 @@ q3_detectors="scalar"
 [[ "$have_dsa" == "yes" ]] && q3_detectors="$q3_detectors,dsa_hw,dsa_hw_async"
 [[ "$have_iax" == "yes" ]] && q3_detectors="$q3_detectors,iaa_hw,iaa_hw_async,iaa_freq_hw"
 q3_detectors="${COSORT_Q3_DETECTORS:-$q3_detectors}"
-echo "q3 detectors: $q3_detectors"
-if [[ "$have_dsa" == "no" && "$have_iax" == "no" ]]; then
-  echo "  no accelerator on this host: Q3 contributes the scalar baseline only"
+if [[ "$runs_q3" == "yes" ]]; then
+  echo "q3 detectors: $q3_detectors"
+  if [[ "$have_dsa" == "no" && "$have_iax" == "no" ]]; then
+    echo "  no accelerator on this host: Q3 contributes the scalar baseline only"
+  fi
 fi
 # DML reaches the device through `dlopen("libaccel-config.so.1")` -- the exact name
 # in its hw_configuration_driver.c -- and without it every hardware submission
@@ -492,7 +505,7 @@ case ",$q3_detectors," in
     asks_hardware="yes" ;;
 esac
 
-if [[ "$asks_hardware" == "yes" && "$have_accel" == "no" ]]; then
+if [[ "$runs_q3" == "yes" && "$asks_hardware" == "yes" && "$have_accel" == "no" ]]; then
   echo "refusing to measure: $q3_detectors includes a hardware backend, and" >&2
   echo "  $accel_lib is not where dlopen would find it. DML loads it to" >&2
   echo "  enumerate work queues; without it every hardware submission fails with" >&2
