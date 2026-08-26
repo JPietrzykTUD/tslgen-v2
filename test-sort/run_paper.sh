@@ -229,7 +229,26 @@ if [[ -n "$scale" ]]; then
     fi
   fi
 fi
-[[ -n "$datasets" ]] && export TPCDS_KEYS="$datasets"
+# Absolute, for the same reason `results` is: the drivers are invoked as
+# `(cd "$build" && ./bench_q2_algorithms --tpcds-dir "$dir")`, so a relative path
+# resolves against the build tree instead of the caller's directory. It would not
+# error -- `--tpcds-dir` that finds no *.tsldset means "measure synthetic shapes
+# only", and the run says so in a line nobody reads until afterwards. So a path
+# that was given and cannot be resolved is refused here instead.
+if [[ -n "$datasets" ]]; then
+  if [[ ! -d "$datasets" ]]; then
+    echo "--datasets: no such directory: $datasets" >&2
+    exit 2
+  fi
+  datasets="$(cd "$datasets" && pwd)"
+  if ! compgen -G "$datasets/*.tsldset" > /dev/null; then
+    echo "--datasets: $datasets holds no *.tsldset key columns" >&2
+    echo "  extract them with ./run_all.sh --scale N, or omit --datasets to" >&2
+    echo "  measure synthetic shapes only." >&2
+    exit 2
+  fi
+  export TPCDS_KEYS="$datasets"
+fi
 
 # Which stages to run. Named rather than positional so a re-run of one question
 # does not depend on counting, and validated here so a typo fails before the
