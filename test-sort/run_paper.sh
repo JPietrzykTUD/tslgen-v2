@@ -545,20 +545,29 @@ if [[ -z "${isolated//[[:space:]]/}" ]]; then
   echo "" >&2
   echo "  What actually excludes other work, strongest first:" >&2
   echo "    isolcpus=<list> nohz_full=<list> rcu_nocbs=<list> at boot -- the" >&2
-  echo "      kernel keeps those CPUs out of the general scheduling domains, so" >&2
-  echo "      nothing lands there unless it asks by affinity. Needs a reboot." >&2
-  echo "    sudo cset shield --cpu=0-5 --kthread=on -- moves every movable task," >&2
-  echo "      kernel threads included, into a system cpuset off those cores. No" >&2
-  echo "      reboot; needs root and the cpuset package." >&2
-  echo "    cgroup v2 with cpuset.cpus.partition=isolated on the run's cgroup --" >&2
-  echo "      the same idea without cset. Note that AllowedCPUs / cpuset.cpus" >&2
-  echo "      ALONE does not do this: it confines this run to those CPUs the way" >&2
-  echo "      taskset does, and leaves every other cgroup free to use them. The" >&2
-  echo "      partition file is what makes them exclusive." >&2
+  echo "      kernel keeps those CPUs out of the general scheduling domains and" >&2
+  echo "      moves the timer tick and RCU callbacks off them too, which nothing" >&2
+  echo "      at runtime can. Needs a reboot." >&2
+  echo "    ./isolate_cpus.sh setup <list> -- a cgroup v2 isolated partition." >&2
+  echo "      No reboot; needs root. This is the runtime answer on any current" >&2
+  echo "      distribution." >&2
   echo "" >&2
-  echo "  Then run under numactl inside it, e.g." >&2
-  echo "    sudo cset shield --exec -- numactl --cpunodebind=0 --membind=0 \\" >&2
+  echo "  Two things that look like they belong on that list and do not:" >&2
+  echo "    cset shield is a cgroup *v1* tool. It mounts a cpuset filesystem at" >&2
+  echo "      /cpusets, and a host on the unified v2 hierarchy has no v1 cpuset to" >&2
+  echo "      mount, so it fails outright with 'mount of cpuset filesystem" >&2
+  echo "      failed'. 'cat /proc/cgroups' says which you have: hierarchy 0 for" >&2
+  echo "      cpuset means v2, and cset cannot help." >&2
+  echo "    taskset, numactl and systemd AllowedCPUs= confine *this* run to those" >&2
+  echo "      CPUs and leave every other cgroup free to use them. They are the" >&2
+  echo "      locality half and none of the exclusivity half." >&2
+  echo "" >&2
+  echo "  Exclusivity outside, locality inside:" >&2
+  echo "    sudo $source_dir/isolate_cpus.sh setup 0-5,12-17" >&2
+  echo "    sudo $source_dir/isolate_cpus.sh run -- \\" >&2
+  echo "      numactl --physcpubind=0-5 --membind=0 \\" >&2
   echo "      $0 --results $results" >&2
+  echo "    sudo $source_dir/isolate_cpus.sh reset" >&2
   echo "" >&2
   echo "  Without any of them, run under numactl anyway and read preempted_passes" >&2
   echo "  afterwards: counting what the kernel took away is all a userspace" >&2

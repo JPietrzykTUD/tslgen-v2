@@ -96,21 +96,33 @@ layers, and the exclusivity layer has to be one that actually evicts:
 
 | mechanism | excludes others? | cost |
 | --- | --- | --- |
-| `isolcpus=` + `nohz_full=` + `rcu_nocbs=` at boot | yes -- the CPUs leave the general scheduling domains | a reboot |
-| `cset shield --cpu=<list> --kthread=on` | yes -- moves every movable task, kernel threads included | root, `cpuset` package |
-| cgroup v2 with `cpuset.cpus.partition=isolated` | yes -- that is what the partition file is for | root, manual cgroup setup |
+| `isolcpus=` + `nohz_full=` + `rcu_nocbs=` at boot | yes -- the CPUs leave the scheduling domains, and the tick and RCU callbacks leave too | a reboot |
+| `./isolate_cpus.sh setup <list>` (cgroup v2 isolated partition) | yes -- that is what `cpuset.cpus.partition` is for | root |
+| `cset shield` | **cannot run** on a cgroup v2 host -- it is a v1 tool | — |
 | `taskset`, `numactl`, `systemd-run -p AllowedCPUs=` | **no** -- confines this run, leaves the CPUs open to everyone else | none |
 
-The last row is the trap: `AllowedCPUs` looks like a cpuset and writes
-`cpuset.cpus`, but on its own it only *confines*. Making those CPUs exclusive needs
-`cpuset.cpus.partition`, which no `systemd-run` property sets.
+Two traps in that table, both of which cost time here.
+
+`cset shield` is the advice you will find everywhere, and it is a cgroup **v1**
+tool: it mounts a cpuset filesystem at `/cpusets`, and a host on the unified v2
+hierarchy has none to mount. It fails with `mount of cpuset filesystem failed, do
+you have permission?`, which reads like a privilege problem and is not one. `cat
+/proc/cgroups` settles it -- hierarchy `0` for cpuset means v2.
+
+`AllowedCPUs` looks like a cpuset and does write `cpuset.cpus`, but on its own it
+only *confines*. Making those CPUs exclusive needs `cpuset.cpus.partition`, which
+no `systemd-run` property sets. `isolate_cpus.sh` does exactly that, in the order
+the kernel requires, and checks the partition actually formed -- it reports failure
+by reading back as `isolated invalid` rather than by returning an error, so an
+unchecked setup looks like it worked.
 
 So the shape of a publishable run is exclusivity outside, locality inside:
 
 ```bash
-sudo cset shield --cpu=<list> --kthread=on
-sudo cset shield --exec -- numactl --physcpubind=<list> --membind=0 \
+sudo ./isolate_cpus.sh setup <list>
+sudo ./isolate_cpus.sh run -- numactl --physcpubind=<list> --membind=0 \
   ./run_paper.sh --results results/$(hostname)
+sudo ./isolate_cpus.sh reset
 ```
 
 Where none of them is available, run under `numactl` alone and read
