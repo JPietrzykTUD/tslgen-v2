@@ -158,6 +158,18 @@ status() {
   local procs
   procs="$(wc -l < "$group/cgroup.procs")"
   echo "processes      $procs"
+  echo "this shell     $(grep Cpus_allowed_list /proc/self/status | awk '{print $2}')"
+  echo
+  # The consequence people trip over: exclusivity is two-sided. From outside the
+  # group those CPUs are gone, so `numactl --physcpubind=<them>` fails with
+  # "libnuma: Warning: cpu argument ... is out of range", which reads like a broken
+  # command rather than like the isolation doing its job.
+  echo "  Those CPUs are usable only from inside the group. From a shell outside it,"
+  echo "  taskset and numactl --physcpubind will refuse them:"
+  echo "    libnuma: Warning: cpu argument <list> is out of range"
+  echo "  Enter the group first:"
+  echo "    sudo $0 run -- <command>"
+  echo "  or give them back with '$0 reset'."
 }
 
 run() {
