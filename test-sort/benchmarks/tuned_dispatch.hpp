@@ -122,14 +122,18 @@ auto with_samplesort(TslTunedConfig const & config, Run && run) -> bool {
 // in its report, not an input any reporting driver needs.
 template <class Key>
 void tsl_select_tuned(std::map<std::string, TslTunedConfig> const & tuned,
-                      TslTunedConfig & samplesort, TslTunedConfig & quicksort) {
+                      TslTunedConfig & samplesort, TslTunedConfig & quicksort,
+                      std::size_t workers = 0) {
   // The cell this binary was *built* for, not a fixed one. The drivers now take
   // their SIMD type from `tsl_measure_simd_t`, so asking Q0 for Intrinsics/512
   // regardless meant a binary built for clang_bool/512 ran that code with the
   // configuration tuned for intrinsics -- the knobs and the instantiation
   // disagreeing, with the row still labelled "(tuned)".
+  // And the worker count, because the tuner answers per worker count: passing 0
+  // asks for the worker-agnostic entry, which is what a caller that measures one
+  // thread count wants.
   samplesort = tsl_tuned_for(tuned, "samplesort", tsl_measure_style,
-                             tsl_measure_width, sizeof(Key));
+                             tsl_measure_width, sizeof(Key), workers);
   quicksort = tsl_tuned_for(tuned, "quicksort", tsl_measure_style,
-                            tsl_measure_width, sizeof(Key));
+                            tsl_measure_width, sizeof(Key), workers);
 }

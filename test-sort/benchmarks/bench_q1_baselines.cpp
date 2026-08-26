@@ -189,6 +189,11 @@ void run_shape(TslPaperResults & results, TslDatasetSource<Key> & source,
   };
 
   for (auto const workers : worker_counts) {
+    // The tuner answers per worker count; ask it again for this one. A file
+    // without an entry for it falls back to the worker-agnostic answer, and the
+    // row's label says so.
+    tsl_select_tuned<Key>(g_tuned, g_samplesort_config, g_quicksort_config,
+                          workers);
     bool const many = workers > 1;
 
     // --- ours -----------------------------------------------------------------
@@ -196,7 +201,7 @@ void run_shape(TslPaperResults & results, TslDatasetSource<Key> & source,
       auto row = blank;
       row.algorithm = "samplesort";
       row.variant = g_samplesort_config.describe_samplesort()
-                    + (g_samplesort_config.from_file ? " (tuned)" : " (default)");
+                    + tsl_tuned_label(g_samplesort_config, workers);
       row.workers = workers;
       bool ok = false;
       TslPaperStats stats{};
@@ -230,7 +235,7 @@ void run_shape(TslPaperResults & results, TslDatasetSource<Key> & source,
       auto row = blank;
       row.algorithm = "quicksort";
       row.variant = g_quicksort_config.describe_quicksort()
-                    + (g_quicksort_config.from_file ? " (tuned)" : " (default)");
+                    + tsl_tuned_label(g_quicksort_config, workers);
       row.workers = workers;
       bool ok = false;
       TslPaperStats stats{};

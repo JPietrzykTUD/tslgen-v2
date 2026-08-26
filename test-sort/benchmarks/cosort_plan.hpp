@@ -38,7 +38,13 @@ enum class TslExecution { Serial, Parallel, DeepParallel };
 // packed boolean vectors that lower to a k-register like the intrinsic families.
 // Both use the same builtins for everything else, so the pair isolates the cost
 // of the mask representation alone.
-enum class TslStyle { Intrinsics, ClangBuiltin, ClangBoolMask };
+// `Scalar` is the denominator the other three need: the same sorter sources at
+// one lane. It is a style rather than a separate binary because `tsl::scalar` is
+// an extension every profile carries -- the AVX-512 profile header contains its
+// own `select_impl<simd<int32_t, scalar>>` -- so one build holds both. (Including
+// `tsl_scalar.hpp`, which is a whole rival *profile*, is what makes them look
+// exclusive: two profile headers both define `active_profile`.)
+enum class TslStyle { Scalar, Intrinsics, ClangBuiltin, ClangBoolMask };
 enum class TslStage { Screen, Tune, Characterize, Attribute };
 
 // How rows are moved. `Direct` permutes the key column and every payload column
@@ -66,6 +72,7 @@ inline auto tsl_execution_prefix(TslExecution execution) -> char const * {
 
 inline auto tsl_style_name(TslStyle style) -> char const * {
   switch (style) {
+    case TslStyle::Scalar: return "scalar";
     case TslStyle::Intrinsics: return "intr";
     case TslStyle::ClangBuiltin: return "clang";
     case TslStyle::ClangBoolMask: return "clang_bool";
@@ -74,6 +81,7 @@ inline auto tsl_style_name(TslStyle style) -> char const * {
 }
 
 inline auto tsl_style_from_name(std::string const & name) -> TslStyle {
+  if (name == "scalar") return TslStyle::Scalar;
   if (name == "clang") return TslStyle::ClangBuiltin;
   if (name == "clang_bool") return TslStyle::ClangBoolMask;
   return TslStyle::Intrinsics;
@@ -287,18 +295,19 @@ struct TslStagePlan {
   std::uint64_t two_way_size_cap = 256 * 1024;
 
   // A non-scalar detector needs a seam, work to discover, and a range large
-  // enough for an offload to pay for itself. Only the parallel path has the seam:
-  // the serial driver calls the scalar scan directly, and an asynchronous detector
-  // needs the executor for pending-work accounting regardless.
+  // enough for an offload to pay for itself. The direct driver's serial form has
+  // no seam -- it calls the scalar scan directly -- so the axis is the indirect
+  // driver plus every parallel form.
   auto detector_applies(TslVariant const & variant, TslDetectorBackend backend,
                         std::size_t column_count, std::size_t size_level) const -> bool {
     if (backend == TslDetectorBackend::Scalar) {
       return true;
     }
     // The indirect driver reaches the detector from both its executions, on the
-    // contiguous materialized key buffer. Its parallel form calls discovery from
-    // worker threads, which a fleet handles, but it never polls, so an
-    // asynchronous backend would not complete.
+    // contiguous materialized key buffer. Its parallel form polls from the task
+    // executor; its serial form polls at each level boundary of its own level loop.
+    // So an asynchronous backend completes in both, and the axis no longer depends
+    // on whether the detector is asynchronous.
     auto const frequency = backend == TslDetectorBackend::IaaFrequencySoftware
       || backend == TslDetectorBackend::IaaFrequencyHardware;
     // Frequency discovery needs a range handed over before it is sorted. Only the
@@ -309,13 +318,23 @@ struct TslStagePlan {
             || variant.discovery != TslRunDiscoveryKind::POST_SORT)) {
       return false;
     }
+    // Every detector needs a poll site as well as a seam, and both sorters now
+    // have one wherever they have a seam: the samplesort and the indirect
+    // quicksort carry pending-work accounting in their parallel forms, and the
+    // indirect quicksort's serial level loop settles its debt between columns.
     auto const has_seam = variant.movement == TslMovement::Index
-      ? !tsl_detector_is_async(backend)
-      : variant.execution != TslExecution::Serial;
+      || variant.execution != TslExecution::Serial;
     return has_seam
         && column_count >= 2
         && size_level >= 2            // halfLLC and above
         && variant.width_bits == 512; // the detector does not depend on lane count
+  }
+
+  // One lane has no register width, so a scalar variant is registered at a single
+  // width instead of three times over. 128 is chosen because every stage that
+  // sweeps widths includes it.
+  auto scalar_width_ok(TslVariant const & variant) const -> bool {
+    return variant.style != TslStyle::Scalar || variant.width_bits == widths.front();
   }
 
   // Does the stage ask for this variant at all? This is the per-family predicate:
@@ -392,8 +411,14 @@ inline auto tsl_default_plan(TslStage stage) -> TslStagePlan {
       break;
     case TslStage::Attribute:
       plan.shapes = tsl_attribute_shapes();
+      // Scalar first, because it is the denominator: without it this stage
+      // compares three ways of writing vector code and says nothing about
+      // whether writing it paid. Its narrowest cell is 128 bits, which is still
+      // SIMD, and the only non-vector row anywhere else was a different
+      // algorithm.
       plan.styles = {
-        TslStyle::Intrinsics, TslStyle::ClangBuiltin, TslStyle::ClangBoolMask
+        TslStyle::Scalar, TslStyle::Intrinsics, TslStyle::ClangBuiltin,
+        TslStyle::ClangBoolMask
       };
       plan.widths = {128, 256, 512};
       // Both key widths. A style comparison on 4-byte keys only would leave the

@@ -17,6 +17,7 @@
 #include "cluster_detection/scalar/equal_runs.hpp"
 #include "sorting/common/multicolumn_sort_types.hpp"
 #include "sorting/common/multicolumn_sort_tasks.hpp"
+#include "sorting/common/run_discovery.hpp"
 #include "sorting/common/sort_helpers.hpp"
 
 
@@ -892,7 +893,8 @@ class TslMultiColumnQuickSorter {
         }
         // make_emit, not a [&] lambda: an asynchronous detector retains this
         // callable past the end of this task, so it must own what it needs.
-        detect_runs(
+        tsl_detect_runs(
+          detect_runs,
           columns[task.column].data,
           leaf_begin,
           leaf_end,
@@ -943,7 +945,8 @@ class TslMultiColumnQuickSorter {
         std::memory_order_relaxed
       );
     }
-    detect_runs(
+    tsl_detect_runs(
+      detect_runs,
       columns[task.column].data,
       task.begin,
       task.end,

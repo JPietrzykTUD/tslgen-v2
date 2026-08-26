@@ -120,6 +120,71 @@ inline auto tsl_dataset_label(TslDatasetSpec const & spec) -> std::string {
   return cut == std::string::npos ? spec.id : spec.id.substr(0, cut);
 }
 
+
+// The longest equal run two-way partitioning may face. Eight is generous: at that
+// length the quadratic term is 32 comparisons per run, which is inside the noise,
+// while the 512-long runs of independent_uniform_c1024 are not.
+inline constexpr double tsl_two_way_run_cap = 8.0;
+
+
+// Is two-way partitioning safe on this shape?
+//
+// Two-way peels one element per level out of an all-equal range, so it is
+// quadratic in the *equal-run length*: a run of r costs about r^2/2, and there are
+// rows/r of them, so the column costs rows*r/2. What decides that is the
+// distinct-value count, which every generated spec carries -- `d` for the
+// low-cardinality family, `d1` for the hierarchical and skewed ones, `c` for the
+// uniform and correlated ones.
+//
+// This is worth getting right rather than approximating with a size cap, because
+// two-way is the *faster* scheme where it is safe: measured across the attribute
+// stage it runs 0.93x-0.97x of three-way on short-run data, and the margin grows
+// with the working set rather than shrinking. A gate that excludes it by size
+// therefore does not buy safety, it forfeits a real win -- which is exactly what
+// the tuner's size cap was doing.
+//
+// The rule used to test the dataset's *name*: only labels beginning
+// "low_cardinality" or "all_equal" were gated. `independent_uniform_c1024` was
+// therefore admitted at every size, and at 524,288 rows over 1024 values its runs
+// are 512 long. One such case ran for eleven and a half hours before it was killed
+// -- a name-based test for a numeric property that was right there in the spec.
+inline auto tsl_two_way_run_bounded(TslDatasetSpec const & spec) -> bool {
+  // Families whose duplication is the point of the shape rather than a parameter
+  // of it. A heavy-tailed distribution has no cardinality to read -- Zipf carries
+  // only its exponent -- but its head is a long equal run by construction, which is
+  // precisely what two-way cannot partition. Naming them is right here; naming them
+  // *instead of* reading the parameter where one exists was the bug.
+  auto const label = tsl_dataset_label(spec);
+  for (auto const * family : {"low_cardinality", "all_equal", "skewed_zipf",
+                              "heavy_hitter", "duplicates_at_pivot"}) {
+    if (label.rfind(family, 0) == 0) {
+      return false;
+    }
+  }
+  // `g` is the terminal group size of the unique_last and extreme_values families.
+  // It is the equal-run length itself, not a cardinality to divide the row count
+  // by -- both generators assert `max group at level m-1 == g` in their own
+  // invariant checks. Falling through to the rows/distinct formula below found no
+  // `d`, `d1` or `c`, concluded "no cardinality, treat as unique", and admitted
+  // every group size up to 4096. At the LLC size `unique_last_g64` cost 60s per
+  // iteration for each two-way variant against 0.24s for three-way.
+  auto const group = spec.param("g", 0.0);
+  if (group > 0.0) {
+    return group <= tsl_two_way_run_cap;
+  }
+  auto distinct = spec.param("d", 0.0);
+  if (distinct <= 0.0) {
+    distinct = spec.param("d1", 0.0);
+  }
+  if (distinct <= 0.0) {
+    distinct = spec.param("c", 0.0);
+  }
+  if (distinct <= 0.0) {
+    return true;   // no cardinality and not a skewed family: treat as unique
+  }
+  return static_cast<double>(spec.rows) / distinct <= tsl_two_way_run_cap;
+}
+
 inline auto tsl_dataset_params(TslDatasetSpec const & spec) -> std::string {
   std::string text;
   for (auto const & entry : spec.params) {

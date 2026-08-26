@@ -525,6 +525,69 @@ filled the table with rows from the wrong machine. It also warns when
 hardware submission fails identically, which is what made `dsa_hw` look broken for
 months.
 
+**Both forms of each device, because only one of them can overlap.** A
+synchronous offload is a worker waiting on a descriptor, so the best it can do is
+beat the scalar scan it replaced. The asynchronous form is where the question
+actually lives: the range goes to the device, the sort continues, and the spans
+are collected at the next poll. Until the samplesort's worklist took on the
+pending-work contract -- termination that counts the device's outstanding ranges,
+an idle worker that polls instead of sleeping, an emitter that outlives the frame
+that produced it -- every asynchronous row in this question was a drop reading
+`this driver never polls`, and "detection offload does not pay" drawn from the
+synchronous rows alone was answering a narrower question than the one asked. Both
+forms are now in the grid. Two caveats belong beside the asynchronous rows: at one
+worker there is nothing to overlap with, because the sorter polls from its own
+idle loop; and with an asynchronous detector `ns_detect` measures the handover
+rather than the scan, so it is not comparable with a synchronous row's phase
+split.
+
+**The axes, and why none of them is a literal.** Row counts come from multiples of
+the probed last level (`--sizes`, default 4x, which is where every other reported
+figure lives); worker counts from the physical cores of one NUMA node; the sorter
+from `best_config.tsv` for the key width being measured; the detector list from
+what `/dev` holds. The device's own knobs are flags too -- `--slots`, `--depth`,
+`--region-bytes`, `--min-offload` -- because the in-flight window a host can hold
+is a property of its work queues rather than of the algorithm. Nothing in the grid
+is typed in, so the same command is the same experiment on the IAA machine.
+
+An offload's case is memory pressure, so the larger points are worth a deliberate
+run rather than a default: `--sizes 4,16` puts the working set at sixteen times the
+last level, where a cell costs minutes instead of seconds.
+
+**The iso-resource pairing, because "it frees a core" has to be paid for.** The
+usual argument for moving work to a device is that the core it would have used is
+returned to the system, and a comparison at equal worker counts never charges the
+offload for that core. `--iso-resource` therefore also measures every offloading
+backend with **one worker fewer** than the scalar scan it is compared against: W-1
+cores plus the device against W cores. The row records the worker count it actually
+ran with and names the pairing in its `variant`, so the two are unambiguous. On this
+host, eight columns at 8.4M rows, cardinality 16: scalar at six workers 50.6
+ns/element against `dsa_hw` at five 48.8 -- the synchronous offload buys back the
+core it costs. At cardinality 1024 the same pairing is 26.2 against 27.2, which is
+break-even. Neither is publishable from this container, and both are the shape of
+answer the equal-worker grid cannot produce. The device is not free either -- one
+host, one work queue -- which is exactly why the pairing is measured rather than
+argued.
+
+**What the detector did, beside what it cost.** Runtime alone cannot separate "the
+offload did not pay" from "the offload never happened": a backend that declined
+every range because it fell below the offload threshold, or because its in-flight
+window was full, is indistinguishable from one that ran and lost. So the driver
+writes `q3_detection_detector_counters.csv` beside its CSV -- ranges offered,
+ranges offloaded, declines by reason, descriptors, spans, and the poll accounting --
+with the repetition count, since the counters accumulate over every timed pass. It
+is a sidecar rather than extra columns because one schema across all seven
+questions is what makes a figure a query over the directory.
+
+Two findings came straight out of those counters and are the reason they exist.
+Sub-threshold ranges used to reach the detector and pay a pool lease or a metrics
+lock to be declined -- 748k of them per run on one shape, for 5.0x synchronous and
+3.4x asynchronous against the scalar scan they performed anyway; the caller now
+declines them first (`sorting/common/run_discovery.hpp`) and the same cell is 1.04x.
+And an asynchronous detector's idle workers were polling on every publish
+notification -- 400k polls of which 99.8% found nothing, on cores that were meant
+to be sorting; one worker polls at a time now.
+
 **Two things about this driver's numbers.** It reads Q0's configuration like the
 others, which it did not until recently -- it built its samplesort from literals,
 and since its headline is detection's *share* of the runtime, and a share is a
@@ -567,12 +630,116 @@ reason, including Q1's twenty-four-worker comparison against
 `std::sort(execution::par)` -- TBB was equally free to spread across both nodes.
 Re-measuring those pinned is the outstanding item.
 
+## Q7 — what SIMD and SMT buy
+
+Two axes the earlier plan named in its aim and measured nowhere.
+
+**A scalar baseline of the same algorithm.** Q6 sweeps three implementation styles
+across three register widths, and its narrowest cell is 128 bits -- so on its own
+it says how vector code should be *written*, not whether writing it paid. The only
+non-SIMD row anywhere else was `std_lex_argsort`, a different algorithm, which
+conflates vectorisation with everything else that differs between a comparator
+sort and a co-sort. The baseline is therefore a *style* in the corpus, alongside
+the three vector ones: `TslStyle::Scalar` instantiates the same sorter sources on
+`tsl::simd<Key, tsl::scalar>` -- one lane, every primitive resolved to its scalar
+implementation, same partition, same leaf, same detector seam -- at the same
+shapes and size levels, writing the shared schema with `style=scalar/lanes=1`.
+
+One binary, not two. `tsl::scalar` is an *extension*, and every profile carries
+it: the AVX-512 profile header this build uses contains
+`select_impl<tsl::simd<int32_t, tsl::scalar>>` and five hundred references to the
+extension. What is exclusive is a rival *profile* header -- `tsl_scalar.hpp`
+against `tsl_sapphire_...hpp`, both defining `active_profile` -- and including one
+of those was the actual reason an earlier attempt needed a separate target. Since
+the register width is not a free axis here, the scalar style is registered once
+per case at the narrowest width rather than three times, and the registrar drops
+the wider two with `StageVariant`.
+
+Measured in the attribute stage across L2 and LLC, both key widths, six shapes,
+three columns -- every scalar row paired against the vector rows of the same cell
+(median over the paired cells, count in brackets):
+
+| algorithm | 2 lanes | 4 lanes | 8 lanes | 16 lanes |
+| --- | --- | --- | --- | --- |
+| index quicksort, network leaf | 0.98x (6) | 1.74x (12) | 2.55x (12) | **4.84x** (6) |
+| index quicksort, hybrid leaf | 0.94x (6) | 1.57x (12) | 2.40x (12) | **4.58x** (6) |
+| index quicksort, insertion leaf | 0.90x (6) | 1.51x (12) | 2.14x (12) | **2.88x** (6) |
+| samplesort | 1.20x (6) | 1.44x (12) | 1.73x (12) | **2.04x** (6) |
+
+Three things in that table are the finding.
+
+**The lane count is the axis, and it is not linear.** The quicksort's partition
+gains almost the full step from 4 to 16 lanes; the samplesort's bucket
+classification gets 2.0x out of sixteen, because its cost is the scatter, and a
+scatter does not get cheaper with wider registers.
+
+**At two lanes, vectorising the quicksort loses.** 0.90x-0.98x -- the stitch's
+mask work and register pressure cost more than two lanes of comparison save. The
+samplesort still wins there (1.20x) because its classification amortises over the
+bucket. A machine with only 128-bit registers over 8-byte keys is therefore a
+machine where the quicksort should not vectorise at all, which is a portability
+statement the style sweep alone could not make.
+
+**The leaf decides how far it scales.** The three leaves are within 15% of each
+other at four lanes and a factor of 1.7 apart at sixteen: the insertion leaf caps
+at 2.88x while the network leaf reaches 4.84x. A sorting network is itself
+vectorised; an insertion leaf is not, so at sixteen lanes it is the serial
+fraction of the sort.
+
+One caveat belongs with the numbers. The baseline is now compiled in the corpus
+binary, with the full `-m` flag set, so the compiler was free to auto-vectorise
+the scalar style's loops -- and where it managed to, these ratios understate what
+explicit vectorisation contributes. An earlier separate binary built with no `-m`
+flags answered the other question, "what explicit vectorisation buys over a build
+that could not vectorise at all", and reported 1.98x/4.06x/6.54x for the insertion
+leaf against 1.51x/2.14x/2.88x here. Both are true; they differ by what the
+compiler did on its own. The numbers above are the conservative reading, and are
+the ones to cite. Keeping both would need two translation units of the same
+sources at different flags, which is a build change rather than a source one.
+
+These were measured on a contended host -- 106 of 252 rows had more than half
+their timed passes preempted -- so read the shape of the table rather than its
+third digit.
+
+**SMT.** Every parallel figure here pins one thread per physical core of one NUMA
+node, and for a good reason: a memory-bound co-sort run across SMT siblings has
+them evicting each other's lines, and a sweep that wandered onto siblings once
+produced a "the quicksort does not scale" finding that had to be withdrawn. But
+"avoid SMT so the thread axis is clean" is not the claim "SMT does not help", and
+the paper is about exploiting the hardware. So `q4_smt` runs the thread axis again
+on the *same* physical cores with both siblings enabled, under a mask derived from
+`/sys/devices/system/cpu/*/topology/thread_siblings_list` rather than from a
+literal, and every row records the mask it ran under in `pinned_cpus`. The
+comparison is between the two ends: one thread per core against two.
+
 ## Q5 and Q6 — variant screening and what the primitives buy
 
 Both are stages of `cosort_bench` rather than binaries of their own, for the
 reason given at the top: they would have to re-implement its registration to
 produce numbers it already produces. `run_paper.sh` runs them at nine repetitions
 and converts the Google Benchmark JSON into the shared schema.
+
+**Both stages now measure the way the other five questions do.** They used to run
+through Google Benchmark and reach the schema through a JSON conversion, which
+could not recover the fields the schema wanted: `verified` was hardcoded to 1, so
+a case the corpus refused converted into a row indistinguishable from a measured
+one; there were no quartiles; and the repetition count was whatever the flag said
+rather than what the spread needed. `cosort_bench --paper-csv` runs the same
+registered cases through `paper_harness.hpp` instead -- verify then time, median of
+at least nine with quartiles, resampled while the relative IQR stays above 5%,
+machine state per row, drops carrying their reason -- and writes the shared schema
+directly. The `size_level` column the corpus carried and the reporting drivers did
+not is now part of that schema, so "one schema across all of them" is true rather
+than nearly true.
+
+The registration is untouched: a `bench_q5_*.cpp` would still have to
+re-implement it. What changed is that a case body says *what* to measure by
+calling `measure(prepare, body, verify)` on whichever runner it was handed, so
+there is one copy of each sort body and two backends. `prepare` is why this was
+not possible before: an in-place variant consumes the table and has to be handed
+it back between passes, which the harness had no way to exclude from its timing.
+`COSORT_GBENCH=1` still runs the old path, for comparing the two on one machine
+before it goes.
 
 **Q5, the `screen` stage.** Every implementable variant at one point per axis --
 execution, discovery, partition kind, leaf, movement -- over six shapes at two
@@ -625,6 +792,29 @@ One command, from a clean checkout to a results directory:
 ./run_all.sh results/<host> --no-baselines    # skip Q1's external libraries
 ```
 
+`run_paper.sh` refuses to start rather than producing a directory that cannot be
+used, and each refusal is there because that mistake has already been made:
+
+| refuses when | because |
+| --- | --- |
+| the build's fetched TSL is not the version it was configured for | FetchContent keeps whatever it downloaded first, so a build tree can be months behind the pin and fail on a primitive that exists upstream |
+| instrumentation is compiled in, or the profile resolved to scalar | the counters cost up to 1.17x, and a scalar fallback is not a SIMD measurement |
+| the load average is above 1.0 | the effects being resolved are a few percent; `--allow-busy` overrides and labels the run |
+| the correctness gate fails | a configuration that sorts wrongly is a bug, not a slow candidate |
+
+**Q3 is three stages, because its question has three parts.** `q3_detection` is
+the grid, one pass, where a large effect shows up. `q3_ladder` sweeps every worker
+count from one to the physical cores of one node on a single cell, because "how
+many cores does the device replace" is a crossing between two scaling curves
+rather than a measurement -- `findings.py::cores_freed` reads it off those rows.
+`q3_pressure` repeats one cell at four and sixteen times the last level, because
+an offload's case is memory pressure and a working set that half-fits cannot show
+it. The two narrow stages run the whole binary several times and append their
+rows: the effects there are a few percent, and re-running a driver moves its
+numbers by about a fifth -- a spread no amount of resampling inside one process
+can see, and the reason a single-pass 1-5% result from any of these stages should
+not be quoted.
+
 It configures, generates the data, builds and runs, skipping any step already
 done, so a re-run after a failure does not repeat `dsdgen`. Extracted keys go to
 `TMP/tpcds_keys/sf<N>/` with a `manifest.txt` naming the scale factor: the earlier
@@ -659,14 +849,38 @@ seven hours, and the accelerator rows need the machine with the devices.
 
 ## Exploring the results
 
+One analysis, three front ends. `benchmarks/visualization/findings.py` normalises
+every packed field in the schema once and computes each question's answer -- the
+verdict, the counts it rests on, and the conditions it holds under -- so the text,
+the page and the app cannot disagree about what the data says.
+
 ```bash
+python3 benchmarks/visualization/findings.py --results <results-dir>          # text
+python3 benchmarks/visualization/report.py   --results <results-dir> --out report.html
 pip install streamlit pandas altair
-streamlit run benchmarks/visualization/explore.py -- --results <results-dir>
+streamlit run benchmarks/visualization/explore.py -- --results <results-dir>  # interactive
 ```
 
-Reads every CSV the directory holds — one schema, so questions compare directly.
-It shows the interquartile range on every point, gives drops their own tab rather
-than letting them look like gaps, and says so when two hosts' numbers are mixed.
+The page and the app are organised by question rather than by chart type, because
+the earlier explorer was a field picker: it could produce any comparison and
+asserted none, so reading it meant already knowing which stage, which fields and
+which filters answer Q2. Each question now leads with its answer, then the figure
+that carries it, then what it holds under.
+
+Every ratio is **paired** -- formed inside one measurement cell, where a cell is
+the full set of conditions (shape, columns, key width, rows, workers, detector,
+style, register width) -- and only then summarised across cells. Pooling first and
+dividing after is what once made a serial-and-parallel median look slower than a
+parallel-only one. Unequal coverage is stated with the dimension named; drops are
+listed rather than omitted; and the two stages with no quartiles have their
+coefficient of variation recovered from the Google Benchmark JSON beside the CSV
+rather than being reported as no spread at all.
+
+Two things the CSV schema cannot carry, which the report says out loud rather than
+working around: Q0's rows have p25 = p75 = median, so the paired per-round ratio
+the tuning decision actually rests on is read from `q0_tune.log`; and the phase
+columns are zero in any `bench*` build, so detection's *share* of a runtime is not
+answerable from a published results directory.
 
 ## Output
 

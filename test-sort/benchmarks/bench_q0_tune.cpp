@@ -711,7 +711,7 @@ int main(int argc, char ** argv) {
       // outcome with no correct candidate carries a default-constructed config,
       // and writing that stamped `from_file` would hand the reporting drivers a
       // configuration nothing measured while labelling it tuned.
-      if (workers == worker_counts.front()) {
+      {
         auto publish = [&](char const * algorithm, Outcome const & outcome) {
           if (outcome.best.score <= 0.0) {
             std::printf("  !! %s/%s/%zu-bit/u%zu: no candidate sorted correctly; "
@@ -723,7 +723,15 @@ int main(int argc, char ** argv) {
           auto config = outcome.best.config;
           config.from_file = true;
           tuned[tsl_tuned_key(algorithm, unit.style, unit.width,
-                              unit.element_bytes)] = config;
+                              unit.element_bytes, workers)] = config;
+          // Also as the worker-agnostic entry, from the lowest worker count
+          // measured, so a driver that asks without a worker count -- and a file
+          // read by an older binary -- still finds the serial answer where it
+          // always was.
+          if (workers == worker_counts.front()) {
+            tuned[tsl_tuned_key(algorithm, unit.style, unit.width,
+                                unit.element_bytes)] = config;
+          }
         };
         publish("samplesort", sample_outcome);
         publish("quicksort", quick_outcome);

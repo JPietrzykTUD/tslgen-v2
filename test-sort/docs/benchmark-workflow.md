@@ -157,6 +157,15 @@ one cell ran with another cell's knobs and still labelled the row `(tuned)`.
 again: two runs of the tuner could disagree, and the cheaper one used to decide what
 got built.
 
+It also stands on its own, which is what makes a run reproducible on a machine that
+has never seen this repository: `--results` is the only required flag, the build
+tree is configured and built from `--source` with `--cxx` / `--cc` / `--profile` /
+`--tsl-version`, `--datasets` points at the extracted keys, and `--stages` names
+which questions to run (`--list-stages` prints them). Re-measuring one question
+after a fix is therefore `--stages q3_detection,report` rather than a hand-edited
+copy of the script. `configure.log` and `build.log` land in the results directory,
+so a directory records how it was produced.
+
 Every row records the configuration it used and whether it came from the file, its
 repetition count (adaptive: nine, then batches of four while the inter-quartile
 range exceeds 5%, to a ceiling of 33), and the machine it ran on. A row still wide at

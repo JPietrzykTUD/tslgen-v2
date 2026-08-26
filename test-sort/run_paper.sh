@@ -2,7 +2,13 @@
 # Produces every number the paper cites, with the method fixed in
 # benchmarks/paper_harness.hpp and the questions listed in docs/benchmark-plan.md.
 #
-#   ./run_paper.sh <build-dir> <results-dir> [--quick]
+#   ./run_paper.sh --results DIR [--build DIR] [--cxx PATH] [--profile NAME]
+#                  [--stages LIST] [--datasets DIR] [--quick] [--allow-busy]
+#
+# Self-contained: given only a results directory it configures a build tree from
+# this checkout, builds it, measures every stage and writes the report. `--help`
+# lists every flag, `--list-stages` every stage name. The older positional form
+# `run_paper.sh <build-dir> <results-dir>` still works.
 #
 # One CSV per question, all sharing a schema, so a figure is a query over the
 # results directory rather than a re-run. Refuses to write into a results
@@ -12,17 +18,234 @@
 # The accelerator rows need a machine with the devices. Where they are absent the
 # drivers emit the row with a reason rather than skipping it, so a run from the
 # wrong host is visible in the CSV instead of looking like a backend that lost.
+#
+# What this refuses to do, each because it has silently produced wrong numbers:
+#
+#   * measure from a build whose fetched TSL is not the version it was configured
+#     for -- FetchContent keeps whatever it downloaded first, and a stale tree can
+#     be months behind the pin,
+#   * measure from an instrumented build, or one that resolved the scalar profile,
+#   * measure on a machine that is not idle -- load average above 1.0 or another
+#     runnable task while sampling (--allow-busy overrides and says so in the
+#     output), and
+#   * measure before the correctness gate passes.
+#
+# Q3 is three stages rather than one, because its question has three parts: the
+# grid (large effects, one pass), the worker ladder (how many cores the device
+# replaces -- a crossing between two scaling curves) and the pressure sweep (4x
+# and 16x the last level, because an offload's case is memory pressure). The two
+# narrow ones repeat the whole binary several times and append: the effects there
+# are a few percent, and re-running a driver moves its numbers by about a fifth,
+# which no amount of resampling inside one process can see.
 set -euo pipefail
 
-build="${1:?usage: run_paper.sh <build-dir> <results-dir> [--quick]}"
-results="${2:?usage: run_paper.sh <build-dir> <results-dir> [--quick]}"
+here="$(cd "$(dirname "$0")" && pwd)"
+
+# Every stage this suite can run, in the order it runs them. `--stages` selects a
+# subset by name; `--list-stages` prints them.
+all_stages=(q0_tune q1_baselines q2_algorithms q3_detection q3_ladder q3_pressure
+            q3_run_length q4_scaling q4_smt q5_variants q6_portability report)
+
+usage() {
+  cat <<'USAGE'
+run_paper.sh -- produce every number the paper cites, from a checkout to a report.
+
+  ./run_paper.sh --results DIR [options]
+  ./run_paper.sh <build-dir> <results-dir> [--quick] [--allow-busy]    (older form)
+
+Where the work happens:
+  --results DIR      where the CSVs, logs and report go. Required.
+  --build DIR        build tree to measure from. Configured and built if it does
+                     not exist yet. Default: <results>/build.
+  --source DIR       repository checkout to build. Default: this script's directory.
+
+What to build with:
+  --cxx PATH         C++ compiler.        Default: $CXX, else c++.
+  --cc PATH          C compiler.          Default: $CC, else cc.
+  --profile NAME     TSL profile.         Default: auto. A run whose profile
+                     resolves to `scalar` is refused: every number would be a
+                     scalar fallback whatever the style column says.
+  --tsl-version TAG  Generated TSL release tag. Default: the pin in CMakeLists.txt.
+  --baselines        Also build Q1's external baselines (needs network: ips4o,
+                     x86-simd-sort, TBB).
+  --jobs N           Build parallelism. Default: online CPUs minus two.
+  --reconfigure      Delete and re-create the build tree first.
+
+What to measure:
+  --stages LIST      Comma-separated stage names, or `all`. Default: all.
+                     `--list-stages` prints them.
+  --datasets DIR     Directory of extracted TPC-DS/DSB keys (*.tsldset). Default:
+                     $TPCDS_KEYS, else a search under <source>/TMP/tpcds_keys.
+  --workers N        Worker count for the reporting drivers.
+  --max-workers N    Upper bound on Q4's thread axis.
+  --quick            Proof-of-pipeline sizes: fewer stages, smaller shapes. Not
+                     publishable, and the narrow stages are skipped because a few
+                     percent is not resolvable at those sizes anyway.
+  --allow-busy       Measure anyway on a machine that is not idle, and say so.
+
+  -h, --help         This text.
+
+Everything above can also be set through the environment (COSORT_*); the flags
+win. `--list-stages` and `--help` exit without touching anything.
+USAGE
+}
+
+build=""
+results=""
+source_dir="$here"
+cxx="${CXX:-}"
+cc="${CC:-}"
+profile="${TSL_PROFILE:-auto}"
+tsl_version="${COSORT_TSL_VERSION_PIN:-}"
+jobs=""
+want_baselines="no"
+reconfigure="no"
+stages_requested="all"
+datasets="${TPCDS_KEYS:-}"
+quick=""
+allow_busy="no"
+# Whether any build-time flag was passed *explicitly*. The defaults come from the
+# environment, and a caller who has `CXX` exported has not asked for anything.
+build_flags="no"
+positional=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --results)      results="${2:?--results needs a directory}"; shift 2 ;;
+    --build)        build="${2:?--build needs a directory}"; shift 2 ;;
+    --source)       source_dir="${2:?--source needs a directory}"; shift 2 ;;
+    --cxx)          cxx="${2:?--cxx needs a compiler}"; build_flags="yes"; shift 2 ;;
+    --cc)           cc="${2:?--cc needs a compiler}"; build_flags="yes"; shift 2 ;;
+    --profile)      profile="${2:?--profile needs a name}"; build_flags="yes"; shift 2 ;;
+    --tsl-version)  tsl_version="${2:?--tsl-version needs a tag}"; build_flags="yes"; shift 2 ;;
+    --jobs)         jobs="${2:?--jobs needs a count}"; shift 2 ;;
+    --stages)       stages_requested="${2:?--stages needs a list}"; shift 2 ;;
+    --datasets)     datasets="${2:?--datasets needs a directory}"; shift 2 ;;
+    --workers)      COSORT_WORKERS="${2:?--workers needs a count}"; shift 2 ;;
+    --max-workers)  COSORT_MAX_WORKERS="${2:?--max-workers needs a count}"; shift 2 ;;
+    --baselines)    want_baselines="yes"; shift ;;
+    --reconfigure)  reconfigure="yes"; shift ;;
+    --quick)        quick="--quick"; shift ;;
+    --allow-busy)   allow_busy="yes"; shift ;;
+    --list-stages)  printf '%s\n' "${all_stages[@]}"; exit 0 ;;
+    -h|--help)      usage; exit 0 ;;
+    --*)            echo "unknown argument: $1" >&2; usage >&2; exit 2 ;;
+    *)              positional+=("$1"); shift ;;
+  esac
+done
+
+# The older positional form, kept because existing scripts and notes use it.
+if [[ ${#positional[@]} -gt 0 ]]; then
+  [[ -z "$build" ]]   && build="${positional[0]}"
+  [[ ${#positional[@]} -gt 1 && -z "$results" ]] && results="${positional[1]}"
+  if [[ ${#positional[@]} -gt 2 ]]; then
+    echo "too many positional arguments: ${positional[*]}" >&2
+    exit 2
+  fi
+fi
+
+if [[ -z "$results" ]]; then
+  echo "no results directory: pass --results DIR" >&2
+  usage >&2
+  exit 2
+fi
 # Absolute from here on. Several steps run the drivers from inside the build
 # directory -- `(cd "$build" && ./bench_q2_algorithms --csv "$results/...")` -- so a
 # relative results path put the CSVs in the build tree while `tee` wrote the logs
 # where the caller asked, splitting a results directory in half without saying so.
 mkdir -p "$results"
 results="$(cd "$results" && pwd)"
-quick="${3:-}"
+source_dir="$(cd "$source_dir" && pwd)"
+[[ -z "$build" ]] && build="$results/build"
+[[ -n "$datasets" ]] && export TPCDS_KEYS="$datasets"
+
+# Which stages to run. Named rather than positional so a re-run of one question
+# does not depend on counting, and validated here so a typo fails before the
+# machine is tied up for six hours rather than after.
+declare -A run_stage=()
+if [[ "$stages_requested" == "all" ]]; then
+  for stage in "${all_stages[@]}"; do run_stage[$stage]=1; done
+else
+  IFS=',' read -r -a wanted <<< "$stages_requested"
+  for stage in "${wanted[@]}"; do
+    known="no"
+    for candidate in "${all_stages[@]}"; do
+      [[ "$stage" == "$candidate" ]] && known="yes"
+    done
+    if [[ "$known" != "yes" ]]; then
+      echo "unknown stage: $stage" >&2
+      echo "known stages: ${all_stages[*]}" >&2
+      exit 2
+    fi
+    run_stage[$stage]=1
+  done
+fi
+# `report` and `q0_tune` are not optional in the way the others are: every
+# reporting driver reads best_config.tsv, so asking for q2 alone still needs the
+# tuner's answer -- reused from the results directory when it is already there.
+want() { [[ -n "${run_stage[$1]:-}" ]]; }
+
+# ---------------------------------------------------------------------------
+# The build tree
+# ---------------------------------------------------------------------------
+# Configured here rather than assumed, so a fresh checkout on a new machine is one
+# command. An existing tree is reused as it stands -- reconfiguring one that is
+# mid-build is how a directory came out resolved to the scalar profile once, with
+# no symptom but an unrelated compile error.
+if [[ "$reconfigure" == "yes" ]]; then
+  echo "removing $build to configure it again"
+  rm -rf "$build"
+fi
+
+if [[ ! -f "$build/CMakeCache.txt" ]]; then
+  echo
+  echo "=== configuring $build"
+  configure=(cmake -S "$source_dir" -B "$build"
+             -DCMAKE_BUILD_TYPE=Release
+             -DTSL_PROFILE="$profile"
+             -DTSL_COSORT_ENABLE_DSA=ON
+             -DTSL_COSORT_NO_INSTRUMENTATION=ON)
+  [[ -n "$cxx" ]] && configure+=(-DCMAKE_CXX_COMPILER="$cxx")
+  [[ -n "$cc" ]]  && configure+=(-DCMAKE_C_COMPILER="$cc")
+  [[ -n "$tsl_version" ]] && configure+=(-DTSL_RELEASE_VERSION="$tsl_version")
+  [[ "$want_baselines" == "yes" ]] && configure+=(-DTSL_COSORT_ENABLE_BASELINES=ON)
+  if ! "${configure[@]}" 2>&1 | tee "$results/configure.log" | tail -5; then
+    echo "configure failed; the whole log is in $results/configure.log" >&2
+    grep -m1 -A 4 "CMake Error" "$results/configure.log" >&2 || true
+    exit 1
+  fi
+  # `TSL_PROFILE=auto` probes the host by compiling *and running* a snippet per
+  # ISA. Where that cannot run -- a container without permission to execute a
+  # freshly built binary, a cross build -- every probe fails and the profile
+  # silently resolves to `scalar`. Nothing downstream complains: the intrinsics
+  # style still compiles, the drivers still run, and every number is a scalar
+  # fallback. Caught here, where the log still says which it picked.
+  if grep -q "TSL auto-detected profile = scalar" "$results/configure.log" \
+     && [[ "$profile" == "auto" ]]; then
+    echo "refusing to build: TSL_PROFILE=auto resolved to the scalar profile." >&2
+    echo "  Every number from this tree would be a scalar fallback whatever the" >&2
+    echo "  style column says. The probe compiles and *runs* a snippet per ISA, so" >&2
+    echo "  it fails wholesale where running a fresh binary is not permitted." >&2
+    echo "  Name the profile instead, e.g." >&2
+    echo "    $0 --profile sapphire_emerald_granite_rapids --results $results" >&2
+    echo "  (cmake -LH $build | grep TSL_PROFILE lists what this release carries)" >&2
+    exit 1
+  fi
+else
+  echo "=== reusing the build tree in $build"
+  if [[ "$build_flags" == "yes" ]]; then
+    echo "    (--cxx/--cc/--profile/--tsl-version apply at configure time only;" >&2
+    echo "     pass --reconfigure to apply them to this tree)" >&2
+  fi
+fi
+
+: "${jobs:=$(( $(nproc) > 2 ? $(nproc) - 2 : 1 ))}"
+echo "=== building (-j $jobs)"
+if ! cmake --build "$build" -j "$jobs" 2>&1 | tee "$results/build.log" | tail -3; then
+  echo "build failed; the whole log is in $results/build.log" >&2
+  grep -m3 -i "error:" "$results/build.log" >&2 || true
+  exit 1
+fi
 
 host="$(hostname)"
 mkdir -p "$results"
@@ -53,6 +276,40 @@ printf '%s\n' "$host" > "$stamp"
 } > "$results/machine.txt"
 cat "$results/machine.txt"
 
+# The generated TSL this build actually compiled against, checked against the
+# version it was configured to want. FetchContent does not re-download into an
+# existing source directory, so a build tree configured months ago keeps whatever
+# release it fetched then, silently, while CMakeLists.txt says something else.
+# That is not a hypothetical: a tree holding v0.2.5 against a v0.3.0 pin failed to
+# compile the bitonic leaf for want of `tsl::select`, and the missing primitive
+# looked like a source bug for hours.
+# The pin comes from CMakeLists.txt, not from the build's own cache: a tree
+# configured while the pin was older holds that older value in its cache too, so
+# cache-against-fetched is consistent on exactly the tree that is wrong.
+pinned_tsl="$(sed -n 's/^set(TSL_RELEASE_VERSION "\([^"]*\)".*/\1/p' "$source_dir/CMakeLists.txt" 2>/dev/null | head -1 || true)"
+fetched_tsl="$(ls "$build"/_deps/tsl-subbuild/tsl-populate-prefix/src/tsl-generated-*.tar.gz                2>/dev/null | head -1 || true)"
+if [[ -n "$pinned_tsl" && -n "$fetched_tsl" ]]; then
+  fetched_tsl="$(basename "$fetched_tsl" .tar.gz)"
+  fetched_tsl="${fetched_tsl#tsl-generated-}"
+  if [[ "$fetched_tsl" != "$pinned_tsl" ]]; then
+    if [[ "${COSORT_TSL_VERSION:-}" == "$fetched_tsl" ]]; then
+      echo "generated TSL: $fetched_tsl (pin says $pinned_tsl; allowed by COSORT_TSL_VERSION)"
+    else
+      echo "refusing to measure: $build compiled against generated TSL $fetched_tsl," >&2
+      echo "  but CMakeLists.txt pins $pinned_tsl. FetchContent does not replace an" >&2
+      echo "  existing _deps source tree, so a build directory configured before the" >&2
+      echo "  pin moved keeps the old release -- and its own cache records the old" >&2
+      echo "  version too, so nothing looks inconsistent from inside it. The" >&2
+      echo "  directory has to go:" >&2
+      echo "    $0 --results $results --build $build --reconfigure" >&2
+      echo "  To measure an older release deliberately:" >&2
+      echo "    COSORT_TSL_VERSION=$fetched_tsl ./run_paper.sh ..." >&2
+      exit 1
+    fi
+  fi
+  echo "generated TSL: $fetched_tsl (matches the pin)"
+fi
+
 # Which accelerator rows this machine can contribute. No host here has both, so
 # the paper's accelerator table is assembled from more than one run and each row
 # records where it came from.
@@ -63,9 +320,15 @@ echo "accelerators: dsa=$have_dsa iax=$have_iax"
 # hardware backend and drop the absent ones as unavailable, which is honest but
 # fills the accelerator table with rows from the wrong machine. Override with
 # COSORT_Q3_DETECTORS to force a list.
+# Both forms of each device, because they answer different questions. The
+# synchronous row prices an offload that a worker waits on; the asynchronous one
+# prices the only form in which the device can overlap the sort, and it is the one
+# a "does offloading pay" claim rests on. It became measurable when the
+# samplesort's worklist took on the pending-work contract; before that every
+# asynchronous row was a drop reading "this driver never polls".
 q3_detectors="scalar"
-[[ "$have_dsa" == "yes" ]] && q3_detectors="$q3_detectors,dsa_hw"
-[[ "$have_iax" == "yes" ]] && q3_detectors="$q3_detectors,iaa_hw,iaa_freq_hw"
+[[ "$have_dsa" == "yes" ]] && q3_detectors="$q3_detectors,dsa_hw,dsa_hw_async"
+[[ "$have_iax" == "yes" ]] && q3_detectors="$q3_detectors,iaa_hw,iaa_hw_async,iaa_freq_hw"
 q3_detectors="${COSORT_Q3_DETECTORS:-$q3_detectors}"
 echo "q3 detectors: $q3_detectors"
 if [[ "$have_dsa" == "no" && "$have_iax" == "no" ]]; then
@@ -77,10 +340,81 @@ if ! ldconfig -p 2>/dev/null | grep -q libaccel-config; then
   echo "     internal error whatever its size"
 fi
 
-if [[ -n "$(awk '{print ($1 > 1.0)}' /proc/loadavg)" ]] \
-   && [[ "$(awk '{print ($1 > 1.0)}' /proc/loadavg)" == "1" ]]; then
+# A busy machine is refused rather than warned about. Every driver already prints
+# "these numbers are not publishable" when it starts above 1.0, and every results
+# directory in this repository carries that line -- which is to say the warning
+# does not work. The differences being resolved here are a few percent and the
+# inter-process spread on a contended host is twenty.
+#
+# What this gate can and cannot do, because it is easy to over-read:
+#
+#   * It is a screen at the door, not a guard for the run. A six-hour suite that
+#     starts on an idle host and is joined at minute forty by a colleague's build
+#     passes this check and is contended anyway.
+#   * The load average is a one-minute exponential average, so it lags: a job that
+#     started ten seconds ago barely shows, and one that ended a minute ago still
+#     does. `procs_running` from /proc/stat is the instantaneous count of runnable
+#     tasks, so both are sampled -- the average for what has been happening, the
+#     runnable count for what is happening now.
+#   * Neither can stop the kernel putting something on these cores mid-run.
+#     Nothing in userspace can. What closes that gap is on two other levels:
+#     `paper_harness.hpp` counts involuntary context switches around every timed
+#     pass and marks the row (`preempted_passes`), and a cpuset makes the cores
+#     exclusive so there is nothing to be preempted by. The recipe is printed
+#     below when this host is not already isolated.
+load_now="$(cut -d' ' -f1 /proc/loadavg)"
+load_cap="${COSORT_LOAD_CAP:-1.0}"
+
+# The runnable count, sampled rather than read once: a single read of
+# `procs_running` catches this shell and whatever happened to be on a CPU that
+# instant, so the useful statistic is the maximum over a couple of seconds.
+runnable_max=0
+for _ in 1 2 3 4 5 6; do
+  running="$(awk '/^procs_running/{print $2}' /proc/stat)"
+  if (( running > runnable_max )); then runnable_max=$running; fi
+  sleep 0.3
+done
+# One runnable task is this script. Anything above that is somebody else.
+runnable_others=$(( runnable_max > 0 ? runnable_max - 1 : 0 ))
+runnable_cap="${COSORT_RUNNABLE_CAP:-1}"
+
+busy_reason=""
+if awk -v l="$load_now" -v c="$load_cap" 'BEGIN{exit !(l > c)}'; then
+  busy_reason="load average is $load_now, above $load_cap"
+fi
+if (( runnable_others > runnable_cap )); then
+  extra="$runnable_others other runnable task(s) while sampling, above $runnable_cap"
+  busy_reason="${busy_reason:+$busy_reason; }$extra"
+fi
+if [[ -n "$busy_reason" ]]; then
+  if [[ "$allow_busy" == "yes" ]]; then
+    echo
+    echo "!! $busy_reason, and --allow-busy was given:" >&2
+    echo "   this directory will not be publishable" >&2
+  else
+    echo "refusing to measure: $busy_reason" >&2
+    echo "  something else is using the cores being measured. Wait for it, or pass" >&2
+    echo "  --allow-busy to produce a working (not publishable) directory, or raise" >&2
+    echo "  the bar with COSORT_LOAD_CAP / COSORT_RUNNABLE_CAP." >&2
+    exit 1
+  fi
+fi
+
+# Whether the OS can put anything else on these cores at all. `isolcpus` or an
+# exclusive cpuset is the only thing that answers "what if some process gets
+# scheduled on the same CPU" with "it cannot"; without one, the harness can only
+# notice afterwards.
+isolated="$(cat /sys/devices/system/cpu/isolated 2>/dev/null || true)"
+if [[ -z "${isolated//[[:space:]]/}" ]]; then
   echo
-  echo "!! load average is above 1.0; these numbers are not publishable" >&2
+  echo "note: no isolated CPUs on this host, so the scheduler may place other work" >&2
+  echo "  on the cores this run measures. The harness records that per row" >&2
+  echo "  (preempted_passes) but cannot prevent it. To prevent it:" >&2
+  echo "    * boot with isolcpus=<list> nohz_full=<list> rcu_nocbs=<list>, or" >&2
+  echo "    * put the run in an exclusive cpuset:" >&2
+  echo "        sudo cset shield --cpu=0-5 --kthread=on" >&2
+  echo "        sudo cset shield --exec -- ./run_paper.sh $build $results" >&2
+  echo "  and pin memory too: numactl --cpunodebind=0 --membind=0." >&2
 fi
 
 # Elapsed per stage and since the start, printed either side of each driver. A
@@ -88,13 +422,78 @@ fi
 # from a hung one is to watch the row count by hand.
 suite_started=$SECONDS
 stage_index=0
-stage_total=6
+# Eight stages: q1, q2, the three q3 stages, q4, and the two corpus stages.
+# --quick skips the two narrow q3 stages, whose whole point is resolving a few
+# percent -- which a proof-of-pipeline run cannot do anyway.
+# How many stages this invocation will actually run, so the "[3/7]" headers mean
+# something after `--stages` narrows the set. `--quick` drops the three narrow Q3
+# stages and the SMT stage: they resolve a few percent, which proof-of-pipeline
+# sizes cannot do anyway.
+stage_total=0
+for stage in "${all_stages[@]}"; do
+  want "$stage" || continue
+  case "$stage" in
+    report) continue ;;                    # not a measurement
+    q0_tune) continue ;;                   # printed separately, before the count
+    q3_ladder|q3_pressure|q3_run_length|q4_smt)
+      [[ "$quick" == "--quick" ]] && continue ;;
+  esac
+  stage_total=$(( stage_total + 1 ))
+done
 
 elapsed_text() {  # seconds
   local s=$1
   if (( s >= 3600 )); then printf '%dh%02dm' $(( s / 3600 )) $(( (s % 3600) / 60 ))
   elif (( s >= 60 )); then printf '%dm%02ds' $(( s / 60 )) $(( s % 60 ))
   else printf '%ds' "$s"; fi
+}
+
+# Some questions here turn on a few percent, and the harness's own resampling
+# only sees the spread *inside* one process: re-running the binary moves the same
+# numbers by about a fifth. So the stages that ask fine questions are run several
+# times and their rows appended into one CSV, which is exactly what the analysis
+# wants -- `findings.py` medians the rows per cell, and the row count per cell is
+# how many whole-process passes produced it.
+run_repeated() {  # passes, binary, csv name, args...
+  local passes="$1"; shift
+  local binary="$1"; shift
+  local name="$1"; shift
+  stage_index=$(( stage_index + 1 ))
+  if [[ ! -x "$build/$binary" ]]; then
+    echo "skipping $name: $build/$binary is not built"
+    return
+  fi
+  local began=$SECONDS
+  echo
+  echo "=== [$stage_index/$stage_total] $name  x$passes passes  (started \
+$(date +%H:%M:%S), $(elapsed_text $(( began - suite_started ))) into the run)"
+  rm -f "$results/$name.csv" "$results/$name.log" \
+        "$results/${name}_detector_counters.csv"
+  local pass
+  for (( pass = 1; pass <= passes; pass++ )); do
+    local scratch="$results/.$name.pass$pass.csv"
+    echo "--- pass $pass of $passes" | tee -a "$results/$name.log"
+    (cd "$build" && "./$binary" "$@" --csv "$scratch" 2>&1) \
+      | tee -a "$results/$name.log"
+    # First pass keeps the header; the rest append their rows to it. The schema is
+    # identical by construction -- same binary, same flags -- so this is a longer
+    # table rather than a merged one.
+    for part in "$scratch" "${scratch%.csv}_detector_counters.csv"; do
+      [[ -s "$part" ]] || continue
+      local target="$results/$name.csv"
+      [[ "$part" == *_detector_counters.csv ]] \
+        && target="$results/${name}_detector_counters.csv"
+      if [[ -s "$target" ]]; then
+        tail -n +2 "$part" >> "$target"
+      else
+        cat "$part" > "$target"
+      fi
+      rm -f "$part"
+    done
+  done
+  local took=$(( SECONDS - began ))
+  echo "--- $name finished in $(elapsed_text $took); \
+$(elapsed_text $(( SECONDS - suite_started ))) total so far"
 }
 
 run() {  # binary, csv name, args...
@@ -124,13 +523,16 @@ if [[ "$quick" == "--quick" ]]; then
   narrow_q1=(--shapes low_cardinality_d4 --rows 1048576 --cols 1,4 \
              --workers "1,${COSORT_WORKERS:-$(nproc)}")
   narrow_q2=(--shapes low_cardinality_d4,skewed_zipf_s1 --rows 1048576 --cols 4 --widths 4)
-  narrow_q3=(--cardinalities 1024 --cols 4 --widths 4 --workers 1 --rows 1048576)
+  # Two worker counts rather than one, so the iso-resource pairing is actually
+  # exercised: at one worker there is no core to take away and the flag is inert.
+  narrow_q3=(--cardinalities 1024 --cols 4 --widths 4 --workers 1,2 --rows 1048576)
   narrow_q4=(--axis threads --shapes skewed_zipf_s1 --widths 4 --rows 1048576)
   # The corpus stages need narrowing too: `attribute` alone is 186 registrations
   # across three styles and three widths, which is minutes even at one shape.
   export COSORT_SHAPES=low_cardinality_d4
   export COSORT_SIZE_LEVELS=1
   export COSORT_COLUMNS=3
+  export COSORT_SCREEN_REPETITIONS="${COSORT_SCREEN_REPETITIONS:-3}"
 else
   narrow_q1=()
   narrow_q2=()
@@ -150,7 +552,7 @@ tpcds_args=()
 # more than one, ask the results directory which the run being reproduced used.
 tpcds_dir="${TPCDS_KEYS:-}"
 if [[ -z "$tpcds_dir" ]]; then
-  keys_root="$(dirname "$0")/TMP/tpcds_keys"
+  keys_root="$source_dir/TMP/tpcds_keys"
   mapfile -t key_sets < <(
     for candidate in "$keys_root"/sf*; do
       [[ -d "$candidate" ]] && compgen -G "$candidate/*.tsldset" > /dev/null \
@@ -159,7 +561,7 @@ if [[ -z "$tpcds_dir" ]]; then
   if [[ ${#key_sets[@]} -eq 1 ]]; then
     tpcds_dir="$keys_root/${key_sets[0]}"
   elif [[ ${#key_sets[@]} -gt 1 ]]; then
-    inferred="$(python3 "$(dirname "$0")/benchmarks/visualization/infer_key_scale.py" \
+    inferred="$(python3 "$source_dir/benchmarks/visualization/infer_key_scale.py" \
                 "$keys_root" "$results" 2>/dev/null || true)"
     if [[ -n "$inferred" ]]; then
       tpcds_dir="$keys_root/$inferred"
@@ -172,7 +574,7 @@ if [[ -z "$tpcds_dir" ]]; then
       echo "   defaulting to ${key_sets[0]}" >&2
     fi
   else
-    tpcds_dir="$(dirname "$0")/data/tpcds"
+    tpcds_dir="$source_dir/data/tpcds"
   fi
 fi
 if [[ -d "$tpcds_dir" ]] && compgen -G "$tpcds_dir/*.tsldset" > /dev/null; then
@@ -229,7 +631,7 @@ if [[ -s "$tuned" ]]; then
   # answer for the same question. Reuse it.
   echo
   echo "=== q0_tune: reusing $tuned ($(grep -vc '^#' "$tuned") configurations)"
-elif [[ -x "$build/bench_q0_tune" ]]; then
+elif want q0_tune && [[ -x "$build/bench_q0_tune" ]]; then
   echo
   echo "=== q0_tune"
   if [[ "$quick" == "--quick" ]]; then
@@ -247,83 +649,338 @@ fi
 # Q1 exists only in a build configured with -DTSL_COSORT_ENABLE_BASELINES=ON, so
 # it is run when present rather than required: the default build stays
 # dependency-free.
-if [[ -x "$build/bench_q1_baselines" ]]; then
-  run bench_q1_baselines q1_baselines --tuned "$tuned" \
-      ${COSORT_WORKERS:+--workers "$COSORT_WORKERS"} \
-      "${tpcds_args[@]+"${tpcds_args[@]}"}" "${narrow_q1[@]+"${narrow_q1[@]}"}"
-else
-  echo
-  echo "=== q1_baselines: not built; configure with -DTSL_COSORT_ENABLE_BASELINES=ON"
+if want q1_baselines; then
+  if [[ -x "$build/bench_q1_baselines" ]]; then
+    run bench_q1_baselines q1_baselines --tuned "$tuned" \
+        ${COSORT_WORKERS:+--workers "$COSORT_WORKERS"} \
+        "${tpcds_args[@]+"${tpcds_args[@]}"}" "${narrow_q1[@]+"${narrow_q1[@]}"}"
+  else
+    echo
+    echo "=== q1_baselines: not built; pass --baselines (needs network) to include it"
+    stage_total=$(( stage_total - 1 ))
+  fi
 fi
 
-run bench_q2_algorithms q2_algorithms --tuned "$tuned" "${tpcds_args[@]+"${tpcds_args[@]}"}" \
-    "${narrow_q2[@]+"${narrow_q2[@]}"}"
+if want q2_algorithms; then
+  run bench_q2_algorithms q2_algorithms --tuned "$tuned" \
+      "${tpcds_args[@]+"${tpcds_args[@]}"}" "${narrow_q2[@]+"${narrow_q2[@]}"}"
+fi
 # Hardware only, and only this host's hardware: the software paths are QPL's and
 # DML's own CPU code, kept for correctness rather than for figures.
-run bench_q3_detection  q3_detection  --tuned "$tuned" --detectors "$q3_detectors" \
-    ${COSORT_WORKERS:+--workers "$COSORT_WORKERS"} \
-    "${narrow_q3[@]+"${narrow_q3[@]}"}"
+#
+# Three Q3 stages, because the question has three parts and they need different
+# amounts of machine time.
+#
+# 1. `q3_detection` -- the grid. Cardinality x columns x key width x workers x
+#    detector, one pass. This is where a large effect shows up: a backend that
+#    regresses several-fold, or a device that cannot engage at all. Its rows now
+#    carry the phase split, so detection's *share* of the sort is readable from
+#    them -- it was structurally zero in every earlier directory, because the
+#    switch that compiles the counters out also nulled the pointer the phase
+#    timers are written through.
+#    `--iso-resource` adds, for every offloading backend, a run with one worker
+#    fewer than the scalar scan it is compared against: the usual argument for an
+#    offload is that it frees a core, and an equal-worker comparison never charges
+#    it for one.
+if want q3_detection; then
+  run bench_q3_detection  q3_detection  --tuned "$tuned" --iso-resource \
+                                        --detectors "$q3_detectors" \
+      ${COSORT_WORKERS:+--workers "$COSORT_WORKERS"} \
+      "${narrow_q3[@]+"${narrow_q3[@]}"}"
+fi
+
+if [[ "$quick" != "--quick" ]]; then
+ if want q3_ladder; then
+  # 2. `q3_ladder` -- both scaling curves, every worker count from one to the
+  #    physical cores of one node, on one cell. "How many cores does the device
+  #    replace" is a crossing between the scalar curve at full width and the
+  #    offloaded curve, so it needs the curves rather than two points;
+  #    `findings.py::cores_freed` reads it off these rows. Narrow on purpose: the
+  #    ladder multiplies the grid by the core count, and the effect it resolves is
+  #    a few percent, which is what the repeated passes are for.
+  run_repeated "${COSORT_Q3_LADDER_PASSES:-3}" bench_q3_detection q3_ladder \
+      --tuned "$tuned" --detectors "$q3_detectors" --workers ladder \
+      --cardinalities "${COSORT_Q3_LADDER_CARDINALITY:-16}" \
+      --cols "${COSORT_Q3_LADDER_COLS:-8}" --element-bytes 4 \
+      --sizes "${COSORT_Q3_LADDER_SIZES:-4}"
+ fi
+
+ if want q3_pressure; then
+  # 3. `q3_pressure` -- the same cell at four and sixteen times the last level.
+  #    An offload's case is that it moves memory without spending core cycles or
+  #    polluting cache, and a working set that still half-fits cannot show it: on
+  #    this class of machine the asynchronous penalty fell from 1.7x to 1.05x
+  #    between those two sizes. Multiples of the probed cache, so the axis means
+  #    the same thing on the next host.
+  #    Two sweeps, because "bigger footprint" and "longer runs" are different
+  #    claims and a fixed cardinality moves both: four times the rows at c=1024
+  #    also makes every equal run four times longer, so a win cannot be attributed.
+  #    The first sweep holds the cardinality and lets both move (the confounded
+  #    one, kept because it is the regime the other questions report); the second
+  #    holds rows/c fixed, so only the footprint changes.
+  run_repeated "${COSORT_Q3_PRESSURE_PASSES:-2}" bench_q3_detection q3_pressure \
+      --tuned "$tuned" --detectors "$q3_detectors" \
+      --cardinalities "${COSORT_Q3_PRESSURE_CARDINALITY:-1024}" --cols 8 \
+      --element-bytes 4 --sizes "${COSORT_Q3_SIZES:-4,16}"
+ fi
+
+ if want q3_run_length; then
+  run_repeated "${COSORT_Q3_PRESSURE_PASSES:-2}" bench_q3_detection q3_run_length \
+      --tuned "$tuned" --detectors "$q3_detectors" --cols 8 --element-bytes 4 \
+      --sizes "${COSORT_Q3_SIZES:-4,16}" \
+      --run-length "${COSORT_Q3_RUN_LENGTH:-8192}"
+ fi
+fi
+
+# The SMT question, which nothing in this suite asked before.
+#
+# Every parallel figure here pins one thread per *physical* core of one NUMA node,
+# for a good reason: a memory-bound co-sort run across SMT siblings has them
+# evicting each other's lines, and a sweep that wandered onto siblings once
+# produced a "the quicksort does not scale" finding that had to be withdrawn. But
+# "avoid SMT so the thread axis is clean" is not the same claim as "SMT does not
+# help", and the paper is about exploiting the hardware. So: the same physical
+# cores, once with one thread each and once with both siblings, and the comparison
+# is between the two ends.
+#
+# The masks come from the topology rather than from a literal, because which
+# logical CPU is which core's sibling is a per-machine fact.
+node0_cpus="$(cat /sys/devices/system/node/node0/cpulist 2>/dev/null || echo '')"
+physical_mask=""
+sibling_mask=""
+if [[ -n "$node0_cpus" ]]; then
+  declare -A seen_core=()
+  first_of_core=()
+  second_of_core=()
+  for cpu in $(python3 -c "
+import sys
+spec = sys.argv[1]
+out = []
+for part in spec.split(','):
+    if '-' in part:
+        lo, hi = part.split('-')
+        out += list(range(int(lo), int(hi) + 1))
+    elif part:
+        out.append(int(part))
+print(' '.join(map(str, out)))" "$node0_cpus"); do
+    siblings="$(cat "/sys/devices/system/cpu/cpu$cpu/topology/thread_siblings_list" \
+                2>/dev/null || echo "$cpu")"
+    if [[ -z "${seen_core[$siblings]:-}" ]]; then
+      seen_core[$siblings]=$cpu
+      first_of_core+=("$cpu")
+    else
+      second_of_core+=("$cpu")
+    fi
+  done
+  physical_mask="$(IFS=,; echo "${first_of_core[*]}")"
+  if [[ ${#second_of_core[@]} -gt 0 ]]; then
+    sibling_mask="$physical_mask,$(IFS=,; echo "${second_of_core[*]}")"
+  fi
+fi
+if [[ -n "$sibling_mask" && "$quick" != "--quick" ]]; then
+  echo
+  echo "SMT: ${#first_of_core[@]} physical cores on node 0 (mask $physical_mask),"
+  echo "     ${#second_of_core[@]} siblings (mask $sibling_mask)"
+fi
+
 # Q4 gets the tuned configuration and the measured keys: its thread axis is where
 # the algorithm crossover is visible, and it is only visible on real keys -- the
 # synthetic shapes are won by the quicksort at every thread count.
-run bench_q4_scaling    q4_scaling    --tuned "$tuned" \
-    ${COSORT_MAX_WORKERS:+--max-workers "$COSORT_MAX_WORKERS"} \
-    "${tpcds_args[@]+"${tpcds_args[@]}"}" "${narrow_q4[@]+"${narrow_q4[@]}"}"
+if want q4_scaling; then
+  run bench_q4_scaling    q4_scaling    --tuned "$tuned" \
+      ${COSORT_MAX_WORKERS:+--max-workers "$COSORT_MAX_WORKERS"} \
+      "${tpcds_args[@]+"${tpcds_args[@]}"}" "${narrow_q4[@]+"${narrow_q4[@]}"}"
+fi
 
-# Q5 and Q6 are stages of the existing staged driver rather than new binaries.
+# One thread per physical core against two threads per physical core, on the same
+# cores. `pinned_cpus` in the CSV records which mask each row ran under, so the
+# two are distinguishable afterwards without trusting a filename.
+if want q4_smt && [[ -n "$sibling_mask" && "$quick" != "--quick" \
+      && -x "$build/bench_q4_scaling" ]]; then
+  smt_workers=$(( ${#first_of_core[@]} + ${#second_of_core[@]} ))
+  stage_index=$(( stage_index + 1 ))
+  smt_began=$SECONDS
+  echo
+  echo "=== [$stage_index/$stage_total] q4_smt (up to $smt_workers threads on \
+${#first_of_core[@]} cores)"
+  (cd "$build" && taskset -c "$sibling_mask" ./bench_q4_scaling --tuned "$tuned" \
+      --axis threads --max-workers "$smt_workers" \
+      "${tpcds_args[@]+"${tpcds_args[@]}"}" \
+      --csv "$results/q4_smt.csv" 2>&1) | tee "$results/q4_smt.log"
+  echo "--- q4_smt finished in $(elapsed_text $(( SECONDS - smt_began )))"
+fi
+
+# Q5 and Q6 are stages of the existing staged driver rather than new binaries: a
+# bench_q5_*.cpp would have to re-implement its registration, its variant
+# enumeration and its drop accounting to produce numbers it already produces.
+#
+# What changed is how those cases are *measured*. `--paper-csv` runs them through
+# paper_harness.hpp -- verify then time, median of at least nine with quartiles,
+# resampled while the spread stays above 5%, machine state on every row, drops
+# carrying their reason -- and writes the shared schema directly. Before this they
+# went through Google Benchmark and a JSON conversion that could not recover the
+# fields the schema wanted: `verified` was hardcoded to 1, there were no
+# quartiles, and the repetition count was whatever the flag said rather than what
+# the spread needed. Two of the seven questions were held to a different method
+# than the other five, and the corpus's CSVs carried a `size_level` column the
+# others did not.
+#
+# COSORT_GBENCH=1 runs the old path instead, for comparing the two on one machine.
 if [[ -x "$build/cosort_bench" ]]; then
-  # Q5 and Q6 are stages of the corpus rather than binaries of their own: a
-  # bench_q5_*.cpp would have to re-implement its registration and drop
-  # accounting to produce numbers it already produces. What the paper needs from
-  # them is the shared schema, so the JSON is converted into it.
-  converter="$(dirname "$0")/benchmarks/visualization/gbench_to_paper.py"
-  # `--benchmark_format` is the *console* format and `--benchmark_out_format` the
-  # file's. Setting the console to json made gbench emit nothing at all until the
-  # entire stage finished -- it writes one document at the end -- so an eight-hour
-  # stage looked identical to a hang, and the file was going to be json anyway
-  # because that is the default for --benchmark_out. Console for progress, json for
-  # the file.
-  # No exclusions: the full size grid, every shape. These two stages once ran for
-  # hours, but that was two-way partitioning being admitted onto data whose equal
-  # runs it cannot partition -- a gate that read the wrong parameter, since fixed --
-  # not the number of cases. Measured after the fix: screen 38 minutes, attribute 31.
-  # The two variables narrow a re-run by hand; they are not needed for a full one.
+  export COSORT_RLE="${COSORT_RLE-scalar}"
   screen_filter="${COSORT_SCREEN_FILTER-}"
   attribute_filter="${COSORT_ATTRIBUTE_FILTER-}"
-  export COSORT_RLE="${COSORT_RLE-scalar}"
-  export COSORT_MIN_TIME="${COSORT_MIN_TIME:-0.2s}"
-  for stage in "screen:q5_variants:${COSORT_SCREEN_REPETITIONS:-3}:$screen_filter" \
-               "attribute:q6_portability:${COSORT_ATTRIBUTE_REPETITIONS:-9}:$attribute_filter"; do
-    IFS=':' read -r stage_name name stage_reps stage_filter <<< "$stage"
-    stage="$stage_name:$name"
+  for stage in "screen:q5_variants:$screen_filter" \
+               "attribute:q6_portability:$attribute_filter"; do
+    IFS=':' read -r stage_name name stage_filter <<< "$stage"
+    want "$name" || continue
     stage_index=$(( stage_index + 1 ))
     corpus_began=$SECONDS
     echo
-    echo "=== [$stage_index/$stage_total] $name (cosort_bench, ${stage%%:*} stage) \
+    echo "=== [$stage_index/$stage_total] $name (cosort_bench, $stage_name stage) \
 $(elapsed_text $(( corpus_began - suite_started ))) into the run"
-    # `stdbuf -oL`: the output is redirected, and libc block-buffers a non-tty
-    # stdout, so without it a live stage looks frozen until 4 KiB of results
-    # accumulate.
-    if (cd "$build" && COSORT_STAGE="${stage%%:*}" \
-          ${TSL_COSORT_STDBUF:-stdbuf -oL -eL} ./cosort_bench \
-          --benchmark_repetitions="$stage_reps" \
-          --benchmark_report_aggregates_only=true \
-          --benchmark_min_time="$COSORT_MIN_TIME" \
-          ${stage_filter:+--benchmark_filter="$stage_filter"} \
-          --benchmark_format=console --benchmark_out_format=json \
-          --benchmark_out="$results/$name.json") \
-        > "$results/$name.log" 2>&1; then
-      python3 "$converter" "$results/$name.json" "$results/$name.csv" \
-        --question "$name" || echo "  conversion failed"
-      echo "--- $name finished in $(elapsed_text $(( SECONDS - corpus_began )))"
-    else
-      echo "  cosort_bench ${stage%%:*} failed, see $results/$name.log"
+    if [[ "${COSORT_GBENCH:-0}" == "1" ]]; then
+      export COSORT_MIN_TIME="${COSORT_MIN_TIME:-0.2s}"
+      reps="${COSORT_SCREEN_REPETITIONS:-9}"
+      [[ "$stage_name" == "attribute" ]] && reps="${COSORT_ATTRIBUTE_REPETITIONS:-9}"
+      if (cd "$build" && COSORT_STAGE="$stage_name" \
+            ${TSL_COSORT_STDBUF:-stdbuf -oL -eL} ./cosort_bench \
+            --benchmark_repetitions="$reps" \
+            --benchmark_report_aggregates_only=true \
+            --benchmark_min_time="$COSORT_MIN_TIME" \
+            ${stage_filter:+--benchmark_filter="$stage_filter"} \
+            --benchmark_format=console --benchmark_out_format=json \
+            --benchmark_out="$results/$name.json") \
+          > "$results/$name.log" 2>&1; then
+        python3 "$(dirname "$0")/benchmarks/visualization/gbench_to_paper.py" \
+          "$results/$name.json" "$results/$name.csv" --question "$name" \
+          || echo "  conversion failed"
+      else
+        echo "  cosort_bench $stage_name failed, see $results/$name.log"
+      fi
+    elif ! (cd "$build" && COSORT_STAGE="$stage_name" \
+              ${TSL_COSORT_STDBUF:-stdbuf -oL -eL} ./cosort_bench \
+              --paper-csv "$results/$name.csv" --question "$name") \
+            > "$results/$name.log" 2>&1; then
+      echo "  cosort_bench $stage_name failed, see $results/$name.log"
     fi
+    echo "--- $name finished in $(elapsed_text $(( SECONDS - corpus_began )))"
   done
 fi
 
-echo
-echo "the whole run took $(elapsed_text $(( SECONDS - suite_started )))"
+# Answer the questions, not just measure them. Both steps read the directory that
+# was just written and need nothing but pandas, so a run ends with its own
+# findings rather than with a pile of CSVs and a note about how to read them. Not
+# fatal: a missing dependency should not fail a seven-hour measurement.
+analysis="$source_dir/benchmarks/visualization"
+if want report && python3 -c 'import pandas' 2>/dev/null; then
+  echo
+  echo "=== findings"
+  if python3 "$analysis/findings.py" --results "$results" \
+       > "$results/findings.txt" 2>&1; then
+    sed -n '1,12p' "$results/findings.txt"
+    echo "  ... full text in $results/findings.txt"
+  else
+    echo "  findings.py failed; see $results/findings.txt"
+  fi
+  if python3 "$analysis/report.py" --results "$results" \
+       --out "$results/report.html" >/dev/null 2>&1; then
+    echo "  wrote $results/report.html (one page, opens offline)"
+  else
+    echo "  report.py failed"
+  fi
+else
+  echo
+  echo "no pandas: skipping the findings and the report. Produce them later with"
+  echo "  python3 $analysis/findings.py --results $results"
+fi
+
+# Did anything land on these cores while the suite ran? The per-row counters can
+# answer that, and a reader should not have to open a CSV to find out.
+python3 - "$results" <<'CONTENTION' || true
+import csv, glob, os, sys
+
+results = sys.argv[1]
+worst = []
+for path in sorted(glob.glob(os.path.join(results, "*.csv"))):
+    contended = total = 0
+    with open(path, newline="") as handle:
+        for row in csv.DictReader(handle):
+            passes = row.get("preempted_passes") or ""
+            reps = row.get("repetitions") or ""
+            if not passes.strip() or not reps.strip():
+                continue
+            try:
+                passes, reps = int(float(passes)), int(float(reps))
+            except ValueError:
+                continue
+            total += 1
+            if reps > 0 and passes * 2 > reps:
+                contended += 1
+    if contended:
+        worst.append((os.path.basename(path), contended, total))
+if worst:
+    print()
+    print("!! rows measured while the kernel was preempting this run:")
+    for name, contended, total in worst:
+        print(f"     {name}: {contended} of {total} rows")
+    print("   The scheduler put other work on these cores after the start-of-run")
+    print("   check passed. Re-run those stages on an isolated cpuset, or read")
+    print("   them as working numbers.")
+CONTENTION
+
 echo
 echo "results in $results:"
 ls -1 "$results"
+cat <<'MANIFEST'
+
+what is in there, beyond one CSV per question:
+  q3_detection.csv              the grid, with the phase split (ns_materialize /
+                                ns_sort / ns_detect) and the iso-resource rows,
+                                which name their pairing in `variant`
+  q3_ladder.csv                 both scaling curves over every worker count, for
+                                findings.py::cores_freed
+  q3_pressure.csv               the same cell at 4x and 16x the last level, with
+                                the cardinality held -- so the footprint and the
+                                run length grow together
+  q4_smt.csv                    the thread axis run on the same physical cores
+                                with both SMT siblings, against q4_scaling's one
+                                thread per core. `pinned_cpus` says which mask a
+                                row ran under
+  q3_run_length.csv             the same two sizes with rows/cardinality held, so
+                                only the footprint changes. The pair separates
+                                "the offload likes memory pressure" from "the
+                                offload likes long runs"
+  q3_*_detector_counters.csv    what each detector did with the ranges it was
+                                given: offloaded, declined and why, descriptors,
+                                spans, poll accounting, with the repetition count.
+                                A runtime column cannot tell "the offload did not
+                                pay" from "the offload never happened"; these can.
+  best_config.tsv               what Q0 shipped, and what every reporting driver
+                                read. Keyed by worker count as well as shape, so a
+                                driver running six workers gets the tuner's
+                                six-worker winner; the worker-agnostic entry is the
+                                fallback where a cell was not tuned at that width.
+                                Every row's label says which it used.
+
+every CSV carries two columns about the machine rather than the sort:
+  preempted_passes              timed passes the kernel interrupted, and
+  involuntary_switches          how many times. `start_load` screens the host when
+                                a driver launches; these two catch interference
+                                that arrived later, which is the only kind a
+                                six-hour suite is actually exposed to. A row whose
+                                preempted_passes exceeds half its repetitions has a
+                                contended median and should not be published.
+
+  configure.log / build.log     how this tree was configured and built, so a
+                                results directory says which compiler, which TSL
+                                release and which profile produced it without
+                                anyone having to remember
+
+read it with:
+  python3 benchmarks/visualization/findings.py --results <this directory>
+  python3 benchmarks/visualization/report.py   --results <this directory> --out report.html
+
+re-run one question:
+  ./run_paper.sh --results <this directory> --stages q3_detection,report
+MANIFEST

@@ -40,6 +40,27 @@ constexpr auto tsl_metrics_or_null(Metrics * metrics) -> Metrics * {
   }
 }
 
+// The pointer a caller that asked for phase timing must keep.
+//
+// The two mechanisms are documented above as independent -- timers are a template
+// parameter, counters are a build switch -- but both are written through the
+// caller's metrics pointer, so nulling that pointer for a measurement build also
+// removed the phase split from the one driver whose headline is a phase share.
+// Q3 published ns_materialize, ns_sort and ns_detect as zero for every row it ever
+// measured, which reads as "detection is free" rather than "not collected".
+//
+// A caller that instantiates a sorter with Profile has already accepted the
+// timers' cost, so it keeps its pointer; every other caller still gets the
+// statically-known null that folds the counters away.
+template <bool Profile, class Metrics>
+constexpr auto tsl_metrics_for(Metrics * metrics) -> Metrics * {
+  if constexpr (Profile) {
+    return metrics;
+  } else {
+    return tsl_metrics_or_null(metrics);
+  }
+}
+
 // Counter updates that vanish when instrumentation is compiled out.
 //
 // Gating at the entry point is not enough on the parallel path: the shared

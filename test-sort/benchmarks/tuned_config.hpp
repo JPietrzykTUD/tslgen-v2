@@ -42,6 +42,10 @@ struct TslTunedConfig {
   bool hybrid_leaf = false;
   TslRunDiscoveryKind discovery = TslRunDiscoveryKind::POST_SORT;
   std::size_t partition_threshold = 16384;
+  // 0 when this came from the worker-agnostic entry (or from the defaults), so a
+  // row can say that its configuration was tuned at a different thread count
+  // rather than implying the tuner answered for this one.
+  std::size_t for_workers = 0;
   // provenance
   bool from_file = false;
 
@@ -65,10 +69,27 @@ struct TslTunedConfig {
 };
 
 
+// `algorithm|style|width|element_bytes|workers`.
+//
+// The worker count is part of the key because the thread count changes what a
+// knob costs: on this class of machine the tuner picks `discovery=incremental`
+// for the quicksort at six workers in every cell it measured, at 0.88-0.94 of the
+// default on its own paired statistic, and `post` serially. A key without the
+// worker count can hold only one of those, so the parallel winner was measured,
+// printed, and then discarded -- every parallel quicksort number ran the serial
+// choice.
+//
+// `workers == 0` means "any", which is what a file written before this looks
+// like and what `tsl_tuned_for` falls back to.
 inline auto tsl_tuned_key(std::string const & algorithm, TslStyle style,
-                          std::size_t width, std::size_t element_bytes) -> std::string {
-  return algorithm + "|" + tsl_style_name(style) + "|" + std::to_string(width) + "|"
-         + std::to_string(element_bytes);
+                          std::size_t width, std::size_t element_bytes,
+                          std::size_t workers = 0) -> std::string {
+  auto key = algorithm + "|" + tsl_style_name(style) + "|" + std::to_string(width)
+             + "|" + std::to_string(element_bytes);
+  if (workers != 0) {
+    key += "|" + std::to_string(workers);
+  }
+  return key;
 }
 
 
@@ -77,7 +98,8 @@ inline void tsl_write_tuned(std::string const & path,
                             std::map<std::string, TslTunedConfig> const & configs) {
   std::ofstream out(path);
   out << "# written by bench_q0_tune; read by the reporting drivers\n";
-  out << "# key: algorithm|style|width|element_bytes\n";
+  out << "# key: algorithm|style|width|element_bytes|workers\n";
+  out << "# a key without the worker field applies to any worker count\n";
   for (auto const & [key, config] : configs) {
     out << key << '\t'
         << "k=" << config.k
@@ -158,11 +180,42 @@ inline auto tsl_read_tuned(std::string const & path)
 }
 
 
+// What a row should say about where its configuration came from. One place,
+// because four drivers were building this string themselves and none of them
+// could distinguish "the tuner answered for this thread count" from "the tuner
+// answered for another one and this is the closest thing in the file".
+inline auto tsl_tuned_label(TslTunedConfig const & config, std::size_t workers)
+  -> std::string {
+  if (!config.from_file) {
+    return " (default)";
+  }
+  if (workers > 1 && config.for_workers != workers) {
+    return " (tuned, any-workers)";
+  }
+  return " (tuned)";
+}
+
+
 // The configuration for one cell, or the defaults when the descent has not run.
 inline auto tsl_tuned_for(std::map<std::string, TslTunedConfig> const & configs,
                           std::string const & algorithm, TslStyle style,
-                          std::size_t width, std::size_t element_bytes)
+                          std::size_t width, std::size_t element_bytes,
+                          std::size_t workers = 0)
   -> TslTunedConfig {
-  auto const found = configs.find(tsl_tuned_key(algorithm, style, width, element_bytes));
+  // The entry for this worker count if the tuner published one, then the
+  // worker-agnostic entry a file written before the key grew, then the defaults.
+  // Never a silent substitution of one worker count's answer for another's: the
+  // fallback is a *file-wide* shape, not a nearest neighbour.
+  if (workers != 0) {
+    auto const exact = configs.find(
+      tsl_tuned_key(algorithm, style, width, element_bytes, workers));
+    if (exact != configs.end()) {
+      auto config = exact->second;
+      config.for_workers = workers;
+      return config;
+    }
+  }
+  auto const found = configs.find(tsl_tuned_key(algorithm, style, width,
+                                                element_bytes));
   return found == configs.end() ? TslTunedConfig{} : found->second;
 }

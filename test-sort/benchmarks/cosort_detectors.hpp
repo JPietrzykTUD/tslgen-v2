@@ -117,8 +117,10 @@ inline auto tsl_detector_from_name(std::string const & name) -> TslDetectorBacke
   throw std::invalid_argument("unknown detector backend: " + name);
 }
 
-// Asynchronous backends need the task executor, so they exist only on the
-// parallel execution path.
+// Which backends submit and poll rather than blocking. No longer a restriction on
+// where they can run -- both sorters poll from their serial forms too -- but a
+// deprecated driver still branches on it, and a counters reader needs to know
+// which rows have poll accounting at all.
 inline auto tsl_detector_is_async(TslDetectorBackend backend) -> bool {
   return backend == TslDetectorBackend::DmlSoftwareAsync
       || backend == TslDetectorBackend::DsaHardwareAsync

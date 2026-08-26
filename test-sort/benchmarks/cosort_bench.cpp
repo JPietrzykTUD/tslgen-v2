@@ -47,9 +47,12 @@
 #include <thread>
 #include <vector>
 
+#ifdef TSL_COSORT_WITH_GBENCH
 #include <benchmark/benchmark.h>
+#endif
 
 #include "cosort_case.hpp"
+#include "cosort_case_runner.hpp"
 #include "sorting/sample_sort/samplesort_multicolumn.hpp"
 #include "sorting/quicksort/multicolumn_index_sort.hpp"
 #include "cosort_detectors.hpp"
@@ -61,13 +64,11 @@
 
 namespace {
 
-// The longest equal run two-way partitioning may face above the size cap. Eight is
-// generous: at that length the quadratic term is 32 comparisons per run, which is
-// inside the noise, while the 512-long runs of independent_uniform_c1024 are not.
-inline constexpr double tsl_two_way_run_cap = 8.0;
-
 constexpr auto tsl_style_available(TslStyle style) -> bool {
   switch (style) {
+    // Every profile carries the scalar extension, so this is available wherever
+    // the build is.
+    case TslStyle::Scalar: return true;
     case TslStyle::Intrinsics: return true;
     case TslStyle::ClangBuiltin: return tsl_clang_style_available;
     case TslStyle::ClangBoolMask: return tsl_clang_bool_style_available;
@@ -175,6 +176,44 @@ auto direction_of(int id) -> TslDirection {
   }
 }
 
+// The same metadata as `case_name`, as schema fields. Both exist while both paths
+// do: the name is what Google Benchmark reports under, the row is what the CSV
+// carries.
+inline auto case_row(
+  TslPaperResults & results,
+  std::string const & algorithm,
+  char const * style,
+  std::string const & lanes,
+  TslDatasetSpec const & spec,
+  int direction,
+  TslSizeLevel const & size,
+  TslStagePlan const & plan,
+  TslDetectorBackend backend,
+  std::size_t element_bytes,
+  std::size_t rows,
+  bool parallel,
+  TslMovement movement
+) -> TslPaperRow {
+  auto row = results.make_row();
+  row.shape = tsl_dataset_label(spec);
+  row.shape_params = tsl_dataset_params(spec);
+  row.rows = rows;
+  row.columns = spec.columns;
+  row.element_bytes = element_bytes;
+  row.algorithm = algorithm;
+  // The direction belongs in the variant too: the corpus registers ascending and
+  // descending cases, and without it two rows differing only by direction are
+  // indistinguishable in the CSV -- which is how three identical-looking
+  // samplesort rows turned up in the first paper-path run.
+  row.variant = std::string("style=") + style + "/lanes=" + lanes
+                + "/move=" + tsl_movement_name(movement)
+                + "/order=" + tsl_direction_name(direction_of(direction));
+  row.detector = tsl_detector_name(backend);
+  row.workers = parallel ? plan.worker_count : 1;
+  row.size_level = size.name;
+  return row;
+}
+
 auto case_name(
   std::string const & algorithm,
   char const * type_name,
@@ -212,9 +251,9 @@ auto case_name(
 }
 
 // --- counters ---------------------------------------------------------------
-
+template <class Runner>
 void publish(
-  benchmark::State & state,
+  Runner & runner,
   std::size_t rows,
   std::size_t columns,
   std::size_t lanes,
@@ -223,45 +262,44 @@ void publish(
   TslMultiColumnSortMetrics const * metrics,
   TslDatasetDescriptor const * descriptor
 ) {
-  state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations() * rows));
-  state.SetBytesProcessed(
-    static_cast<std::int64_t>(state.iterations() * rows * columns * element_bytes)
-  );
-  state.counters["count"] = static_cast<double>(rows);
-  state.counters["cols"] = static_cast<double>(columns);
-  state.counters["lanes"] = static_cast<double>(lanes);
-  state.counters["elem_bytes"] = static_cast<double>(element_bytes);
-  state.counters["algo"] = static_cast<double>(algorithm);
+  // Items and bytes per second were Google Benchmark's own throughput lines. The
+  // schema reports nanoseconds per row and every consumer divides from there, so
+  // there is nothing left for them to say.
+  runner.counters["count"] = static_cast<double>(rows);
+  runner.counters["cols"] = static_cast<double>(columns);
+  runner.counters["lanes"] = static_cast<double>(lanes);
+  runner.counters["elem_bytes"] = static_cast<double>(element_bytes);
+  runner.counters["algo"] = static_cast<double>(algorithm);
   if (metrics != nullptr && rows != 0) {
-    state.counters["rle_values_per_row"] =
+    runner.counters["rle_values_per_row"] =
       static_cast<double>(metrics->rle_values_scanned) / static_cast<double>(rows);
-    state.counters["direct_equal_bands"] = static_cast<double>(metrics->direct_equal_bands);
-    state.counters["direct_band_rows"] = static_cast<double>(metrics->direct_equal_band_rows);
-    state.counters["tasks_submitted"] = static_cast<double>(metrics->tasks_submitted);
-    state.counters["tasks_inline"] = static_cast<double>(metrics->tasks_executed_inline);
-    state.counters["max_outstanding"] = static_cast<double>(metrics->max_outstanding_tasks);
-    state.counters["partition_tasks"] = static_cast<double>(metrics->partition_tasks_submitted);
+    runner.counters["direct_equal_bands"] = static_cast<double>(metrics->direct_equal_bands);
+    runner.counters["direct_band_rows"] = static_cast<double>(metrics->direct_equal_band_rows);
+    runner.counters["tasks_submitted"] = static_cast<double>(metrics->tasks_submitted);
+    runner.counters["tasks_inline"] = static_cast<double>(metrics->tasks_executed_inline);
+    runner.counters["max_outstanding"] = static_cast<double>(metrics->max_outstanding_tasks);
+    runner.counters["partition_tasks"] = static_cast<double>(metrics->partition_tasks_submitted);
   }
   // Intrinsic-work descriptors, so time can be normalized across unlike shapes
   // instead of compared as raw ns/row. Optional because computing them costs a
   // reference sort of its own.
   if (descriptor != nullptr && rows != 0) {
-    state.counters["work_per_row"] =
+    runner.counters["work_per_row"] =
       descriptor->weighted_work / static_cast<double>(rows);
-    state.counters["scan_per_row"] =
+    runner.counters["scan_per_row"] =
       descriptor->scan_volume / static_cast<double>(rows);
-    state.counters["distinct_first"] = descriptor->distinct_prefixes.empty()
+    runner.counters["distinct_first"] = descriptor->distinct_prefixes.empty()
       ? 0.0 : static_cast<double>(descriptor->distinct_prefixes.front());
-    state.counters["duplicate_tuple_frac"] = descriptor->duplicate_tuple_fraction;
+    runner.counters["duplicate_tuple_frac"] = descriptor->duplicate_tuple_fraction;
   }
 }
 
 // --- the measured body ------------------------------------------------------
 
-template <class DataType, TslStyle Style, std::size_t Width,
+template <class Runner, class DataType, TslStyle Style, std::size_t Width,
           TslPartitionKind Partition, TslLeafKind Leaf, std::size_t FillPercent>
 void run_case(
-  benchmark::State & state,
+  Runner & runner,
   TslVariant variant,
   TslDatasetSpec spec,
   int direction,
@@ -275,65 +313,70 @@ void run_case(
   TslBenchCase<DataType> data(spec, direction_of(direction), plan.cache_bytes);
   Sorter sorter(tsl_spec_seed(spec) ^ static_cast<std::uint64_t>(direction));
   TslMultiColumnSortMetrics metrics;
+  // Filled by the verification pass inside `measure`, so the message survives to
+  // the drop below.
+  std::string failure;
   auto const partition_threshold =
     variant.execution == TslExecution::DeepParallel ? plan.partition_threshold : 0;
 
   if (variant.execution == TslExecution::Serial) {
     // The serial driver calls the scalar scan directly: there is no detector seam
     // on that path, which is why registration only offers it `rle=scalar`.
-    for (auto _ : state) {
-      state.PauseTiming();
-      data.reset();
-      state.ResumeTiming();
-      sorter.sort_columns(data.specs(), data.column_count(), data.rows(),
-                          variant.discovery, &metrics);
-      benchmark::DoNotOptimize(data.specs());
-      benchmark::ClobberMemory();
-    }
+    runner.measure(
+      // Untimed: an in-place sort consumes the table, and charging the copy that
+      // gives it back to the sort would report a memcpy.
+      [&] { data.reset(); },
+      [&] {
+        sorter.sort_columns(data.specs(), data.column_count(), data.rows(),
+                            variant.discovery, &metrics);
+        tsl_do_not_optimize(data.specs());
+        tsl_clobber_memory();
+      },
+      [&] { failure = data.verify(); return failure.empty(); });
   } else {
     // One detector per case rather than per iteration: an accelerator fleet
     // allocates scratch proportional to slots x depth x region size, which would
     // dominate a short case. Its counters therefore accumulate over iterations and
     // are divided by the iteration count when published.
     tsl_with_detector<DataType>(backend, plan.detector_config, [&](auto & detector) {
-      for (auto _ : state) {
-        state.PauseTiming();
-        data.reset();
-        state.ResumeTiming();
-        sorter.sort_columns_parallel(data.specs(), data.column_count(), data.rows(),
-                                    plan.worker_count, plan.task_threshold,
-                                    partition_threshold, variant.discovery,
-                                    detector, &metrics);
-        benchmark::DoNotOptimize(data.specs());
-        benchmark::ClobberMemory();
-      }
-      auto const iterations = std::max<std::int64_t>(state.iterations(), 1);
+      runner.measure(
+        [&] { data.reset(); },
+        [&] {
+          sorter.sort_columns_parallel(data.specs(), data.column_count(), data.rows(),
+                                      plan.worker_count, plan.task_threshold,
+                                      partition_threshold, variant.discovery,
+                                      detector, &metrics);
+          tsl_do_not_optimize(data.specs());
+          tsl_clobber_memory();
+        },
+        [&] { failure = data.verify(); return failure.empty(); });
+      auto const iterations = std::max<std::int64_t>(static_cast<std::int64_t>(runner.iterations()), 1);
       tsl_publish_detector_metrics(detector, [&](char const * name, double value) {
         auto const ratio = std::string(name).find("frac") != std::string::npos;
-        state.counters[name] = ratio ? value : value / static_cast<double>(iterations);
+        runner.counters[name] = ratio ? value : value / static_cast<double>(iterations);
       });
     });
   }
 
-  if (auto const error = data.verify(); !error.empty()) {
-    state.SkipWithError(error.c_str());
+  if (!failure.empty()) {
+    runner.fail("incorrect result: " + failure);
     return;
   }
   TslDatasetDescriptor descriptor;
   if (plan.describe_datasets) {
     descriptor = tsl_shared_source<DataType>(plan.cache_bytes).descriptor(spec);
   }
-  publish(state, data.rows(), data.column_count(), Simd::lane_count_v, sizeof(DataType),
+  publish(runner, data.rows(), data.column_count(), Simd::lane_count_v, sizeof(DataType),
           variant.algorithm_id(), &metrics, plan.describe_datasets ? &descriptor : nullptr);
   if constexpr (FillPercent != 0) {
     // The rule is derived from type and lane count, so record which one ran.
-    state.counters["hybrid_fill_percent"] = static_cast<double>(FillPercent);
+    runner.counters["hybrid_fill_percent"] = static_cast<double>(FillPercent);
   }
 }
 
-template <class DataType>
+template <class Runner, class DataType>
 void run_baseline(
-  benchmark::State & state,
+  Runner & runner,
   TslDatasetSpec spec,
   int direction,
   TslStagePlan plan
@@ -343,11 +386,11 @@ void run_baseline(
   std::vector<std::uint32_t> order(data.rows());
   std::vector<DataType> gather(data.rows());
 
-  for (auto _ : state) {
-    state.PauseTiming();
-    data.reset();
+  std::string failure;
+  runner.measure(
+    [&] { data.reset(); },
+    [&] {
     auto * specs = data.specs();
-    state.ResumeTiming();
     std::iota(order.begin(), order.end(), 0u);
     std::sort(order.begin(), order.end(), [&](std::uint32_t left, std::uint32_t right) {
       for (std::size_t column = 0; column < spec.columns; ++column) {
@@ -363,23 +406,24 @@ void run_baseline(
       }
       std::copy(gather.begin(), gather.end(), specs[column].data);
     }
-    benchmark::DoNotOptimize(data.specs());
-    benchmark::ClobberMemory();
-  }
+    tsl_do_not_optimize(data.specs());
+    tsl_clobber_memory();
+    },
+    [&] { failure = data.verify(); return failure.empty(); });
 
-  if (auto const error = data.verify(); !error.empty()) {
-    state.SkipWithError(error.c_str());
+  if (!failure.empty()) {
+    runner.fail("incorrect result: " + failure);
     return;
   }
-  publish(state, data.rows(), spec.columns, 0, sizeof(DataType), 0, nullptr, nullptr);
+  publish(runner, data.rows(), spec.columns, 0, sizeof(DataType), 0, nullptr, nullptr);
 }
 
 // The indirect body: the columns stay read-only and the sort produces a row
 // permutation, so the oracle is the value image the permutation selects.
-template <class DataType, TslStyle Style, std::size_t Width,
+template <class Runner, class DataType, TslStyle Style, std::size_t Width,
           TslPartitionKind Partition, TslLeafKind Leaf, std::size_t FillPercent>
 void run_index_case(
-  benchmark::State & state,
+  Runner & runner,
   TslVariant variant,
   TslDatasetSpec spec,
   int direction,
@@ -393,16 +437,20 @@ void run_index_case(
   TslBenchCase<DataType> data(spec, direction_of(direction), plan.cache_bytes);
   Sorter sorter(tsl_spec_seed(spec) ^ static_cast<std::uint64_t>(direction));
   TslIndexSortMetrics metrics;
+  std::string failure;
 
   // Discovery runs between levels on the materialized key buffer, so the seam is
   // available on this serial path -- unlike the direct serial driver, which calls
-  // the scalar scan directly. Asynchronous backends are excluded at registration.
+  // the scalar scan directly. Both executions poll, so an asynchronous backend runs
+  // here too: the parallel form from its task executor, the serial one at each
+  // level boundary of its level loop.
   tsl_with_detector<DataType>(backend, plan.detector_config, [&](auto & detector) {
-    if constexpr (tsl_detector_wants_executor<std::decay_t<decltype(detector)>>::value) {
-      state.SkipWithError("asynchronous detectors have no indirect form");
-    } else {
-      auto const parallel = variant.execution != TslExecution::Serial;
-      for (auto _ : state) {
+    auto const parallel = variant.execution != TslExecution::Serial;
+    // No reset: this family leaves the columns read-only and writes a
+    // permutation, so every pass starts from the same input already.
+    runner.measure(
+      [] {},
+      [&] {
         if (parallel) {
           sorter.sort_index_parallel(data.specs(), data.column_count(), data.index(),
                                      data.rows(), variant.discovery, detector,
@@ -411,48 +459,48 @@ void run_index_case(
           sorter.sort_index(data.specs(), data.column_count(), data.index(), data.rows(),
                             variant.discovery, detector, &metrics);
         }
-        benchmark::DoNotOptimize(data.index());
-        benchmark::ClobberMemory();
-      }
-      // Same publication the direct path does: without it a frequency-backed row
-      // shows a plausible ratio and no way to tell how much of its discovery
-      // actually came from the counts.
-      auto const iterations = std::max<std::int64_t>(state.iterations(), 1);
-      tsl_publish_detector_metrics(detector, [&](char const * name, double value) {
-        auto const ratio = std::string(name).find("coverage") != std::string::npos
-          || std::string(name).find("frac") != std::string::npos;
-        state.counters[name] = ratio ? value : value / static_cast<double>(iterations);
-      });
-    }
+        tsl_do_not_optimize(data.index());
+        tsl_clobber_memory();
+      },
+      [&] { failure = data.verify_index(); return failure.empty(); });
+    // Same publication the direct path does: without it a frequency-backed row
+    // shows a plausible ratio and no way to tell how much of its discovery
+    // actually came from the counts.
+    auto const iterations = std::max<std::int64_t>(static_cast<std::int64_t>(runner.iterations()), 1);
+    tsl_publish_detector_metrics(detector, [&](char const * name, double value) {
+      auto const ratio = std::string(name).find("coverage") != std::string::npos
+        || std::string(name).find("frac") != std::string::npos;
+      runner.counters[name] = ratio ? value : value / static_cast<double>(iterations);
+    });
   });
 
-  if (auto const error = data.verify_index(); !error.empty()) {
-    state.SkipWithError(error.c_str());
+  if (!failure.empty()) {
+    runner.fail("incorrect result: " + failure);
     return;
   }
 
-  auto const published_iterations = std::max<std::int64_t>(state.iterations(), 1);
-  state.counters["materialized_per_row"] = data.rows() == 0
+  auto const published_iterations = std::max<std::int64_t>(static_cast<std::int64_t>(runner.iterations()), 1);
+  runner.counters["materialized_per_row"] = data.rows() == 0
     ? 0.0
     : static_cast<double>(metrics.materialized_elements)
       / static_cast<double>(published_iterations * static_cast<std::int64_t>(data.rows()));
-  state.counters["levels"] =
+  runner.counters["levels"] =
     static_cast<double>(metrics.levels) / static_cast<double>(published_iterations);
-  state.counters["ranges_sorted"] =
+  runner.counters["ranges_sorted"] =
     static_cast<double>(metrics.ranges_sorted) / static_cast<double>(published_iterations);
-  state.counters["tasks"] =
+  runner.counters["tasks"] =
     static_cast<double>(metrics.tasks) / static_cast<double>(published_iterations);
-  state.counters["levels_split"] =
+  runner.counters["levels_split"] =
     static_cast<double>(metrics.levels_split) / static_cast<double>(published_iterations);
   TslMultiColumnSortMetrics shared{};
   auto const per_iteration = static_cast<std::size_t>(published_iterations);
   shared.rle_values_scanned = metrics.rle_values_scanned / per_iteration;
   shared.direct_equal_bands = metrics.direct_equal_bands / per_iteration;
   shared.direct_equal_band_rows = metrics.direct_equal_band_rows / per_iteration;
-  publish(state, data.rows(), data.column_count(), Simd::lane_count_v, sizeof(DataType),
+  publish(runner, data.rows(), data.column_count(), Simd::lane_count_v, sizeof(DataType),
           variant.algorithm_id(), &shared, nullptr);
   if constexpr (FillPercent != 0) {
-    state.counters["hybrid_fill_percent"] = static_cast<double>(FillPercent);
+    runner.counters["hybrid_fill_percent"] = static_cast<double>(FillPercent);
   }
 }
 
@@ -470,9 +518,9 @@ void run_index_case(
 // google-benchmark binary with no access to `best_config.tsv`, and a portability
 // comparison wants the *same* configuration in every cell anyway, otherwise it
 // measures tuning rather than portability.
-template <class DataType, TslStyle Style, std::size_t Width>
+template <class Runner, class DataType, TslStyle Style, std::size_t Width>
 void run_samplesort_case(
-  benchmark::State & state,
+  Runner & runner,
   TslDatasetSpec spec,
   int direction,
   TslDetectorBackend backend,
@@ -489,12 +537,20 @@ void run_samplesort_case(
   TslBenchCase<DataType> data(spec, direction_of(direction), plan.cache_bytes);
   Sorter sorter;
   TslSampleSortColumnMetrics metrics;
+  std::string failure;
 
   tsl_with_detector<DataType>(backend, plan.detector_config, [&](auto & detector) {
-    if constexpr (tsl_detector_wants_executor<std::decay_t<decltype(detector)>>::value) {
-      state.SkipWithError("asynchronous detectors have no samplesort form");
-    } else {
-      for (auto _ : state) {
+    // The sorter's worklist implements the pending-work contract at every worker
+    // count, so an asynchronous backend runs here as well. "Nothing to overlap
+    // with at one worker" was the earlier reasoning and it was wrong: a serial
+    // samplesort still has the rest of its level to sort while a range is on the
+    // device, and at sixteen times the last level that made the asynchronous
+    // detector the fastest of the three at one worker.
+    //
+    // Index movement, so the columns are untouched and no reset is needed.
+    runner.measure(
+      [] {},
+      [&] {
         if (parallel) {
           sorter.sort_index_parallel(data.specs(), data.column_count(), data.index(),
                                      data.rows(), detector, plan.worker_count,
@@ -503,41 +559,51 @@ void run_samplesort_case(
           sorter.sort_index(data.specs(), data.column_count(), data.index(),
                             data.rows(), detector, &metrics);
         }
-        benchmark::DoNotOptimize(data.index());
-        benchmark::ClobberMemory();
-      }
-      auto const iterations = std::max<std::int64_t>(state.iterations(), 1);
-      tsl_publish_detector_metrics(detector, [&](char const * name, double value) {
-        auto const ratio = std::string(name).find("coverage") != std::string::npos
-          || std::string(name).find("frac") != std::string::npos;
-        state.counters[name] = ratio ? value : value / static_cast<double>(iterations);
-      });
-    }
+        tsl_do_not_optimize(data.index());
+        tsl_clobber_memory();
+      },
+      [&] { failure = data.verify_index(); return failure.empty(); });
+    auto const iterations = std::max<std::int64_t>(static_cast<std::int64_t>(runner.iterations()), 1);
+    tsl_publish_detector_metrics(detector, [&](char const * name, double value) {
+      auto const ratio = std::string(name).find("coverage") != std::string::npos
+        || std::string(name).find("frac") != std::string::npos;
+      runner.counters[name] = ratio ? value : value / static_cast<double>(iterations);
+    });
   });
 
-  if (auto const error = data.verify_index(); !error.empty()) {
-    state.SkipWithError(error.c_str());
+  if (!failure.empty()) {
+    runner.fail("incorrect result: " + failure);
     return;
   }
 
-  auto const published = std::max<std::int64_t>(state.iterations(), 1);
-  state.counters["materialized_per_row"] = data.rows() == 0
+  auto const published = std::max<std::int64_t>(static_cast<std::int64_t>(runner.iterations()), 1);
+  runner.counters["materialized_per_row"] = data.rows() == 0
     ? 0.0
     : static_cast<double>(metrics.materialized_elements)
       / static_cast<double>(published * static_cast<std::int64_t>(data.rows()));
-  state.counters["ranges_sorted"] =
+  runner.counters["ranges_sorted"] =
     static_cast<double>(metrics.ranges) / static_cast<double>(published);
-  state.counters["deepest_column"] = static_cast<double>(metrics.deepest_column);
+  runner.counters["deepest_column"] = static_cast<double>(metrics.deepest_column);
   TslMultiColumnSortMetrics shared{};
   shared.rle_values_scanned =
     metrics.detected_elements / static_cast<std::size_t>(published);
   // 200-series ids: the index quicksort uses 100 + its algorithmic id, so the
   // samplesort starts above that and no published id moves.
-  publish(state, data.rows(), data.column_count(), Simd::lane_count_v,
+  publish(runner, data.rows(), data.column_count(), Simd::lane_count_v,
           sizeof(DataType), parallel ? 201 : 200, &shared, nullptr);
 }
 
 // --- registration -----------------------------------------------------------
+
+// One registered case in the paper path: the row it will fill, and how to run it.
+// The metadata is carried as fields rather than parsed back out of a benchmark
+// name, which is what the JSON round trip had to do -- and could not do for
+// `verified`.
+struct PaperCase {
+  TslPaperRow row;
+  std::size_t elements = 0;
+  std::function<void(TslPaperRunner &)> run;
+};
 
 struct Registrar {
   TslStagePlan plan;
@@ -550,6 +616,11 @@ struct Registrar {
   std::vector<std::string> skip_variants;
   TslDropLog drops;
   std::size_t registered = 0;
+  // Empty unless --paper-csv was given, in which case registration collects the
+  // cases here instead of handing them to Google Benchmark.
+  bool paper_mode = false;
+  std::vector<PaperCase> cases;
+  TslPaperResults * results = nullptr;
 
   auto wants(TslVariant const & variant) -> bool {
     if (!plan.admits(variant)) {
@@ -576,66 +647,24 @@ struct Registrar {
       drops.drop(TslDropReason::StyleUnavailable);
       return false;
     }
+    if (!plan.scalar_width_ok(variant)) {
+      // A scalar cell at three register widths is the same measurement three
+      // times, so the other two are declined rather than run.
+      drops.drop(TslDropReason::StageVariant);
+      return false;
+    }
     return true;
   }
 
   // Two-way peels one element per level out of an all-equal range, so it is
-  // quadratic in the equal-run length. Registered only where that stays bounded.
-  // Two-way partitioning is quadratic in the *equal-run length*: a run of r costs
-  // about r^2/2, and there are rows/r of them, so the whole column costs rows*r/2.
-  // What decides that is the distinct-value count, which every generated spec
-  // carries -- `d` for the low-cardinality family, `c` for the uniform and
-  // hierarchy ones.
-  //
-  // This used to test the dataset's *name* instead: only labels beginning
-  // "low_cardinality" or "all_equal" were gated. `independent_uniform_c1024` was
-  // therefore admitted at every size, and at 524,288 rows over 1024 values its runs
-  // are 512 long. One such case ran for eleven and a half hours in the screen stage
-  // before it was killed -- a name-based test for a numeric property, and the
-  // property was right there in the spec.
+  // quadratic in the equal-run length. Registered only where that stays bounded;
+  // the rule itself is `tsl_two_way_run_bounded` in cosort_case.hpp, shared with
+  // the tuner so the two cannot disagree about which shapes are safe.
   auto two_way_allowed(TslDatasetSpec const & spec, TslSizeLevel const & size) -> bool {
     if (size.per_column_bytes <= plan.two_way_size_cap) {
       return true;   // small enough that even the quadratic case is cheap
     }
-    // Families whose duplication is the point of the shape rather than a parameter
-    // of it. A heavy-tailed distribution has no cardinality to read -- Zipf carries
-    // only its exponent -- but its head is a long equal run by construction, which
-    // is precisely what two-way cannot partition. Naming them is right here; naming
-    // them *instead of* reading the parameter where one exists was the bug.
-    auto const label = tsl_dataset_label(spec);
-    for (auto const * family : {"low_cardinality", "all_equal", "skewed_zipf",
-                                "heavy_hitter", "duplicates_at_pivot"}) {
-      if (label.rfind(family, 0) == 0) {
-        return false;
-      }
-    }
-    // `g` is the terminal group size of the unique_last and extreme_values
-    // families. It is the equal-run length itself, not a cardinality to divide the
-    // row count by -- both generators assert `max group at level m-1 == g` in their
-    // own invariant checks. Falling through to the rows/distinct formula below found
-    // no `d`, `d1` or `c`, concluded "no cardinality, treat as unique", and admitted
-    // every group size up to 4096. Measured at the LLC size, `unique_last_g64` cost
-    // 60s per iteration for each two-way variant against 0.24s for three-way on the
-    // same data; the shape's whole point is an equal run two-way cannot partition.
-    auto const group = spec.param("g", 0.0);
-    if (group > 0.0) {
-      return group <= tsl_two_way_run_cap;
-    }
-    // The distinct-value count under any of the names the generator uses: `d` for
-    // the low-cardinality family, `d1` for the hierarchical and skewed ones, `c`
-    // for the uniform and correlated ones.
-    auto distinct = spec.param("d", 0.0);
-    if (distinct <= 0.0) {
-      distinct = spec.param("d1", 0.0);
-    }
-    if (distinct <= 0.0) {
-      distinct = spec.param("c", 0.0);
-    }
-    if (distinct <= 0.0) {
-      return true;   // no cardinality and not a skewed family: treat as unique
-    }
-    auto const run = static_cast<double>(spec.rows) / distinct;
-    return run <= tsl_two_way_run_cap;
+    return tsl_two_way_run_bounded(spec);
   }
 
   auto footprint_ok(TslDatasetSpec const & spec) -> bool {
@@ -644,6 +673,31 @@ struct Registrar {
     return bytes <= plan.memory_cap;
   }
 };
+
+// Registers one case with whichever backend is active. The lambda is built once
+// per path because their signatures differ; the body it calls is the same.
+template <class Body>
+void register_case(Registrar & registrar, std::string const & name,
+                   TslPaperRow row, std::size_t elements, Body body) {
+  if (registrar.paper_mode) {
+    registrar.cases.push_back(PaperCase{std::move(row), elements,
+                                        [body](TslPaperRunner & runner) {
+                                          body(runner);
+                                        }});
+  } else {
+#ifdef TSL_COSORT_WITH_GBENCH
+    benchmark::RegisterBenchmark(
+      name, [body](benchmark::State & state) {
+        TslGbenchRunner runner(state);
+        body(runner);
+      })->Unit(benchmark::kNanosecond)->UseRealTime();
+#else
+    static_cast<void>(name);
+#endif
+  }
+  ++registrar.registered;
+}
+
 
 template <class DataType, TslStyle Style, std::size_t Width,
           TslPartitionKind Partition, TslLeafKind Leaf, std::size_t FillPercent>
@@ -700,27 +754,33 @@ void register_leaf(Registrar & registrar, char const * type_name) {
                   std::to_string(tsl_simd_for<DataType, Style, Width>::type::lane_count_v),
                   spec, direction, size, plan, backend, parallel, deep, movement
                 );
+                auto row = registrar.results == nullptr
+                  ? TslPaperRow{}
+                  : case_row(*registrar.results, variant.algorithm_name(),
+                             tsl_style_name(Style),
+                             std::to_string(
+                               tsl_simd_for<DataType, Style, Width>::type::lane_count_v),
+                             spec, direction, size, plan, backend,
+                             sizeof(DataType), spec.rows, parallel, movement);
                 if (movement == TslMovement::Index) {
-                  benchmark::RegisterBenchmark(
-                    name,
-                    [variant, spec, direction, backend, plan](benchmark::State & state) {
-                      run_index_case<DataType, Style, Width, Partition, Leaf,
-                                     FillPercent>(
-                        state, variant, spec, direction, backend, plan
+                  register_case(
+                    registrar, name, std::move(row), spec.rows,
+                    [variant, spec, direction, backend, plan](auto & runner) {
+                      run_index_case<std::decay_t<decltype(runner)>, DataType, Style,
+                                     Width, Partition, Leaf, FillPercent>(
+                        runner, variant, spec, direction, backend, plan
                       );
-                    }
-                  )->Unit(benchmark::kNanosecond)->UseRealTime();
+                    });
                 } else {
-                  benchmark::RegisterBenchmark(
-                    name,
-                    [variant, spec, direction, backend, plan](benchmark::State & state) {
-                      run_case<DataType, Style, Width, Partition, Leaf, FillPercent>(
-                        state, variant, spec, direction, backend, plan
+                  register_case(
+                    registrar, name, std::move(row), spec.rows,
+                    [variant, spec, direction, backend, plan](auto & runner) {
+                      run_case<std::decay_t<decltype(runner)>, DataType, Style, Width,
+                               Partition, Leaf, FillPercent>(
+                        runner, variant, spec, direction, backend, plan
                       );
-                    }
-                  )->Unit(benchmark::kNanosecond)->UseRealTime();
+                    });
                 }
-                ++registrar.registered;
               }
             }
           }
@@ -771,6 +831,21 @@ void register_samplesort(Registrar & registrar, char const * type_name) {
               TslExecution::Serial, TslRunDiscoveryKind::POST_SORT,
               TslPartitionKind::THREE_WAY, TslLeafKind::NETWORK, Style, Width,
               TslMovement::Index, false};
+            // Every gate the quicksort families get through `admits`, which this
+            // family does not call: it builds its own variant rather than sweeping
+            // them. Leaving them out was not cosmetic -- `tsl_simd_for` falls back
+            // to the native type for a style this build could not compile, so 72
+            // samplesort rows ran on that fallback while their `style=` column
+            // said `clang` and `clang_bool`, in the one stage whose headline is
+            // the style axis.
+            if (!tsl_style_available(Style)) {
+              registrar.drops.drop(TslDropReason::StyleUnavailable);
+              continue;
+            }
+            if (!plan.scalar_width_ok(equivalent)) {
+              registrar.drops.drop(TslDropReason::StageVariant);
+              continue;
+            }
             if (!plan.detector_applies(equivalent, backend, spec.columns, level)) {
               registrar.drops.drop(TslDropReason::DetectorInapplicable);
               continue;
@@ -780,15 +855,22 @@ void register_samplesort(Registrar & registrar, char const * type_name) {
               std::to_string(tsl_simd_for<DataType, Style, Width>::type::lane_count_v),
               spec, direction, size, plan, backend, false, false, TslMovement::Index
             );
-            benchmark::RegisterBenchmark(
-              name,
-              [spec, direction, backend, plan](benchmark::State & state) {
-                run_samplesort_case<DataType, Style, Width>(
-                  state, spec, direction, backend, plan, false
+            register_case(
+              registrar, name,
+              registrar.results == nullptr
+                ? TslPaperRow{}
+                : case_row(*registrar.results, "samplesort", tsl_style_name(Style),
+                           std::to_string(
+                             tsl_simd_for<DataType, Style, Width>::type::lane_count_v),
+                           spec, direction, size, plan, backend,
+                           sizeof(DataType), spec.rows, false, TslMovement::Index),
+              spec.rows,
+              [spec, direction, backend, plan](auto & runner) {
+                run_samplesort_case<std::decay_t<decltype(runner)>, DataType, Style,
+                                    Width>(
+                  runner, spec, direction, backend, plan, false
                 );
-              }
-            )->Unit(benchmark::kNanosecond)->UseRealTime();
-            ++registrar.registered;
+              });
           }
         }
       }
@@ -828,6 +910,11 @@ void register_type(Registrar & registrar, char const * type_name) {
   auto const has = [&styles](TslStyle style) {
     return std::find(styles.begin(), styles.end(), style) != styles.end();
   };
+  // The style axis, including the non-vector end of it: `TslStyle::Scalar` resolves
+  // to `tsl::simd<DataType, tsl::scalar>`, which every profile carries, so it is
+  // the same sorter sources at one lane rather than a second binary. Registered at
+  // one register width only -- see `scalar_width_ok`, since one lane has no width.
+  if (has(TslStyle::Scalar)) register_style<DataType, TslStyle::Scalar>(registrar, type_name);
   if (has(TslStyle::Intrinsics)) register_style<DataType, TslStyle::Intrinsics>(registrar, type_name);
   if (has(TslStyle::ClangBuiltin)) register_style<DataType, TslStyle::ClangBuiltin>(registrar, type_name);
   if (has(TslStyle::ClangBoolMask)) register_style<DataType, TslStyle::ClangBoolMask>(registrar, type_name);
@@ -849,13 +936,18 @@ void register_type(Registrar & registrar, char const * type_name) {
                                       spec, direction, size, plan,
                                       TslDetectorBackend::Scalar, false, false,
                                       TslMovement::Direct);
-          benchmark::RegisterBenchmark(
-            name,
-            [spec, direction, plan](benchmark::State & state) {
-              run_baseline<DataType>(state, spec, direction, plan);
-            }
-          )->Unit(benchmark::kNanosecond)->UseRealTime();
-          ++registrar.registered;
+          register_case(
+            registrar, name,
+            registrar.results == nullptr
+              ? TslPaperRow{}
+              : case_row(*registrar.results, "std_lex_argsort", "na", "na", spec,
+                         direction, size, plan, TslDetectorBackend::Scalar,
+                         sizeof(DataType), spec.rows, false, TslMovement::Direct),
+            spec.rows,
+            [spec, direction, plan](auto & runner) {
+              run_baseline<std::decay_t<decltype(runner)>, DataType>(
+                runner, spec, direction, plan);
+            });
         }
       }
     }
@@ -865,8 +957,33 @@ void register_type(Registrar & registrar, char const * type_name) {
 }  // namespace
 
 int main(int argc, char ** argv) try {
+  // `--paper-csv <path>` runs the registered cases through `paper_harness.hpp`
+  // and writes the shared schema directly: verify then time, median of at least
+  // nine with quartiles, resampled while the spread is wide, machine state per
+  // row, drops carrying their reason. Without it the cases go to Google Benchmark
+  // as before, so the two can be compared on one machine before the old path is
+  // removed.
+  std::string paper_csv;
+  std::string question = "q5_variants";
+  std::vector<char *> forwarded{argv[0]};
+  for (int at = 1; at < argc; ++at) {
+    auto const flag = std::string(argv[at]);
+    if (flag == "--paper-csv" && at + 1 < argc) {
+      paper_csv = argv[++at];
+    } else if (flag == "--question" && at + 1 < argc) {
+      question = argv[++at];
+    } else {
+      forwarded.push_back(argv[at]);
+    }
+  }
+
   Registrar registrar;
   registrar.plan = load_plan();
+  TslPaperResults results(question, "cosort_bench");
+  if (!paper_csv.empty()) {
+    registrar.paper_mode = true;
+    registrar.results = &results;
+  }
   auto const caches = tsl_detect_caches();
   registrar.levels = tsl_size_levels(caches);
   registrar.keep_variants = split_list(env_text("COSORT_VARIANTS", ""));
@@ -879,7 +996,8 @@ int main(int argc, char ** argv) try {
     static_cast<unsigned long long>(caches.l2 / 1024),
     static_cast<unsigned long long>(caches.llc / 1024));
   std::fprintf(stderr, "styles compiled in:");
-  for (auto style : {TslStyle::Intrinsics, TslStyle::ClangBuiltin, TslStyle::ClangBoolMask}) {
+  for (auto style : {TslStyle::Scalar, TslStyle::Intrinsics, TslStyle::ClangBuiltin,
+                     TslStyle::ClangBoolMask}) {
     if (tsl_style_available(style)) std::fprintf(stderr, " %s", tsl_style_name(style));
   }
   std::fprintf(stderr, "\n");
@@ -924,11 +1042,47 @@ int main(int argc, char ** argv) try {
       registrar.registered);
   }
 
-  benchmark::Initialize(&argc, argv);
-  if (benchmark::ReportUnrecognizedArguments(argc, argv)) return 1;
+  if (registrar.paper_mode) {
+    results.expect(registrar.cases.size());
+    for (auto & entry : registrar.cases) {
+      TslPaperRunner runner(entry.elements);
+      entry.run(runner);
+      auto row = entry.row;
+      if (runner.dropped()) {
+        results.drop(row, runner.reason());
+        continue;
+      }
+      if (!runner.measured()) {
+        results.drop(row, "the case registered but never ran");
+        continue;
+      }
+      row.verified = runner.verified();
+      row.ns_per_element = runner.stats();
+      row.repetitions = runner.stats().repetitions;
+      if (!row.verified) {
+        results.drop(row, "verification failed");
+        continue;
+      }
+      results.add(std::move(row));
+    }
+    std::fprintf(stderr, "\n%s\n", results.summary().c_str());
+    results.write_csv(paper_csv);
+    return 0;
+  }
+
+#ifdef TSL_COSORT_WITH_GBENCH
+  int forwarded_count = static_cast<int>(forwarded.size());
+  benchmark::Initialize(&forwarded_count, forwarded.data());
+  if (benchmark::ReportUnrecognizedArguments(forwarded_count, forwarded.data())) {
+    return 1;
+  }
   benchmark::RunSpecifiedBenchmarks();
   benchmark::Shutdown();
   return 0;
+#else
+  std::fprintf(stderr, "built without Google Benchmark: pass --paper-csv <path>\n");
+  return 2;
+#endif
 } catch (std::exception const & error) {
   std::fprintf(stderr, "cosort_bench failed: %s\n", error.what());
   return 1;

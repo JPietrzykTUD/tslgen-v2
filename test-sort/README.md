@@ -22,7 +22,8 @@ include/
                             column loop that makes it multi-column
 benchmarks/
   datagen/                  dataset generation, manifests and reference images
-  visualization/            plotting and sweep scripts
+  visualization/            findings.py (the answers), report.py (one HTML page),
+                            explore.py (the interactive app), and the sweep scripts
   paper_harness.hpp         the measurement method, once: verify then time,
                             median of nine with the IQR, machine state, drops
   bench_qN_*.cpp            one paper question each; see docs/benchmark-plan.md`) and the mechanism
@@ -63,6 +64,15 @@ shared queue -- which is what the task executor does -- capped the samplesort at
 either giving up that, or reworking the scheduler every parallel quicksort
 variant depends on. Four concurrency shapes exist in this tree and only the pool
 was duplicated.
+
+They do share one contract, and it is the smaller thing that was actually
+missing. An asynchronous detector needs its host scheduler to keep the sort alive
+while a device still owes it ranges, to poll rather than sleep when the only
+outstanding work is on that device, and to accept a range from any thread.
+`sorting/common/pending_range_queue.hpp` is that contract for a worklist
+scheduler, the way `TslTaskExecutor` is for the task tree, so the samplesort
+carries `rle=*_async` without routing its ranges through one shared queue -- which
+is the thing that capped it at 1.04x.
 
 ## Why `primitives/` exists
 
@@ -113,14 +123,48 @@ preset: the sorters' counters are compiled out, so a published run collects noth
 while it measures. `run_paper.sh` refuses a build without that, which is why the
 step below names a `bench*` preset and not `clang`.
 
-```bash
-TPCDS_KEYS=TMP/tpcds_keys ./run_paper.sh <build-dir> <results-dir> [--quick]
-```
+`run_paper.sh` is self-contained: given a results directory it configures a build
+tree from this checkout, builds it, measures, and writes the report.
 
 ```bash
+./run_paper.sh --results results/<host>                          # everything
+./run_paper.sh --results results/<host> --quick                  # prove the pipeline
+./run_paper.sh --results results/<host> --stages q3_detection,report
+./run_paper.sh --results results/<host> --cxx clang++ --profile sapphire_emerald_granite_rapids
+./run_paper.sh --results results/<host> --datasets TMP/tpcds_keys/sf10
+./run_paper.sh --list-stages                                     # the stage names
+./run_paper.sh --help                                            # every flag
+```
+
+The build tree defaults to `<results>/build`; `--build DIR` reuses an existing
+one. `--source`, `--cxx`, `--cc`, `--profile`, `--tsl-version`, `--jobs`,
+`--baselines` and `--reconfigure` cover the build; `--stages`, `--datasets`,
+`--workers` and `--max-workers` cover the measurement. The older positional form
+`run_paper.sh <build-dir> <results-dir>` still works.
+
+It refuses to measure from a build whose fetched TSL is not the version it was
+configured for, from an instrumented build, from a tree whose `TSL_PROFILE=auto`
+resolved to the scalar profile, or on a machine that is not idle -- each of those
+has produced a directory of numbers that looked fine and was not. `--allow-busy`
+overrides the last one and says so in the output. Interference that arrives *after*
+a run starts cannot be refused, only recorded: every row carries
+`preempted_passes`, and the run ends by naming any CSV whose medians were measured
+under contention.
+
+Three ways to read a results directory, all over the same analysis, so none of
+them can disagree with the others about what the numbers say:
+
+```bash
+python3 benchmarks/visualization/findings.py --results <results-dir>
+python3 benchmarks/visualization/report.py   --results <results-dir> --out report.html
 pip install streamlit pandas altair
 streamlit run benchmarks/visualization/explore.py -- --results <results-dir>
 ```
+
+`findings.py` prints each question's answer with the counts behind it; `report.py`
+writes one self-contained page -- an answer, its figures and its caveats per
+question, no network and no Python needed to read it; `explore.py` is the same
+thing interactive, with a free-form pivot per question.
 
 `docs/benchmark-plan.md` says which question each binary answers and under what
 method. One CSV schema across all of them, so a figure is a query over the results

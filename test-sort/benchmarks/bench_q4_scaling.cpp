@@ -142,6 +142,11 @@ void measure_cell(TslPaperResults & results, TslDatasetSource<Key> & source,
   }
   results.stage(where.shape + " x" + std::to_string(where.columns) + "col w"
                 + std::to_string(where.workers));
+  // Per point on the thread axis, not once per key width: the tuner answers per
+  // worker count, and this axis is the one that moves it. Where it has no answer
+  // for this count the label says "any-workers" rather than "tuned".
+  tsl_select_tuned<Key>(g_tuned, g_samplesort_config, g_quicksort_config,
+                        where.workers);
   auto blank = results.make_row();
   blank.shape = where.shape;
   blank.rows = where.rows;
@@ -174,7 +179,7 @@ void measure_cell(TslPaperResults & results, TslDatasetSource<Key> & source,
     auto row = blank;
     row.algorithm = "samplesort";
     row.variant = g_samplesort_config.describe_samplesort()
-                  + (g_samplesort_config.from_file ? " (tuned)" : " (default)");
+                  + tsl_tuned_label(g_samplesort_config, where.workers);
     TslSampleSortColumnMetrics metrics;
     bool measured_ok = false;
     TslPaperStats measured{};
@@ -232,7 +237,7 @@ void measure_cell(TslPaperResults & results, TslDatasetSource<Key> & source,
     auto row = blank;
     row.algorithm = "quicksort";
     row.variant = g_quicksort_config.describe_quicksort()
-                  + (g_quicksort_config.from_file ? " (tuned)" : " (default)");
+                  + tsl_tuned_label(g_quicksort_config, where.workers);
     bool measured_ok = false;
     TslPaperStats measured{};
     TslIndexSortMetrics quick_metrics;

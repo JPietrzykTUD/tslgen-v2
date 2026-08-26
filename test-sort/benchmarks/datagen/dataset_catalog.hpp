@@ -1119,7 +1119,13 @@ inline auto tsl_default_catalog(std::size_t rows, std::size_t columns, std::size
       add(TslShape::UniqueLast, {{"g", static_cast<double>(group)}}, "g" + std::to_string(group));
     }
   }
-  for (std::size_t cardinality : {16u, 1024u, 65536u}) {
+  // 4096 is here so a sweep can hold the *run length* fixed while the footprint
+  // grows. Growing a table at a fixed cardinality lengthens every equal run, so
+  // "the offload likes memory pressure" and "the offload likes long runs" move
+  // together and cannot be told apart. Four times the rows with four times the
+  // cardinality keeps rows/c constant, and 1024 -> 4096 is that step for the 4x
+  // and 16x working sets the accelerator question uses.
+  for (std::size_t cardinality : {16u, 1024u, 4096u, 65536u}) {
     add(TslShape::IndependentUniform, {{"c", static_cast<double>(cardinality)}},
         "c" + std::to_string(cardinality));
   }

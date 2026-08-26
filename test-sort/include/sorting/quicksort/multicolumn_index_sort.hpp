@@ -80,6 +80,7 @@
 #include <mutex>
 #include <thread>
 #include <limits>
+#include <exception>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -93,6 +94,7 @@
 #include "sorting/common/multicolumn_sort_tasks.hpp"
 #include "common/instrumentation.hpp"
 #include "sorting/common/multicolumn_sort_types.hpp"
+#include "sorting/common/run_discovery.hpp"
 
 
 // Chunk of one range's materialize pass, the unit the parallel form hands out.
@@ -151,6 +153,23 @@ struct TslIndexSortMetrics {
 inline auto tsl_index_since(std::chrono::steady_clock::time_point mark) -> double {
   return std::chrono::duration<double, std::nano>(
     std::chrono::steady_clock::now() - mark).count();
+}
+
+// One iteration of a spin that is waiting for a device, not for another thread.
+//
+// `pause` is the right primitive rather than `yield`: the serial drain has nothing
+// else to run, so handing the core to the scheduler buys nothing and costs a
+// context switch, while `pause` tells the core this is a spin -- it drops the
+// pipeline out of speculation and saves the power. Elsewhere it is a plain
+// `yield`, which is correct if slower.
+inline void tsl_index_pause() {
+#if defined(__x86_64__) || defined(__i386__)
+  __builtin_ia32_pause();
+#elif defined(__aarch64__)
+  asm volatile("yield" ::: "memory");
+#else
+  std::this_thread::yield();
+#endif
 }
 
 
@@ -246,12 +265,12 @@ class TslMultiColumnIndexSorter {
     DetectRuns & detect_runs,
     TslIndexSortMetrics * metrics_in = nullptr
   ) {
-    static_assert(
-      !tsl_detector_wants_executor<DetectRuns>::value,
-      "the index sort is serial and never polls: an asynchronous detector would "
-      "never complete. Use a synchronous backend."
-    );
-    auto * const metrics = tsl_metrics_or_null(metrics_in);
+    constexpr bool asynchronous = tsl_detector_wants_executor<DetectRuns>::value;
+    auto * const metrics = tsl_metrics_for<Profile>(metrics_in);
+    serial_pending pending;
+    if constexpr (asynchronous) {
+      detect_runs.bind(pending);
+    }
     validate_inputs(columns, column_count, index, row_count);
 
     // The identity the level-0 copy relies on.
@@ -293,6 +312,38 @@ class TslMultiColumnIndexSorter {
       // Incremental discovery reports completions in whatever order partitions
       // finish; sorting keeps the next level's materialize pass sequential. The
       // post-sort path emits ascending already.
+      if constexpr (asynchronous) {
+        // The level boundary is where the debt has to be settled: the next column
+        // materialises from `next_ranges_`, and a range still on the device has
+        // not contributed to it yet. Bounded by the detector's own progress --
+        // every poll either advances a job or finds nothing, and a job that never
+        // completes is a device failure, which arrives through `fail`.
+        //
+        // Backing off matters here in a way it does not in the parallel form,
+        // which parks on a condition variable and has other work to do meanwhile.
+        // A bare spin measured 1,032,843 polls against 10,880 descriptors -- 99.9%
+        // of them finding nothing, each taking the detector's pool lock and reading
+        // every active completion record, on the one core an offload is supposed to
+        // be freeing. Pausing between fruitless polls costs no completion latency
+        // (a pause is tens of cycles, a descriptor is microseconds) and takes the
+        // lock two orders of magnitude less often.
+        std::size_t idle = 0;
+        while (pending.outstanding != 0 && !pending.error) {
+          auto const before = pending.outstanding;
+          detect_runs.poll();
+          if (pending.outstanding != before) {
+            idle = 0;
+            continue;
+          }
+          idle = idle < 256 ? idle * 2 + 1 : 256;
+          for (std::size_t spin = 0; spin < idle; ++spin) {
+            tsl_index_pause();
+          }
+        }
+        if (pending.error) {
+          std::rethrow_exception(pending.error);
+        }
+      }
       if (discovery == TslRunDiscoveryKind::INCREMENTAL) {
         std::sort(
           next_ranges_.begin(), next_ranges_.end(),
@@ -330,17 +381,19 @@ class TslMultiColumnIndexSorter {
     std::size_t partition_threshold,
     TslIndexSortMetrics * metrics_in = nullptr
   ) {
-    auto * const metrics = tsl_metrics_or_null(metrics_in);
-    static_assert(
-      !tsl_detector_wants_executor<DetectRuns>::value,
-      "an asynchronous detector retains the emitting callable past the task that "
-      "produced it, and this driver's child-submitting emitters are not yet "
-      "self-contained. Use a synchronous backend."
-    );
-    if (worker_count <= 1) {
-      sort_index(columns, column_count, index, row_count, discovery, detect_runs,
-                 metrics_in);
-      return;
+    auto * const metrics = tsl_metrics_for<Profile>(metrics_in);
+    constexpr bool asynchronous = tsl_detector_wants_executor<DetectRuns>::value;
+    // One worker used to mean "hand this to the serial form", which has no
+    // executor to poll from. An asynchronous detector needs the executor even at
+    // one worker: its own worker loop is what observes the completions.
+    // `if constexpr`, not a runtime branch: naming `sort_index` here would
+    // instantiate it, and its own static_assert refuses an asynchronous detector.
+    if constexpr (!asynchronous) {
+      if (worker_count <= 1) {
+        sort_index(columns, column_count, index, row_count, discovery, detect_runs,
+                   metrics_in);
+        return;
+      }
     }
     validate_inputs(columns, column_count, index, row_count);
     for (std::size_t row = 0; row < row_count; ++row) {
@@ -397,7 +450,17 @@ class TslMultiColumnIndexSorter {
       process_task(columns, column_count, index, task, discovery, detect_runs,
                    executor, shared_metrics);
     };
-    TslTaskExecutor<index_task, decltype(worker)> executor(worker_count, worker);
+    TslTaskExecutor<index_task, decltype(worker)> executor(
+      std::max<std::size_t>(1, worker_count), worker);
+    // An asynchronous detector needs the executor to hold a pending unit per
+    // in-flight range and its completions checked from worker threads. Both are
+    // wired before the first task exists, so nothing can run against a
+    // half-connected detector; a synchronous detector has neither member and is
+    // unaffected.
+    if constexpr (asynchronous) {
+      detect_runs.bind(executor);
+      executor.set_poller([&detect_runs] { detect_runs.poll(); });
+    }
     // The root's values are already in scratch_, so it does not fetch them again.
     executor.submit(index_task{0, 0, row_count, true});
     executor.wait();
@@ -563,6 +626,40 @@ class TslMultiColumnIndexSorter {
   // already in `scratch_`, sort it, and submit a child per tied sub-range. Column
   // 0 additionally splits its own partitions, because while the root is the only
   // task the tree has nothing to spread.
+  // A discovered next-column range becoming a task, in one place. `inline_ns` is
+  // null when the emitter that calls this may outlive the frame that built it.
+  template <class Executor>
+  static void submit_child(
+    Executor & executor,
+    concurrent_index_metrics * metrics,
+    std::size_t next_column,
+    std::size_t column_count,
+    TslRunSpan span,
+    std::atomic<std::uint64_t> * inline_ns
+  ) {
+    if (span.end - span.begin < 2 || next_column >= column_count) {
+      return;
+    }
+    if (metrics != nullptr) {
+      tsl_count_add(metrics->next_level_ranges, span.end - span.begin);
+    }
+    index_task child{next_column, span.begin, span.end, false};
+    if (span.end - span.begin >= tsl_index_inline_task) {
+      executor.submit(child);
+      return;
+    }
+    if constexpr (Profile) {
+      if (inline_ns != nullptr) {
+        auto const mark = std::chrono::steady_clock::now();
+        executor.run_inline(child);
+        inline_ns->fetch_add(static_cast<std::uint64_t>(tsl_index_since(mark)),
+                             std::memory_order_relaxed);
+        return;
+      }
+    }
+    executor.run_inline(child);
+  }
+
   template <class DetectRuns, class Executor>
   void process_task(
     TslSortColumn<DataType> const * columns,
@@ -613,27 +710,20 @@ class TslMultiColumnIndexSorter {
     // subtracted by the caller. Atomic because `split` fans one range across
     // workers, so the sink runs concurrently.
     std::atomic<std::uint64_t> inline_ns{0};
-    auto emit_child = [&executor, metrics, next_column, column_count,
-                       &inline_ns](TslRunSpan span) {
-      if (span.end - span.begin < 2 || next_column >= column_count) {
-        return;
-      }
-      if (metrics != nullptr) {
-        tsl_count_add(metrics->next_level_ranges, span.end - span.begin);
-      }
-      index_task child{next_column, span.begin, span.end, false};
-      if (span.end - span.begin < tsl_index_inline_task) {
-        if constexpr (Profile) {
-          auto const mark = std::chrono::steady_clock::now();
-          executor.run_inline(child);
-          inline_ns.fetch_add(static_cast<std::uint64_t>(tsl_index_since(mark)),
-                              std::memory_order_relaxed);
-        } else {
-          executor.run_inline(child);
-        }
-      } else {
-        executor.submit(child);
-      }
+    // Everything this callable needs, captured by value. An asynchronous detector
+    // stores it and calls it from whichever worker observes the completion, long
+    // after this task returned, so a reference to anything on this frame would be
+    // dangling by then -- which is the whole reason asynchronous backends used to
+    // be refused here. The inline accumulator is the one thing that cannot
+    // survive: it is passed as a pointer and left null on that path, where the
+    // child subtree does not run inside the detector call anyway.
+    auto * const executor_address = &executor;
+    std::atomic<std::uint64_t> * const inline_ns_address =
+      tsl_detector_wants_executor<DetectRuns>::value ? nullptr : &inline_ns;
+    auto emit_child = [executor_address, metrics, next_column, column_count,
+                       inline_ns_address](TslRunSpan span) {
+      submit_child(*executor_address, metrics, next_column, column_count, span,
+                   inline_ns_address);
     };
 
     if (discovery == TslRunDiscoveryKind::POST_SORT) {
@@ -660,7 +750,7 @@ class TslMultiColumnIndexSorter {
       // Sound here and not inside a partition: the whole range is sorted by now,
       // so no equal run can be split between two scans.
       auto const t_detect = std::chrono::steady_clock::now();
-      detect_runs(scratch_.data(), task.begin, task.end, emit_child);
+      tsl_detect_runs(detect_runs, scratch_.data(), task.begin, task.end, emit_child);
       if (metrics != nullptr) {
         if constexpr (Profile) {
           auto const spent = static_cast<std::uint64_t>(tsl_index_since(t_detect));
@@ -688,7 +778,7 @@ class TslMultiColumnIndexSorter {
         tsl_count_add(metrics->rle_values_scanned, end - begin);
       }
       auto const mark = std::chrono::steady_clock::now();
-      detect_runs(scratch_.data(), begin, end, emit_child);
+      tsl_detect_runs(detect_runs, scratch_.data(), begin, end, emit_child);
       if constexpr (Profile) {
         detect_ns.fetch_add(static_cast<std::uint64_t>(tsl_index_since(mark)),
                             std::memory_order_relaxed);
@@ -721,6 +811,38 @@ class TslMultiColumnIndexSorter {
     }
   }
 
+  // The debt an asynchronous detector registers, for a caller that is the only
+  // thread involved.
+  //
+  // See `tsl_index_pause` for why the drain backs off rather than spinning.
+  //
+  // The level loop below is bulk-synchronous: it fills `next_ranges_` from the
+  // current column and cannot advance until every range of this column has
+  // reported its children. So an asynchronous detector fits without an executor
+  // -- hand the range over, keep sorting the rest of the level, and settle the
+  // debt at the level boundary. That is software pipelining rather than
+  // concurrency, and it is worth having: at sixteen times the last level on this
+  // class of machine the asynchronous detector was the *fastest* of the three at
+  // one worker, because the device scans one range while the sort works through
+  // the next.
+  //
+  // No locking, deliberately: the detector is driven by this thread and polled by
+  // this thread, so there is no second party to synchronise with.
+  struct serial_pending final : TslPendingWork {
+    std::size_t outstanding = 0;
+    std::exception_ptr error;
+
+    void add_pending(std::size_t count) override { outstanding += count; }
+    void resolve_pending(std::size_t count) override {
+      outstanding -= count < outstanding ? count : outstanding;
+    }
+    void fail(std::exception_ptr raised) override {
+      if (!error) {
+        error = std::move(raised);
+      }
+    }
+  };
+
   // Sorts one range on the materialized key and records the tied sub-ranges the
   // next column has to break.
   template <class DetectRuns>
@@ -744,7 +866,11 @@ class TslMultiColumnIndexSorter {
     DataType * const * payloads = &payload;
     auto * keys = scratch_.data() + range.begin;
 
-    auto keep = [&](TslRunSpan span) {
+    // By value, because an asynchronous detector retains this callable past the
+    // call and invokes it from its own poll: `this` and `metrics` are a pointer to
+    // the sorter and a pointer the caller owns, both of which outlive the sort,
+    // while a `[&]` capture would be a reference to this frame.
+    auto keep = [this, metrics](TslRunSpan span) {
       if (span.end - span.begin < 2) {
         return;
       }
@@ -767,7 +893,7 @@ class TslMultiColumnIndexSorter {
         metrics->rle_values_scanned += count;
       }
       auto const t_detect = std::chrono::steady_clock::now();
-      detect_runs(scratch_.data(), range.begin, range.end, keep);
+      tsl_detect_runs(detect_runs, scratch_.data(), range.begin, range.end, keep);
       if constexpr (Profile) {
         if (metrics != nullptr) {
           metrics->ns_detect += tsl_index_since(t_detect);
@@ -796,7 +922,7 @@ class TslMultiColumnIndexSorter {
         metrics->rle_values_scanned += leaf_end - leaf_begin;
       }
       auto const mark = std::chrono::steady_clock::now();
-      detect_runs(scratch_.data(), leaf_begin, leaf_end, keep);
+      tsl_detect_runs(detect_runs, scratch_.data(), leaf_begin, leaf_end, keep);
       if constexpr (Profile) {
         detect_ns += tsl_index_since(mark);
       }

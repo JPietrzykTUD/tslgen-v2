@@ -13,6 +13,7 @@
 
 #include <cstdio>
 
+#include "cosort_case.hpp"
 #include "q0_tune_impl.hpp"
 
 #if !defined(TSL_Q0_STYLE) || !defined(TSL_Q0_WIDTH)
@@ -102,12 +103,28 @@ auto quicksort_candidates(TslTuneProblem const & problem)
   // The hybrid leaf's threshold is derived from the width, so it changes with the
   // unit rather than being a knob of its own.
   constexpr std::size_t hybrid = tsl_hybrid_auto_percent<Key, Simd>();
-  // The largest working set this problem asks for, which decides whether the
-  // quadratic two-way candidate is measurable or a trap.
-  std::uint64_t working_set = 0;
+  // Whether the quadratic two-way candidate is measurable on this problem or a
+  // trap. A candidate is scored across every shape, so one duplicate-heavy shape
+  // disqualifies it for the whole problem -- but only a duplicate-heavy one.
+  //
+  // This used to be a working-set size test, `working_set > two_way_size_cap`, and
+  // that was the wrong property. Two-way is quadratic in the equal-run *length*,
+  // not in the table size, and where runs are short it is the faster scheme: 0.93x
+  // to 0.97x of three-way across the attribute stage, with the margin growing at
+  // the larger working set rather than shrinking. The size test therefore did not
+  // buy safety, it forfeited that win -- and unconditionally, because every shape
+  // this tuner runs on is larger than the cap, so two-way was skipped in every cell
+  // of every run and `partition=3way` was shipped by default rather than by
+  // measurement. The run-length rule is the corpus registrar's, shared so the two
+  // cannot disagree about which shapes are safe.
+  bool two_way_measurable = true;
+  std::string two_way_blocker;
   for (auto const & spec : problem.specs) {
-    working_set = std::max<std::uint64_t>(
-      working_set, static_cast<std::uint64_t>(spec.rows) * spec.columns * sizeof(Key));
+    if (!tsl_two_way_run_bounded(spec)) {
+      two_way_measurable = false;
+      two_way_blocker = tsl_dataset_label(spec);
+      break;
+    }
   }
 
 #define TSL_Q0_QS(AXIS, LABEL, PART, LEAF, FILL, DISCOVERY)                        \
@@ -116,13 +133,12 @@ auto quicksort_candidates(TslTuneProblem const & problem)
     config.partition = (PART); config.leaf = (LEAF);                                \
     config.hybrid_leaf = ((FILL) != 0);                                             \
     config.discovery = (DISCOVERY);                                                 \
-    if ((PART) == TslPartitionKind::TWO_WAY                                          \
-        && working_set > problem.two_way_size_cap) {                                 \
+    if ((PART) == TslPartitionKind::TWO_WAY && !two_way_measurable) {                 \
       TslTuneCandidate gated;                                                        \
       gated.axis = AXIS;                                                             \
       gated.label = LABEL;                                                           \
-      gated.skipped = "two-way is quadratic in the equal-run length above the "      \
-                      "working-set cap";                                             \
+      gated.skipped = "two-way is quadratic in the equal-run length, and "           \
+                      + two_way_blocker + " has runs longer than the cap";           \
       skipped.push_back(std::move(gated));                                           \
       break;                                                                         \
     }                                                                                \

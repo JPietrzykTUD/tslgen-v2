@@ -240,6 +240,7 @@ template <class DataType>
 class TslDsaDetectorFleet {
   using detector_type = TslDsaRunDetector<DataType>;
   TslBorrowPool<detector_type> pool_;
+  std::size_t min_offload_elements_;
 
  public:
   TslDsaDetectorFleet(
@@ -252,13 +253,18 @@ class TslDsaDetectorFleet {
       : pool_(worker_count + 1, [&](std::size_t) {
           return std::make_unique<detector_type>(backend, region_bytes,
                                                  min_offload_elements);
-        }) {}
+        }),
+        min_offload_elements_(min_offload_elements) {}
 
   template <class Emit>
   void operator()(DataType const * values, std::size_t begin, std::size_t end, Emit && emit) {
     auto held = pool_.borrow();
     held->detect(values, begin, end, std::forward<Emit>(emit));
   }
+
+  // Published so a caller can decline a range this fleet would only decline
+  // itself, before paying for the lease above. See sorting/common/run_discovery.hpp.
+  auto min_offload_elements() const -> std::size_t { return min_offload_elements_; }
 
   // Call only after the sort has joined its workers.
   auto aggregate_metrics() const -> TslDsaRunDetectorMetrics {
@@ -334,6 +340,8 @@ class TslDsaRunDetector {
 
   auto backend() const -> TslRleBackend { return backend_; }
   auto region_bytes() const -> std::size_t { return region_bytes_; }
+  // See sorting/common/run_discovery.hpp.
+  auto min_offload_elements() const -> std::size_t { return min_offload_elements_; }
   auto metrics() const -> TslDsaRunDetectorMetrics const & { return metrics_; }
   void reset_metrics() { metrics_ = {}; }
 

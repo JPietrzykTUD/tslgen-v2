@@ -19,6 +19,8 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
+#include <functional>
+#include <mutex>
 #include <numeric>
 #include <random>
 #include <string>
@@ -229,6 +231,91 @@ void check_parallel(
   }
 }
 
+// A detector that answers only when polled, which is what an accelerator's
+// asynchronous form does. It exists here to cover the sorter's side of that
+// contract on every host: the emitter it is handed must outlive the task that
+// produced it, and the task tree must not report completion while a range is
+// still outstanding.
+template <class DataType>
+class DeferredRunDetector {
+ public:
+  void bind(TslPendingWork & pending) { pending_ = &pending; }
+
+  template <class Emit>
+  void operator()(DataType const * values, std::size_t begin, std::size_t end,
+                  Emit && emit) {
+    if (end - begin < 2) {
+      return;
+    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    pending_->add_pending(1);
+    queued_.push_back(job{values, begin, end, std::forward<Emit>(emit)});
+  }
+
+  void poll() {
+    job taken;
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      ++polls_;
+      if (queued_.empty()) {
+        return;
+      }
+      taken = queued_.back();
+      queued_.pop_back();
+    }
+    // Emitted from the polling worker, after the producing task returned.
+    tsl_for_each_equal_run(taken.values, taken.begin, taken.end, taken.emit);
+    pending_->resolve_pending(1);
+  }
+
+  auto polls() -> std::size_t {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return polls_;
+  }
+
+ private:
+  struct job {
+    DataType const * values = nullptr;
+    std::size_t begin = 0;
+    std::size_t end = 0;
+    std::function<void(TslRunSpan)> emit;
+  };
+  std::mutex mutex_;
+  TslPendingWork * pending_ = nullptr;
+  std::vector<job> queued_;
+  std::size_t polls_ = 0;
+};
+
+// The parallel cases only: an asynchronous detector needs an executor to poll
+// from, and the serial entry point has none -- it refuses one at compile time.
+template <class T, TslPartitionKind Partition, TslLeafKind Leaf, class Detector>
+void run_parallel_shapes(std::string const & tag, Detector & detector) {
+  for (auto discovery : {TslRunDiscoveryKind::POST_SORT,
+                         TslRunDiscoveryKind::INCREMENTAL}) {
+    auto const disc = discovery == TslRunDiscoveryKind::POST_SORT ? "post" : "incr";
+    std::string const base = tag + "/" + disc;
+    // One worker included deliberately: with an asynchronous detector that is
+    // still the executor path, because the serial form cannot poll.
+    for (std::size_t workers : {std::size_t{1}, std::size_t{2}, std::size_t{8}}) {
+      auto const columns = make_columns<T>(200000, 3, 64, 0xC0FFEE2);
+      check_parallel<T, Partition, Leaf>(
+        base + "/parallel-ranges/workers=" + std::to_string(workers), columns,
+        discovery, workers, detector);
+    }
+    // Level 0 over both parallel thresholds, and one maximal tie: the two shapes
+    // that can only be split inside a partition, so the emitter runs on several
+    // threads at once.
+    auto const wide = make_columns<T>(300000, 3, 4096, 0xC0FFEE1);
+    check_parallel<T, Partition, Leaf>(base + "/parallel-level0/workers=4", wide,
+                                       discovery, 4, detector);
+    if constexpr (Partition == TslPartitionKind::THREE_WAY) {
+      auto const tied = make_columns<T>(300000, 3, 1, 0xC0FFEE3);
+      check_parallel<T, Partition, Leaf>(base + "/parallel-one-tie/workers=8", tied,
+                                         discovery, 8, detector);
+    }
+  }
+}
+
 template <class T, TslPartitionKind Partition, TslLeafKind Leaf, class Detector>
 void run_shapes(std::string const & tag, Detector & detector) {
   constexpr std::size_t leaf = TslMultiColumnIndexSorter<T, Partition, Leaf>::leaf_size_threshold();
@@ -316,6 +403,23 @@ int main() {
     run_shapes<std::uint32_t, TslPartitionKind::TWO_WAY, TslLeafKind::NETWORK>("scalar/u32/2way/net", scalar32);
     run_shapes<std::uint64_t, TslPartitionKind::THREE_WAY, TslLeafKind::NETWORK>("scalar/u64/3way/net", scalar64);
     run_shapes<std::uint64_t, TslPartitionKind::TWO_WAY, TslLeafKind::INSERTION>("scalar/u64/2way/ins", scalar64);
+  }
+
+  {
+    // The asynchronous seam, without a device. Until the emitter became
+    // self-contained and the executor's pending-work accounting was wired up,
+    // this was a compile error by design; it is a test now so it stays working.
+    std::printf("-- detector deferred (asynchronous, no device) --\n");
+    DeferredRunDetector<std::uint32_t> deferred32;
+    run_parallel_shapes<std::uint32_t, TslPartitionKind::THREE_WAY,
+                        TslLeafKind::NETWORK>("deferred/u32/3way/net", deferred32);
+    if (deferred32.polls() == 0) {
+      ++g_failures;
+      std::printf("FAIL deferred/u32: the sorter never polled the detector\n");
+    }
+    DeferredRunDetector<std::uint64_t> deferred64;
+    run_parallel_shapes<std::uint64_t, TslPartitionKind::THREE_WAY,
+                        TslLeafKind::INSERTION>("deferred/u64/3way/ins", deferred64);
   }
 
 #ifdef TSL_COSORT_ENABLE_IAA

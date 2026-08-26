@@ -79,8 +79,22 @@ omitted:
   ranges out and barriers between levels. Splitting a *single* partition across
   workers needs the task tree the direct sorter has, so `deep_parallel_` drops
   with `no indirect form of this execution`.
-* **Synchronous detectors only.** Nothing polls, so an asynchronous backend would
-  never complete; a `static_assert` says so and registration excludes them.
+* ~~**Asynchronous detectors need the parallel form.**~~ They no longer do. The
+  serial entry refused one at compile time because it had no poll site, which read
+  as a property of the algorithm and was really a property of the driver: the level
+  loop is bulk-synchronous, so it can hand a range to the device, keep sorting the
+  rest of the level, and settle the debt at the level boundary before the next
+  column materialises. That is a `serial_pending` -- the same `TslPendingWork`
+  contract, with no locking, since the same thread both submits and polls -- plus a
+  drain in front of the `ranges_.swap(next_ranges_)`, and an emitter that captures
+  `this` and `metrics` by value rather than the frame it was built in.
+
+  This is worth having rather than merely tidy: it is software pipelining, and one
+  worker is where it shows best. At sixteen times the last level on this host the
+  asynchronous detector was the fastest of the three at one worker (79.11 against
+  80.45 synchronous and 82.96 scalar ns/element) and the slowest at five, where the
+  device is contended by every worker at once. `rle=*_async` is therefore
+  registered for `move=index` at every worker count, serial included.
 * **Index element type equals the data type**, because the stitch replays a key
   mask on payload registers of the same style. A narrower index needs the mask
   re-spacing that `TMP/tsl_sort`'s `compress_store_index_array` does.
@@ -128,10 +142,15 @@ Two consequences the caller carries:
 * **Discovery runs on worker threads**, so a detector must be safe for concurrent
   use -- a fleet (`TslIaaDetectorFleet`, `TslDsaDetectorFleet`) or a stateless one.
   This is the contract `sort_columns_parallel` already has, for the same reason.
-* **Asynchronous detectors are still excluded**, now for a different reason than
-  before: an asynchronous backend retains the emitting callable past the task that
-  produced it, and the child-submitting emitters here are not self-contained. A
-  `static_assert` says so.
+* **Asynchronous detectors work here now.** The blocker was never the driver's
+  shape: an asynchronous backend retains the emitting callable past the task that
+  produced it, and the child-submitting emitter captured a frame-local timing
+  accumulator by reference. It captures the executor, the two column counts and a
+  nullable accumulator pointer by value instead -- null on the asynchronous path,
+  where the child subtree does not run inside the detector call anyway -- and the
+  executor is handed to the detector through `bind`/`set_poller` before the first
+  task exists. What the emitter must satisfy is written down at
+  `dsa_async_run_detector.hpp`: it outlives the frame that built it.
 
 Column 0 is the exception the tree cannot help: while the root is the only task
 there is nothing to spread. Its fetch is a copy of the whole table, done by a
@@ -190,6 +209,42 @@ Superseded on the way: an earlier bulk-synchronous form, with a parallel-for ove
 each level's ranges and a barrier between levels, reached 2.76x and 4.30x on the
 same two shapes. The task tree beats it on both and deletes the mechanism, so the
 `TslIndexParallelFor` it needed is gone.
+
+### Two-way is the faster scheme where it is legal
+
+Two-way's reputation here was "quadratic on duplicates, therefore gated" -- and the
+gate was doing more than that. Measured across the attribute stage, on the shapes
+where the equal runs are short enough for it to be admitted at all, two-way beats
+three-way in **47 of 48 paired cells**:
+
+| size level | insertion leaf | network leaf | hybrid leaf |
+| --- | --- | --- | --- |
+| L2 | 0.96x | 0.97x | 0.95x |
+| LLC | 0.94x | 0.94x | 0.93x |
+
+The margin *grows* with the working set rather than shrinking, which rules out a
+small-problem artifact: one pass over the range instead of two is worth more when
+the range does not fit in cache. Two-way's cost is one `BEFORE_PIVOT` partition;
+three-way pays a second `EQUAL_TO` pass over the part that survives the first.
+
+None of that was shipped, because the tuner could not see it. Its gate asked
+whether the *working set* exceeded 256 KiB, while two-way's danger is the equal-run
+*length*; since every shape the tuner runs on is far larger than 256 KiB, two-way
+was skipped in every cell of every run and `partition=3way` was written to
+`best_config.tsv` by default rather than by measurement. The corpus registrar had
+the right rule all along (`tsl_two_way_run_bounded`, now shared by both), and with
+the tuner using it, two-way wins outright on short-run data:
+
+| cell | shipped | ns/element | default (`3way/hyb/post`) | paired |
+| --- | --- | --- | --- | --- |
+| 512-bit, u32, 16 lanes | `2way/net/post` | 21.09 | 22.14 | 0.951 |
+| 512-bit, u64, 8 lanes | `2way/net/post` | 42.76 | 44.35 | 0.961 |
+
+On the duplicate-heavy default tuning set it is still skipped, now naming the shape
+that disqualifies it rather than a size. So the honest statement of the partition
+axis is not "three-way, two-way is a trap" but **"the partition scheme is a
+property of the key distribution"**: short runs want two-way, long runs cannot use
+it at all, and there is no single answer to ship.
 
 ### How incremental two-way works
 
@@ -691,10 +746,14 @@ configure time naming the file.
    still runs on one thread, because splitting it measured worse. Making that case
    pay needs the nested executor removed, i.e. the partition split expressed as
    tasks in the same tree rather than a tree of its own.
-7. **Asynchronous detectors are unreachable from the indirect family.** The
-   blocker is now narrow and fixable: the child-submitting emitters must own what
-   they need, the way `process_parallel_task`'s `make_emit` does, before an
-   `rle=iaa_hw_async` row can exist for `move=index`.
+7. **Asynchronous detectors are reachable from both families** as of the
+   pending-work work: the indirect family's emitter owns what it needs and its
+   task executor polls, and the samplesort's worklist implements the same
+   `TslPendingWork` contract through `sorting/common/pending_range_queue.hpp`. An
+   `rle=*_async` row exists for `move=index` and for the samplesort, at any
+   non-serial execution. Two things to hold onto when reading one: at one worker
+   there is nothing for the offload to overlap with, and `ns_detect` measures the
+   handover rather than the scan.
 8. **`gather` is still scalar-emulated for the clang families** in `v0.2.9`, so
    `move=index` with `style=clang` measures that emulation: 34.92 ms against
    19.14 ms for `intr` at 4 columns. It is the same class of gap the `net` leaf

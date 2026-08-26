@@ -35,6 +35,7 @@
 #include <cstdio>
 #include <cstring>
 #include <stdexcept>
+#include <set>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -112,6 +113,11 @@ std::map<std::string, TslTunedConfig> g_tuned;
 // IAA host and `scalar,dsa_hw` here. Empty means "whatever --paths says".
 inline std::vector<std::string> g_detectors;
 
+// Which sorters to measure the share around. Both by default: detection's share
+// is a fraction of a particular sorter's runtime, and the reported figures use
+// both families.
+inline std::set<std::string> g_algorithms{"samplesort", "quicksort"};
+
 inline auto wanted(TslDetectorBackend backend) -> bool {
   auto const name = std::string(tsl_detector_name(backend));
   if (!g_detectors.empty()) {
@@ -122,12 +128,123 @@ inline auto wanted(TslDetectorBackend backend) -> bool {
   return path == "scalar" || g_paths == "all" || g_paths == path;
 }
 
+// What a detector did with the ranges it was given, normalised across backends.
+//
+// Runtime alone cannot separate "the offload did not pay" from "the offload never
+// happened": a detector that declined every range because it was below the
+// threshold, or because its window was full, looks exactly like one that ran and
+// lost. These counters are what tell them apart, so they are written beside the
+// timings rather than printed and forgotten.
+struct detector_counters {
+  bool present = false;
+  std::size_t ranges = 0;            // ranges the detector was asked about
+  std::size_t offloaded = 0;         // ranges that became device work
+  std::size_t declined_small = 0;    // below the offload threshold
+  std::size_t declined_no_slot = 0;  // the in-flight window was full
+  std::size_t descriptors = 0;
+  std::size_t spans = 0;
+  std::size_t polls = 0;             // asynchronous only
+  std::size_t poll_advances = 0;
+  std::size_t poll_empty = 0;
+};
+
+// Which shape of metrics a detector keeps, detected the way the sorters detect
+// the executor and prepare seams: a trait, because the detectors are unrelated
+// types by design and this target is C++17.
+template <class Detector, class = void>
+struct tsl_detector_has_async_metrics : std::false_type {};
+template <class Detector>
+struct tsl_detector_has_async_metrics<
+  Detector,
+  decltype(std::declval<Detector &>().metrics().poll_calls, void())
+> : std::true_type {};
+
+template <class Detector, class = void>
+struct tsl_detector_has_fleet_metrics : std::false_type {};
+template <class Detector>
+struct tsl_detector_has_fleet_metrics<
+  Detector,
+  decltype(std::declval<Detector &>().aggregate_metrics().fallback_small, void())
+> : std::true_type {};
+
+// Two shapes of metrics struct, one record.
+template <class Detector>
+auto counters_of(Detector & detector) -> detector_counters {
+  detector_counters out;
+  if constexpr (tsl_detector_has_async_metrics<Detector>::value) {
+    auto const m = detector.metrics();
+    out = {true, m.ranges, m.offloaded_ranges, m.fallback_small,
+           m.fallback_no_slot, m.descriptors, m.spans_emitted, m.poll_calls,
+           m.poll_advances, m.poll_empty};
+  } else if constexpr (tsl_detector_has_fleet_metrics<Detector>::value) {
+    auto const m = detector.aggregate_metrics();
+    out.present = true;
+    out.ranges = m.ranges;
+    out.declined_small = m.fallback_small;
+    out.offloaded = m.ranges - m.fallback_small;
+    out.descriptors = m.descriptors;
+    out.spans = m.spans_emitted;
+  }
+  return out;
+}
+
+// The sidecar. Not extra columns in the question's CSV: one schema across every
+// question is what makes a figure a query over the directory rather than a
+// per-question special case, and these fields exist for one question only.
+struct counter_sink {
+  std::vector<std::string> lines;
+
+  void add(TslPaperRow const & row, std::string const & pairing,
+           detector_counters const & counters) {
+    if (!counters.present) {
+      return;
+    }
+    lines.push_back(
+      row.shape + "," + row.shape_params + "," + std::to_string(row.rows) + ","
+      + std::to_string(row.columns) + "," + std::to_string(row.element_bytes) + ","
+      + std::to_string(row.workers) + "," + row.detector + "," + pairing + ","
+      + std::to_string(row.repetitions) + "," + std::to_string(counters.ranges) + "," + std::to_string(counters.offloaded)
+      + "," + std::to_string(counters.declined_small) + ","
+      + std::to_string(counters.declined_no_slot) + ","
+      + std::to_string(counters.descriptors) + "," + std::to_string(counters.spans)
+      + "," + std::to_string(counters.polls) + ","
+      + std::to_string(counters.poll_advances) + ","
+      + std::to_string(counters.poll_empty));
+  }
+
+  void write(std::string const & path) const {
+    if (path.empty() || lines.empty()) {
+      return;
+    }
+    std::FILE * out = std::fopen(path.c_str(), "w");
+    if (out == nullptr) {
+      std::printf("could not write %s\n", path.c_str());
+      return;
+    }
+    // repetitions, because a detector's counters accumulate over every timed
+    // pass: the harness resamples a wide row up to 33 times, and a count that
+    // does not say how many runs produced it cannot be compared with its
+    // neighbour.
+    std::fprintf(out, "shape,shape_params,rows,columns,element_bytes,workers,"
+                      "detector,pairing,repetitions,ranges,offloaded,declined_small,"
+                      "declined_no_slot,descriptors,spans,polls,poll_advances,"
+                      "poll_empty\n");
+    for (auto const & line : lines) {
+      std::fprintf(out, "%s\n", line.c_str());
+    }
+    std::fclose(out);
+    std::printf("wrote %s (%zu rows)\n", path.c_str(), lines.size());
+  }
+};
+
+inline counter_sink g_counters;
+
 template <class Key>
 void run_width(TslPaperResults & results,
                std::vector<std::size_t> const & cardinalities,
                std::vector<std::size_t> const & column_counts,
                std::size_t rows, std::vector<std::size_t> const & worker_counts,
-               std::size_t min_offload) {
+               TslDetectorConfig const & detector_config, bool iso_resource) {
   // The cell this binary was built for: intr/512 unless
   // TSL_COSORT_MEASURE_STYLE/WIDTH say otherwise. Q0 checks that default against
   // the nine cells it measured, so a host where it is the wrong choice says so
@@ -170,37 +287,88 @@ void run_width(TslPaperResults & results,
 
       for (auto const workers : worker_counts) {
         for (auto const backend : tsl_compiled_detectors()) {
+          // Iso-resource pairing: the argument for an offload is usually that it
+          // frees a core, and comparing both at the same worker count never
+          // charges it for one. So an offloading backend is also measured with one
+          // worker fewer than the scalar scan it is being compared against --
+          // W-1 cores plus the device against W cores. The device is not free
+          // either (one host, one work queue), which is exactly why the pairing
+          // has to be measured rather than argued.
+          auto const offloads = backend != TslDetectorBackend::Scalar;
+          auto const iso = iso_resource && offloads && workers > 1;
+          auto const run_workers = iso ? workers - 1 : workers;
+          auto const pairing = iso ? "iso vs " + std::to_string(workers) + "w"
+                                   : std::string("equal-workers");
           auto row = blank;
           row.detector = tsl_detector_name(backend);
-          row.workers = workers;
-          if (tsl_detector_is_async(backend)) {
-            results.drop(row, "asynchronous: this driver never polls");
-            continue;
-          }
+          row.workers = run_workers;
+          // Asynchronous backends used to be dropped here: the samplesort's
+          // phase-two loop had no way to stay alive while a device still owed it
+          // ranges, so it could not poll. It now carries the pending-work
+          // contract, and an asynchronous offload is the only form in which
+          // moving detection to a device can overlap the sort -- which is the
+          // question this driver exists to answer, so it is measured rather than
+          // dropped. Serially there is nothing to overlap with, though: the
+          // sorter polls from its own idle loop, so a one-worker asynchronous row
+          // measures the submission path and not concurrency.
           if (!wanted(backend)) {
             continue;  // not asked for; not a drop, the grid never included it
           }
-          TslDetectorConfig config;
-          config.workers = workers;
-          config.min_offload = min_offload;
+          // For the worker count this row actually runs at: under the
+          // iso-resource pairing that is one fewer than the scalar row it is
+          // compared against, and the configuration that would be deployed there
+          // is the one tuned for it.
+          tsl_select_tuned<Key>(g_tuned, g_samplesort_config, g_quicksort_config,
+                                run_workers);
+          auto config = detector_config;
+          config.workers = run_workers;
           std::vector<Key> index(rows);
           try {
             tsl_with_detector<Key>(backend, config, [&](auto & detector) {
-              using Detector = std::decay_t<decltype(detector)>;
-              if constexpr (!tsl_detector_wants_executor<Detector>::value) {
-                // The sorter Q0 chose, not one typed here. Detection's share of
-                // the runtime is this driver's headline, and a share is a ratio
-                // against the sort: measuring it around a sorter twice as slow as
-                // the one we ship would halve the share and understate every
-                // offload decision that rests on it.
+              // The sorter Q0 chose, not one typed here. Detection's share of
+              // the runtime is this driver's headline, and a share is a ratio
+              // against the sort: measuring it around a sorter twice as slow as
+              // the one we ship would halve the share and understate every
+              // offload decision that rests on it.
+              //
+              // Both families, because the share is a property of the sorter as
+              // much as of the detector: the samplesort and the index quicksort
+              // spend different fractions of their time materialising and
+              // sorting, so "detection is N% of the sort" needs saying about the
+              // sorter the reported figures use. Q2 and Q4 report both.
+              //
+              // Profiling stays on here, unlike every other driver: the phase
+              // split *is* the measurement. So Q3's absolute ns/element are not
+              // comparable with Q2's or Q4's -- they carry the timers' 1.08x to
+              // 1.28x -- while the share and the between-detector comparison,
+              // both taken within this build, are unaffected.
+              auto record = [&](std::string const & algorithm,
+                                std::string const & variant, bool dispatched,
+                                bool ok, TslPaperStats const & stats,
+                                double ns_materialize, double ns_sort,
+                                double ns_detect) {
+                auto row_out = row;
+                row_out.algorithm = algorithm;
+                if (!dispatched) {
+                  results.drop(row_out, "the tuned " + algorithm + " configuration "
+                               "is not instantiated here: " + variant);
+                  return;
+                }
+                row_out.variant = variant + (iso ? " [" + pairing + "]" : "");
+                row_out.verified = ok;
+                row_out.ns_per_element = stats;
+                auto const denominator = static_cast<double>(rows);
+                row_out.ns_materialize = ns_materialize / denominator;
+                row_out.ns_sort = ns_sort / denominator;
+                row_out.ns_detect = ns_detect / denominator;
+                g_counters.add(row_out, pairing, counters_of(detector));
+                results.add(std::move(row_out));
+              };
+
+              if (g_algorithms.count("samplesort") != 0) {
                 TslSampleSortColumnMetrics metrics;
                 bool ok = false;
                 TslPaperStats stats{};
-                // Profiling stays on here, unlike every other driver: the phase
-                // split *is* the measurement. So Q3's absolute ns/element are not
-                // comparable with Q2's or Q4's -- they carry the timers' 1.08x to
-                // 1.28x -- while the share and the between-detector comparison,
-                // both taken within this build, are unaffected.
                 auto const dispatched = with_samplesort<Key, Simd, true>(
                   g_samplesort_config, [&](auto sorter) {
                     auto const measured = tsl_paper_measure(
@@ -209,7 +377,7 @@ void run_width(TslPaperResults & results,
                         if (workers > 1) {
                           sorter.sort_index_parallel(specs.data(), columns,
                                                      index.data(), rows, detector,
-                                                     workers, &metrics);
+                                                     run_workers, &metrics);
                         } else {
                           sorter.sort_index(specs.data(), columns, index.data(),
                                             rows, detector, &metrics);
@@ -220,22 +388,50 @@ void run_width(TslPaperResults & results,
                     ok = measured.first;
                     stats = measured.second;
                   });
-                if (!dispatched) {
-                  results.drop(row, "tuned samplesort configuration is not "
-                                    "instantiated here: "
-                                    + g_samplesort_config.describe_samplesort());
-                } else {
-                  row.variant = g_samplesort_config.describe_samplesort()
-                                + (g_samplesort_config.from_file ? " (tuned)"
-                                                                 : " (default)");
-                  row.verified = ok;
-                  row.ns_per_element = stats;
-                  auto const denominator = static_cast<double>(rows);
-                  row.ns_materialize = metrics.ns_materialize / denominator;
-                  row.ns_sort = metrics.ns_sort / denominator;
-                  row.ns_detect = metrics.ns_detect / denominator;
-                  results.add(std::move(row));
-                }
+                record("samplesort",
+                       g_samplesort_config.describe_samplesort()
+                         + tsl_tuned_label(g_samplesort_config, run_workers),
+                       dispatched, ok, stats, metrics.ns_materialize,
+                       metrics.ns_sort, metrics.ns_detect);
+              }
+
+              if (g_algorithms.count("quicksort") != 0) {
+                TslIndexSortMetrics metrics;
+                bool ok = false;
+                TslPaperStats stats{};
+                auto const dispatched = with_quicksort_leaf<Key, Simd, true>(
+                  g_quicksort_config, [&](auto sorter) {
+                    auto const measured = tsl_paper_measure(
+                      [&] {
+                        metrics = {};
+                        // One worker takes the serial entry, whatever the
+                        // detector: it now polls at each level boundary of its own
+                        // level loop, so an asynchronous backend completes there.
+                        // Which matters for the comparison rather than only for
+                        // coverage -- a serial row that had to go through the
+                        // parallel entry was paying for a task executor the
+                        // scalar row it is compared against did not have.
+                        if (workers > 1) {
+                          sorter.sort_index_parallel(
+                            specs.data(), columns, index.data(), rows,
+                            g_quicksort_config.discovery, detector, run_workers,
+                            g_quicksort_config.partition_threshold, &metrics);
+                        } else {
+                          sorter.sort_index(specs.data(), columns, index.data(),
+                                            rows, g_quicksort_config.discovery,
+                                            detector, &metrics);
+                        }
+                      },
+                      [&] { return image_matches(*pristine, *reference, index); },
+                      rows);
+                    ok = measured.first;
+                    stats = measured.second;
+                  });
+                record("quicksort",
+                       g_quicksort_config.describe_quicksort()
+                         + tsl_tuned_label(g_quicksort_config, run_workers),
+                       dispatched, ok, stats, metrics.ns_materialize,
+                       metrics.ns_sort, metrics.ns_detect);
               }
             });
           } catch (std::exception const & error) {
@@ -257,8 +453,24 @@ int main(int argc, char ** argv) {
   std::vector<std::size_t> worker_counts;   // machine-derived unless --workers
   std::vector<std::size_t> widths{4, 8};
   std::size_t rows = 0;                     // machine-derived unless --rows
-  std::size_t min_offload = 4096;
+  // Working-set targets as multiples of this machine's last level, so the axis
+  // means the same thing on a host with a different cache. 4x is where every
+  // other reported figure lives; the larger points are there because an offload's
+  // case is memory pressure, and a working set that still half-fits cannot show
+  // it. Written as multiples rather than row counts for the same reason the row
+  // count is derived: a literal here would be a different experiment on the next
+  // machine.
+  std::vector<std::size_t> llc_multiples{4};
+  bool workers_ladder = false;
+  // Hold the mean equal-run length fixed across the size axis instead of the
+  // cardinality: rows/c constant, so what changes between two sizes is the
+  // footprint and not how much work each detect call has. Without it the two
+  // mechanisms move together and a result cannot say which one it measured.
+  std::size_t run_length = 0;
+  TslDetectorConfig detector_config;
+  bool iso_resource = false;
   std::string csv_path;
+  std::string counters_path;
   std::string tuned_path = "best_config.tsv";
 
   for (int i = 1; i < argc; ++i) {
@@ -270,7 +482,17 @@ int main(int argc, char ** argv) {
         into.push_back(std::strtoull(part.c_str(), nullptr, 10));
       }
     };
-    if (flag == "--cardinalities") {
+    if (flag == "--workers" && i + 1 < argc && std::string(argv[i + 1]) == "ladder") {
+      // Every worker count from one to the physical cores of one NUMA node. The
+      // "how many cores does the device replace" question is a crossing between
+      // two scaling curves, so it needs the curves rather than two points -- and
+      // the top of the ladder is a property of the machine, so it is derived here
+      // rather than written into a command line that would mean something else on
+      // the next host.
+      ++i;
+      worker_counts.clear();   // filled once the machine has been probed
+      workers_ladder = true;
+    } else if (flag == "--cardinalities") {
       list(cardinalities);
     } else if (flag == "--cols") {
       list(column_counts);
@@ -288,7 +510,32 @@ int main(int argc, char ** argv) {
     } else if (flag == "--rows") {
       rows = std::strtoull(value().c_str(), nullptr, 10);
     } else if (flag == "--min-offload") {
-      min_offload = std::strtoull(value().c_str(), nullptr, 10);
+      detector_config.min_offload = std::strtoull(value().c_str(), nullptr, 10);
+    } else if (flag == "--run-length") {
+      run_length = std::strtoull(value().c_str(), nullptr, 10);
+    } else if (flag == "--sizes") {
+      list(llc_multiples);
+    } else if (flag == "--slots") {
+      // The device's window, which is a property of the machine rather than of
+      // the algorithm: a host with more work queues can hold more in flight.
+      detector_config.slots = std::strtoull(value().c_str(), nullptr, 10);
+    } else if (flag == "--depth") {
+      detector_config.depth = std::strtoull(value().c_str(), nullptr, 10);
+    } else if (flag == "--region-bytes") {
+      detector_config.region_bytes = std::strtoull(value().c_str(), nullptr, 10);
+    } else if (flag == "--iso-resource") {
+      iso_resource = true;
+    } else if (flag == "--counters") {
+      counters_path = value();
+    } else if (flag == "--algorithms") {
+      g_algorithms.clear();
+      for (auto const & part : split(value(), ',')) {
+        if (part != "samplesort" && part != "quicksort") {
+          std::printf("--algorithms takes samplesort and/or quicksort\n");
+          return 2;
+        }
+        g_algorithms.insert(part);
+      }
     } else if (flag == "--detectors") {
       g_detectors = split(value(), ',');
       for (auto const & name : g_detectors) {
@@ -320,14 +567,38 @@ int main(int argc, char ** argv) {
   }
 
   TslPaperResults results("Q3 detection", "bench_q3_detection");
+  if (workers_ladder) {
+    auto const top = std::max<std::size_t>(1, results.machine().parallel_width());
+    for (std::size_t workers = 1; workers <= top; ++workers) {
+      worker_counts.push_back(workers);
+    }
+  }
   if (worker_counts.empty()) {
     worker_counts = tsl_default_workers(results.machine());
   }
-  if (rows == 0) {
-    rows = tsl_rows_out_of_cache(results.machine(), 4, 4);
+  auto const llc = results.machine().llc_bytes > 0 ? results.machine().llc_bytes
+                                                   : 32ull * 1024 * 1024;
+  // One explicit --rows overrides the size axis; otherwise the axis is the axis.
+  std::vector<std::size_t> row_counts;
+  if (rows != 0) {
+    row_counts.push_back(rows);
+    llc_multiples.clear();
+  } else {
+    for (auto const multiple : llc_multiples) {
+      row_counts.push_back(tsl_rows_for_bytes(multiple * llc, 4, 4));
+    }
   }
-  std::printf("workers=%zu..%zu, rows=%zu (derived from this machine)\n",
-              worker_counts.front(), worker_counts.back(), rows);
+  std::printf("workers=%zu..%zu, LLC=%zu MiB, working sets=",
+              worker_counts.front(), worker_counts.back(), llc / (1024 * 1024));
+  for (std::size_t index = 0; index < row_counts.size(); ++index) {
+    std::printf("%zu rows%s", row_counts[index],
+                index + 1 < row_counts.size() ? ", " : "");
+  }
+  std::printf(" (derived from this machine)\n");
+  if (iso_resource) {
+    std::printf("iso-resource: an offloading backend also runs at one worker "
+                "fewer than the scalar scan it is compared against\n");
+  }
   g_tuned = tsl_read_tuned(tuned_path);
   if (g_tuned.empty()) {
     std::printf("no %s: measuring the default configuration, rows labelled "
@@ -353,25 +624,42 @@ int main(int argc, char ** argv) {
       }
     }
   }
-  std::printf("min_offload=%zu  backends compiled in: ", min_offload);
+  std::printf("min_offload=%zu slots=%zu depth=%zu region=%zuB  "
+              "backends compiled in: ", detector_config.min_offload,
+              detector_config.slots, detector_config.depth,
+              detector_config.region_bytes);
   for (auto const backend : tsl_compiled_detectors()) {
     std::printf("%s ", tsl_detector_name(backend));
   }
   std::printf("\n");
 
   results.expect(cardinalities.size() * column_counts.size() * widths.size()
-                 * worker_counts.size() * tsl_compiled_detectors().size());
-  for (auto const width : widths) {
-    if (width == 4) {
-      tsl_select_tuned<std::uint32_t>(g_tuned, g_samplesort_config,
-                                      g_quicksort_config);
-      run_width<std::uint32_t>(results, cardinalities, column_counts, rows,
-                               worker_counts, min_offload);
-    } else if (width == 8) {
-      tsl_select_tuned<std::uint64_t>(g_tuned, g_samplesort_config,
-                                      g_quicksort_config);
-      run_width<std::uint64_t>(results, cardinalities, column_counts, rows,
-                               worker_counts, min_offload);
+                 * worker_counts.size() * row_counts.size()
+                 * tsl_compiled_detectors().size() * g_algorithms.size());
+  for (auto const size_rows : row_counts) {
+    // The cardinality that gives the requested run length at this size. Reported
+    // rather than silently substituted: a catalogue without that shape drops the
+    // cell with a reason, which is the honest outcome for a diagonal the data
+    // cannot supply.
+    auto const size_cardinalities = run_length == 0
+      ? cardinalities
+      : std::vector<std::size_t>{std::max<std::size_t>(1, size_rows / run_length)};
+    if (run_length != 0) {
+      std::printf("size %zu rows: cardinality %zu holds the run length at %zu\n",
+                  size_rows, size_cardinalities.front(), run_length);
+    }
+    for (auto const width : widths) {
+      if (width == 4) {
+        tsl_select_tuned<std::uint32_t>(g_tuned, g_samplesort_config,
+                                        g_quicksort_config);
+        run_width<std::uint32_t>(results, size_cardinalities, column_counts, size_rows,
+                                 worker_counts, detector_config, iso_resource);
+      } else if (width == 8) {
+        tsl_select_tuned<std::uint64_t>(g_tuned, g_samplesort_config,
+                                        g_quicksort_config);
+        run_width<std::uint64_t>(results, size_cardinalities, column_counts, size_rows,
+                                 worker_counts, detector_config, iso_resource);
+      }
     }
   }
 
@@ -379,5 +667,13 @@ int main(int argc, char ** argv) {
   if (!csv_path.empty()) {
     results.write_csv(csv_path);
   }
+  if (counters_path.empty() && !csv_path.empty()) {
+    // Beside the question's CSV by default: the counters are only meaningful
+    // against the rows they came from.
+    auto const dot = csv_path.rfind('.');
+    counters_path = (dot == std::string::npos ? csv_path : csv_path.substr(0, dot))
+                    + "_detector_counters.csv";
+  }
+  g_counters.write(counters_path);
   return 0;
 }

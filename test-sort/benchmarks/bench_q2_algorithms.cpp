@@ -119,6 +119,11 @@ void run_pair(TslPaperResults & results, TslDatasetSource<Key> & source,
   }
 
   for (auto const workers : worker_counts) {
+    // The tuner answers per worker count; ask it again for this one. A file
+    // without an entry for it falls back to the worker-agnostic answer, and the
+    // row's label says so.
+    tsl_select_tuned<Key>(g_tuned, g_samplesort_config, g_quicksort_config,
+                          workers);
     std::vector<Key> index(rows);
     {
       auto row = blank;
@@ -129,7 +134,7 @@ void run_pair(TslPaperResults & results, TslDatasetSource<Key> & source,
       // per key width, so a global computed once in main was always stale and
       // labelled tuned rows "(default)".
       row.variant = g_samplesort_config.describe_samplesort()
-                    + (g_samplesort_config.from_file ? " (tuned)" : " (default)");
+                    + tsl_tuned_label(g_samplesort_config, workers);
       TslSampleSortColumnMetrics metrics;
       auto const dispatched = with_samplesort<Key, Simd, TSL_COSORT_PHASES>(
         g_samplesort_config, [&](auto sorter) {
@@ -166,7 +171,7 @@ void run_pair(TslPaperResults & results, TslDatasetSource<Key> & source,
       row.detector = "scalar";
       row.workers = workers;
       row.variant = g_quicksort_config.describe_quicksort()
-                    + (g_quicksort_config.from_file ? " (tuned)" : " (default)");
+                    + tsl_tuned_label(g_quicksort_config, workers);
       TslIndexSortMetrics quick_metrics;
       auto const dispatched = with_quicksort_leaf<Key, Simd, TSL_COSORT_PHASES>(
         g_quicksort_config, [&](auto sorter) {

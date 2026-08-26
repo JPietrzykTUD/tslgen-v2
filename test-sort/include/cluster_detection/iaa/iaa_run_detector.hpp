@@ -366,6 +366,11 @@ class TslIaaRunDetector {
   auto path() const -> TslIaaPath { return path_; }
   auto region_elements() const -> std::size_t { return region_elements_; }
   auto metrics() const -> TslIaaRunDetectorMetrics const & { return metrics_; }
+
+  // Published so a caller can decline a range this detector would decline
+  // anyway, before paying to reach the decision. See
+  // sorting/common/run_discovery.hpp.
+  auto min_offload_elements() const -> std::size_t { return min_offload_elements_; }
   void reset_metrics() { metrics_ = {}; }
 
   // Emits every maximal equal run of length > 1 in [begin, end), ascending.
@@ -539,6 +544,7 @@ template <class DataType>
 class TslIaaDetectorFleet {
   using detector_type = TslIaaRunDetector<DataType>;
   TslBorrowPool<detector_type> pool_;
+  std::size_t min_offload_elements_;
 
  public:
   TslIaaDetectorFleet(
@@ -551,13 +557,17 @@ class TslIaaDetectorFleet {
       : pool_(worker_count + 1, [&](std::size_t) {
           return std::make_unique<detector_type>(path, region_bytes,
                                                  min_offload_elements);
-        }) {}
+        }),
+        min_offload_elements_(min_offload_elements) {}
 
   template <class Emit>
   void operator()(DataType const * values, std::size_t begin, std::size_t end, Emit && emit) {
     auto held = pool_.borrow();
     held->detect(values, begin, end, std::forward<Emit>(emit));
   }
+
+  // The lease above is what a caller saves by declining a short range itself.
+  auto min_offload_elements() const -> std::size_t { return min_offload_elements_; }
 
   auto aggregate_metrics() const -> TslIaaRunDetectorMetrics {
     TslIaaRunDetectorMetrics total{};
@@ -713,6 +723,9 @@ class TslIaaAsyncRunDetector {
   }
 
   void bind(TslPendingWork & pending) { pending_ = &pending; }
+
+  // See sorting/common/run_discovery.hpp.
+  auto min_offload_elements() const -> std::size_t { return min_offload_elements_; }
 
   auto path() const -> TslIaaPath { return path_; }
 

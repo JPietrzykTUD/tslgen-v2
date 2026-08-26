@@ -19,6 +19,8 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
+#include <functional>
+#include <mutex>
 #include <numeric>
 #include <random>
 #include <string>
@@ -63,6 +65,66 @@ struct BisectingRunDetector {
   }
 };
 
+// A detector that answers late, which is what an accelerator does. It keeps the
+// emitter and produces its spans only when polled -- so it exercises the three
+// properties a device imposes on the sorter without needing one: the sort must
+// not finish while a range is outstanding, an idle worker must poll rather than
+// sleep, and the emitter must outlive the frame that produced it.
+//
+// The real DSA and IAA asynchronous detectors are covered by their own tests;
+// this one is here so the *sorter* side is covered on every host.
+template <class DataType>
+class DeferredRunDetector {
+ public:
+  void bind(TslPendingWork & pending) { pending_ = &pending; }
+
+  template <class Emit>
+  void operator()(DataType const * values, std::size_t begin, std::size_t end,
+                  Emit && emit) {
+    if (end - begin < 2) {
+      return;
+    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    // Registered before the work is handed over, as the contract requires.
+    pending_->add_pending(1);
+    queued_.push_back(job{values, begin, end, std::forward<Emit>(emit)});
+  }
+
+  void poll() {
+    job taken;
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      ++polls_;
+      if (queued_.empty()) {
+        return;
+      }
+      taken = queued_.back();
+      queued_.pop_back();
+    }
+    // Emitted outside the lock and from whichever worker polled, which is where
+    // a device's completion is observed too.
+    tsl_for_each_equal_run(taken.values, taken.begin, taken.end, taken.emit);
+    pending_->resolve_pending(1);
+  }
+
+  auto polls() -> std::size_t {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return polls_;
+  }
+
+ private:
+  struct job {
+    DataType const * values = nullptr;
+    std::size_t begin = 0;
+    std::size_t end = 0;
+    std::function<void(TslRunSpan)> emit;
+  };
+  std::mutex mutex_;
+  TslPendingWork * pending_ = nullptr;
+  std::vector<job> queued_;
+  std::size_t polls_ = 0;
+};
+
 template <class Key>
 auto image_of(std::vector<std::vector<Key>> const & columns,
               std::vector<typename TslSampleSortTraits<Key>::index_type> const & index)
@@ -96,7 +158,7 @@ void run_case(char const * tag, TslDatasetSpec const & spec,
                                        TslSortOrder::ASCENDING});
   }
 
-  for (int which = 0; which < 2; ++which) {
+  for (int which = 0; which < 3; ++which) {
     ++g_checks;
     std::vector<Idx> index(rows);
     Sorter sorter;
@@ -110,7 +172,7 @@ void run_case(char const * tag, TslDatasetSpec const & spec,
         sorter.sort_index(specs.data(), columns, index.data(), rows, detector,
                           &metrics);
       }
-    } else {
+    } else if (which == 1) {
       BisectingRunDetector<Key> detector;
       if (workers > 1) {
         sorter.sort_index_parallel(specs.data(), columns, index.data(), rows,
@@ -119,8 +181,25 @@ void run_case(char const * tag, TslDatasetSpec const & spec,
         sorter.sort_index(specs.data(), columns, index.data(), rows, detector,
                           &metrics);
       }
+    } else {
+      // The same sort with a detector that answers only when polled. Every span
+      // arrives from a different thread at a later moment, and the image below
+      // still has to match, which is what proves the sorter carries an
+      // asynchronous seam rather than merely accepting one.
+      DeferredRunDetector<Key> detector;
+      if (workers > 1) {
+        sorter.sort_index_parallel(specs.data(), columns, index.data(), rows,
+                                   detector, workers, &metrics);
+      } else {
+        sorter.sort_index(specs.data(), columns, index.data(), rows, detector,
+                          &metrics);
+      }
+      if (columns > 1 && rows > 1 && detector.polls() == 0) {
+        fail(label + "/deferred", "the sorter never polled the detector");
+      }
     }
-    auto const * which_name = which == 0 ? "scalar" : "bisect";
+    auto const * which_name =
+      which == 0 ? "scalar" : (which == 1 ? "bisect" : "deferred");
 
     if (rows != 0) {
       std::vector<bool> seen(rows, false);

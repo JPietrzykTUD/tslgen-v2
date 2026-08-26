@@ -26,6 +26,7 @@
 
 #include <algorithm>
 #include <sched.h>
+#include <sys/resource.h>
 #include <set>
 #include <filesystem>
 #include <system_error>
@@ -258,6 +259,28 @@ struct TslPaperMachine {
 };
 
 
+// How many times the kernel took a CPU away from this process, across every
+// thread of it.
+//
+// The load average in `TslPaperMachine` is read once, when a run starts, so it
+// screens the machine and nothing more: a run that starts on a quiet host and is
+// joined at minute forty by something else looks clean in every column. That is
+// the case this counts. `ru_nivcsw` rises when the scheduler preempts a thread --
+// exactly what happens when another runnable process wants a core this run is
+// using -- so a delta of zero across a timed pass means the pass had the cores to
+// itself, and a nonzero delta names the pass that did not.
+//
+// Voluntary switches are deliberately not counted: a worker blocking on a
+// condition variable is this sort's own behaviour, not interference.
+inline auto tsl_involuntary_switches() -> long {
+  rusage usage{};
+  if (getrusage(RUSAGE_SELF, &usage) != 0) {
+    return 0;
+  }
+  return usage.ru_nivcsw;
+}
+
+
 struct TslPaperStats {
   double median = 0.0;
   double p25 = 0.0;
@@ -265,11 +288,26 @@ struct TslPaperStats {
   // How many samples this actually took. Adaptive, so it varies per row, and a
   // reader can see which measurements needed persuading.
   int repetitions = 0;
+  // Of those samples, how many were taken while the kernel was also running
+  // something else on these cores, and how many times it switched.
+  //
+  // A minority is what the median is for: a preempted pass is a slow pass, the
+  // quartiles show it, and resampling widens until the bulk is tight again. A
+  // majority is different -- then the median itself is a contended number, and no
+  // amount of resampling recovers the quiet one. `contaminated()` is that line.
+  int preempted_passes = 0;
+  long involuntary_switches = 0;
 
   // Spread as a fraction of the centre, which is what decides whether two rows
   // can be told apart.
   auto relative_iqr() const -> double {
     return median > 0.0 ? (p75 - p25) / median : 0.0;
+  }
+
+  // True when more than half the timed passes were preempted, so the median sits
+  // inside the interference rather than beside it.
+  auto contaminated() const -> bool {
+    return repetitions > 0 && preempted_passes * 2 > repetitions;
   }
 };
 
@@ -306,6 +344,12 @@ struct TslPaperRow {
   std::string variant;
   std::string detector;
   std::size_t workers = 0;
+  // The cache tier a row count was derived from -- L2, LLC, 2xLLC. The corpus
+  // sizes its cases that way and the row count alone does not say it, so the
+  // schema carries it: it was the one field the corpus's CSVs had and the
+  // reporting drivers' did not, which is the whole of the "one schema" claim's
+  // exception. Empty where a driver sizes by rows directly.
+  std::string size_level;
   int repetitions = 0;
   TslPaperStats ns_per_element;
   // Phase split where the driver has one, so a result can be attributed rather
@@ -326,6 +370,7 @@ class TslPaperResults {
   bool quiet_ = false;
   mutable std::chrono::steady_clock::time_point last_progress_{};
   std::size_t unsettled_ = 0;   // rows still wide after the repetition ceiling
+  std::size_t contended_ = 0;   // rows whose median was measured under preemption
   bool header_printed_ = false;
   // Progress. A full run is six to eight hours across six drivers, and without
   // this the only sign of life is a table that grows in bursts -- a shape that
@@ -449,6 +494,11 @@ class TslPaperResults {
         && row.ns_per_element.relative_iqr() > tsl_paper_target_spread) {
       ++unsettled_;
     }
+    // And a row whose *majority* of passes were preempted, which the start-of-run
+    // load average cannot see because the interference arrived later.
+    if (row.ns_per_element.contaminated()) {
+      ++contended_;
+    }
     if (quiet_) {
       rows_.push_back(std::move(row));
       return;
@@ -513,8 +563,9 @@ class TslPaperResults {
       return;
     }
     csv << "question,binary,shape,shape_params,rows,columns,element_bytes,"
-           "algorithm,variant,detector,workers,repetitions,"
+           "algorithm,variant,detector,workers,size_level,repetitions,"
            "ns_per_element_median,ns_per_element_p25,ns_per_element_p75,"
+           "preempted_passes,involuntary_switches,"
            "ns_materialize,ns_sort,ns_detect,verified,drop_reason,"
            "host,governor,clock_mhz,compiler,start_load,pinned_cpus\n";
     for (auto const & row : rows_) {
@@ -523,9 +574,12 @@ class TslPaperResults {
           << row.rows << ',' << row.columns << ',' << row.element_bytes << ','
           << csv_field(row.algorithm) << ',' << csv_field(row.variant) << ','
           << csv_field(row.detector) << ',' << row.workers << ','
-          << row.repetitions << ','
+          << csv_field(row.size_level) << ',' << row.repetitions << ','
           << row.ns_per_element.median << ',' << row.ns_per_element.p25 << ','
-          << row.ns_per_element.p75 << ',' << row.ns_materialize << ','
+          << row.ns_per_element.p75 << ','
+          << row.ns_per_element.preempted_passes << ','
+          << row.ns_per_element.involuntary_switches << ','
+          << row.ns_materialize << ','
           << row.ns_sort << ',' << row.ns_detect << ','
           << (row.verified ? 1 : 0) << ',' << csv_field(row.drop_reason) << ','
           << csv_field(machine_.host) << ',' << csv_field(machine_.governor) << ','
@@ -562,6 +616,13 @@ class TslPaperResults {
               + " repetitions: the machine would not settle on those, and their"
               " medians should not be compared at fine margins";
     }
+    if (contended_ > 0) {
+      text += "\n  !! " + std::to_string(contended_)
+              + " row(s) had more than half their timed passes preempted by the"
+              " kernel: something else was running on these cores while they were"
+              " measured. The start-of-run load average does not catch this, so"
+              " check the preempted_passes column before publishing those rows";
+    }
     return text;
   }
 };
@@ -570,15 +631,42 @@ class TslPaperResults {
 // Verifies once, then times `repetitions` times. `verify` returns true when the
 // result is right; a false makes the row `INCORRECT` and produces no number, so a
 // wrong configuration can never contribute a figure.
+// Same, for a body that consumes what it sorts.
+//
+// Every reporting driver so far sorts an index and leaves the columns alone, so
+// one body could be run nine times over. An in-place sort cannot: it has to be
+// handed its data back between passes, and a copy of the table charged to the sort
+// would report a memcpy. `prepare` runs before every pass, outside the timing --
+// which is what `state.PauseTiming()` was doing for the corpus under Google
+// Benchmark, and the reason the corpus could not use this harness before.
+template <class Prepare, class Body, class Verify>
+auto tsl_paper_measure_reset(Prepare && prepare, Body && body, Verify && verify,
+                             std::size_t elements,
+                             double abandon_after_seconds = 0.0,
+                             bool * abandoned = nullptr)
+  -> std::pair<bool, TslPaperStats>;
+
 template <class Body, class Verify>
 auto tsl_paper_measure(Body && body, Verify && verify, std::size_t elements,
                        double abandon_after_seconds = 0.0,
                        bool * abandoned = nullptr)
   -> std::pair<bool, TslPaperStats> {
+  return tsl_paper_measure_reset([] {}, std::forward<Body>(body),
+                                 std::forward<Verify>(verify), elements,
+                                 abandon_after_seconds, abandoned);
+}
+
+template <class Prepare, class Body, class Verify>
+auto tsl_paper_measure_reset(Prepare && prepare, Body && body, Verify && verify,
+                             std::size_t elements,
+                             double abandon_after_seconds,
+                             bool * abandoned)
+  -> std::pair<bool, TslPaperStats> {
   // The first pass is the verification pass, and timing it costs nothing extra.
   // A configuration whose single pass already exceeds the budget cannot become
   // competitive over nine of them, so it is abandoned rather than measured --
   // which is a different finding from sorting wrongly, hence the out-parameter.
+  prepare();
   auto const first = std::chrono::steady_clock::now();
   body();
   auto const first_seconds =
@@ -594,12 +682,25 @@ auto tsl_paper_measure(Body && body, Verify && verify, std::size_t elements,
   }
   std::vector<double> samples;
   samples.reserve(tsl_paper_max_repetitions);
-  for (int rep = 0; rep < tsl_paper_repetitions; ++rep) {
+  int preempted = 0;
+  long switches = 0;
+  // One timed pass: reset, time, and note whether the kernel interrupted it.
+  auto timed_pass = [&] {
+    prepare();
+    auto const before = tsl_involuntary_switches();
     auto const start = std::chrono::steady_clock::now();
     body();
     auto const stop = std::chrono::steady_clock::now();
+    auto const taken = tsl_involuntary_switches() - before;
+    if (taken > 0) {
+      ++preempted;
+      switches += taken;
+    }
     samples.push_back(std::chrono::duration<double, std::nano>(stop - start).count()
                       / static_cast<double>(elements == 0 ? 1 : elements));
+  };
+  for (int rep = 0; rep < tsl_paper_repetitions; ++rep) {
+    timed_pass();
   }
   // Widen the sample until the bulk is tight or the ceiling stops us.
   auto stats = tsl_paper_stats(samples);
@@ -607,14 +708,12 @@ auto tsl_paper_measure(Body && body, Verify && verify, std::size_t elements,
          && stats.median > 0.0
          && (stats.p75 - stats.p25) / stats.median > tsl_paper_target_spread) {
     for (int extra = 0; extra < 4; ++extra) {
-      auto const start = std::chrono::steady_clock::now();
-      body();
-      auto const stop = std::chrono::steady_clock::now();
-      samples.push_back(std::chrono::duration<double, std::nano>(stop - start).count()
-                        / static_cast<double>(elements == 0 ? 1 : elements));
+      timed_pass();
     }
     stats = tsl_paper_stats(samples);
   }
+  stats.preempted_passes = preempted;
+  stats.involuntary_switches = switches;
   return {true, stats};
 }
 

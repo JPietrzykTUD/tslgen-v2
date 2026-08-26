@@ -27,10 +27,9 @@ set(
   CACHE PATH
   "Path to a local generated TSL output root, or to its cpp directory"
 )
-set(TSL_RELEASE_VERSION "v0.3.0" CACHE STRING "Generated TSL release tag")
+set(TSL_RELEASE_VERSION "v0.3.1" CACHE STRING "Generated TSL release tag")
 set(
   TSL_RELEASE_ARCHIVE_URL
-  # "https://github.com/JPietrzykTUD/tslgen-v2/releases/download/${TSL_RELEASE_VERSION}/tsl-generated-1daeecdd39aa2b02a1bb60697d67fe6ae70b23cc.tar.gz"
   "https://github.com/JPietrzykTUD/tslgen-v2/releases/download/${TSL_RELEASE_VERSION}/tsl-generated-${TSL_RELEASE_VERSION}.tar.gz"
   CACHE STRING
   "URL of the generated TSL release archive"
@@ -527,6 +526,16 @@ add_executable(bench_samplesort_multicolumn EXCLUDE_FROM_ALL benchmarks/deprecat
 target_compile_features(bench_samplesort_multicolumn PRIVATE cxx_std_17)
 target_link_libraries(bench_samplesort_multicolumn PRIVATE tsl::tsl Threads::Threads)
 
+# The worklist scheduler an asynchronous detector needs: termination that counts
+# the device's outstanding work, an idle worker that polls rather than sleeps, and
+# a published range that outlives the frame that produced it. It touches neither
+# TSL nor an accelerator, so it builds and runs anywhere.
+add_executable(test_pending_range_queue tests/test_pending_range_queue.cpp)
+target_compile_features(test_pending_range_queue PRIVATE cxx_std_17)
+target_include_directories(test_pending_range_queue PRIVATE include)
+target_link_libraries(test_pending_range_queue PRIVATE Threads::Threads)
+add_test(NAME test_pending_range_queue COMMAND test_pending_range_queue)
+
 add_executable(test_samplesort_multicolumn tests/test_samplesort_multicolumn.cpp)
 target_compile_features(test_samplesort_multicolumn PRIVATE cxx_std_17)
 target_link_libraries(test_samplesort_multicolumn PRIVATE tsl::tsl Threads::Threads)
@@ -622,6 +631,10 @@ option(ENABLE_COSORT_BENCH "Build the staged multi-column co-sort benchmark" ON)
 if(ENABLE_COSORT_BENCH AND ENABLE_GBENCH)
   add_executable(cosort_bench benchmarks/cosort_bench.cpp)
   target_compile_features(cosort_bench PRIVATE cxx_std_17)
+  # Both measurement paths are compiled while both exist: --paper-csv runs the
+  # cases through paper_harness.hpp and writes the shared schema, and without it
+  # they go to Google Benchmark as before. Dropping this define drops the old path.
+  target_compile_definitions(cosort_bench PRIVATE TSL_COSORT_WITH_GBENCH=1)
   target_include_directories(
     cosort_bench PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"

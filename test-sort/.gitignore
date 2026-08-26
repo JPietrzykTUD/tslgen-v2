@@ -13,3 +13,14 @@ data/
 .data/
 # DSB generator clone and build, produced by datagen/tpcds/build_generator.sh
 .dsb/
+# Build trees. run_paper.sh configures one per results directory by default;
+# these are the ones made by hand.
+build*/
+
+# The tuner's answer for whichever host and cell it last ran on. Per-host like
+# any other measurement, and every run writes its own copy into the results
+# directory it belongs to.
+best_config.tsv
+
+# Core dumps from an interrupted driver.
+core.*

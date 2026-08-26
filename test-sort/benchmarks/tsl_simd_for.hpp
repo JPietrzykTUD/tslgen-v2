@@ -46,6 +46,15 @@ inline constexpr bool tsl_profile_has_register_widths = true;
 template <class DataType, TslStyle Style, std::size_t Width>
 struct tsl_simd_for;
 
+// One lane, and the width is ignored: a scalar cell has no register width, and
+// registering it once per width would be three copies of the same measurement.
+// The registrar therefore offers it at a single width and the type is the same
+// whichever that is.
+template <class DataType, std::size_t Width>
+struct tsl_simd_for<DataType, TslStyle::Scalar, Width> {
+  using type = tsl::simd<DataType, tsl::scalar>;
+};
+
 // Intrinsics: ask TSL. A fixed register size is a lane count once the element
 // width is known, and `simd_for_t` owns the lane-count-to-extension table.
 template <class DataType, std::size_t Width>

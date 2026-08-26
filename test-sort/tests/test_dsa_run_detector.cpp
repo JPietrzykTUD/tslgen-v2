@@ -7,6 +7,13 @@
 // tsl_for_each_equal_run over the same range, for both sort orders, all four
 // element widths, and region/range shapes chosen to hit the seams.
 //
+// The asynchronous detector is covered too, and it needs more than the same span
+// arithmetic: its emitted callable is retained past the call that produced it, its
+// completions are visible only through a pending count, and several descriptors
+// are in flight at once. Those are the three properties a sorter depends on when
+// it wires `rle=dsa_hw_async`, so they are tested here rather than discovered in a
+// benchmark.
+//
 // Runs on the DML software path by default so it needs no accelerator. Pass
 // `hw` to additionally run every case on real DSA hardware.
 
@@ -16,10 +23,13 @@
 #include <functional>
 #include <random>
 #include <string>
+#include <utility>
 #include <vector>
 
+#include "cluster_detection/dsa/dsa_async_run_detector.hpp"
 #include "cluster_detection/dsa/dsa_run_detector.hpp"
 #include "cluster_detection/scalar/equal_runs.hpp"
+#include "counting_pending_work.hpp"
 
 namespace {
 
@@ -52,46 +62,50 @@ auto describe(std::vector<TslRunSpan> const & spans, std::size_t limit = 6) -> s
   return out + "]";
 }
 
-// One case: run the detector over [begin, end) and demand the exact span set
-// the scalar oracle produces.
+// The spans the oracle produces over the same range.
 template <class T>
-void check(
+auto oracle(std::vector<T> const & values, std::size_t begin, std::size_t end)
+  -> std::vector<TslRunSpan> {
+  std::vector<TslRunSpan> spans;
+  tsl_for_each_equal_run(values.data(), begin, end, [&](TslRunSpan span) {
+    spans.push_back(span);
+  });
+  return spans;
+}
+
+template <class T>
+void report_mismatch(
+  std::string const & label,
+  TslRleBackend backend,
+  std::size_t region_bytes,
+  std::size_t begin,
+  std::size_t end,
+  std::vector<TslRunSpan> const & expected,
+  std::vector<TslRunSpan> const & actual
+) {
+  ++g_failures;
+  std::printf(
+    "FAIL %-46s w=%zu backend=%s region=%zuB range=[%zu,%zu)\n"
+    "       expected %zu spans %s\n"
+    "       actual   %zu spans %s\n",
+    label.c_str(), sizeof(T), tsl_rle_backend_name(backend), region_bytes, begin, end,
+    expected.size(), describe(expected).c_str(),
+    actual.size(), describe(actual).c_str()
+  );
+}
+
+// Contract checks the oracle comparison alone would not catch if both were wrong
+// the same way. Shared by the synchronous and asynchronous cases: the
+// asynchronous detector emits the same spans from a different thread at a
+// different time, and every one of these properties still has to hold.
+template <class T>
+void contract_holds(
   std::string const & label,
   std::vector<T> const & values,
   std::size_t begin,
   std::size_t end,
-  TslRleBackend backend,
-  std::size_t region_bytes,
-  std::size_t min_offload_elements = 0
+  std::vector<TslRunSpan> const & actual
 ) {
-  ++g_checks;
-
-  std::vector<TslRunSpan> expected;
-  tsl_for_each_equal_run(values.data(), begin, end, [&](TslRunSpan span) {
-    expected.push_back(span);
-  });
-
-  std::vector<TslRunSpan> actual;
-  TslDsaRunDetector<T> detector(backend, region_bytes, min_offload_elements);
-  detector.detect(values.data(), begin, end, [&](TslRunSpan span) {
-    actual.push_back(span);
-  });
-
-  if (!spans_equal(expected, actual)) {
-    ++g_failures;
-    std::printf(
-      "FAIL %-46s w=%zu backend=%s region=%zuB range=[%zu,%zu)\n"
-      "       expected %zu spans %s\n"
-      "       actual   %zu spans %s\n",
-      label.c_str(), sizeof(T), tsl_rle_backend_name(backend), region_bytes, begin, end,
-      expected.size(), describe(expected).c_str(),
-      actual.size(), describe(actual).c_str()
-    );
-    return;
-  }
-
-  // Contract checks the oracle comparison alone would not catch if both were
-  // wrong the same way.
   for (std::size_t index = 0; index < actual.size(); ++index) {
     auto const & span = actual[index];
     if (span.end - span.begin < 2) {
@@ -121,6 +135,112 @@ void check(
       return;
     }
   }
+}
+
+// One synchronous case: run the detector over [begin, end) and demand the exact
+// span set the scalar oracle produces.
+template <class T>
+void check(
+  std::string const & label,
+  std::vector<T> const & values,
+  std::size_t begin,
+  std::size_t end,
+  TslRleBackend backend,
+  std::size_t region_bytes,
+  std::size_t min_offload_elements = 0
+) {
+  ++g_checks;
+  auto const expected = oracle(values, begin, end);
+
+  std::vector<TslRunSpan> actual;
+  TslDsaRunDetector<T> detector(backend, region_bytes, min_offload_elements);
+  detector.detect(values.data(), begin, end, [&](TslRunSpan span) {
+    actual.push_back(span);
+  });
+
+  if (!spans_equal(expected, actual)) {
+    report_mismatch<T>(label, backend, region_bytes, begin, end, expected, actual);
+    return;
+  }
+  contract_holds(label, values, begin, end, actual);
+}
+
+// One asynchronous case: hand the range over, then poll to completion.
+//
+// This is the seam the sorters use for `rle=dsa_hw_async`, and it has two
+// properties the synchronous path does not. The emitted callable is retained past
+// the call and invoked on whichever thread observes the completion, so the sink
+// here captures a pointer rather than a reference to a frame that could go away
+// -- the same contract a sorter's emit callable has to satisfy. And nothing
+// reports completion except `poll()`, so the pending count is the only signal
+// that the device is done.
+template <class T>
+void check_async(
+  std::string const & label,
+  std::vector<T> const & values,
+  std::size_t begin,
+  std::size_t end,
+  TslRleBackend backend,
+  std::size_t region_bytes,
+  std::size_t slots,
+  std::size_t depth,
+  std::size_t min_offload_elements = 1,
+  bool expect_offload = true
+) {
+  ++g_checks;
+  auto const expected = oracle(values, begin, end);
+
+  std::vector<TslRunSpan> actual;
+  TslCountingPendingWork pending;
+  {
+    TslDsaAsyncRunDetector<T> detector(backend, slots, depth, region_bytes,
+                                       min_offload_elements);
+    detector.bind(pending);
+    auto * sink = &actual;
+    detector(values.data(), begin, end, [sink](TslRunSpan span) {
+      sink->push_back(span);
+    });
+
+    // Bounded, so a lost completion fails the test instead of hanging it.
+    std::size_t polls = 0;
+    auto const poll_limit = (end - begin) + 1024;
+    while (pending.busy() && polls < poll_limit) {
+      detector.poll();
+      ++polls;
+    }
+    if (pending.busy()) {
+      ++g_failures;
+      std::printf("FAIL async/%s: still pending after %zu polls\n", label.c_str(),
+                  polls);
+      return;
+    }
+  }
+  if (pending.error) {
+    ++g_failures;
+    try {
+      std::rethrow_exception(pending.error);
+    } catch (std::exception const & raised) {
+      std::printf("FAIL async/%s: detector reported %s\n", label.c_str(),
+                  raised.what());
+    }
+    return;
+  }
+  // Without this the gate cases would pass by never offloading at all, and so
+  // would a detector that silently fell back to the scalar scan everywhere.
+  auto const offloaded = pending.offloaded() != 0;
+  if (offloaded != expect_offload) {
+    ++g_failures;
+    std::printf("FAIL async/%s: %s the offload route (expected %s)\n", label.c_str(),
+                offloaded ? "took" : "declined", expect_offload ? "taken" : "declined");
+    return;
+  }
+
+  if (!spans_equal(expected, actual)) {
+    report_mismatch<T>("async/" + label, backend, region_bytes, begin, end, expected,
+                       actual);
+    return;
+  }
+  contract_holds("async/" + label, values, begin, end, actual);
 }
 
 // Sorted column of runs whose lengths are drawn from [1, 2*mean-1].
@@ -242,6 +362,64 @@ void run_width(TslRleBackend backend, bool descending) {
   }
 }
 
+// The asynchronous sweep is narrower than the synchronous one on purpose: the
+// span arithmetic is shared with `TslDsaRunDetector` and already covered above,
+// so what is exercised here is what only the asynchronous path has -- a sliding
+// window of in-flight descriptors, spans emitted after the producing call
+// returned, and completion visible only through the pending count.
+template <class T>
+void run_async_width(TslRleBackend backend, bool descending) {
+  constexpr std::size_t g = 8u / sizeof(T);
+  std::string const dir = descending ? "desc" : "asc";
+  constexpr std::size_t region_bytes = 8192;
+  auto const region_elems = region_bytes / sizeof(T);
+
+  // Window shapes: one slot one deep submits strictly sequentially, and the
+  // default four-by-four keeps several regions in flight. A boundary that lands
+  // in a region refined out of submission order shows up as a span emitted in
+  // the wrong order, which `contract_holds` rejects.
+  for (auto [slots, depth] : {std::pair<std::size_t, std::size_t>{1, 1},
+                              std::pair<std::size_t, std::size_t>{4, 4},
+                              std::pair<std::size_t, std::size_t>{2, 8}}) {
+    std::string const shape = dir + "/slots=" + std::to_string(slots)
+                            + "/depth=" + std::to_string(depth);
+    // Enough regions that the window is the thing under test rather than a
+    // single submission.
+    auto const rows = 6 * region_elems + 5;
+    for (std::size_t mean_run : {1u, 2u, 8u, 1000u}) {
+      auto const values = make_sorted_runs<T>(rows, mean_run, 0xA5D + mean_run, descending);
+      check_async(shape + "/mean_run=" + std::to_string(mean_run), values, 0,
+                  values.size(), backend, region_bytes, slots, depth);
+    }
+    // One run across every region: the span the window must carry rather than
+    // close at each region seam.
+    {
+      auto const values = make_constant<T>(rows, static_cast<T>(7));
+      check_async(shape + "/one-run-over-6-regions", values, 0, values.size(),
+                  backend, region_bytes, slots, depth);
+    }
+    // Unaligned start, so the scalar prologue and the offloaded remainder both
+    // contribute spans to the same emit.
+    for (std::size_t begin : {std::size_t{1}, g + 1}) {
+      auto const values = make_sorted_runs<T>(rows, 5, 0xB01 + begin, descending);
+      check_async(shape + "/begin=" + std::to_string(begin), values, begin,
+                  values.size(), backend, region_bytes, slots, depth);
+    }
+  }
+
+  // The gate: above the threshold the range is offloaded, below it the detector
+  // scans inline and completes with nothing pending. Both must give the oracle's
+  // answer, and the third argument to `check_async` records which route was
+  // expected so neither case can pass by taking the other one.
+  {
+    auto const values = make_sorted_runs<T>(4 * region_elems, 6, 0xC0FFEE, descending);
+    check_async(dir + "/gate-accepts", values, 0, values.size(), backend, region_bytes,
+                4, 4, /*min_offload=*/1, /*expect_offload=*/true);
+    check_async(dir + "/gate-declines", values, 0, values.size(), backend, region_bytes,
+                4, 4, /*min_offload=*/1u << 24, /*expect_offload=*/false);
+  }
+}
+
 void run_all(TslRleBackend backend) {
   std::printf("-- backend %s --\n", tsl_rle_backend_name(backend));
   auto const before = g_failures;
@@ -252,6 +430,19 @@ void run_all(TslRleBackend backend) {
     run_width<std::uint64_t>(backend, descending);
   }
   std::printf("   %zu checks total, %zu failed on this backend\n", g_checks, g_failures - before);
+}
+
+void run_all_async(TslRleBackend backend) {
+  std::printf("-- backend %s, asynchronous --\n", tsl_rle_backend_name(backend));
+  auto const before = g_failures;
+  for (bool descending : {false, true}) {
+    run_async_width<std::uint8_t>(backend, descending);
+    run_async_width<std::uint16_t>(backend, descending);
+    run_async_width<std::uint32_t>(backend, descending);
+    run_async_width<std::uint64_t>(backend, descending);
+  }
+  std::printf("   %zu checks total, %zu failed on this backend\n", g_checks,
+              g_failures - before);
 }
 
 }  // namespace
@@ -266,9 +457,13 @@ int main(int argc, char ** argv) {
 
   run_all(TslRleBackend::SCALAR);
   run_all(TslRleBackend::DML_SOFTWARE);
+  // SCALAR has no asynchronous form: the detector routes it inline, which the
+  // gate case above already covers.
+  run_all_async(TslRleBackend::DML_SOFTWARE);
 
   if (want_hardware) {
     run_all(TslRleBackend::DSA_HARDWARE);
+    run_all_async(TslRleBackend::DSA_HARDWARE);
   } else {
     std::printf("-- backend dsa_hw skipped (pass 'hw' to include it) --\n");
   }

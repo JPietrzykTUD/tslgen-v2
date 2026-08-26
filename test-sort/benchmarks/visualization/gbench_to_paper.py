@@ -24,7 +24,8 @@ import os
 FIELDS = ["question", "binary", "shape", "shape_params", "rows", "columns",
           "element_bytes", "algorithm", "variant", "detector", "workers", "size_level",
           "repetitions", "ns_per_element_median", "ns_per_element_p25",
-          "ns_per_element_p75", "ns_materialize", "ns_sort", "ns_detect",
+          "ns_per_element_p75", "preempted_passes", "involuntary_switches",
+          "ns_materialize", "ns_sort", "ns_detect",
           "verified", "drop_reason", "host", "governor", "clock_mhz", "compiler"]
 
 
@@ -68,9 +69,13 @@ def main():
 
     rows = []
     for entry in report.get("benchmarks", []):
-        if entry.get("run_type") == "aggregate" and entry.get("aggregate_name") not in (
-                "median", None):
+        # An errored case produces no aggregates, so it has to survive the filter
+        # below or the drop disappears with it.
+        if not entry.get("error_occurred") and entry.get("run_type") == "aggregate" \
+                and entry.get("aggregate_name") not in ("median", None):
             continue
+        if entry.get("error_occurred") and entry.get("run_type") == "iteration":
+            continue   # one drop per case, not one per repetition
         algorithm, fields = parse_name(entry["name"])
         count = float(entry.get("count", 0)) or 1.0
         # gbench reports the whole case; the paper schema is per element.
@@ -104,7 +109,14 @@ def main():
             "ns_per_element_p25": "",
             "ns_per_element_p75": "",
             "ns_materialize": 0, "ns_sort": 0, "ns_detect": 0,
-            "verified": 1, "drop_reason": "",
+            # gbench reports a case that called SkipWithError with
+            # `error_occurred`, and this used to write `verified: 1` regardless --
+            # so a case the corpus refused converted into a row indistinguishable
+            # from a measured one. A failed case is a drop carrying its reason,
+            # like every other question's.
+            "verified": 0 if entry.get("error_occurred") else 1,
+            "drop_reason": entry.get("error_message", "")
+                           if entry.get("error_occurred") else "",
             "host": host,
             "governor": "",
             "clock_mhz": context.get("mhz_per_cpu", ""),
