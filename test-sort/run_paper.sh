@@ -508,16 +508,26 @@ if [[ -z "${isolated//[[:space:]]/}" ]]; then
   echo "             restricts this process, not the scheduler's freedom to put" >&2
   echo "             somebody else on the same cores." >&2
   echo "" >&2
-  echo "  Exclusivity, in increasing order of setup:" >&2
-  echo "    systemd-run --scope -p AllowedCPUs=0-5 --same-dir --collect \\" >&2
-  echo "      numactl --cpunodebind=0 --membind=0 \\" >&2
-  echo "      $0 --results $results" >&2
-  echo "    sudo cset shield --cpu=0-5 --kthread=on   # also moves kernel threads" >&2
-  echo "    isolcpus=<list> nohz_full=<list> rcu_nocbs=<list> at boot" >&2
+  echo "  What actually excludes other work, strongest first:" >&2
+  echo "    isolcpus=<list> nohz_full=<list> rcu_nocbs=<list> at boot -- the" >&2
+  echo "      kernel keeps those CPUs out of the general scheduling domains, so" >&2
+  echo "      nothing lands there unless it asks by affinity. Needs a reboot." >&2
+  echo "    sudo cset shield --cpu=0-5 --kthread=on -- moves every movable task," >&2
+  echo "      kernel threads included, into a system cpuset off those cores. No" >&2
+  echo "      reboot; needs root and the cpuset package." >&2
+  echo "    cgroup v2 with cpuset.cpus.partition=isolated on the run's cgroup --" >&2
+  echo "      the same idea without cset. Note that AllowedCPUs / cpuset.cpus" >&2
+  echo "      ALONE does not do this: it confines this run to those CPUs the way" >&2
+  echo "      taskset does, and leaves every other cgroup free to use them. The" >&2
+  echo "      partition file is what makes them exclusive." >&2
   echo "" >&2
-  echo "  The first needs nothing installed on a systemd host and is enough for" >&2
-  echo "  most of it. Without any of them, run under numactl anyway and read" >&2
-  echo "  preempted_passes afterwards." >&2
+  echo "  Then run under numactl inside it, e.g." >&2
+  echo "    sudo cset shield --exec -- numactl --cpunodebind=0 --membind=0 \\" >&2
+  echo "      $0 --results $results" >&2
+  echo "" >&2
+  echo "  Without any of them, run under numactl anyway and read preempted_passes" >&2
+  echo "  afterwards: counting what the kernel took away is all a userspace" >&2
+  echo "  program can do about it." >&2
 fi
 
 # Elapsed per stage and since the start, printed either side of each driver. A

@@ -91,21 +91,31 @@ workers.
 `numactl` is the whole of the *locality* answer and none of the *exclusivity* one.
 It decides where this process runs and allocates; it says nothing about whether the
 scheduler may put somebody else on the same cores, and it cannot -- that is a
-property of the cpuset, not of the process. On a shared machine the two are
-separate layers:
+property of the cpuset, not of the process. On a shared machine they are separate
+layers, and the exclusivity layer has to be one that actually evicts:
+
+| mechanism | excludes others? | cost |
+| --- | --- | --- |
+| `isolcpus=` + `nohz_full=` + `rcu_nocbs=` at boot | yes -- the CPUs leave the general scheduling domains | a reboot |
+| `cset shield --cpu=<list> --kthread=on` | yes -- moves every movable task, kernel threads included | root, `cpuset` package |
+| cgroup v2 with `cpuset.cpus.partition=isolated` | yes -- that is what the partition file is for | root, manual cgroup setup |
+| `taskset`, `numactl`, `systemd-run -p AllowedCPUs=` | **no** -- confines this run, leaves the CPUs open to everyone else | none |
+
+The last row is the trap: `AllowedCPUs` looks like a cpuset and writes
+`cpuset.cpus`, but on its own it only *confines*. Making those CPUs exclusive needs
+`cpuset.cpus.partition`, which no `systemd-run` property sets.
+
+So the shape of a publishable run is exclusivity outside, locality inside:
 
 ```bash
-systemd-run --scope -p AllowedCPUs=<list> --same-dir --collect \
-  numactl --physcpubind=<list> --membind=0 \
+sudo cset shield --cpu=<list> --kthread=on
+sudo cset shield --exec -- numactl --physcpubind=<list> --membind=0 \
   ./run_paper.sh --results results/$(hostname)
 ```
 
-`AllowedCPUs` keeps other work off those cores, `numactl` keeps this run on them
-and on node 0's memory. `cset shield` does the same and also moves kernel threads;
-`isolcpus` at boot is the strongest and the least convenient. Where none of them is
-available, run under `numactl` alone and read `preempted_passes` afterwards: the
-harness counts what the kernel took away from each timed pass, which is the only
-part of this a userspace program can do.
+Where none of them is available, run under `numactl` alone and read
+`preempted_passes` afterwards: the harness counts what the kernel took away from
+each timed pass, which is all a userspace program can do about it.
 
 ### 1. Build the tuner only
 
