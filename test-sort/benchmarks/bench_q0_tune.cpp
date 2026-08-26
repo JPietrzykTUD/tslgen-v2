@@ -412,6 +412,22 @@ int main(int argc, char ** argv) {
   if (worker_counts.empty()) {
     worker_counts = tsl_default_workers(results.machine());
   }
+  // Said before any of it runs. Worker count is the *inner* loop, so every cell
+  // measures all of its serial candidates before its first parallel one -- and a
+  // watcher who sees one busy core for the first ten minutes has no way to tell
+  // "the parallel phase has not started" from "the parallel phase is broken".
+  {
+    std::string list;
+    for (auto const workers : worker_counts) {
+      list += (list.empty() ? "" : ", ") + std::to_string(workers);
+    }
+    std::printf("worker counts: %s  (each cell runs them in this order, so the "
+                "serial pass comes first)\n", list.c_str());
+    if (worker_counts.size() == 1 && worker_counts.front() == 1) {
+      std::printf("  !! only one worker count, so nothing here tunes the parallel "
+                  "path. Pass --workers 1,<n> to add one.\n");
+    }
+  }
   if (rows == 0) {
     rows = tsl_rows_out_of_cache(results.machine(), columns, 4);
     std::printf("rows not given: using %zu, about %zu MiB of live data against a "
