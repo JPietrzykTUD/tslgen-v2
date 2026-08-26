@@ -563,10 +563,12 @@ if(TSL_COSORT_ENABLE_BASELINES)
       # than allowed to break the build: the other Q1 baselines are independent of
       # it, and a row that says why is worth more than a build that stops.
       list(APPEND _q1_absent
-           "${_arrow_label} -- found, but arrow::compute::SortIndices does not link. Modern "
-           "Arrow keeps the kernels in a separate libarrow_compute; if this host "
-           "has none, configure with -DTSL_COSORT_ARROW_FETCH=ON to build a pinned "
-           "one. Its rows will be drops.")
+           "${_arrow_label} -- found, but arrow::compute::SortIndices does not "
+           "link. Modern Arrow keeps the kernels in a separate libarrow_compute; if "
+           "this host has none, build a pinned Arrow instead: run_paper.sh --arrow "
+           "fetch, or -DTSL_COSORT_ARROW_FETCH=ON. Note that the pinned release "
+           "does not compile with every clang -- see TSL_COSORT_ARROW_TAG. Its rows "
+           "will be drops.")
     else()
       # Announced only now: whether Arrow is *usable* is what the reader needs,
       # and until the probe above ran, "found" and "usable" were the same claim.
