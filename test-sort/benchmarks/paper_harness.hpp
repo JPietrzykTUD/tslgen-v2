@@ -143,8 +143,29 @@ struct TslPaperMachine {
         }
         if (found_node) {
           machine.numa_nodes = std::max(machine.numa_nodes, which_node + 1);
-          if (which_node == 0 && !siblings_text.empty()) {
-            node_zero_cores.insert(siblings_text);
+          if (which_node == 0) {
+            // What identifies the *physical* core this logical cpu belongs to.
+            // `thread_siblings_list` names the whole SMT group and is the best
+            // answer, but it is not guaranteed readable -- and when it came back
+            // empty this counted nothing at all, leaving `physical_per_node` at
+            // zero, which `parallel_width()` reads as one core. The result was a
+            // suite that measured only its serial configurations on a machine with
+            // plenty of them, with no diagnostic anywhere. `core_id` was already
+            // being read for this and never used; the cpu index is the last resort,
+            // which over-counts SMT siblings but is never zero.
+            std::string key = siblings_text;
+            if (key.empty() && !core_text.empty()) {
+              std::string package;
+              if (std::ifstream package_file(base + "/topology/physical_package_id");
+                  package_file) {
+                std::getline(package_file, package);
+              }
+              key = package + ":" + core_text;
+            }
+            if (key.empty()) {
+              key = "cpu" + std::to_string(cpu);
+            }
+            node_zero_cores.insert(key);
           }
         }
       }
@@ -194,7 +215,15 @@ struct TslPaperMachine {
   // the machine, `allowed_cpus` describes this process -- and a run pinned to fewer
   // CPUs than a node has would oversubscribe them if only the first were consulted.
   auto parallel_width() const -> std::size_t {
-    auto width = physical_per_node > 0 ? physical_per_node : 1;
+    // No topology at all -- an unreadable sysfs, a kernel that does not expose
+    // `node0`, a container that hides it -- must not mean "serial". Everything
+    // parallel in this suite is derived from this number, so a probe that fails
+    // silently turns a twelve-core host into a one-worker run and reports nothing.
+    // Falling back to what the process is allowed to use over-counts SMT siblings,
+    // which is a worse *pinning* than one thread per physical core and a far better
+    // answer than measuring no parallelism at all.
+    auto width = physical_per_node > 0 ? physical_per_node
+                 : (allowed_cpus > 0 ? allowed_cpus : cores);
     if (allowed_cpus > 0) {
       width = std::min(width, allowed_cpus);
     }
@@ -214,6 +243,20 @@ struct TslPaperMachine {
                 "%zu logical cpu(s) available to this process%s, LLC %zu MiB\n",
                 numa_nodes, physical_per_node, allowed_cpus,
                 pinned ? " [pinned]" : "", llc_bytes / (1024 * 1024));
+    // The number every parallel figure is derived from, said out loud. A run whose
+    // thread axis silently collapsed to one worker looks exactly like a run of a
+    // machine that has one core, and the difference is six hours of measuring the
+    // serial configurations twice.
+    std::printf("parallel width: %zu (thread axis: 1..%zu)\n",
+                parallel_width(), parallel_width());
+    if (parallel_width() == 1 && allowed_cpus > 1) {
+      std::printf("  !! the thread axis collapsed to one worker although %zu cpus "
+                  "are available. physical_per_node came out %zu, so the sysfs "
+                  "topology probe found nothing usable under "
+                  "/sys/devices/system/cpu/cpu*/topology. Every parallel row will "
+                  "be a repeat of the serial one.\n",
+                  allowed_cpus, physical_per_node);
+    }
     if (!pinned && physical_per_node > 0 && allowed_cpus > physical_per_node) {
       std::printf("  !! not pinned: this process may use SMT siblings and both "
                   "NUMA nodes. Run under `numactl --cpunodebind=0 --membind=0` "
