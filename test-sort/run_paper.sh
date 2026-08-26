@@ -86,6 +86,9 @@ What to measure:
                      extracted already -- run_all.sh --scale N does that.
   --datasets DIR     Directory of extracted TPC-DS/DSB keys (*.tsldset). Default:
                      $TPCDS_KEYS, else a search under <source>/TMP/tpcds_keys.
+  --detectors LIST   Q3's `rle=` axis: comma-separated detector names, e.g.
+                     `scalar` or `scalar,dsa_hw,dsa_hw_async`. Default: scalar
+                     plus both forms of whichever device /dev says this host has.
   --workers N        Worker count for the reporting drivers.
   --max-workers N    Upper bound on Q4's thread axis.
   --quick            Proof-of-pipeline sizes: fewer stages, smaller shapes. Not
@@ -134,6 +137,8 @@ while [[ $# -gt 0 ]]; do
     --stages)       stages_requested="${2:?--stages needs a list}"; shift 2 ;;
     --datasets)     datasets="${2:?--datasets needs a directory}"; shift 2 ;;
     --scale)        scale="${2:?--scale needs a number}"; shift 2 ;;
+    --detectors)    COSORT_Q3_DETECTORS="${2:?--detectors needs a list}"
+                    export COSORT_Q3_DETECTORS; shift 2 ;;
     --workers)      COSORT_WORKERS="${2:?--workers needs a count}"; shift 2 ;;
     --max-workers)  COSORT_MAX_WORKERS="${2:?--max-workers needs a count}"; shift 2 ;;
     --baselines)    want_baselines="yes"; shift ;;
@@ -456,10 +461,56 @@ echo "q3 detectors: $q3_detectors"
 if [[ "$have_dsa" == "no" && "$have_iax" == "no" ]]; then
   echo "  no accelerator on this host: Q3 contributes the scalar baseline only"
 fi
-if ! ldconfig -p 2>/dev/null | grep -q libaccel-config; then
-  echo "  !! libaccel-config is not installed; DML dlopens it to enumerate work"
-  echo "     queues, and without it every hardware submission fails with an"
-  echo "     internal error whatever its size"
+# DML reaches the device through `dlopen("libaccel-config.so.1")` -- the exact name
+# in its hw_configuration_driver.c -- and without it every hardware submission
+# returns an internal error whatever its size. So a run that asks for hardware
+# detectors on a host missing that library does not produce weak accelerator
+# numbers, it produces no valid ones, and Q3's whole question is "does offloading
+# pay".
+#
+# Tested the way dlopen would resolve it rather than by grepping the ldconfig cache
+# alone: a library installed under /usr/local/lib without `ldconfig` having been run
+# is absent from the cache and present to the loader if LD_LIBRARY_PATH names it.
+accel_lib="libaccel-config.so.1"
+have_accel="no"
+if ldconfig -p 2>/dev/null | grep -q "$accel_lib"; then
+  have_accel="yes"
+else
+  IFS=':' read -r -a _accel_dirs <<< "${LD_LIBRARY_PATH:-}"
+  _accel_dirs+=(/usr/lib64 /usr/lib /usr/local/lib64 /usr/local/lib
+                /usr/lib/x86_64-linux-gnu)
+  for _dir in "${_accel_dirs[@]}"; do
+    [[ -n "$_dir" && -e "$_dir/$accel_lib" ]] && have_accel="yes" && break
+  done
+fi
+
+# Did this run actually ask for a hardware backend? The software paths (dml_sw,
+# iaa_sw) are DML's and QPL's own CPU code and need none of this.
+asks_hardware="no"
+case ",$q3_detectors," in
+  *,dsa_hw,*|*,dsa_hw_async,*|*,iaa_hw,*|*,iaa_hw_async,*|*,iaa_freq_hw,*)
+    asks_hardware="yes" ;;
+esac
+
+if [[ "$asks_hardware" == "yes" && "$have_accel" == "no" ]]; then
+  echo "refusing to measure: $q3_detectors includes a hardware backend, and" >&2
+  echo "  $accel_lib is not where dlopen would find it. DML loads it to" >&2
+  echo "  enumerate work queues; without it every hardware submission fails with" >&2
+  echo "  an internal error whatever the range size, so every dsa_hw / iaa_hw row" >&2
+  echo "  would be a failure rather than a measurement -- and Q3's question is" >&2
+  echo "  exactly whether offloading pays." >&2
+  echo "" >&2
+  echo "  Install it:" >&2
+  echo "    Debian/Ubuntu   sudo apt install libaccel-config1" >&2
+  echo "    RHEL/Fedora     sudo dnf install accel-config-libs" >&2
+  echo "    from source     https://github.com/intel/idxd-config" >&2
+  echo "  If it is installed somewhere unusual, name the directory:" >&2
+  echo "    LD_LIBRARY_PATH=/path/to/lib $0 ..." >&2
+  echo "" >&2
+  echo "  Or measure the rest of the paper now and leave Q3's hardware rows for" >&2
+  echo "  a later run:" >&2
+  echo "    $0 --results $results --detectors scalar" >&2
+  exit 1
 fi
 
 # A busy machine is refused rather than warned about. Every driver already prints
