@@ -119,9 +119,15 @@ datasets="${TPCDS_KEYS:-}"
 scale=""
 quick=""
 allow_busy="no"
-# Whether any build-time flag was passed *explicitly*. The defaults come from the
-# environment, and a caller who has `CXX` exported has not asked for anything.
+# Whether each build-time setting was asked for *explicitly*. The defaults come
+# from the environment, and a caller who happens to have `CXX` exported has not
+# asked for anything -- an inherited value must never be reported as a conflict
+# with an existing tree, nor echoed back in a suggested command line.
 build_flags="no"
+cxx_given="no"
+cc_given="no"
+profile_given="no"
+tsl_given="no"
 positional=()
 
 while [[ $# -gt 0 ]]; do
@@ -129,10 +135,14 @@ while [[ $# -gt 0 ]]; do
     --results)      results="${2:?--results needs a directory}"; shift 2 ;;
     --build)        build="${2:?--build needs a directory}"; shift 2 ;;
     --source)       source_dir="${2:?--source needs a directory}"; shift 2 ;;
-    --cxx)          cxx="${2:?--cxx needs a compiler}"; build_flags="yes"; shift 2 ;;
-    --cc)           cc="${2:?--cc needs a compiler}"; build_flags="yes"; shift 2 ;;
-    --profile)      profile="${2:?--profile needs a name}"; build_flags="yes"; shift 2 ;;
-    --tsl-version)  tsl_version="${2:?--tsl-version needs a tag}"; build_flags="yes"; shift 2 ;;
+    --cxx)          cxx="${2:?--cxx needs a compiler}"; cxx_given="yes"
+                    build_flags="yes"; shift 2 ;;
+    --cc)           cc="${2:?--cc needs a compiler}"; cc_given="yes"
+                    build_flags="yes"; shift 2 ;;
+    --profile)      profile="${2:?--profile needs a name}"; profile_given="yes"
+                    build_flags="yes"; shift 2 ;;
+    --tsl-version)  tsl_version="${2:?--tsl-version needs a tag}"; tsl_given="yes"
+                    build_flags="yes"; shift 2 ;;
     --jobs)         jobs="${2:?--jobs needs a count}"; shift 2 ;;
     --stages)       stages_requested="${2:?--stages needs a list}"; shift 2 ;;
     --datasets)     datasets="${2:?--datasets needs a directory}"; shift 2 ;;
@@ -358,11 +368,72 @@ if [[ ! -f "$build/CMakeCache.txt" ]]; then
     echo "  (cmake -LH $build | grep TSL_PROFILE lists what this release carries)" >&2
     exit 1
   fi
+  # Said out loud, because it is chosen implicitly when --cxx is absent and it
+  # decides whether the generated TSL header compiles at all.
+  resolved_cxx="$(sed -n 's/^CMAKE_CXX_COMPILER:[A-Z]*=//p' "$build/CMakeCache.txt" \
+                  2>/dev/null | head -1)"
+  if [[ -n "$resolved_cxx" ]]; then
+    echo "    compiler: $resolved_cxx ($("$resolved_cxx" --version 2>/dev/null \
+          | head -1))"
+  fi
 else
   echo "=== reusing the build tree in $build"
+  # A build-time flag against an existing tree used to be a warning, and a warning
+  # is the wrong answer: CMake caches those settings, so the flag is silently a
+  # no-op and the run proceeds with whatever the tree was configured with. Passing
+  # --cxx to escape a compiler error and getting the same error back, from the same
+  # compiler, is not a message anybody reads past. Refused instead, on the same
+  # terms as every other way this script can produce numbers you did not ask for.
   if [[ "$build_flags" == "yes" ]]; then
-    echo "    (--cxx/--cc/--profile/--tsl-version apply at configure time only;" >&2
-    echo "     pass --reconfigure to apply them to this tree)" >&2
+    cached_value() {
+      sed -n "s/^$1:[A-Z]*=//p" "$build/CMakeCache.txt" 2>/dev/null | head -1
+    }
+    same_program() {
+      # /usr/bin/clang++ and /usr/bin/clang++-21 may be the same binary; compare
+      # what they resolve to before calling a difference a difference.
+      [[ "$1" == "$2" ]] && return 0
+      local left right
+      left="$(readlink -f "$1" 2>/dev/null || echo "$1")"
+      right="$(readlink -f "$2" 2>/dev/null || echo "$2")"
+      [[ "$left" == "$right" ]]
+    }
+    conflicts=()
+    if [[ "$cxx_given" == "yes" ]] \
+       && ! same_program "$cxx" "$(cached_value CMAKE_CXX_COMPILER)"; then
+      conflicts+=("--cxx $cxx        but the tree has $(cached_value CMAKE_CXX_COMPILER)")
+    fi
+    if [[ "$cc_given" == "yes" ]] \
+       && ! same_program "$cc" "$(cached_value CMAKE_C_COMPILER)"; then
+      conflicts+=("--cc $cc          but the tree has $(cached_value CMAKE_C_COMPILER)")
+    fi
+    if [[ "$profile_given" == "yes" \
+          && "$profile" != "$(cached_value TSL_PROFILE)" ]]; then
+      conflicts+=("--profile $profile   but the tree has $(cached_value TSL_PROFILE)")
+    fi
+    if [[ "$tsl_given" == "yes" \
+          && "$tsl_version" != "$(cached_value TSL_RELEASE_VERSION)" ]]; then
+      conflicts+=("--tsl-version $tsl_version  but the tree has $(cached_value TSL_RELEASE_VERSION)")
+    fi
+    if [[ ${#conflicts[@]} -gt 0 ]]; then
+      echo "refusing to build: $build was configured differently from what you" >&2
+      echo "  asked for, and these settings are fixed at configure time -- CMake" >&2
+      echo "  caches them, so the flags would be silently ignored." >&2
+      echo "" >&2
+      for conflict in "${conflicts[@]}"; do
+        echo "    $conflict" >&2
+      done
+      echo "" >&2
+      echo "  Add --reconfigure to rebuild the tree with what you asked for:" >&2
+      echo "    $0 --results $results --build $build --reconfigure \\" >&2
+      suggest=""
+      [[ "$cxx_given" == "yes" ]] && suggest+=" --cxx $cxx"
+      [[ "$cc_given" == "yes" ]] && suggest+=" --cc $cc"
+      [[ "$profile_given" == "yes" ]] && suggest+=" --profile $profile"
+      [[ "$tsl_given" == "yes" ]] && suggest+=" --tsl-version $tsl_version"
+      echo "      $suggest" >&2
+      echo "  or drop the flag to measure the tree as it stands." >&2
+      exit 1
+    fi
   fi
 fi
 
@@ -371,6 +442,27 @@ echo "=== building (-j $jobs)"
 if ! cmake --build "$build" -j "$jobs" 2>&1 | tee "$results/build.log" | tail -3; then
   echo "build failed; the whole log is in $results/build.log" >&2
   grep -m3 -i "error:" "$results/build.log" >&2 || true
+  # Errors *inside the fetched TSL header* are not a bug in this repository and
+  # not something a rebuild fixes: the generated header uses intrinsics that only
+  # some compilers declare, so the message is about the compiler, not the code.
+  # This is how a run that dropped --cxx and silently got the system's default
+  # g++ presents itself, three minutes into a build.
+  if grep -q "_deps/tsl-src/.*error" "$results/build.log"; then
+    failed_cxx="$(sed -n 's/^CMAKE_CXX_COMPILER:[A-Z]*=//p' "$build/CMakeCache.txt" \
+                  2>/dev/null | head -1)"
+    echo "" >&2
+    echo "  Those errors are inside the *generated TSL* header, not in this" >&2
+    echo "  repository, and they are the compiler's: it does not declare the" >&2
+    echo "  intrinsics the profile uses. This tree was configured with" >&2
+    echo "    ${failed_cxx:-<the CMake default>}" >&2
+    echo "    ${failed_cxx:+$("$failed_cxx" --version 2>/dev/null | head -1)}" >&2
+    echo "" >&2
+    echo "  Name a compiler that has them and configure again -- the flags apply" >&2
+    echo "  at configure time, so the tree has to be rebuilt:" >&2
+    echo "    $0 --results $results --reconfigure \\" >&2
+    echo "       --cxx /usr/bin/clang++ --cc /usr/bin/clang" >&2
+    echo "  (a versioned clang works too: clang++-24, clang++-21, ...)" >&2
+  fi
   exit 1
 fi
 
