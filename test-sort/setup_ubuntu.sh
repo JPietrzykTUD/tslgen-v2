@@ -201,6 +201,50 @@ if command -v accel-config >/dev/null 2>&1; then
   enabled="$(accel-config list 2>/dev/null | grep -c '"state":"enabled"' || true)"
   if [[ "${enabled:-0}" -gt 0 ]]; then
     echo "  work queues              $enabled enabled"
+    accel-config list 2>/dev/null | python3 -c '
+import json, sys
+try:
+    devices = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for device in devices:
+    for group in device.get("groups", []):
+        for wq in group.get("grouped_workqueues", []):
+            if wq.get("state") != "enabled":
+                continue
+            kind = wq.get("type", "?")
+            note = "" if kind == "user" else "   <-- not usable from userspace"
+            print("    {:<9} type={:<7} mode={:<10} name={}{}".format(
+                wq.get("dev", "?"), kind, wq.get("mode", "?"),
+                wq.get("name", ""), note))
+' 2>/dev/null || true
+    # Enabled and user-type is still not enough: the queue is reached through a
+    # device node, and those are group-restricted. This is the failure that looks
+    # like something else entirely -- DML reports
+    #   create_delta failed: error (internal; is libaccel-config installed?)
+    # when it cannot *open* the queue, so a run by a user outside the group reads
+    # as a missing package. Checked for the user who will actually measure, which
+    # is not root when the run drops privileges (isolate_cpus.sh run does).
+    target_user="${SUDO_USER:-$(id -un)}"
+    for node in /dev/dsa/* /dev/iax/*; do
+      [[ -e "$node" ]] || continue
+      # Numeric ids too: a container often cannot resolve the group that owns an
+      # accelerator queue, and "UNKNOWN" is not something a reader can act on.
+      owner="$(stat -c '%U(%u):%G(%g) %a' "$node")"
+      if sudo -u "$target_user" test -r "$node" && \
+         sudo -u "$target_user" test -w "$node" 2>/dev/null; then
+        echo "    $node  $owner  readable+writable by $target_user"
+      else
+        group="$(stat -c '%G' "$node")"
+        [[ "$group" == "UNKNOWN" ]] && group="$(stat -c '%g' "$node")"
+        echo "    $node  $owner  NOT accessible by $target_user" >&2
+        echo "      That is what makes a hardware detector fail with an" >&2
+        echo "      'internal' error that names libaccel-config. Fix it with" >&2
+        echo "        sudo usermod -aG $group $target_user   # then log in again" >&2
+        echo "      or run the measurement as root (isolate_cpus.sh run drops" >&2
+        echo "      back to \$SUDO_USER, so sudo alone is not enough)." >&2
+      fi
+    done
   else
     echo "  work queues              none enabled. The library and the device are"
     echo "                           not enough: a queue has to be configured and"
