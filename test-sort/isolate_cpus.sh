@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Make a set of CPUs exclusive to one measurement, on a cgroup v2 host.
 #
+#        ./isolate_cpus.sh plan               # what to pass on THIS machine
 #   sudo ./isolate_cpus.sh setup 0-5,12-17
 #        ./isolate_cpus.sh status
 #   sudo ./isolate_cpus.sh setup 0-5,12-17 --isolated   # only if you pin threads
@@ -145,6 +146,145 @@ setup() {
   echo "  run a measurement inside it with: sudo $0 run -- <command>"
 }
 
+
+# What to isolate on this machine, and what to pin inside it.
+#
+# Three facts decide it and all three are per-host: which CPUs each NUMA node
+# owns, which of those are first threads rather than SMT siblings, and which node
+# the accelerator is attached to. The last one is the one people skip. A DSA or
+# IAA device belongs to a node, and offloading from cores on the other node sends
+# every descriptor and its data across the interconnect -- which is a measurement
+# of the interconnect, not of the device.
+#
+# Prints the two commands to use rather than the raw topology, because the mapping
+# from `lscpu` output to a correct `--physcpubind` is exactly where this goes wrong:
+# a host that enumerates siblings adjacently makes `0-5` three cores, and a host
+# that enumerates them at an offset makes it six.
+plan() {
+  python3 - <<'PLAN'
+import glob
+import os
+import re
+
+
+def cpulist(spec):
+    out = []
+    for part in (spec or "").strip().split(","):
+        if not part:
+            continue
+        if "-" in part:
+            lo, hi = part.split("-")
+            out += list(range(int(lo), int(hi) + 1))
+        else:
+            out.append(int(part))
+    return out
+
+
+def compact(cpus):
+    cpus = sorted(cpus)
+    runs, start = [], None
+    for index, cpu in enumerate(cpus):
+        if start is None:
+            start = cpu
+        last = index + 1 == len(cpus) or cpus[index + 1] != cpu + 1
+        if last:
+            runs.append(str(start) if start == cpu else f"{start}-{cpu}")
+            start = None
+    return ",".join(runs)
+
+
+def read(path, fallback=""):
+    try:
+        with open(path) as handle:
+            return handle.read().strip()
+    except OSError:
+        return fallback
+
+
+nodes = {}
+for path in sorted(glob.glob("/sys/devices/system/node/node*/cpulist")):
+    node = int(re.search(r"node(\d+)", path).group(1))
+    cpus = cpulist(read(path))
+    if not cpus:
+        continue
+    first, siblings, seen = [], [], set()
+    for cpu in cpus:
+        group = read(f"/sys/devices/system/cpu/cpu{cpu}/topology/thread_siblings_list",
+                     str(cpu))
+        (siblings if group in seen else first).append(cpu)
+        seen.add(group)
+    nodes[node] = {"all": cpus, "first": first, "siblings": siblings}
+
+if not nodes:
+    print("no NUMA nodes exposed under /sys/devices/system/node")
+    raise SystemExit(1)
+
+print("NUMA topology")
+for node, info in sorted(nodes.items()):
+    print(f"  node {node}: {len(info['all'])} logical cpus  {compact(info['all'])}")
+    print(f"          {len(info['first'])} physical cores   {compact(info['first'])}")
+    if info["siblings"]:
+        print(f"          {len(info['siblings'])} smt siblings    "
+              f"{compact(info['siblings'])}")
+
+# Which node each accelerator lives on. `iax*` is IAA, `dsa*` is DSA; a work
+# queue entry (`dsa!wq0.0`) is not a device and has no node of its own.
+devices = []
+for path in sorted(glob.glob("/sys/bus/dsa/devices/*")):
+    name = os.path.basename(path)
+    if "!" in name or not re.fullmatch(r"(dsa|iax)\d+", name):
+        continue
+    devices.append((name, read(f"{path}/numa_node", "?"), read(f"{path}/state", "?")))
+
+print()
+print("accelerators")
+if devices:
+    for name, node, state in devices:
+        kind = "IAA" if name.startswith("iax") else "DSA"
+        print(f"  {name:<8} {kind}  numa_node={node:<4} state={state}")
+else:
+    print("  none on the dsa bus")
+
+# The node to measure on: one that has an enabled accelerator, preferring IAA
+# because a host with both is usually being used for IAA. Falls back to the node
+# with the most physical cores.
+preferred = None
+for want in ("iax", "dsa"):
+    for name, node, state in devices:
+        if name.startswith(want) and state == "enabled" and node.lstrip("-").isdigit():
+            if int(node) in nodes:
+                preferred = (int(node), name)
+                break
+    if preferred:
+        break
+if preferred is None:
+    node = max(nodes, key=lambda n: len(nodes[n]["first"]))
+    preferred, why = (node, None), "no enabled accelerator; picked the widest node"
+else:
+    why = f"the node {preferred[1]} is attached to"
+
+node, device = preferred
+info = nodes[node]
+print()
+print(f"recommended: node {node} ({why})")
+print()
+print("  # exclusive cores, siblings included so the SMT stage can reach them")
+print(f"  sudo ./isolate_cpus.sh setup {compact(info['all'])}")
+print()
+print("  # one thread per physical core, memory from the same node")
+print(f"  sudo ./isolate_cpus.sh run -- \\")
+print(f"    numactl --physcpubind={compact(info['first'])} --membind={node} \\")
+print(f"    ./run_paper.sh --results results/$(hostname)")
+print()
+print(f"  # the thread axis this gives you: 1..{len(info['first'])} workers,")
+print(f"  # and {len(info['all'])} for the SMT stage")
+if len(nodes) > 1:
+    print()
+    print("  Every parallel figure is one node. A claim about the whole machine")
+    print("  needs a second run on the other node and is not comparable to this one.")
+PLAN
+}
+
 status() {
   if [[ ! -d "$group" ]]; then
     echo "no isolated group; the machine is whole"
@@ -206,6 +346,9 @@ reset_group() {
 }
 
 case "${1:-}" in
+  plan) shift; plan ;;
+  # `plan` reads sysfs only, so it needs no privileges -- say so rather than
+  # having somebody sudo it out of habit.
   setup) shift; setup "$@" ;;
   status) shift; status ;;
   run) shift; run "$@" ;;
