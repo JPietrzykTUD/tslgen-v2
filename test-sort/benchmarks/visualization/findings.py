@@ -445,12 +445,20 @@ def cores_freed(frame: pd.DataFrame, cell: Sequence[str],
     W of them do without it".
 
     Given both scaling curves, that is a crossing rather than a measurement: the
-    baseline is the scalar scan at full width, and the answer is the smallest
-    worker count at which the offload reaches it. Reported fractionally, by linear
-    interpolation between the two measured points that bracket the crossing --
-    "1.4 cores" says more than "between one and two", and the interpolation is
-    stated rather than hidden because the curve between two thread counts is not
-    actually a line.
+    answer is the smallest worker count at which the offload reaches what the
+    machine can do without it. Reported fractionally, by linear interpolation
+    between the two measured points that bracket the crossing -- "1.4 cores" says
+    more than "between one and two", and the interpolation is stated rather than
+    hidden because the curve between two thread counts is not actually a line.
+
+    The baseline is the scalar curve's **best** point, not its point at full width,
+    and the difference is the whole result on a curve that is not monotonic. On
+    this corpus the index quicksort at eight columns and cardinality 16 costs 77.0
+    ns/row at four workers and 111.2 at six -- it degrades past four. Baselined at
+    full width, *every* detector "reaches" 111.2 by two workers and the function
+    would have reported four cores freed, when what it measured was the sorter
+    scaling badly. Against the best scalar point the same data says no offload
+    frees anything, which is the true answer.
 
     A detector that never reaches the baseline gets `NaN`, which is the honest
     answer to "how many cores does it free" for something that does not free any.
@@ -464,7 +472,12 @@ def cores_freed(frame: pd.DataFrame, cell: Sequence[str],
         if scalar.empty:
             continue
         width = scalar["workers"].max()
-        target = float(scalar.loc[scalar["workers"].idxmax(), "ns_per_row"])
+        # The best the scalar scan achieves anywhere on its curve, and the worker
+        # count that achieved it. A U-shaped curve makes the full-width point a
+        # target anything can clear; see the docstring.
+        best_row = scalar.loc[scalar["ns_per_row"].idxmin()]
+        target = float(best_row["ns_per_row"])
+        baseline_workers = int(best_row["workers"])
         for detector, curve in block.groupby("detector"):
             if detector == baseline:
                 continue
@@ -472,6 +485,7 @@ def cores_freed(frame: pd.DataFrame, cell: Sequence[str],
             reached = curve[curve["ns_per_row"] <= target]
             record = dict(zip(cell, key if isinstance(key, tuple) else (key,)))
             record.update({"detector": detector, "workers_at_full_width": int(width),
+                           "baseline_workers": baseline_workers,
                            "baseline_ns_per_row": target})
             if reached.empty:
                 record.update({"workers_needed": float("nan"),
@@ -492,7 +506,10 @@ def cores_freed(frame: pd.DataFrame, cell: Sequence[str],
                     crossing = float(last["workers"]) + share * (
                         float(first["workers"]) - float(last["workers"]))
             record.update({"workers_needed": crossing,
-                           "cores_freed": float(width) - crossing,
+                           # Against the workers the baseline needed, not against
+                           # full width: freeing a core the scalar scan was not
+                           # using is not freeing anything.
+                           "cores_freed": float(baseline_workers) - crossing,
                            "best_ns_per_row": float(curve["ns_per_row"].min())})
             out.append(record)
     return pd.DataFrame(out)
