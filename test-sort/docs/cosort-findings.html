@@ -1,0 +1,535 @@
+<title>Co-Sorting on Sapphire Rapids</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ground:#f6f7f9; --panel:#ffffff; --sunk:#eef1f5;
+  --ink:#141c26; --ink-2:#4a5867; --ink-3:#7d8b9c;
+  --rule:#dbe1e8; --rule-2:#c7d0da;
+  --s1:#3b5bdb; --s2:#0b9488; --s3:#e8590c;
+  --good:#0f7a52; --warn:#8a5a12; --bad:#a51d38;
+  --good-bg:#e6f4ee; --warn-bg:#fbf1e0; --bad-bg:#fbe9ec; --neutral-bg:#eceff4;
+  --serif:"Spectral",Georgia,"Times New Roman",serif;
+  --sans:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --ground:#0d1219; --panel:#141c26; --sunk:#101823;
+  --ink:#e7ecf2; --ink-2:#a8b5c4; --ink-3:#78879a;
+  --rule:#243040; --rule-2:#324256;
+  --s1:#5c7cfa; --s2:#0ca678; --s3:#e8590c;
+  --good:#38b98a; --warn:#d4a047; --bad:#e8697f;
+  --good-bg:#10241c; --warn-bg:#241d10; --bad-bg:#26141a; --neutral-bg:#1a2431;
+}}
+:root[data-theme="dark"]{
+  --ground:#0d1219; --panel:#141c26; --sunk:#101823;
+  --ink:#e7ecf2; --ink-2:#a8b5c4; --ink-3:#78879a;
+  --rule:#243040; --rule-2:#324256;
+  --s1:#5c7cfa; --s2:#0ca678; --s3:#e8590c;
+  --good:#38b98a; --warn:#d4a047; --bad:#e8697f;
+  --good-bg:#10241c; --warn-bg:#241d10; --bad-bg:#26141a; --neutral-bg:#1a2431;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);
+  font-size:16px;line-height:1.62;-webkit-font-smoothing:antialiased}
+.wrap{display:grid;grid-template-columns:210px minmax(0,1fr);gap:0;max-width:1180px;margin:0 auto}
+nav{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;padding:34px 20px 34px 0;
+  border-right:1px solid var(--rule)}
+nav .navtitle{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-3);margin-bottom:14px}
+nav a{display:flex;gap:9px;align-items:baseline;text-decoration:none;color:var(--ink-2);
+  font-size:13.5px;padding:5px 0;border-bottom:1px solid transparent}
+nav a:hover{color:var(--ink)}
+nav a .qn{font-family:var(--mono);font-size:11px;color:var(--ink-3);min-width:20px}
+nav .sep{height:1px;background:var(--rule);margin:14px 0}
+main{padding:34px 0 90px 40px;min-width:0}
+header.top{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:30px}
+h1{font-family:var(--serif);font-weight:600;font-size:clamp(28px,4vw,40px);line-height:1.14;
+  margin:0 0 10px;letter-spacing:-.015em;text-wrap:balance;max-width:24ch}
+.standfirst{font-size:17.5px;color:var(--ink-2);max-width:62ch;margin:0 0 18px}
+.hostline{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);display:flex;
+  flex-wrap:wrap;gap:6px 16px}
+h2{font-family:var(--serif);font-weight:600;font-size:23px;margin:0 0 4px;letter-spacing:-.01em;
+  text-wrap:balance}
+h3{font-family:var(--sans);font-weight:600;font-size:13px;letter-spacing:.02em;
+  color:var(--ink-2);margin:26px 0 8px}
+p{max-width:66ch;margin:0 0 13px}
+.q{border-top:1px solid var(--rule);padding:26px 0 30px}
+.qhead{display:flex;align-items:baseline;gap:12px;margin-bottom:2px}
+.qnum{font-family:var(--mono);font-size:12px;color:var(--ink-3);letter-spacing:.06em;padding-top:5px}
+.asks{font-size:14px;color:var(--ink-3);margin:0 0 16px;max-width:66ch}
+.badge{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.1em;
+  text-transform:uppercase;padding:3px 8px;border-radius:3px;white-space:nowrap;vertical-align:2px}
+.b-yes{background:var(--good-bg);color:var(--good)}
+.b-cond{background:var(--warn-bg);color:var(--warn)}
+.b-no{background:var(--bad-bg);color:var(--bad)}
+.b-open{background:var(--neutral-bg);color:var(--ink-2)}
+.verdict{font-family:var(--serif);font-size:19px;line-height:1.48;margin:0 0 18px;max-width:60ch}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:1px;
+  background:var(--rule);border:1px solid var(--rule);margin:18px 0 20px}
+.stat{background:var(--panel);padding:11px 13px}
+.stat .k{font-size:11px;color:var(--ink-3);letter-spacing:.02em}
+.stat .v{font-family:var(--mono);font-size:19px;font-weight:500;font-variant-numeric:tabular-nums;
+  margin:3px 0 1px}
+.stat .n{font-size:11px;color:var(--ink-3);line-height:1.4}
+figure{margin:20px 0;background:var(--panel);border:1px solid var(--rule);padding:16px 18px 12px}
+figcaption{font-size:12.5px;color:var(--ink-2);margin-top:10px;max-width:70ch;
+  border-top:1px solid var(--rule);padding-top:9px}
+svg{width:100%;height:auto;display:block;overflow:visible}
+.grid{stroke:var(--rule);stroke-width:1}
+.unity{stroke:var(--ink-3);stroke-width:1;stroke-dasharray:3 3}
+.tick,.axis{font-family:var(--mono);font-size:9.5px;fill:var(--ink-3)}
+.axis{font-size:10px}
+.line{fill:none;stroke-width:2}
+.dot{stroke:var(--panel);stroke-width:1.5}
+.mark{stroke:var(--panel);stroke-width:1.5}
+.slabel{font-family:var(--mono);font-size:10.5px;font-weight:500}
+.grouplabel{font-family:var(--sans);font-size:12px;font-weight:600;fill:var(--ink)}
+.blabel{font-family:var(--sans);font-size:11.5px;fill:var(--ink-2)}
+.bval{font-family:var(--mono);font-size:11px;fill:var(--ink-2);font-variant-numeric:tabular-nums}
+.bandlabel{font-family:var(--mono);font-size:9.5px;fill:var(--ink-3)}
+.band{fill:var(--sunk)}
+.s1{stroke:var(--s1)} .s2{stroke:var(--s2)} .s3{stroke:var(--s3)}
+circle.s1,rect.s1{fill:var(--s1)} circle.s2,rect.s2{fill:var(--s2)} circle.s3,rect.s3{fill:var(--s3)}
+text.s1{fill:var(--s1);stroke:none} text.s2{fill:var(--s2);stroke:none} text.s3{fill:var(--s3);stroke:none}
+.caveat{border-left:3px solid var(--warn);background:var(--warn-bg);padding:12px 15px;margin:18px 0 0}
+.caveat .ct{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--warn);margin-bottom:7px}
+.caveat ul{margin:0;padding-left:17px}
+.caveat li{font-size:13.5px;color:var(--ink-2);margin-bottom:6px;max-width:64ch}
+.caveat li:last-child{margin-bottom:0}
+table{border-collapse:collapse;width:100%;font-size:13.5px;margin:14px 0}
+th{text-align:left;font-weight:600;font-size:11.5px;letter-spacing:.03em;color:var(--ink-3);
+  border-bottom:1px solid var(--rule-2);padding:6px 10px 6px 0}
+td{padding:6px 10px 6px 0;border-bottom:1px solid var(--rule);
+  font-variant-numeric:tabular-nums}
+td.n,th.n{text-align:right;font-family:var(--mono);font-size:12.5px}
+.scroll{overflow-x:auto}
+code{font-family:var(--mono);font-size:.9em;background:var(--sunk);padding:1px 4px;border-radius:2px}
+.pull{border-left:3px solid var(--s1);padding:2px 0 2px 15px;margin:18px 0;
+  font-family:var(--serif);font-size:17px;color:var(--ink);max-width:58ch}
+.note{font-size:13.5px;color:var(--ink-2);max-width:66ch}
+footer{border-top:2px solid var(--ink);margin-top:36px;padding-top:20px;font-size:13px;
+  color:var(--ink-3);max-width:66ch}
+@media (max-width:860px){
+  .wrap{grid-template-columns:1fr}
+  nav{position:static;height:auto;border-right:0;border-bottom:1px solid var(--rule);
+    padding:20px 0;display:flex;flex-wrap:wrap;gap:2px 16px;align-items:baseline}
+  nav .navtitle{width:100%;margin-bottom:6px} nav .sep{display:none}
+  main{padding:26px 0 60px}
+}
+</style>
+<div class="wrap"><nav>
+<div class="navtitle">Findings</div>
+<a href="#q0"><span class="qn">Q0</span> Tuning</a>
+<a href="#q1"><span class="qn">Q1</span> Against the field</a>
+<a href="#q2"><span class="qn">Q2</span> Which sorter</a>
+<a href="#q3"><span class="qn">Q3</span> Does offload pay</a>
+<a href="#q4"><span class="qn">Q4</span> Scaling &amp; SMT</a>
+<a href="#q5"><span class="qn">Q5</span> Variant screen</a>
+<a href="#q6"><span class="qn">Q6</span> SIMD &amp; portability</a>
+<div class="sep"></div>
+<div class="navtitle">Reading it</div>
+<a href="#thesis"><span class="qn">§</span> What it adds up to</a>
+<a href="#open"><span class="qn">§</span> Open problems</a>
+<a href="#method"><span class="qn">§</span> Method &amp; coverage</a>
+</nav><main><header class="top">
+<h1>Multi-column co-sorting on Sapphire Rapids</h1>
+<p class="standfirst">Seven questions, one machine, 3,516 verified
+measurements. What SIMD buys, where the two sorters cross over, and why the
+accelerator does not pay — each stated with what it does not cover.</p>
+<div class="hostline"><span>bolvar</span>
+<span>Intel(R) Xeon(R) w5-3425</span><span>6 cores/node, pinned</span>
+<span>LLC 30 MiB</span><span>clang_bool/512-bit</span>
+<span>clang 24</span><span>DSA present, IAA absent</span></div></header><section class="q" id="thesis">
+<div class="qhead"><span class="qnum">§</span><h2>What it adds up to</h2></div>
+<p>The question was how a multi-column sort should exploit SIMD, SMT and Intel's
+data-movement accelerators. The three answers are not symmetric, and the asymmetry
+is the result.</p>
+<p class="pull">SIMD pays and scales. SMT pays for one sorter and costs the other.
+The accelerator pays for neither.</p>
+<p><strong>SIMD earns its complexity.</strong> Against the same sorter sources
+compiled at one lane, sixteen lanes is 2.86x — monotonic past two lanes, where
+vectorising is actually a loss. That the loss exists is what makes the rest of the
+curve credible.</p>
+<p><strong>SMT is a per-algorithm decision, not a machine setting.</strong> Two
+threads per physical core is worth 1.12x to the samplesort and 0.88x to the index
+quicksort. The quicksort is memory-bound enough that siblings evict each other; the
+samplesort's bucket classification has the slack to use them. A paper reporting one
+number here would be wrong for half its own results.</p>
+<p><strong>The accelerator is a negative result, and a clean one.</strong> The best
+DSA configuration runs at 0.99x the software scan — a wash — and the asynchronous
+form regresses the samplesort by 1.43x at six workers. No configuration frees a
+core. Worth reporting precisely because the architectural argument is so plausible:
+the scan looks like exactly the work a data-movement engine should absorb, and it
+is, and it still does not pay at this scale.</p></section><section class="q" id="q0">
+<div class="qhead"><span class="qnum">Q0</span><h2>What configuration does everything else use?</h2>
+<span class="badge b-yes">settled</span></div>
+<p class="asks">Every reported number rests on a tuning decision. If that decision is wrong or unstated, nothing downstream means anything.</p><p class="verdict">The reporting cell is <code>clang_bool/512</code>, and inside it nothing beats the shipped configuration by more than a couple of percent — with one exception that now ships.</p><div class="stats"><div class="stat"><div class="k">Cells explored</div><div class="v">9 of 9</div><div class="n">3 styles x 3 register widths</div></div><div class="stat"><div class="k">Candidates measured</div><div class="v">79</div><div class="n">in the reported cell</div></div><div class="stat"><div class="k">Knobs that matter</div><div class="v">2 of 6</div><div class="n">buckets 2.23x, movement 1.24x</div></div><div class="stat"><div class="k">Parallel winner</div><div class="v">incremental</div><div class="n">9 of 9 cells, 0.88–0.94 paired</div></div></div><p>Two knobs carry the tuning and the rest is noise: bucket policy is worth
+2.23x, movement 1.24x, while <code>cross</code> and <code>base_case</code> sit
+inside the drift the tuner measures on a re-run of the same binary. Reporting that
+is the point — a knob that does nothing is a finding about the design space, not a
+gap in the search.</p>
+<p>The exception is discovery mode. The paired statistic selects
+<code>incremental</code> in 9 of 9 cells at six workers, at 0.88–0.94 of the
+default, and that choice was unreachable until <code>best_config.tsv</code> gained
+a worker field: the parallel winner differs from the serial one, and a file keyed
+without thread count silently shipped the serial answer to every parallel run.</p><div class="caveat"><div class="ct">Holds only under</div><ul><li>Every tuning row carries p25 = p75 = median, so this CSV holds no spread for Q0. The decision rests on the pooled per-round ratio from interleaved rounds, printed in the log. Treat anything under ~2% as unresolved.</li><li>336 rows are the eight non-reported cells, priced out on their default and not explored further. Those cells are measured at six workers only.</li><li>One descent round from a common default. A second would need the base moved to the winner, which is a rebuild rather than a flag.</li><li>The tuning set is four shapes at 8.4M rows over four columns, sized to miss a 30 MiB LLC. A knob tuned out of cache is not tuned for an in-cache run.</li></ul></div></section><section class="q" id="q1">
+<div class="qhead"><span class="qnum">Q1</span><h2>How does it compare to implementations other people wrote?</h2>
+<span class="badge b-yes">confirmed</span></div>
+<p class="asks">A sorting paper that only compares against itself has established nothing. The baselines have to be real libraries, on the same data, measured the same way.</p><p class="verdict">On the operation this work is about the claim holds: <strong>40 of 42 multi-column cells</strong> go to us, median 2.24x, up to 8.1x. The single-column cells mostly do not, and they are the honest limit.</p><div class="stats"><div class="stat"><div class="k">Multi-column won</div><div class="v">40 of 42</div><div class="n">median 2.24x faster</div></div><div class="stat"><div class="k">Best margin</div><div class="v">8.1x</div><div class="n">low_cardinality_d4, 8 col, u32</div></div><div class="stat"><div class="k">Single-column won</div><div class="v">14 of 16</div><div class="n">not the operation we optimise</div></div><div class="stat"><div class="k">External baselines</div><div class="v">4</div><div class="n">IPS4o, x86-simd-sort, Arrow, std::sort</div></div></div><p>The structural claim is that a comparator cannot exploit equal runs.
+IPS&#8308;o and <code>std::sort</code> see the columns only through one, so they
+re-compare a prefix already known equal. That is a mechanism, not a tuning
+artifact — and it predicts exactly where we lose.</p>
+<p>Every loss is to IPS&#8308;o, and they cluster on ten-column TPC-DS keys and
+single-column u64: the regimes where either the key is wide enough that the gather
+dominates, or there is no run structure to find at all.</p><div class="caveat"><div class="ct">Holds only under</div><ul><li><code>avx512_argsort</code> appears only in single-column cells — an argsort cannot express a lexicographic key over several columns. It also writes 8-byte indices where ours are 4-byte.</li><li><code>arrow::SortIndices</code> is serial only: Arrow parallelises across plan nodes, not inside this kernel, so it never appears in a six-worker cell.</li><li><code>std::sort(execution::par)</code> and <code>ips4o::parallel::sort</code> choose their own thread count; the row records what we asked ours for.</li><li>Ours is the faster of the two sorters per cell, both configured from Q0. That is a legitimate product only because Q0 emits both configurations from one file.</li></ul></div></section><section class="q" id="q2">
+<div class="qhead"><span class="qnum">Q2</span><h2>Quicksort or samplesort — which, where, and why?</h2>
+<span class="badge b-cond">conditional</span></div>
+<p class="asks">Two sorters were built. Shipping both is only defensible if there is a rule for choosing between them.</p><p class="verdict">Neither. The quicksort wins <strong>159 of 177</strong> cells serially; the samplesort takes <strong>62 of 177</strong> at six workers. But the crossover is not a shape family — it is a threshold in how much work the tie structure creates.</p><div class="stats"><div class="stat"><div class="k">Quicksort, serial</div><div class="v">159 of 177</div><div class="n">median margin 1.26x</div></div><div class="stat"><div class="k">Samplesort, parallel</div><div class="v">62 of 177</div><div class="n">at six workers</div></div><div class="stat"><div class="k">Cells that change hands</div><div class="v">58 of 177</div><div class="n">between one and six workers</div></div><div class="stat"><div class="k">Crossover threshold</div><div class="v">30 ns/row</div><div class="n">65 of 65 cells predicted</div></div></div><figure><div style="display:flex;gap:18px;font-size:12px;color:var(--ink-2);margin-bottom:10px;font-family:var(--mono)"><span><svg width="10" height="10" style="display:inline;vertical-align:-1px;width:10px"><circle cx="5" cy="5" r="4.2" fill="var(--s1)"/></svg> quicksort wins</span><span><svg width="10" height="10" style="display:inline;vertical-align:-1px;width:10px"><circle cx="5" cy="5" r="4.2" fill="var(--s3)"/></svg> samplesort wins</span></div><svg viewBox="0 0 560 138" role="img" aria-label="each measured cell placed by serial quicksort cost, marked by which sorter won">
+<line class="grid" x1="46.0" y1="24" x2="46.0" y2="98"/>
+<text class="tick" x="46.0" y="114" text-anchor="middle">0</text>
+<line class="grid" x1="127.1" y1="24" x2="127.1" y2="98"/>
+<text class="tick" x="127.1" y="114" text-anchor="middle">50</text>
+<line class="grid" x1="208.2" y1="24" x2="208.2" y2="98"/>
+<text class="tick" x="208.2" y="114" text-anchor="middle">100</text>
+<line class="grid" x1="289.3" y1="24" x2="289.3" y2="98"/>
+<text class="tick" x="289.3" y="114" text-anchor="middle">150</text>
+<line class="grid" x1="370.4" y1="24" x2="370.4" y2="98"/>
+<text class="tick" x="370.4" y="114" text-anchor="middle">200</text>
+<line class="grid" x1="451.4" y1="24" x2="451.4" y2="98"/>
+<text class="tick" x="451.4" y="114" text-anchor="middle">250</text>
+<line class="grid" x1="532.5" y1="24" x2="532.5" y2="98"/>
+<text class="tick" x="532.5" y="114" text-anchor="middle">300</text>
+<rect class="band" x="88.3" y="24" width="32.9" height="74"/>
+<text class="bandlabel" x="104.8" y="18" text-anchor="middle">no cell here</text>
+<circle class="mark s1" cx="55.2" cy="38" r="4.2"><title>unique_first: quicksort 5.7, samplesort 11.9 ns/row — quicksort wins</title></circle>
+<circle class="mark s1" cx="56.4" cy="59" r="4.2"><title>unique_first: quicksort 6.4, samplesort 8.9 ns/row — quicksort wins</title></circle>
+<circle class="mark s1" cx="57.8" cy="80" r="4.2"><title>tpcds_q081: quicksort 7.3, samplesort 10.4 ns/row — quicksort wins</title></circle>
+<circle class="mark s1" cx="58.2" cy="38" r="4.2"><title>tpcds_q050: quicksort 7.5, samplesort 32.1 ns/row — quicksort wins</title></circle>
+<circle class="mark s1" cx="60.3" cy="59" r="4.2"><title>unique_last_g4096: quicksort 8.8, samplesort 19.9 ns/row — quicksort wins</title></circle>
+<circle class="mark s1" cx="60.9" cy="80" r="4.2"><title>independent_uniform_c65536: quicksort 9.2, samplesort 16.0 ns/row — quicksort wins</title></circle>
+<circle class="mark s1" cx="63.0" cy="38" r="4.2"><title>unique_first: quicksort 10.5, samplesort 11.4 ns/row — quicksort wins</title></circle>
+<circle class="mark s1" cx="64.5" cy="59" r="4.2"><title>unique_first: quicksort 11.4, samplesort 18.9 ns/row — quicksort wins</title></circle>
+<circle class="mark s1" cx="65.0" cy="80" r="4.2"><title>tpcds_q010: quicksort 11.7, samplesort 20.6 ns/row — quicksort wins</title></circle>
+<circle class="mark s1" cx="68.4" cy="38" r="4.2"><title>unique_last_g4096: quicksort 13.8, samplesort 24.6 ns/row — quicksort wins</title></circle>
+<circle class="mark s1" cx="70.0" cy="59" r="4.2"><title>low_cardinality_d4: quicksort 14.8, samplesort 23.0 ns/row — quicksort wins</title></circle>
+<circle class="mark s1" cx="70.0" cy="80" r="4.2"><title>independent_uniform_c65536: quicksort 14.8, samplesort 24.3 ns/row — quicksort wins</title></circle>
+<circle class="mark s1" cx="71.8" cy="38" r="4.2"><title>balanced_hierarchy_c64: quicksort 15.9, samplesort 19.5 ns/row — quicksort wins</title></circle>
+<circle class="mark s1" cx="72.9" cy="59" r="4.2"><title>unique_last_g64: quicksort 16.6, samplesort 18.4 ns/row — quicksort wins</title></circle>
+<circle class="mark s1" cx="74.4" cy="80" r="4.2"><title>unique_last_g4096: quicksort 17.5, samplesort 33.2 ns/row — quicksort wins</title></circle>
+<circle class="mark s1" cx="74.5" cy="38" r="4.2"><title>low_cardinality_d4: quicksort 17.6, samplesort 18.3 ns/row — quicksort wins</title></circle>
+<circle class="mark s1" cx="78.6" cy="59" r="4.2"><title>unique_last_g64: quicksort 20.1, samplesort 27.8 ns/row — quicksort wins</title></circle>
+<circle class="mark s1" cx="78.8" cy="80" r="4.2"><title>low_cardinality_d4: quicksort 20.2, samplesort 33.9 ns/row — quicksort wins</title></circle>
+<circle class="mark s1" cx="81.4" cy="38" r="4.2"><title>unique_last_g4096: quicksort 21.8, samplesort 37.7 ns/row — quicksort wins</title></circle>
+<circle class="mark s1" cx="81.5" cy="59" r="4.2"><title>balanced_hierarchy_c64: quicksort 21.9, samplesort 28.4 ns/row — quicksort wins</title></circle>
+<circle class="mark s1" cx="83.8" cy="80" r="4.2"><title>unique_last_g64: quicksort 23.3, samplesort 28.6 ns/row — quicksort wins</title></circle>
+<circle class="mark s1" cx="83.8" cy="38" r="4.2"><title>low_cardinality_d4: quicksort 23.3, samplesort 28.3 ns/row — quicksort wins</title></circle>
+<circle class="mark s1" cx="84.1" cy="59" r="4.2"><title>independent_uniform_c65536: quicksort 23.5, samplesort 39.8 ns/row — quicksort wins</title></circle>
+<circle class="mark s1" cx="85.6" cy="80" r="4.2"><title>independent_uniform_c65536: quicksort 24.4, samplesort 43.3 ns/row — quicksort wins</title></circle>
+<circle class="mark s1" cx="88.3" cy="38" r="4.2"><title>unique_last_g64: quicksort 26.1, samplesort 38.1 ns/row — quicksort wins</title></circle>
+<circle class="mark s3" cx="121.3" cy="59" r="4.2"><title>heavy_hitter_f90: quicksort 46.4, samplesort 36.1 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="125.8" cy="80" r="4.2"><title>independent_uniform_c1024: quicksort 49.2, samplesort 22.9 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="128.1" cy="38" r="4.2"><title>independent_uniform_c1024: quicksort 50.6, samplesort 30.9 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="132.8" cy="59" r="4.2"><title>heavy_hitter_f90: quicksort 53.5, samplesort 47.5 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="139.7" cy="80" r="4.2"><title>tpcds_q067: quicksort 57.8, samplesort 33.6 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="154.8" cy="38" r="4.2"><title>skewed_zipf_s2: quicksort 67.1, samplesort 37.4 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="158.7" cy="59" r="4.2"><title>heavy_hitter_f90: quicksort 69.5, samplesort 33.5 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="158.9" cy="80" r="4.2"><title>skewed_zipf_s2: quicksort 69.6, samplesort 41.7 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="162.6" cy="38" r="4.2"><title>heavy_hitter_f90: quicksort 71.9, samplesort 44.6 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="200.6" cy="59" r="4.2"><title>independent_uniform_c1024: quicksort 95.3, samplesort 20.0 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="200.7" cy="80" r="4.2"><title>balanced_hierarchy_c64: quicksort 95.4, samplesort 18.0 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="206.1" cy="38" r="4.2"><title>balanced_hierarchy_c64: quicksort 98.7, samplesort 25.6 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="206.2" cy="59" r="4.2"><title>independent_uniform_c1024: quicksort 98.8, samplesort 25.3 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="215.6" cy="80" r="4.2"><title>skewed_zipf_s2: quicksort 104.6, samplesort 43.8 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="218.2" cy="38" r="4.2"><title>skewed_zipf_s2: quicksort 106.2, samplesort 31.9 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="246.8" cy="59" r="4.2"><title>independent_uniform_c16: quicksort 123.8, samplesort 43.7 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="249.9" cy="80" r="4.2"><title>independent_uniform_c16: quicksort 125.7, samplesort 54.9 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="258.5" cy="38" r="4.2"><title>tpcds_q064: quicksort 131.0, samplesort 45.0 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="270.8" cy="59" r="4.2"><title>independent_uniform_c16: quicksort 138.6, samplesort 31.7 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="273.7" cy="80" r="4.2"><title>tpcds_q67_sf1: quicksort 140.4, samplesort 45.7 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="273.9" cy="38" r="4.2"><title>skewed_zipf_s1: quicksort 140.5, samplesort 58.3 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="274.8" cy="59" r="4.2"><title>independent_uniform_c16: quicksort 141.1, samplesort 41.2 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="276.6" cy="80" r="4.2"><title>tpcds_q67_sf1: quicksort 142.2, samplesort 55.3 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="278.9" cy="38" r="4.2"><title>skewed_zipf_s1: quicksort 143.6, samplesort 68.1 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="344.9" cy="59" r="4.2"><title>skewed_zipf_s0.5: quicksort 184.3, samplesort 55.4 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="348.1" cy="80" r="4.2"><title>skewed_zipf_s0.5: quicksort 186.3, samplesort 62.0 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="349.8" cy="38" r="4.2"><title>tpcds_q67_sf1: quicksort 187.3, samplesort 37.9 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="354.6" cy="59" r="4.2"><title>tpcds_q67_sf1: quicksort 190.3, samplesort 49.8 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="369.4" cy="80" r="4.2"><title>tpcds_q67_sf100: quicksort 199.4, samplesort 67.6 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="372.5" cy="38" r="4.2"><title>tpcds_q67_sf100: quicksort 201.3, samplesort 58.0 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="378.1" cy="59" r="4.2"><title>tpcds_q67_sf100: quicksort 204.8, samplesort 40.2 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="388.4" cy="80" r="4.2"><title>tpcds_q67_sf100: quicksort 211.1, samplesort 53.0 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="389.2" cy="38" r="4.2"><title>unique_last_g2: quicksort 211.6, samplesort 62.9 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="392.2" cy="59" r="4.2"><title>skewed_zipf_s1: quicksort 213.5, samplesort 43.9 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="392.4" cy="80" r="4.2"><title>unique_last_g2: quicksort 213.6, samplesort 75.9 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="401.7" cy="38" r="4.2"><title>skewed_zipf_s1: quicksort 219.3, samplesort 54.8 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="415.8" cy="59" r="4.2"><title>unique_last_g2: quicksort 228.0, samplesort 61.5 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="434.9" cy="80" r="4.2"><title>unique_last_g2: quicksort 239.8, samplesort 78.3 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="501.6" cy="38" r="4.2"><title>skewed_zipf_s0.5: quicksort 280.9, samplesort 49.0 ns/row — samplesort wins</title></circle>
+<circle class="mark s3" cx="516.5" cy="59" r="4.2"><title>skewed_zipf_s0.5: quicksort 290.1, samplesort 61.9 ns/row — samplesort wins</title></circle>
+<text class="axis" x="46" y="135">serial quicksort cost, ns/row →</text>
+</svg><figcaption>Every ≥8-column cell at six workers, placed by what the <em>serial</em> quicksort costs. Blue cells go to the quicksort, orange to the samplesort. The two never interleave: the most expensive quicksort win is 26.1 ns/row and the cheapest samplesort win 46.4, with nothing between them. Three rows only to avoid overplotting; hover for the shape.</figcaption></figure><p>The column count is too coarse — at eight columns the parallel split is
+39 of 62 — and the shape family is not the axis either. <code>low_cardinality_d4</code>
+goes to the quicksort while <code>independent_uniform_c16</code> goes to the
+samplesort, so cardinality does not order them.</p>
+<p class="pull">At ≥8 columns in parallel: above 30 ns/row use the samplesort,
+below it the quicksort. 65 of 65 cells.</p>
+<p>What orders them is how much work the tie structure creates, and the serial
+quicksort's own cost per row measures exactly that. Cheap means the order resolves
+early and its faster partition wins; expensive means deep tie chains, where the
+samplesort's bucket classification amortises and its scheduler is the one that
+scales. The empty band is what makes this a threshold rather than a tendency.</p><div class="caveat"><div class="ct">Holds only under</div><ul><li>The threshold is fitted to this host and is a property of its memory system as much as of the algorithms. A machine with different bandwidth will move it; the fit is recomputed per results directory rather than hardcoded.</li><li>All 26 cells the rule gets wrong are at two columns, which is why the rule carries a column floor rather than applying everywhere.</li><li>Phase columns are zero for every row here: this build compiles the phase timers out, which is what a published number requires. The <em>why</em> behind a crossover needs a separate instrumented build.</li><li>Six workers is one thread per physical core of one NUMA node, pinned. Numbers at twenty-four workers on this host oversubscribed it twice over and are not in this directory.</li></ul></div></section><section class="q" id="q3">
+<div class="qhead"><span class="qnum">Q3</span><h2>What does cluster detection cost, and does offloading it pay?</h2>
+<span class="badge b-no">negative</span></div>
+<p class="asks">The equal-run scan is the work a data-movement engine should absorb. This is the question the hardware was chosen for.</p><p class="verdict">No. The best offload runs at <strong>0.99x</strong> the software scan at the median cell, the asynchronous form <strong>regresses the samplesort by 1.43x</strong> at six workers, and no configuration frees a core.</p><div class="stats"><div class="stat"><div class="k">Best offload</div><div class="v">0.99x</div><div class="n">dsa_hw_async, median of 24 cells</div></div><div class="stat"><div class="k">Cells an offload wins</div><div class="v">5 of 48</div><div class="n">faster by more than 2%</div></div><div class="stat"><div class="k">Cores freed</div><div class="v">none</div><div class="n">against the best scalar point</div></div><div class="stat"><div class="k">Async poll efficiency</div><div class="v">0.2%</div><div class="n">13,260 descriptors, 1,431,929 polls</div></div></div><figure><div style="display:flex;gap:18px;font-size:12px;color:var(--ink-2);margin-bottom:10px;font-family:var(--mono);flex-wrap:wrap"><span><svg width="14" height="10" style="display:inline;vertical-align:-1px;width:14px"><line x1="0" y1="5" x2="14" y2="5" stroke="var(--s1)" stroke-width="2"/></svg> scalar</span><span><svg width="14" height="10" style="display:inline;vertical-align:-1px;width:14px"><line x1="0" y1="5" x2="14" y2="5" stroke="var(--s2)" stroke-width="2"/></svg> dsa_hw</span><span><svg width="14" height="10" style="display:inline;vertical-align:-1px;width:14px"><line x1="0" y1="5" x2="14" y2="5" stroke="var(--s3)" stroke-width="2"/></svg> dsa_hw_async</span></div><svg viewBox="0 0 560 250" role="img" aria-label="nanoseconds per row against worker count, samplesort">
+<line class="grid" x1="46" y1="216.0" x2="442" y2="216.0"/>
+<text class="tick" x="38" y="219.5" text-anchor="end">0</text>
+<line class="grid" x1="46" y1="170.2" x2="442" y2="170.2"/>
+<text class="tick" x="38" y="173.7" text-anchor="end">50</text>
+<line class="grid" x1="46" y1="124.4" x2="442" y2="124.4"/>
+<text class="tick" x="38" y="127.9" text-anchor="end">100</text>
+<line class="grid" x1="46" y1="78.6" x2="442" y2="78.6"/>
+<text class="tick" x="38" y="82.1" text-anchor="end">150</text>
+<line class="grid" x1="46" y1="32.8" x2="442" y2="32.8"/>
+<text class="tick" x="38" y="36.3" text-anchor="end">200</text>
+<text class="tick" x="46.0" y="232" text-anchor="middle">1</text>
+<text class="tick" x="125.2" y="232" text-anchor="middle">2</text>
+<text class="tick" x="204.4" y="232" text-anchor="middle">3</text>
+<text class="tick" x="283.6" y="232" text-anchor="middle">4</text>
+<text class="tick" x="362.8" y="232" text-anchor="middle">5</text>
+<text class="tick" x="442.0" y="232" text-anchor="middle">6</text>
+<polyline class="line s1" points="46.0,34.5 125.2,103.6 204.4,141.4 283.6,152.0 362.8,160.3 442.0,167.9"/>
+<circle class="dot s1" cx="46.0" cy="34.5" r="3.4"><title>scalar, 1 worker(s): 198.1 ns/row</title></circle>
+<circle class="dot s1" cx="125.2" cy="103.6" r="3.4"><title>scalar, 2 worker(s): 122.7 ns/row</title></circle>
+<circle class="dot s1" cx="204.4" cy="141.4" r="3.4"><title>scalar, 3 worker(s): 81.4 ns/row</title></circle>
+<circle class="dot s1" cx="283.6" cy="152.0" r="3.4"><title>scalar, 4 worker(s): 69.9 ns/row</title></circle>
+<circle class="dot s1" cx="362.8" cy="160.3" r="3.4"><title>scalar, 5 worker(s): 60.8 ns/row</title></circle>
+<circle class="dot s1" cx="442.0" cy="167.9" r="3.4"><title>scalar, 6 worker(s): 52.5 ns/row</title></circle>
+<text class="slabel s1" x="450.0" y="171.4">scalar</text>
+<polyline class="line s2" points="46.0,34.9 125.2,103.7 204.4,135.2 283.6,152.2 362.8,160.7 442.0,167.4"/>
+<circle class="dot s2" cx="46.0" cy="34.9" r="3.4"><title>dsa_hw, 1 worker(s): 197.7 ns/row</title></circle>
+<circle class="dot s2" cx="125.2" cy="103.7" r="3.4"><title>dsa_hw, 2 worker(s): 122.6 ns/row</title></circle>
+<circle class="dot s2" cx="204.4" cy="135.2" r="3.4"><title>dsa_hw, 3 worker(s): 88.2 ns/row</title></circle>
+<circle class="dot s2" cx="283.6" cy="152.2" r="3.4"><title>dsa_hw, 4 worker(s): 69.6 ns/row</title></circle>
+<circle class="dot s2" cx="362.8" cy="160.7" r="3.4"><title>dsa_hw, 5 worker(s): 60.4 ns/row</title></circle>
+<circle class="dot s2" cx="442.0" cy="167.4" r="3.4"><title>dsa_hw, 6 worker(s): 53.0 ns/row</title></circle>
+<text class="slabel s2" x="450.0" y="170.9">dsa_hw</text>
+<polyline class="line s3" points="46.0,36.4 125.2,87.9 204.4,121.6 283.6,139.6 362.8,140.1 442.0,131.9"/>
+<circle class="dot s3" cx="46.0" cy="36.4" r="3.4"><title>dsa_hw_async, 1 worker(s): 196.1 ns/row</title></circle>
+<circle class="dot s3" cx="125.2" cy="87.9" r="3.4"><title>dsa_hw_async, 2 worker(s): 139.8 ns/row</title></circle>
+<circle class="dot s3" cx="204.4" cy="121.6" r="3.4"><title>dsa_hw_async, 3 worker(s): 103.0 ns/row</title></circle>
+<circle class="dot s3" cx="283.6" cy="139.6" r="3.4"><title>dsa_hw_async, 4 worker(s): 83.4 ns/row</title></circle>
+<circle class="dot s3" cx="362.8" cy="140.1" r="3.4"><title>dsa_hw_async, 5 worker(s): 82.9 ns/row</title></circle>
+<circle class="dot s3" cx="442.0" cy="131.9" r="3.4"><title>dsa_hw_async, 6 worker(s): 91.8 ns/row</title></circle>
+<text class="slabel s3" x="450.0" y="135.4">dsa_hw_async</text>
+<text class="axis" x="46" y="247">workers →</text>
+</svg><figcaption>Samplesort, eight columns, cardinality 16, 8.4M rows. The synchronous offload tracks the software scan exactly. The asynchronous one diverges from three workers and flattens near 83 ns/row — it stops scaling while the scalar curve continues to 52.5.</figcaption></figure><p>The synchronous offload is a wash by construction: a worker submits and
+waits, so the device replaces CPU cycles one-for-one and the row prices the
+descriptor. The asynchronous form is the one the claim rests on, because it is the
+only one that can overlap the sort — and it is the one that regresses.</p>
+<p>The counters say why, and they say it unambiguously:
+<strong>1,431,929 polls for 13,260 descriptors, 99.8% of them finding
+nothing</strong>. Every descriptor was collected, so the device did its work; the
+cost is the polling around it. Each empty poll takes the detector's pool lock, so
+at six workers that lock is the bottleneck, which is also why the asynchronous
+curve does not improve from six workers to twelve (74.4 → 73.4 ns/row) while the
+scalar curve nearly halves.</p>
+<p>That is a software defect, not a verdict on the hardware, and it is worth
+separating cleanly: <em>this measurement shows the offload does not pay as
+implemented.</em> A fixed poll loop might change the asynchronous number. It would
+not change the synchronous one, which is already at parity and is the honest
+ceiling for a device that must be fed by the same cores it is meant to relieve.</p><h3>The strong form: against a hyperthread, not an idle core</h3><figure><svg viewBox="0 0 560 240" role="img" aria-label="the offload measured against a hyperthread">
+<text class="grouplabel" x="0" y="16">samplesort</text>
+<text class="blabel" x="158" y="39" text-anchor="end">6 cores, scalar</text>
+<rect class="bar s1" x="168" y="29" width="120.1" height="14" rx="3"><title>samplesort, scalar@6: 52.1 ns/row</title></rect>
+<text class="bval" x="295.1" y="40">52.1</text>
+<text class="blabel" x="158" y="66" text-anchor="end">+ hyperthread</text>
+<rect class="bar s2" x="168" y="56" width="85.5" height="14" rx="3"><title>samplesort, scalar@12: 37.1 ns/row</title></rect>
+<text class="bval" x="260.5" y="67">37.1</text>
+<text class="blabel" x="158" y="93" text-anchor="end">+ DSA instead</text>
+<rect class="bar s3" x="168" y="83" width="171.5" height="14" rx="3"><title>samplesort, dsa_hw_async@6: 74.4 ns/row</title></rect>
+<text class="bval" x="346.5" y="94">74.4</text>
+<text class="grouplabel" x="0" y="125">quicksort</text>
+<text class="blabel" x="158" y="148" text-anchor="end">6 cores, scalar</text>
+<rect class="bar s1" x="168" y="138" width="313.0" height="14" rx="3"><title>quicksort, scalar@6: 135.8 ns/row</title></rect>
+<text class="bval" x="488.0" y="149">135.8</text>
+<text class="blabel" x="158" y="175" text-anchor="end">+ hyperthread</text>
+<rect class="bar s2" x="168" y="165" width="316.9" height="14" rx="3"><title>quicksort, scalar@12: 137.5 ns/row</title></rect>
+<text class="bval" x="491.9" y="176">137.5</text>
+<text class="blabel" x="158" y="202" text-anchor="end">+ DSA instead</text>
+<rect class="bar s3" x="168" y="192" width="312.5" height="14" rx="3"><title>quicksort, dsa_hw_async@6: 135.6 ns/row</title></rect>
+<text class="bval" x="487.5" y="203">135.6</text>
+</svg><figcaption>The usual iso-resource comparison hands a <em>physical</em> core back to a machine that has none spare. On a host already running one thread per core, the real alternative to the device is the SMT sibling. For the samplesort a hyperthread is worth 1.40x and the device 0.70x — the device is half as good as the free option. For the quicksort neither does anything.</figcaption></figure><p>This is the comparison a reviewer will make, and it is harsher than the
+iso-resource pairing. Freeing a core only matters if something else can use it, and
+on a saturated machine the cheapest thing that can is a hyperthread. Against that
+bar the offload loses outright for the samplesort and ties for the quicksort.</p><div class="caveat"><div class="ct">Holds only under</div><ul><li>For an asynchronous detector <code>ns_detect</code> is the handover, not the scan — the device works while the sort continues and spans arrive at a later poll. It is not comparable with a synchronous row's phase split.</li><li>At one worker there is nothing to overlap with, so a one-worker asynchronous row prices the submission path rather than concurrency.</li><li>This host has a DSA and no <code>/dev/iax</code>: the IAA backends are absent rather than slow. The accelerator table is assembled across machines and every row records its host.</li><li>One device, one work queue. A machine with several queues per node might not serialise the same way, and that is exactly what the IAA host is for.</li><li>Three uniform shapes, distinct-value counts 16, 1024 and 65536. Run length is the axis that makes detection expensive and it is swept; the dataset catalogue is not. A heavy-tailed key is a regime these shapes cannot reach.</li></ul></div></section><section class="q" id="q4">
+<div class="qhead"><span class="qnum">Q4</span><h2>How does it scale in threads — and does SMT help?</h2>
+<span class="badge b-cond">conditional</span></div>
+<p class="asks">Scaling is where a co-sort either justifies its scheduler or does not. SMT is the cheapest capacity on the machine and nobody had measured whether it helps.</p><p class="verdict">Up to the physical cores of one node it scales, and the two algorithms scale differently: the samplesort reaches a median <strong>2.88x</strong> of six, the quicksort <strong>2.36x</strong> — and <strong>6 of its 73 configurations</strong> end up slower than their own one-worker run.</p><div class="stats"><div class="stat"><div class="k">Samplesort at 6w</div><div class="v">2.88x</div><div class="n">range 1.11–4.8x over 73 configs</div></div><div class="stat"><div class="k">Quicksort at 6w</div><div class="v">2.36x</div><div class="n">range 0.63–4.3x</div></div><div class="stat"><div class="k">Configs that get slower</div><div class="v">6 of 146</div><div class="n">wide keys, or too few rows to spread</div></div><div class="stat"><div class="k">Median efficiency</div><div class="v">45%</div><div class="n">of linear at six workers</div></div></div><figure><div style="display:flex;gap:18px;font-size:12px;color:var(--ink-2);margin-bottom:10px;font-family:var(--mono);flex-wrap:wrap"><span><svg width="14" height="10" style="display:inline;vertical-align:-1px;width:14px"><line x1="0" y1="5" x2="14" y2="5" stroke="var(--s1)" stroke-width="2"/></svg> scalar</span><span><svg width="14" height="10" style="display:inline;vertical-align:-1px;width:14px"><line x1="0" y1="5" x2="14" y2="5" stroke="var(--s2)" stroke-width="2"/></svg> dsa_hw</span><span><svg width="14" height="10" style="display:inline;vertical-align:-1px;width:14px"><line x1="0" y1="5" x2="14" y2="5" stroke="var(--s3)" stroke-width="2"/></svg> dsa_hw_async</span></div><svg viewBox="0 0 560 250" role="img" aria-label="nanoseconds per row against worker count, quicksort">
+<line class="grid" x1="46" y1="216.0" x2="442" y2="216.0"/>
+<text class="tick" x="38" y="219.5" text-anchor="end">0</text>
+<line class="grid" x1="46" y1="147.0" x2="442" y2="147.0"/>
+<text class="tick" x="38" y="150.5" text-anchor="end">50</text>
+<line class="grid" x1="46" y1="78.0" x2="442" y2="78.0"/>
+<text class="tick" x="38" y="81.5" text-anchor="end">100</text>
+<text class="tick" x="46.0" y="232" text-anchor="middle">1</text>
+<text class="tick" x="125.2" y="232" text-anchor="middle">2</text>
+<text class="tick" x="204.4" y="232" text-anchor="middle">3</text>
+<text class="tick" x="283.6" y="232" text-anchor="middle">4</text>
+<text class="tick" x="362.8" y="232" text-anchor="middle">5</text>
+<text class="tick" x="442.0" y="232" text-anchor="middle">6</text>
+<polyline class="line s1" points="46.0,34.5 125.2,69.4 204.4,103.4 283.6,109.7 362.8,92.9 442.0,62.5"/>
+<circle class="dot s1" cx="46.0" cy="34.5" r="3.4"><title>scalar, 1 worker(s): 131.5 ns/row</title></circle>
+<circle class="dot s1" cx="125.2" cy="69.4" r="3.4"><title>scalar, 2 worker(s): 106.2 ns/row</title></circle>
+<circle class="dot s1" cx="204.4" cy="103.4" r="3.4"><title>scalar, 3 worker(s): 81.6 ns/row</title></circle>
+<circle class="dot s1" cx="283.6" cy="109.7" r="3.4"><title>scalar, 4 worker(s): 77.0 ns/row</title></circle>
+<circle class="dot s1" cx="362.8" cy="92.9" r="3.4"><title>scalar, 5 worker(s): 89.2 ns/row</title></circle>
+<circle class="dot s1" cx="442.0" cy="62.5" r="3.4"><title>scalar, 6 worker(s): 111.2 ns/row</title></circle>
+<text class="slabel s1" x="450.0" y="66.0">scalar</text>
+<polyline class="line s2" points="46.0,34.8 125.2,70.3 204.4,103.4 283.6,107.5 362.8,86.8 442.0,66.3"/>
+<circle class="dot s2" cx="46.0" cy="34.8" r="3.4"><title>dsa_hw, 1 worker(s): 131.3 ns/row</title></circle>
+<circle class="dot s2" cx="125.2" cy="70.3" r="3.4"><title>dsa_hw, 2 worker(s): 105.6 ns/row</title></circle>
+<circle class="dot s2" cx="204.4" cy="103.4" r="3.4"><title>dsa_hw, 3 worker(s): 81.6 ns/row</title></circle>
+<circle class="dot s2" cx="283.6" cy="107.5" r="3.4"><title>dsa_hw, 4 worker(s): 78.6 ns/row</title></circle>
+<circle class="dot s2" cx="362.8" cy="86.8" r="3.4"><title>dsa_hw, 5 worker(s): 93.6 ns/row</title></circle>
+<circle class="dot s2" cx="442.0" cy="66.3" r="3.4"><title>dsa_hw, 6 worker(s): 108.5 ns/row</title></circle>
+<text class="slabel s2" x="450.0" y="69.8">dsa_hw</text>
+<polyline class="line s3" points="46.0,36.2 125.2,78.3 204.4,104.4 283.6,100.3 362.8,77.0 442.0,58.3"/>
+<circle class="dot s3" cx="46.0" cy="36.2" r="3.4"><title>dsa_hw_async, 1 worker(s): 130.3 ns/row</title></circle>
+<circle class="dot s3" cx="125.2" cy="78.3" r="3.4"><title>dsa_hw_async, 2 worker(s): 99.8 ns/row</title></circle>
+<circle class="dot s3" cx="204.4" cy="104.4" r="3.4"><title>dsa_hw_async, 3 worker(s): 80.9 ns/row</title></circle>
+<circle class="dot s3" cx="283.6" cy="100.3" r="3.4"><title>dsa_hw_async, 4 worker(s): 83.8 ns/row</title></circle>
+<circle class="dot s3" cx="362.8" cy="77.0" r="3.4"><title>dsa_hw_async, 5 worker(s): 100.7 ns/row</title></circle>
+<circle class="dot s3" cx="442.0" cy="58.3" r="3.4"><title>dsa_hw_async, 6 worker(s): 114.3 ns/row</title></circle>
+<text class="slabel s3" x="450.0" y="61.8">dsa_hw_async</text>
+<text class="axis" x="46" y="247">workers →</text>
+</svg><figcaption>The index quicksort on the same cell as Q3's ladder. It is <em>not monotonic</em> — best at four workers (77.0 ns/row) and degrading to 111.2 at six. This shape is why the cores-freed computation had to be baselined against the scalar curve's best point rather than its full-width point: against 111.2 every detector looks like it frees four cores.</figcaption></figure><h3>SMT: two threads per core on the same cores</h3>
+<p>The two algorithms disagree, and the disagreement is mechanical rather than
+incidental:</p>
+<div class="scroll"><table><thead><tr><th>algorithm</th><th class="n">6 physical cores</th>
+<th class="n">12 threads, same cores</th><th class="n">SMT is worth</th></tr></thead><tbody>
+<tr><td>samplesort</td><td class="n">baseline</td><td class="n">—</td>
+<td class="n" style="color:var(--good)">1.12x</td></tr>
+<tr><td>index quicksort</td><td class="n">baseline</td><td class="n">—</td>
+<td class="n" style="color:var(--bad)">0.88x</td></tr>
+</tbody></table></div>
+<p>The quicksort is memory-bound enough that siblings evict each other's lines; the
+samplesort's bucket classification has enough instruction-level slack to fill the
+gaps. So <em>whether to enable SMT is a property of the algorithm you chose</em>,
+which makes it a scheduling decision rather than a machine configuration — and it
+compounds with Q2: the sorter that scales better with threads is also the one that
+benefits from siblings.</p><div class="caveat"><div class="ct">Holds only under</div><ul><li>Six workers is the whole thread axis available here: one per physical core of one NUMA node. A claim about more threads needs the second node and a different measurement.</li><li>Two and four workers were measured only on the four-column synthetic shapes and the measured TPC-DS keys. Everything else has 1 and 6 only, so those curves are two points.</li><li>The row axis (262k → 16.8M) was swept at four columns; the column axis (1 → 16) at 8.4M rows. Neither is a full grid.</li><li>Speedup is against each configuration's own one-worker row, so the axis is self-normalising and absolute cost divides out.</li></ul></div></section><section class="q" id="q5">
+<div class="qhead"><span class="qnum">Q5</span><h2>Which variant wins where?</h2>
+<span class="badge b-cond">conditional</span></div>
+<p class="asks">Thirty-seven variants exist across execution, discovery, partition and leaf. Screening decides which are worth reporting at all.</p><p class="verdict">Where, not which. Pooled over shapes no axis is worth more than 10% at the median cell — yet each has a shape where its worst level is expensive. Screening rules out levels that collapse somewhere, rather than ranking variants.</p><div class="stats"><div class="stat"><div class="k">Variants screened</div><div class="v">37</div><div class="n">execution x discovery x partition x leaf</div></div><div class="stat"><div class="k">Deciding axis</div><div class="v">leaf</div><div class="n">3.96x on one shape, 1.04x on another</div></div><div class="stat"><div class="k">Cost of one fixed variant</div><div class="v">1.02x median</div><div class="n">2.48x at the worst cell</div></div><div class="stat"><div class="k">Rows</div><div class="v">492</div><div class="n">6 shapes x 2 size levels</div></div></div><p>The numbers that matter are the spreads, not the medians:
+<code>leaf=net</code> costs 3.96x on <code>unique_last_g2</code> and 1.04x on
+<code>low_cardinality_d4</code>; <code>execution=parallel</code> costs 2.39x on
+<code>unique_first</code> and nothing on <code>low_cardinality_d4</code>. Every
+axis interacts with the others rather than having a preferred setting — the same
+level that is worst somewhere is fastest in a third of cells elsewhere.</p>
+<p>Fixing one variant everywhere costs 1.02x at the median cell and 2.48x at the
+worst. That gap is the argument for per-shape dispatch, and it is the same argument
+Q2 makes with a threshold instead of a table.</p><div class="caveat"><div class="ct">Holds only under</div><ul><li>Q5 runs through the same harness as the reporting questions — verify then time, median with quartiles, resampled while wide. Relative IQR is 1.9% at the median row.</li><li>Three columns, u32, one style and register width. This stage asks which variants are viable at all, not how they behave across the shape space; that is Q2's grid.</li><li>Two-way partitioning is registered only where the equal-run length stays bounded: it is quadratic in that length, and a low-cardinality key above the cap is a several-minute row. It therefore appears on two of six shapes, and every ratio is paired inside cells where both levels ran.</li><li><code>deep_parallel</code> and <code>parallel</code> rows exist only at six workers and serial only at one, so the execution axis is compared within its own worker count and never across it.</li></ul></div></section><section class="q" id="q6">
+<div class="qhead"><span class="qnum">Q6</span><h2>What do SIMD and the abstraction actually buy?</h2>
+<span class="badge b-yes">confirmed</span></div>
+<p class="asks">The work is built on a portable SIMD abstraction across three register widths and three implementation styles. Both halves of that need justifying.</p><p class="verdict">The width buys most of it, the abstraction is not a tax, and vectorising at all is worth <strong>2.86x</strong> at sixteen lanes — with a real loss at two.</p><div class="stats"><div class="stat"><div class="k">Scalar → 16 lanes</div><div class="v">2.86x</div><div class="n">same sources at one lane, 30 paired cells</div></div><div class="stat"><div class="k">128-bit → 512-bit</div><div class="v">2.30x</div><div class="n">median over 180 paired cells</div></div><div class="stat"><div class="k">Style spread at 512-bit</div><div class="v">9%</div><div class="n">three styles, widest register</div></div><div class="stat"><div class="k">Style spread at 128-bit</div><div class="v">39%</div><div class="n">clang_bool is the outlier</div></div></div><figure><div style="display:flex;gap:18px;font-size:12px;color:var(--ink-2);margin-bottom:10px;font-family:var(--mono)"><span><svg width="10" height="10" style="display:inline;vertical-align:-1px;width:10px"><rect width="10" height="10" rx="2" fill="var(--s2)"/></svg> faster than scalar</span><span><svg width="10" height="10" style="display:inline;vertical-align:-1px;width:10px"><rect width="10" height="10" rx="2" fill="var(--s3)"/></svg> slower than scalar</span></div><svg viewBox="0 0 560 176" role="img" aria-label="speedup over the same sources at one lane, by lane count">
+<line class="unity" x1="46" y1="101.6" x2="518" y2="101.6"/>
+<text class="tick" x="523" y="105.1">1.0x</text>
+<rect class="bar s3" x="59.0" y="115.0" width="92.0" height="21.0" rx="3"><title>2 lanes: 0.61x the scalar build</title></rect>
+<text class="bval" x="105.0" y="109.0" text-anchor="middle">0.61x</text>
+<text class="tick" x="105.0" y="152" text-anchor="middle">2 lanes</text>
+<rect class="bar s3" x="177.0" y="104.7" width="92.0" height="31.3" rx="3"><title>4 lanes: 0.91x the scalar build</title></rect>
+<text class="bval" x="223.0" y="98.7" text-anchor="middle">0.91x</text>
+<text class="tick" x="223.0" y="152" text-anchor="middle">4 lanes</text>
+<rect class="bar s2" x="295.0" y="68.3" width="92.0" height="67.7" rx="3"><title>8 lanes: 1.97x the scalar build</title></rect>
+<text class="bval" x="341.0" y="62.3" text-anchor="middle">1.97x</text>
+<text class="tick" x="341.0" y="152" text-anchor="middle">8 lanes</text>
+<rect class="bar s2" x="413.0" y="37.7" width="92.0" height="98.3" rx="3"><title>16 lanes: 2.86x the scalar build</title></rect>
+<text class="bval" x="459.0" y="31.7" text-anchor="middle">2.86x</text>
+<text class="tick" x="459.0" y="152" text-anchor="middle">16 lanes</text>
+</svg><figcaption>Speedup over the same sorter sources compiled at one lane (<code>tsl::scalar</code>), by lane count. Two lanes is a <em>loss</em> — the mask work and register pressure cost more than two lanes of comparison save. The dashed line is parity.</figcaption></figure><p>The loss at two lanes is the most useful number here. It means a machine
+with only 128-bit registers over 8-byte keys is a machine where this kernel should
+not vectorise at all — a portability statement the style sweep alone cannot make,
+because its narrowest cell is still SIMD.</p>
+<p>On the abstraction: at the widest register width the three styles sit within 9%
+of each other, which is the portability result stated positively. At the narrowest,
+<code>clang_bool</code> costs 1.39x the best style in the same cell — so the axis
+is worth sweeping rather than assuming, and the mask representation matters exactly
+where registers are scarce.</p><div class="caveat"><div class="ct">Holds only under</div><ul><li>Lanes = register bits / (8 x key bytes), so the two widths are not independent axes: u32 reaches sixteen lanes at 512-bit, u64 only eight. Every comparison is inside one (register width, key width) cell.</li><li>On this host <code>tsl::sse</code> and <code>tsl::avx2</code> mean 128-bit and 256-bit, not the SSE and AVX2 instruction sets: with AVX-512VL the narrow forms resolve to VL-encoded AVX-512. This compares register widths on one ISA and says nothing about a machine that genuinely lacks AVX-512.</li><li>The scalar baseline is compiled in the same binary with the full <code>-m</code> flag set, so the compiler was free to auto-vectorise it. Where it succeeded these ratios understate what explicit vectorisation contributes — they are the conservative reading.</li><li>Serial, post-sort discovery, three columns, one configuration per cell. The question is the cell, not the configuration.</li></ul></div></section><section class="q" id="open">
+<div class="qhead"><span class="qnum">§</span><h2>Open problems</h2></div>
+<p>Four, ordered by how much they would change a claim.</p>
+<h3>1. The asynchronous poll loop &nbsp;<span class="badge b-no">blocks a result</span></h3>
+<p>1,431,929 polls for 13,260 descriptors, 99.8%
+of them empty, each taking the detector's pool lock. This is why the asynchronous
+offload regresses the samplesort and why it does not scale from six workers to
+twelve. Until it is fixed, Q3's asynchronous rows measure the poll loop rather than
+the device, and the negative result should be stated as <em>does not pay as
+implemented</em>. The synchronous rows are unaffected and are already at parity.</p>
+<h3>2. IAA is unmeasured &nbsp;<span class="badge b-open">hardware</span></h3>
+<p>The second host has three IAA devices, all of whose work queues belong to the
+in-kernel <code>iaa_crypto</code> driver — <code>type=kernel</code>, so no
+<code>/dev/iax</code> node and nothing for userspace to submit through. Handing one
+over needs <code>--type=user</code> <em>and</em> <code>--driver-name=user</code>;
+setting only the first is silently reverted. Intel QPL is also not yet built, so
+the <code>iaa_*</code> backends are not compiled in at all.</p>
+<h3>3. The shape axis Q3 does not sweep &nbsp;<span class="badge b-open">scope</span></h3>
+<p>Every Q3 stage measures <code>independent_uniform_cN</code>, which isolates run
+length and holds everything else flat. That is the right default and it cannot
+reach the regime a heavy-tailed key creates, where one value's run is a large
+fraction of the table. <code>--shapes skewed_zipf_s1,heavy_hitter_f90</code> now
+exists for exactly this and has not been run.</p>
+<h3>4. Q0's second descent &nbsp;<span class="badge b-open">method</span></h3>
+<p>The tuner does one descent round from a common default. A second — with the base
+moved to the winner — would say whether the knobs interact, and it is a rebuild
+rather than a flag.</p>
+</section>
+
+<section class="q" id="method">
+<div class="qhead"><span class="qnum">§</span><h2>Method, and what these numbers are not</h2></div>
+<p>Every figure is <strong>nanoseconds per row</strong> — elapsed time divided by
+row count, never by rows x columns — and the <strong>median of at least nine
+repetitions</strong>, resampled in batches of four while the relative
+inter-quartile range stays above 5%, to a ceiling of 33. The median rather than the
+mean because the distribution is skewed by scheduler outliers rather than symmetric
+around them. Each measurement is verified against a reference image before it is
+timed; a configuration that sorts wrongly produces a drop with a reason and never
+a number.</p>
+<p><strong>Two variances are in play.</strong> Repeating inside one process on warm
+data, the spread is 1–5%. Re-running the whole binary moves the same numbers by 21%
+serial and 40% parallel — cold caches, fresh allocations, different scheduler
+state. Everything here is the intra-process spread, which is right for comparing
+two algorithms in one run and wrong for an absolute throughput claim.</p>
+<p><strong>Interference is recorded per row, not screened once.</strong> The
+start-of-run load average says nothing about minute forty of a six-hour suite, so
+every row carries the involuntary context switches the kernel charged it. The
+median row here saw a handful per timed pass — the timer tick, a kworker, an IRQ,
+unavoidable — and 128 of 4,004 rows
+exceeded 100 per pass, which is where the cost approaches what this harness can
+resolve. The run was measured inside an exclusive cgroup v2 partition
+(<code>cpuset.cpus.partition=root</code>) with <code>numactl</code> pinning one
+thread per physical core of node 0.</p>
+<div class="scroll"><table><thead><tr><th>stage</th><th class="n">rows</th>
+<th class="n">verified</th><th class="n">dropped</th><th class="n">disturbed</th>
+</tr></thead><tbody><tr><td>q0_tune</td><td class="n">756</td><td class="n">392</td><td class="n">364</td><td class="n">—</td></tr><tr><td>q1_baselines</td><td class="n">377</td><td class="n">269</td><td class="n">108</td><td class="n">8</td></tr><tr><td>q2_algorithms</td><td class="n">893</td><td class="n">885</td><td class="n">8</td><td class="n">39</td></tr><tr><td>q3_detection</td><td class="n">144</td><td class="n">144</td><td class="n">—</td><td class="n">4</td></tr><tr><td>q3_ladder</td><td class="n">108</td><td class="n">108</td><td class="n">—</td><td class="n">2</td></tr><tr><td>q3_pressure</td><td class="n">48</td><td class="n">48</td><td class="n">—</td><td class="n">12</td></tr><tr><td>q3_run_length</td><td class="n">48</td><td class="n">48</td><td class="n">—</td><td class="n">13</td></tr><tr><td>q3_smt</td><td class="n">12</td><td class="n">12</td><td class="n">—</td><td class="n">1</td></tr><tr><td>q4_scaling</td><td class="n">384</td><td class="n">376</td><td class="n">8</td><td class="n">29</td></tr><tr><td>q4_smt</td><td class="n">130</td><td class="n">130</td><td class="n">—</td><td class="n">3</td></tr><tr><td>q5_variants</td><td class="n">492</td><td class="n">492</td><td class="n">—</td><td class="n">17</td></tr><tr><td>q6_portability</td><td class="n">612</td><td class="n">612</td><td class="n">—</td><td class="n">—</td></tr>
+<tr><td><strong>total</strong></td><td class="n"><strong>4,004</strong></td>
+<td class="n"><strong>3,516</strong></td>
+<td class="n"><strong>488</strong></td>
+<td class="n"><strong>128</strong></td></tr>
+</tbody></table></div>
+<p class="note">Drops are configurations the grid asked for and could not run, and
+they are listed rather than omitted because a silently narrowed sweep reads as full
+coverage. Q0's 364 are the eight non-reported cells priced out on their default;
+Q1's 108 are baselines that cannot express a multi-column key.</p>
+<h3>What would make this publishable on a second machine</h3>
+<p>One results directory per host, since absolute numbers are not comparable across
+them — only within-host ratios are. The accelerator table is assembled from more
+than one machine by design, and every row records where it came from.</p>
+</section>
+
+<footer>
+<p>Generated from <code>bolvar</code>,
+2026-08-27 · 3,516 verified rows across
+seven questions · analysis is <code>benchmarks/visualization/findings.py</code> over
+the results directory, so every number here is recomputed rather than transcribed.</p>
+</footer>
+</main></div>
