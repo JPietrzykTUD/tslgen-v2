@@ -576,23 +576,29 @@ idle core to return. The real alternative to the device at that point is the SMT
 sibling, and this host says a sibling is worth 1.12x to the samplesort and 0.88x to
 the quicksort. That is the bar the offload has to clear, and it is a low one.
 
-`q3_smt` measures it, all three points under the sibling mask so the comparison
-lives inside one affinity:
+`q3_smt` measures it as a **ladder**, not as a pair of points. Three points at one
+arbitrary thread count would say whether the device beats a hyperthread *there*;
+what a reader needs is where the crossing is, if it exists at all. So the pairing
+is the iso-resource one carried across the saturated range:
 
-| what runs | what it answers |
-| --- | --- |
-| scalar at one thread per core | the baseline the paper reports elsewhere |
-| scalar at two threads per core | what a hyperthread adds on top of it |
-| offloaded at one thread per core | what the device adds instead |
+| what runs | against | what it answers |
+| --- | --- | --- |
+| W-1 threads + device | W threads, scalar | does the device pay for the thread it frees |
 
-If the third beats the second, the device is a better use of the machine's
-remaining capacity than SMT is, and "offloading frees cpus" becomes a measured
-claim rather than an argument. If it does not, the honest finding is that on this
-class of hardware a hyperthread is the cheaper way to spend the same silicon --
-which is worth stating either way, because it is the comparison a reader will make
-anyway. The offloaded run at doubled width is measured too, since the two are not
-mutually exclusive and a device that helps *more* under SMT pressure would be the
-strongest result available.
+for W from one thread per physical core up to both siblings — on a six-core,
+twelve-thread host that is scalar at 6..12 against the device at 5..11. Read as two
+curves, the device frees a thread wherever the offloaded curve meets or beats the
+scalar curve one step to its right. Below the first point there are idle physical
+cores and the question is uninteresting: freeing a core nothing was using costs
+nothing to prove.
+
+That is a harsher test than the physical-core pairing and it is the right one,
+because it is the comparison a reviewer makes: on a machine already running one
+thread per core, the cheapest capacity available is a hyperthread, and an
+accelerator has to beat that rather than beat an idle core. A first pass on the
+development host has the synchronous device losing every rung — 51.98 ns/row at six
+threads against 49.61 scalar at seven, the closest rung — which is the shape of a
+negative result rather than a wash.
 
 **The shape axis Q3 does not sweep, and how to reach it.** Every Q3 stage
 measures `independent_uniform_cN`, and that is a deliberate choice rather than an

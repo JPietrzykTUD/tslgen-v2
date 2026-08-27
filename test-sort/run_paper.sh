@@ -1183,39 +1183,54 @@ ${#first_of_core[@]} cores)"
   echo "--- q4_smt finished in $(elapsed_text $(( SECONDS - smt_began )))"
 fi
 
-# Does the offload free a core, when the only other way to use that capacity is a
-# hyperthread?
+# Does the offload free a thread, on a machine that has none spare?
 #
 # `--iso-resource` in q3_detection already asks the fair version of "does
 # offloading pay": the offloaded run gets one worker fewer than the scalar scan it
-# is compared against, so the device is charged for the core it is supposed to be
-# freeing. But it asks it on *physical* cores, where a freed core is simply idle,
-# and that is the weak form of the claim.
+# is compared against, so the device is charged for the thread it is supposed to be
+# freeing. What it did *not* do is ask it in the regime that matters. Those stages
+# run on physical cores only, where a freed core is simply idle, and freeing an
+# idle core costs nothing to prove.
 #
-# The strong form starts from a machine already using every physical core, which is
-# where a sort actually runs. There the alternative to the device is not an idle
-# core, it is the SMT sibling -- and this host's q4_smt says a sibling is worth
-# 1.12x to the samplesort and 0.88x to the quicksort, so the bar is low. Three
-# points settle it, all under the sibling mask so the comparison is inside one
-# affinity:
+# The interesting question starts from a saturated machine. Every parallel figure
+# here runs one thread per physical core, and past that point the only capacity
+# left is the SMT sibling -- worth 1.12x to the samplesort and 0.88x to the index
+# quicksort on this host, so the bar is low but it is the real bar. Handing the
+# scan to the device is then an alternative to *spending another thread*, and the
+# pairing that measures it is a ladder rather than two points:
 #
-#   scalar at <physical>            what a core does
-#   scalar at <physical * 2>        what a sibling adds on top
-#   offloaded at <physical>         what the device adds instead
+#   W-1 threads + device   against   W threads, scalar
 #
-# If the offloaded run at physical width beats the scalar run at doubled width, the
-# device is a better use of the remaining capacity than a hyperthread, and "frees
-# cpus" is a measured claim rather than an argument. The offloaded row at doubled
-# width is measured too, since the two are not exclusive.
+# for W across the whole saturated range. On a host with six cores and twelve
+# threads that is scalar at 6..12 against the device at 5..11, so the reader can
+# see where -- if anywhere -- the crossing happens rather than being told about one
+# arbitrary W. A device that frees a thread shows it as the offloaded curve meeting
+# or beating the scalar curve one step to its right.
 #
-# Narrow on purpose, and the same cell as q3_ladder so the two are comparable.
-if want q3_smt && [[ -n "$sibling_mask" && "$quick" != "--quick"       && -x "$build/bench_q3_detection" ]]; then
+# Same cell as q3_ladder so the two are comparable, under the sibling mask so every
+# row lives inside one affinity.
+if want q3_smt && [[ -n "$sibling_mask" && "$quick" != "--quick" \
+      && -x "$build/bench_q3_detection" ]]; then
   smt_workers=$(( ${#first_of_core[@]} + ${#second_of_core[@]} ))
+  # The saturated range: from one thread per physical core up to both siblings.
+  # Below the first point there are idle cores and the question is uninteresting.
+  q3smt_ladder="${#first_of_core[@]}"
+  for (( w = ${#first_of_core[@]} + 1; w <= smt_workers; w++ )); do
+    q3smt_ladder="$q3smt_ladder,$w"
+  done
   stage_index=$(( stage_index + 1 ))
   q3smt_began=$SECONDS
   echo
-  echo "=== [$stage_index/$stage_total] q3_smt (${#first_of_core[@]} cores vs $smt_workers threads, offload against a hyperthread)"
-  (cd "$build" && taskset -c "$sibling_mask" ./bench_q3_detection --tuned "$tuned"       --detectors "$q3_detectors"       --workers "${#first_of_core[@]},$smt_workers"       --cardinalities "${COSORT_Q3_LADDER_CARDINALITY:-16}"       --cols "${COSORT_Q3_LADDER_COLS:-8}" --element-bytes 4       --sizes "${COSORT_Q3_LADDER_SIZES:-4}"       --counters "$results/q3_smt_detector_counters.csv"       --csv "$results/q3_smt.csv" 2>&1) | tee "$results/q3_smt.log"
+  echo "=== [$stage_index/$stage_total] q3_smt (iso-resource ladder over \
+${#first_of_core[@]}..$smt_workers threads: W-1 + device against W scalar)"
+  (cd "$build" && taskset -c "$sibling_mask" ./bench_q3_detection --tuned "$tuned" \
+      --detectors "$q3_detectors" --iso-resource \
+      --workers "$q3smt_ladder" \
+      --cardinalities "${COSORT_Q3_LADDER_CARDINALITY:-16}" \
+      --cols "${COSORT_Q3_LADDER_COLS:-8}" --element-bytes 4 \
+      --sizes "${COSORT_Q3_LADDER_SIZES:-4}" \
+      --counters "$results/q3_smt_detector_counters.csv" \
+      --csv "$results/q3_smt.csv" 2>&1) | tee "$results/q3_smt.log"
   echo "--- q3_smt finished in $(elapsed_text $(( SECONDS - q3smt_began )))"
 fi
 
@@ -1359,12 +1374,18 @@ what is in there, beyond one CSV per question:
                                 with both SMT siblings, against q4_scaling's one
                                 thread per core. `pinned_cpus` says which mask a
                                 row ran under
-  q3_smt.csv                    the offload measured against a hyperthread rather
-                                than against an idle core: scalar at one thread per
-                                core, scalar at two, and the offloaded backend at
-                                one. If the third beats the second, the device is a
-                                better use of the remaining capacity than SMT is,
-                                which is the strong form of "offloading frees cpus"
+  q3_smt.csv                    the iso-resource pairing in the regime where it
+                                matters: W-1 threads plus the device against W
+                                threads scalar, for W across the saturated range
+                                (one thread per core up to both siblings). The
+                                other Q3 stages pair on physical cores, where a
+                                freed core is simply idle; here the alternative to
+                                the device is spending another thread, which is
+                                what a saturated machine actually offers. Read it
+                                as two curves: the device frees a thread wherever
+                                the offloaded one meets the scalar one a step to
+                                its right. `pairing` in `variant` names each
+                                comparison
   q3_run_length.csv             the same two sizes with rows/cardinality held, so
                                 only the footprint changes. The pair separates
                                 "the offload likes memory pressure" from "the
