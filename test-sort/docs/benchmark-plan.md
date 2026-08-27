@@ -594,6 +594,31 @@ anyway. The offloaded run at doubled width is measured too, since the two are no
 mutually exclusive and a device that helps *more* under SMT pressure would be the
 strongest result available.
 
+**The shape axis Q3 does not sweep, and how to reach it.** Every Q3 stage
+measures `independent_uniform_cN`, and that is a deliberate choice rather than an
+oversight: detection's cost is governed by the equal-run length, `cN` sets it to
+rows/N and holds everything else flat, so a win or loss belongs to the axis under
+test. Every other family in the catalogue moves run length *and* something else --
+skew, hierarchy depth, where ties resolve -- which is Q2's and Q5's subject, not
+this one.
+
+It is still a limit. A uniform key cannot produce the regime a heavy-tailed one
+does, where a single value's run is a large fraction of the table and no other run
+is worth a descriptor. Whether an offload pays *there* is a different question from
+whether it pays at run length 8192, and it is the question a reader with skewed
+data will ask. `--shapes` reaches it:
+
+```bash
+./bench_q3_detection --shapes skewed_zipf_s1,heavy_hitter_f90 --cols 8
+```
+
+Named shapes carry the catalogue's own parameters into `shape_params`, because
+`c=` means nothing for a Zipf key. `--shapes` is mutually exclusive with
+`--run-length`, which solves for the cardinality that holds the run length fixed
+and has nothing to solve for on a shape that has no cardinality knob; asking for
+both is refused rather than silently resolved. The default remains the cardinality
+sweep, so the reported figures stay on the axis they were designed for.
+
 **What the detector did, beside what it cost.** Runtime alone cannot separate "the
 offload did not pay" from "the offload never happened": a backend that declined
 every range because it fell below the offload threshold, or because its in-flight

@@ -28,6 +28,7 @@
 //
 //   ./bench_q3_detection
 //   ./bench_q3_detection --cardinalities 16,1024,65536 --cols 8
+//   ./bench_q3_detection --shapes skewed_zipf_s1,heavy_hitter_f90 --cols 8
 //   ./bench_q3_detection --csv results/q3_detection.csv
 
 #include <algorithm>
@@ -89,6 +90,40 @@ auto image_matches(std::vector<std::vector<Key>> const & columns,
 // element. `independent_uniform_cN` is the catalog's knob for exactly that.
 auto cardinality_shape(std::size_t cardinality) -> std::string {
   return "independent_uniform_c" + std::to_string(cardinality);
+}
+
+// One shape to measure, and what the row should record about it.
+//
+// The cardinality sweep is the default because it isolates the axis under test:
+// `independent_uniform_cN` sets the equal-run length to rows/N and holds
+// everything else flat, so a win or loss belongs to run length rather than to
+// skew or to where ties resolve. That is deliberately narrow, and it is also a
+// limit -- a uniform family cannot reach the regime a heavy-tailed key creates,
+// where one value's run is a large fraction of the table and no other run is
+// worth a descriptor. Whether an offload still pays *there* is a different
+// question from whether it pays at run length 8192, and `--shapes` is how to ask
+// it. The row then carries the catalog's own parameters, since "c=" means nothing
+// for a Zipf key.
+struct shape_request {
+  std::string label;     // catalog id prefix, e.g. "skewed_zipf_s1"
+  std::string params;    // what lands in the row; empty means read it from the spec
+};
+
+// Every parameter the catalog recorded for a spec, as `k=v` pairs. Used for a
+// shape named on the command line, where the driver does not know which knob
+// defines it.
+auto params_of(TslDatasetSpec const & spec) -> std::string {
+  std::string out;
+  for (auto const & [name, value] : spec.params) {
+    if (!out.empty()) {
+      out += ' ';
+    }
+    auto const rounded = static_cast<long long>(value);
+    out += name + "=";
+    out += (static_cast<double>(rounded) == value ? std::to_string(rounded)
+                                                  : std::to_string(value));
+  }
+  return out;
 }
 
 // scalar is always kept: it is the thing every backend is compared against.
@@ -241,7 +276,7 @@ inline counter_sink g_counters;
 
 template <class Key>
 void run_width(TslPaperResults & results,
-               std::vector<std::size_t> const & cardinalities,
+               std::vector<shape_request> const & shapes,
                std::vector<std::size_t> const & column_counts,
                std::size_t rows, std::vector<std::size_t> const & worker_counts,
                TslDetectorConfig const & detector_config, bool iso_resource) {
@@ -253,8 +288,8 @@ void run_width(TslPaperResults & results,
   TslDatasetSource<Key> source(8ull << 30);
   auto const tail = "_u" + std::to_string(sizeof(Key) * 8) + "_n";
 
-  for (auto const cardinality : cardinalities) {
-    auto const shape = cardinality_shape(cardinality);
+  for (auto const & request : shapes) {
+    auto const shape = request.label;
     for (auto const columns : column_counts) {
       auto const catalog = tsl_default_catalog(rows, columns, sizeof(Key));
       TslDatasetSpec const * spec = nullptr;
@@ -266,7 +301,8 @@ void run_width(TslPaperResults & results,
       }
       auto blank = results.make_row();
       blank.shape = shape;
-      blank.shape_params = "c=" + std::to_string(cardinality);
+      blank.shape_params = !request.params.empty() ? request.params
+                           : (spec != nullptr ? params_of(*spec) : std::string{});
       blank.rows = rows;
       blank.columns = columns;
       blank.element_bytes = sizeof(Key);
@@ -449,6 +485,12 @@ int main(int argc, char ** argv) {
   // The catalog's `independent_uniform` cardinalities, which is the axis that
   // decides how much work a detector has relative to the scan it replaces.
   std::vector<std::size_t> cardinalities{16, 1024, 65536};
+  bool cardinalities_given = false;
+  // Catalog shapes named directly, for the regimes the uniform family cannot
+  // reach: a heavy-tailed key whose head is a large fraction of the table, a
+  // hierarchy whose ties resolve at a fixed depth. Empty means sweep
+  // `cardinalities` instead, which is the default because it isolates run length.
+  std::vector<std::string> shape_names;
   std::vector<std::size_t> column_counts{2, 8};
   std::vector<std::size_t> worker_counts;   // machine-derived unless --workers
   std::vector<std::size_t> widths{4, 8};
@@ -494,6 +536,9 @@ int main(int argc, char ** argv) {
       workers_ladder = true;
     } else if (flag == "--cardinalities") {
       list(cardinalities);
+      cardinalities_given = true;
+    } else if (flag == "--shapes") {
+      shape_names = split(value(), ',');
     } else if (flag == "--cols") {
       list(column_counts);
     } else if (flag == "--workers") {
@@ -624,6 +669,44 @@ int main(int argc, char ** argv) {
       }
     }
   }
+  // The shapes to measure, from whichever of the two flags was used.
+  //
+  // Mutually exclusive with `--run-length` on purpose: that flag solves for the
+  // cardinality that holds the run length fixed at each size, and a named shape
+  // has no cardinality to solve for. Refused rather than silently ignored, since
+  // the whole value of the run-length sweep is that its rows are comparable.
+  if (!shape_names.empty() && run_length != 0) {
+    std::printf("--shapes and --run-length are mutually exclusive: --run-length "
+                "chooses the cardinality itself, and a named shape has none to "
+                "choose.\n");
+    return 2;
+  }
+  if (!shape_names.empty() && cardinalities_given) {
+    std::printf("--shapes overrides --cardinalities; drop one of them.\n");
+    return 2;
+  }
+  std::vector<shape_request> shapes;
+  if (shape_names.empty()) {
+    for (auto const cardinality : cardinalities) {
+      shapes.push_back(shape_request{cardinality_shape(cardinality),
+                                     "c=" + std::to_string(cardinality)});
+    }
+  } else {
+    for (auto const & name : shape_names) {
+      // Params left empty: they come from the catalog spec, because the driver
+      // does not know which knob defines a shape it was merely handed the name of.
+      shapes.push_back(shape_request{name, std::string{}});
+    }
+  }
+  auto const shape_count = shapes.size();
+  std::printf("shapes:");
+  for (auto const & request : shapes) {
+    std::printf(" %s", request.label.c_str());
+  }
+  std::printf("%s\n", shape_names.empty()
+              ? "  (cardinality sweep: run length is the axis)"
+              : "  (named shapes: the axis is whatever distinguishes them)");
+
   std::printf("min_offload=%zu slots=%zu depth=%zu region=%zuB  "
               "backends compiled in: ", detector_config.min_offload,
               detector_config.slots, detector_config.depth,
@@ -633,7 +716,7 @@ int main(int argc, char ** argv) {
   }
   std::printf("\n");
 
-  results.expect(cardinalities.size() * column_counts.size() * widths.size()
+  results.expect(shape_count * column_counts.size() * widths.size()
                  * worker_counts.size() * row_counts.size()
                  * tsl_compiled_detectors().size() * g_algorithms.size());
   for (auto const size_rows : row_counts) {
@@ -641,23 +724,28 @@ int main(int argc, char ** argv) {
     // rather than silently substituted: a catalogue without that shape drops the
     // cell with a reason, which is the honest outcome for a diagonal the data
     // cannot supply.
-    auto const size_cardinalities = run_length == 0
-      ? cardinalities
-      : std::vector<std::size_t>{std::max<std::size_t>(1, size_rows / run_length)};
+    // `--run-length` overrides the shape list with the one cardinality that holds
+    // the run length at this size, which is the whole point of that flag. It has
+    // no meaning for a named shape -- a Zipf key has no cardinality knob to solve
+    // for -- so the two are mutually exclusive and that is checked at parse time.
+    auto size_shapes = shapes;
     if (run_length != 0) {
+      auto const cardinality = std::max<std::size_t>(1, size_rows / run_length);
+      size_shapes = {shape_request{cardinality_shape(cardinality),
+                                   "c=" + std::to_string(cardinality)}};
       std::printf("size %zu rows: cardinality %zu holds the run length at %zu\n",
-                  size_rows, size_cardinalities.front(), run_length);
+                  size_rows, cardinality, run_length);
     }
     for (auto const width : widths) {
       if (width == 4) {
         tsl_select_tuned<std::uint32_t>(g_tuned, g_samplesort_config,
                                         g_quicksort_config);
-        run_width<std::uint32_t>(results, size_cardinalities, column_counts, size_rows,
+        run_width<std::uint32_t>(results, size_shapes, column_counts, size_rows,
                                  worker_counts, detector_config, iso_resource);
       } else if (width == 8) {
         tsl_select_tuned<std::uint64_t>(g_tuned, g_samplesort_config,
                                         g_quicksort_config);
-        run_width<std::uint64_t>(results, size_cardinalities, column_counts, size_rows,
+        run_width<std::uint64_t>(results, size_shapes, column_counts, size_rows,
                                  worker_counts, detector_config, iso_resource);
       }
     }
