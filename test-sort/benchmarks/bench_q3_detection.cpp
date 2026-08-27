@@ -152,6 +152,11 @@ inline std::vector<std::string> g_detectors;
 // is a fraction of a particular sorter's runtime, and the reported figures use
 // both families.
 inline std::set<std::string> g_algorithms{"samplesort", "quicksort"};
+// Whether an asynchronous completion respects the share threshold. Off is the
+// behaviour every published figure was taken with; on is the variant this driver
+// exists to price. A flag rather than a replacement, because the comparison is the
+// point and the two have to run in the same process on the same data.
+inline bool g_async_spans_local = false;
 
 inline auto wanted(TslDetectorBackend backend) -> bool {
   auto const name = std::string(tsl_detector_name(backend));
@@ -407,6 +412,11 @@ void run_width(TslPaperResults & results,
                 TslPaperStats stats{};
                 auto const dispatched = with_samplesort<Key, Simd, true>(
                   g_samplesort_config, [&](auto sorter) {
+                    // The span-routing variant under test: an asynchronous
+                    // completion polled on another thread applies the same share
+                    // threshold a synchronous one would, instead of publishing
+                    // every late span to the shared pool whatever its size.
+                    sorter.set_async_spans_local(g_async_spans_local);
                     auto const measured = tsl_paper_measure(
                       [&] {
                         metrics = {};
@@ -570,6 +580,8 @@ int main(int argc, char ** argv) {
       detector_config.region_bytes = std::strtoull(value().c_str(), nullptr, 10);
     } else if (flag == "--iso-resource") {
       iso_resource = true;
+    } else if (flag == "--async-spans-local") {
+      g_async_spans_local = true;
     } else if (flag == "--counters") {
       counters_path = value();
     } else if (flag == "--algorithms") {
@@ -707,6 +719,10 @@ int main(int argc, char ** argv) {
               ? "  (cardinality sweep: run length is the axis)"
               : "  (named shapes: the axis is whatever distinguishes them)");
 
+  if (g_async_spans_local) {
+    std::printf("async span routing: LOCAL (completions respect the share "
+                "threshold)\n");
+  }
   std::printf("min_offload=%zu slots=%zu depth=%zu region=%zuB  "
               "backends compiled in: ", detector_config.min_offload,
               detector_config.slots, detector_config.depth,

@@ -195,8 +195,37 @@ class TslSampleSortMultiColumn {
     return sink;
   }
 
+  // Which worker this thread is, for a span that arrives after its `sort_one_range`
+  // has returned. The inline sink handles the common case -- a span emitted on the
+  // submitting thread while it is still inside the call -- and this handles the
+  // one the inline sink cannot: an asynchronous completion polled by *another*
+  // thread, which has no safe way to reach the owner's stack but can park the span
+  // in a slot the owner will look at.
+  static auto worker_slot() -> std::size_t & {
+    static thread_local std::size_t slot = 0;
+    return slot;
+  }
+
+ public:
+  // Route asynchronous completions through the same share-threshold decision the
+  // synchronous path applies, instead of straight to the shared pool.
+  //
+  // Worth a switch rather than a replacement, because it is the hypothesis under
+  // test. In phase two a worker splits its children: below the share threshold
+  // they stay on its own stack, above it they go to the pool. A completion observed
+  // on another thread skipped that split entirely and published everything, so
+  // every late span became a shared work item however small -- and on this host the
+  // asynchronous path was handed 1031 ranges against the synchronous path's 303,
+  // each 3.4x smaller, with 3.4x the per-range overhead to amortise.
+  void set_async_spans_local(bool enabled) { async_spans_local_ = enabled; }
+  auto async_spans_local() const -> bool { return async_spans_local_; }
+
+ private:
+
   // Sets the slot for the duration of one `sort_one_range` call and restores what
   // was there, so a nested sort cannot lose its own sink.
+  bool async_spans_local_ = false;
+
   class inline_sink_scope {
    public:
     explicit inline_sink_scope(std::vector<range> * sink)
@@ -249,10 +278,25 @@ class TslSampleSortMultiColumn {
     std::atomic<std::size_t> async_runs{0};
     auto * const queue_address = &queue;
     auto * const runs_address = &async_runs;
-    auto const publish_shared = [queue_address, runs_address](range const & child) {
+    // The share threshold has to be known here, because the emitter is what a late
+    // completion reaches and the emitter is where the decision now happens.
+    auto const emit_share_threshold =
+      std::max<std::size_t>(BaseCase, row_count / (workers * 8));
+    auto const spans_local = async_spans_local_;
+    auto const publish_shared =
+      [queue_address, runs_address, emit_share_threshold, spans_local](
+          range const & child) {
       runs_address->fetch_add(1, std::memory_order_relaxed);
       if (auto * const sink = inline_sink()) {
         sink->push_back(child);
+        return;
+      }
+      // No inline sink: this span arrived from a poll on some other thread, after
+      // the submitting worker's call had returned. Publishing it unconditionally is
+      // what the shared pool did; parking a sub-threshold one in the owner's slot
+      // is what the synchronous path would have done with it.
+      if (spans_local && (child.end - child.begin) < emit_share_threshold) {
+        queue_address->defer(worker_slot(), child);
         return;
       }
       queue_address->publish(child);
@@ -260,6 +304,9 @@ class TslSampleSortMultiColumn {
     if constexpr (asynchronous) {
       detect_runs.bind(queue);
       queue.set_poller([&detect_runs] { detect_runs.poll(); });
+      if (async_spans_local_) {
+        queue.enable_deferred(workers);
+      }
     }
 
     std::vector<range> pending;
@@ -331,6 +378,8 @@ class TslSampleSortMultiColumn {
 
     auto const worker = [&](std::size_t id) {
       auto & mine = per_worker[id];
+      // So an emitter running on this thread knows whose slot to park a span in.
+      worker_slot() = id;
       std::vector<Key> scratch;
       std::vector<index_type> index_scratch;
       std::vector<range> local;
@@ -342,7 +391,7 @@ class TslSampleSortMultiColumn {
           if (!local.empty()) {
             current = local.back();
             local.pop_back();
-          } else if (!queue.take(current)) {
+          } else if (!queue.take(current, id)) {
             break;
           }
           auto const count = current.end - current.begin;

@@ -93,11 +93,57 @@ class TslPendingRangeQueue final : public TslPendingWork {
 
   // The next range to work on, or false when the sort is over. Blocks while any
   // work could still appear -- from another worker's local stack or from a device.
-  auto take(Range & out) -> bool {
+  // Per-worker slots for spans that belong to one worker rather than to the pool.
+  //
+  // A completion is observed on whichever thread happened to poll, and that thread
+  // cannot reach into another worker's stack -- so the span went to the shared pool
+  // whatever its size, bypassing the caller's own decision about what is worth
+  // handing to another worker. `defer` is the other route: the span is parked in
+  // the slot of the worker that owns the data, and only that worker takes it.
+  //
+  // The debt is unaffected: a deferred span is published as far as
+  // `resolve_pending` is concerned, so termination has to account for it too --
+  // hence `deferred_total_` in the finish test. Without that a queue could observe
+  // no debt and no shared work while a slot still held ranges.
+  void enable_deferred(std::size_t slots) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    deferred_.assign(slots == 0 ? 1 : slots, {});
+  }
+
+  void defer(std::size_t slot, Range const & range) {
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      if (deferred_.empty()) {
+        shared_.push_back(range);
+        ++published_;
+        ++deferred_fallback_;
+      } else {
+        deferred_[slot % deferred_.size()].push_back(range);
+        ++published_;
+        ++deferred_total_;
+      }
+    }
+    ready_.notify_all();
+  }
+
+  auto deferred_fallbacks() const -> std::size_t { return deferred_fallback_; }
+
+  auto take(Range & out, std::size_t slot = 0) -> bool {
     std::unique_lock<std::mutex> lock(mutex_);
     while (true) {
       if (finished_) {
         return false;
+      }
+      // This worker's own deferred spans first: they are the reason the mechanism
+      // exists, and they are warm in its cache.
+      if (!deferred_.empty()) {
+        auto & mine = deferred_[slot % deferred_.size()];
+        if (!mine.empty()) {
+          out = mine.back();
+          mine.pop_back();
+          --deferred_total_;
+          return true;
+        }
       }
       if (!shared_.empty()) {
         out = shared_.back();
@@ -107,11 +153,25 @@ class TslPendingRangeQueue final : public TslPendingWork {
       ++idle_;
       // Nothing queued, nobody working, nothing owed: this is the only state in
       // which no further range can appear.
-      if (idle_ == workers_ && pending_ == 0) {
+      if (idle_ == workers_ && pending_ == 0 && deferred_total_ == 0) {
         finished_ = true;
         --idle_;
         ready_.notify_all();
         return false;
+      }
+      // Somebody else's deferred spans, once there is no debt left to wait for.
+      // Locality is a preference, not a constraint: an owner that has finished
+      // must not be able to strand work in its slot.
+      if (pending_ == 0 && deferred_total_ != 0) {
+        for (auto & slotted : deferred_) {
+          if (!slotted.empty()) {
+            out = slotted.back();
+            slotted.pop_back();
+            --deferred_total_;
+            --idle_;
+            return true;
+          }
+        }
       }
       if (pending_ != 0) {
         // A completion is not a notification, so an idle worker drives the
@@ -280,6 +340,9 @@ class TslPendingRangeQueue final : public TslPendingWork {
   std::size_t idle_ = 0;
   std::size_t pending_ = 0;
   std::size_t published_ = 0;
+  std::vector<std::vector<Range>> deferred_;
+  std::size_t deferred_total_ = 0;
+  std::size_t deferred_fallback_ = 0;
   bool finished_ = false;
   bool polling_ = false;
 };
