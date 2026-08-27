@@ -753,9 +753,10 @@ for stage in "${all_stages[@]}"; do
     q3_ladder|q3_pressure|q3_run_length|q4_smt)
       [[ "$quick" == "--quick" ]] && continue ;;
     q3_smt)
-      # Two row sets, one per span routing, so it counts twice.
+      # Two row sets, one per span routing -- four when a shape list is given.
       [[ "$quick" == "--quick" ]] && continue
-      stage_total=$(( stage_total + 1 )) ;;
+      stage_total=$(( stage_total + 1 ))
+      [[ -n "${COSORT_Q3_SMT_SHAPES:-}" ]] && stage_total=$(( stage_total + 2 )) ;;
   esac
   stage_total=$(( stage_total + 1 ))
 done
@@ -1263,6 +1264,34 @@ the device one thread lower, x$q3smt_passes passes, both span routings"
     run_repeated "$q3smt_passes" bench_q3_detection q3_smt_local \
       "${q3smt_common[@]}" --async-spans-local \
       --counters "$results/q3_smt_local_detector_counters.csv"
+
+  # The shape axis, when asked for. Every other Q3 stage measures
+  # `independent_uniform_cN`, which isolates run length and holds everything else
+  # flat -- the right default, and unable to reach the regime a heavy-tailed key
+  # creates, where one value's run is a large fraction of the table and no other
+  # run is worth a descriptor. Whether the thread-for-throughput trade survives
+  # *there* is a different question from whether it survives at a uniform run
+  # length, and it is the one a reader with skewed data asks first.
+  #
+  # A separate row set because `--shapes` replaces the cardinality sweep rather
+  # than adding to it: the two cannot be in one invocation.
+  if [[ -n "${COSORT_Q3_SMT_SHAPES:-}" ]]; then
+    q3smt_shape_common=(--tuned "$tuned" --detectors "$q3_detectors" --iso-resource
+                        --workers "$q3smt_ladder"
+                        --shapes "$COSORT_Q3_SMT_SHAPES"
+                        --cols "${COSORT_Q3_LADDER_COLS:-8}" --element-bytes 4
+                        --sizes "${COSORT_Q3_LADDER_SIZES:-4}")
+    echo
+    echo "SMT ladder, named shapes: $COSORT_Q3_SMT_SHAPES"
+    TSL_TASKSET_MASK="$sibling_mask" \
+      run_repeated "$q3smt_passes" bench_q3_detection q3_smt_shapes \
+        "${q3smt_shape_common[@]}" \
+        --counters "$results/q3_smt_shapes_detector_counters.csv"
+    TSL_TASKSET_MASK="$sibling_mask" \
+      run_repeated "$q3smt_passes" bench_q3_detection q3_smt_shapes_local \
+        "${q3smt_shape_common[@]}" --async-spans-local \
+        --counters "$results/q3_smt_shapes_local_detector_counters.csv"
+  fi
 fi
 
 # Q5 and Q6 are stages of the existing staged driver rather than new binaries: a
@@ -1423,6 +1452,14 @@ what is in there, beyond one CSV per question:
                                 the asynchronous decomposition is timing-dependent
                                 and one pass of this cell has been seen at both
                                 303 and 1031 ranges with identical flags
+  q3_smt_shapes*.csv            the same ladder on named catalogue shapes rather
+                                than the cardinality sweep, when
+                                COSORT_Q3_SMT_SHAPES asks for it. Uniform shapes
+                                isolate run length and cannot reach a heavy-tailed
+                                key, where one value's run is most of the table --
+                                so this is what says whether the thread-for-
+                                throughput trade generalises past the regime it was
+                                found in
   q3_run_length.csv             the same two sizes with rows/cardinality held, so
                                 only the footprint changes. The pair separates
                                 "the offload likes memory pressure" from "the
