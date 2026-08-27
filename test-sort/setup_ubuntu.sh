@@ -216,7 +216,8 @@ for device in devices:
             if queue.get("state") != "enabled":
                 continue
             wq += 1
-            if queue.get("type") == "user":
+            if queue.get("type") == "user" and \
+                    queue.get("driver_name", "user") == "user":
                 usable += 1
 print(dev, wq, usable)
 ' 2>/dev/null || echo "0 0 0")"
@@ -236,9 +237,14 @@ for device in devices:
             if wq.get("state") != "enabled":
                 continue
             kind = wq.get("type", "?")
-            note = "" if kind == "user" else "   <-- not usable from userspace"
-            print("    {:<9} type={:<7} mode={:<10} name={}{}".format(
-                wq.get("dev", "?"), kind, wq.get("mode", "?"),
+            # `driver_name` is what the kernel actually binds on, and a queue can
+            # read type=user with driver_name=crypto -- which does not work and
+            # does not look wrong. Both are shown.
+            driver = wq.get("driver_name", "?")
+            usable = kind == "user" and driver in ("user", "?")
+            note = "" if usable else "   <-- not usable from userspace"
+            print("    {:<9} type={:<7} driver={:<8} mode={:<10} name={}{}".format(
+                wq.get("dev", "?"), kind, driver, wq.get("mode", "?"),
                 wq.get("name", ""), note))
 ' 2>/dev/null || true
     # Enabled and user-type is still not enough: the queue is reached through a
@@ -253,21 +259,32 @@ for device in devices:
     # is still no character device to submit through, because a kernel-type queue
     # belongs to something like iaa_crypto rather than to userspace.
     if [[ "${accel_usable:-0}" -eq 0 ]]; then
-      echo "    !! none of these queues is type=user, so no /dev/dsa or /dev/iax" >&2
-      echo "       node exists and nothing in userspace can submit to them. They" >&2
-      echo "       belong to an in-kernel driver (iaa_crypto, dmaengine). One has" >&2
-      echo "       to be handed over, e.g. for an IAA device iax1:" >&2
-      echo "         sudo accel-config disable-wq iax1/wq1.0" >&2
-      echo "         sudo accel-config config-wq iax1/wq1.0 --type=user \\" >&2
-      echo "              --mode=dedicated --priority=1 --group-id=0 \\" >&2
-      echo "              --name=cosort_rle --wq-size=<from list>" >&2
-      echo "         sudo accel-config enable-wq iax1/wq1.0" >&2
-      echo "       A *shared* queue additionally needs PASID, so the kernel wants" >&2
-      echo "       intel_iommu=on,sm_on; dedicated queues do not. Repeat per" >&2
-      echo "       device -- IAA devices are usually odd-numbered (iax1, iax3, ...)." >&2
-      echo "       Then this check should show a type=user queue and a /dev/iax" >&2
-      echo "       node, and that node still has to be readable by the measuring" >&2
-      echo "       user." >&2
+      # stdout, not stderr: --check is a report, and sending half of it to stderr
+      # made `--check | sed` interleave the two streams and split a sentence.
+      echo "    !! none of these queues is type=user, so no /dev/dsa or /dev/iax"
+      echo "       node exists and nothing in userspace can submit to them. They"
+      echo "       belong to an in-kernel driver (iaa_crypto, dmaengine)."
+      echo
+      echo "       Handing one over needs BOTH type and driver_name. Setting"
+      echo "       --type=user alone does not stick: the in-kernel driver rebinds"
+      echo "       the queue and type reverts to kernel, while --name survives, so"
+      echo "       it looks as though the command partly worked. A queue that is"
+      echo "       genuinely usable reads type=user AND driver_name=user."
+      echo
+      echo "         sudo accel-config disable-wq iax1/wq1.0"
+      echo "         sudo accel-config config-wq iax1/wq1.0 \\"
+      echo "              --type=user --driver-name=user --mode=dedicated \\"
+      echo "              --priority=1 --group-id=0 --name=cosort_rle"
+      echo "         sudo accel-config enable-wq iax1/wq1.0"
+      echo
+      echo "       If type still reverts, the kernel driver is holding the device:"
+      echo "         sudo modprobe -r iaa_crypto      # frees IAA queues"
+      echo "       and configure again. A *shared* queue additionally needs PASID"
+      echo "       (intel_iommu=on,sm_on at boot); dedicated queues do not."
+      echo "       Repeat per device -- IAA devices are usually odd-numbered"
+      echo "       (iax1, iax3, ...). Afterwards this check should show a"
+      echo "       type=user queue and a /dev/iax node, and that node still has to"
+      echo "       be readable by the measuring user."
     fi
     target_user="${SUDO_USER:-$(id -un)}"
     for node in /dev/dsa/* /dev/iax/*; do
@@ -281,12 +298,12 @@ for device in devices:
       else
         group="$(stat -c '%G' "$node")"
         [[ "$group" == "UNKNOWN" ]] && group="$(stat -c '%g' "$node")"
-        echo "    $node  $owner  NOT accessible by $target_user" >&2
-        echo "      That is what makes a hardware detector fail with an" >&2
-        echo "      'internal' error that names libaccel-config. Fix it with" >&2
-        echo "        sudo usermod -aG $group $target_user   # then log in again" >&2
-        echo "      or run the measurement as root (isolate_cpus.sh run drops" >&2
-        echo "      back to \$SUDO_USER, so sudo alone is not enough)." >&2
+        echo "    $node  $owner  NOT accessible by $target_user"
+        echo "      That is what makes a hardware detector fail with an"
+        echo "      'internal' error that names libaccel-config. Fix it with"
+        echo "        sudo usermod -aG $group $target_user   # then log in again"
+        echo "      or run the measurement as root (isolate_cpus.sh run drops"
+        echo "      back to \$SUDO_USER, so sudo alone is not enough)."
       fi
     done
   else
