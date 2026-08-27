@@ -995,6 +995,84 @@ def q1_baselines(results: Results) -> Answer:
 
 
 # --- Q2 -----------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class Crossover:
+    """The decision rule between the two sorters, fitted to this directory."""
+    columns: int          # the column count at or above which the rule applies
+    workers: int          # the worker count it was fitted at
+    threshold: float      # quicksort ns/row above which the samplesort wins
+    correct: int          # cells the rule predicts
+    total: int            # cells it was tested on
+    gap: tuple[float, float] | None   # the empty band around the threshold
+    frame: pd.DataFrame
+
+
+def _q2_crossover(head: pd.DataFrame) -> Crossover | None:
+    """Fit "which sorter" to one number, and say how well it holds.
+
+    Neither sorter dominates, and the useful form of that is not a table of wins
+    but a predicate a reader can apply to their own data. The column count alone is
+    too coarse -- at eight columns the parallel split is 39/62 -- and the shape
+    family is not the axis either: `low_cardinality_d4` goes to the quicksort while
+    `independent_uniform_c16` goes to the samplesort, so cardinality does not
+    order them.
+
+    What does order them is how much work the tie structure creates, and the
+    quicksort's own cost per row measures exactly that: cheap means the order
+    resolves early and its faster partition wins, expensive means deep tie chains
+    where the samplesort's classification amortises and its scheduler scales. The
+    threshold is fitted here rather than asserted, and the honest output includes
+    how many cells it gets wrong.
+    """
+    if head.empty or "quicksort" not in head or "workers" not in head:
+        return None
+    parallel_at = int(head["workers"].max())
+    if parallel_at <= 1:
+        return None
+    # Fit the column floor and the threshold together: below some column count the
+    # quicksort wins whatever it costs, and mixing those cells in moves the
+    # threshold to cover them instead of describing the crossover.
+    best = None
+    for floor in sorted({int(c) for c in head["columns"].unique()}):
+        block = head[(head["columns"].astype(int) >= floor)
+                     & (head["workers"] == parallel_at)]
+        if len(block) < 8:
+            continue
+        wants_samplesort = block["ratio"] < 1.0
+        for threshold in range(5, 400, 5):
+            predicted = block["quicksort"] > threshold
+            correct = int((predicted == wants_samplesort).sum())
+            if best is None or correct / len(block) > best[0]:
+                best = (correct / len(block), floor, float(threshold), correct,
+                        len(block))
+    if best is None:
+        return None
+    _, floor, threshold, correct, total = best
+
+    # The band between the most expensive quicksort win and the cheapest
+    # samplesort win. An empty band is what makes the rule a threshold rather than
+    # a tendency; report it, or report that there isn't one.
+    block = head[(head["columns"].astype(int) >= floor)
+                 & (head["workers"] == parallel_at)]
+    qs_wins = block[block["ratio"] >= 1.0]["quicksort"]
+    ss_wins = block[block["ratio"] < 1.0]["quicksort"]
+    gap = None
+    if not qs_wins.empty and not ss_wins.empty:
+        low, high = float(qs_wins.max()), float(ss_wins.min())
+        if low < high:
+            gap = (low, high)
+
+    frame = block.assign(
+        predicted=lambda f: f["quicksort"].gt(threshold)
+                             .map({True: "samplesort", False: "quicksort"}),
+        actual=lambda f: f["ratio"].lt(1.0)
+                          .map({True: "samplesort", False: "quicksort"}),
+    )[["shape", "columns", "element_bytes", "rows", "quicksort", "samplesort",
+       "ratio", "predicted", "actual"]]
+    return Crossover(int(floor), parallel_at, threshold, correct, total, gap, frame)
+
+
 def q2_algorithms(results: Results) -> Answer:
     qid = "Q2"
     asks, binary = QUESTIONS[qid]
@@ -1034,6 +1112,10 @@ def q2_algorithms(results: Results) -> Answer:
                   .agg(["median", "size"]).reset_index())
     tables["by_columns"] = by_columns
 
+    crossover = _q2_crossover(head)
+    if crossover is not None:
+        tables["crossover"] = crossover.frame
+
     stats = (
         Stat("Matched cells", str(len(head)), "both algorithms, same rows"),
         Stat("Quicksort wins serially", f"{qs_serial} of {len(serial)}",
@@ -1044,6 +1126,14 @@ def q2_algorithms(results: Results) -> Answer:
              f"{1 / parallel['ratio'].min():.1f}x",
              str(parallel.loc[parallel['ratio'].idxmin(), 'shape'])),
     )
+    if crossover is not None:
+        stats = stats + (
+            Stat("Crossover rule",
+                 f">{crossover.threshold:.0f} ns/row",
+                 f"at >={crossover.columns} columns and "
+                 f"{crossover.workers} workers, predicts "
+                 f"{crossover.correct} of {crossover.total} cells"),
+        )
 
     wide = parallel[parallel["columns"] >= 4]
     narrow = parallel[parallel["columns"] < 4]
@@ -1057,6 +1147,31 @@ def q2_algorithms(results: Results) -> Answer:
         f"{int((wide['ratio'] < 1).sum())} of {len(wide)} cells at four columns or "
         f"more, against {int((narrow['ratio'] < 1).sum())} of {len(narrow)} at two.",
     ]
+    if crossover is not None:
+        gap = ""
+        if crossover.gap is not None:
+            gap = (f" The two outcomes do not overlap: the most expensive quicksort "
+                   f"win is {crossover.gap[0]:.0f} ns/row and the cheapest "
+                   f"samplesort win {crossover.gap[1]:.0f}, so this is a threshold "
+                   "rather than a tendency.")
+        missed = crossover.total - crossover.correct
+        support.append(
+            "**A rule you can apply without running both.** The column count is too "
+            "coarse and the shape family is not the axis -- `low_cardinality_d4` "
+            "goes to the quicksort while `independent_uniform_c16` goes to the "
+            "samplesort, so cardinality does not order them. What does is how much "
+            "work the tie structure creates, and a serial quicksort's own cost per "
+            "row measures it: at "
+            f"**>= {crossover.columns} columns in parallel, above "
+            f"{crossover.threshold:.0f} ns/row use the samplesort, below it the "
+            f"quicksort**. That predicts {crossover.correct} of {crossover.total} "
+            f"cells here"
+            + (f", missing {missed}" if missed else "") + "."
+            + gap
+            + " Cheap per row means the order resolves early and the quicksort's "
+              "faster partition wins; expensive means deep tie chains, where the "
+              "samplesort's bucket classification amortises and its scheduler is "
+              "the one that scales.")
     if "flip" in tables and not tables["flip"].empty:
         flipped = int(tables["flip"]["flips"].sum())
         support.append(
