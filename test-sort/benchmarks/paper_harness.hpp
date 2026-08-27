@@ -73,6 +73,11 @@ struct TslPaperMachine {
   std::string compiler = "unknown";
   double clock_mhz = 0.0;
   std::size_t cores = 0;            // logical CPUs the machine has
+  // Which CPUs this process may run on, not just how many. See
+  // `tsl_usable_cpu_list`: a count cannot distinguish six physical cores from
+  // three cores and their SMT siblings, and that distinction decides whether a
+  // parallel figure means anything.
+  std::string cpu_list;
   std::size_t allowed_cpus = 0;     // logical CPUs this process may run on
   std::size_t physical_per_node = 0;// physical cores in one NUMA node
   std::size_t numa_nodes = 0;
@@ -112,6 +117,7 @@ struct TslPaperMachine {
     // What this process may actually run on, which is the number that matters:
     // a worker count above it oversubscribes whatever `numactl` allowed.
     machine.allowed_cpus = tsl_usable_cpu_count();
+    machine.cpu_list = tsl_usable_cpu_list();
     // Physical cores per NUMA node, from sysfs: one entry per logical cpu, and
     // `thread_siblings_list` names the SMT group so each physical core is counted
     // once. Nodes come from the `node*` directories.
@@ -243,6 +249,11 @@ struct TslPaperMachine {
                 "%zu logical cpu(s) available to this process%s, LLC %zu MiB\n",
                 numa_nodes, physical_per_node, allowed_cpus,
                 pinned ? " [pinned]" : "", llc_bytes / (1024 * 1024));
+    // The mask, spelled out. "six cpus" is not the same claim as "cpus 0-5", and
+    // only the second one can be checked against the machine's topology after the
+    // fact.
+    std::printf("cpus available: %s\n",
+                cpu_list.empty() ? "unknown" : cpu_list.c_str());
     // The number every parallel figure is derived from, said out loud. A run whose
     // thread axis silently collapsed to one worker looks exactly like a run of a
     // machine that has one core, and the difference is six hours of measuring the
@@ -633,7 +644,7 @@ class TslPaperResults {
            "ns_per_element_median,ns_per_element_p25,ns_per_element_p75,"
            "preempted_passes,involuntary_switches,"
            "ns_materialize,ns_sort,ns_detect,verified,drop_reason,"
-           "host,governor,clock_mhz,compiler,start_load,pinned_cpus\n";
+           "host,governor,clock_mhz,compiler,start_load,pinned_cpus,cpu_list\n";
     for (auto const & row : rows_) {
       csv << csv_field(row.question) << ',' << csv_field(row.binary) << ','
           << csv_field(row.shape) << ',' << csv_field(row.shape_params) << ','
@@ -656,7 +667,8 @@ class TslPaperResults {
           // otherwise indistinguishable afterwards from a clean one. This is not
           // hypothetical -- a stray pinned job took one of six cores from the first
           // minutes of a real run, and nothing in the results would have said so.
-          << machine_.load << ',' << machine_.allowed_cpus << '\n';
+          << machine_.load << ',' << machine_.allowed_cpus << ','
+          << csv_field(machine_.cpu_list) << '\n';
     }
     std::printf("\nwrote %s (%zu rows)\n", path.c_str(), rows_.size());
   }

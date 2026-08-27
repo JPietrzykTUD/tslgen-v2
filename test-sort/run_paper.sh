@@ -1098,6 +1098,64 @@ if [[ -n "$sibling_mask" && "$quick" != "--quick" ]]; then
   echo "     ${#second_of_core[@]} siblings (mask $sibling_mask)"
 fi
 
+# Does the mask this run was given actually hold one thread per physical core?
+#
+# `physical_mask` above comes from sysfs; the mask a caller passes to numactl or
+# taskset is written by hand. When they agree, every parallel figure means what it
+# says. When they do not -- because this host enumerates siblings adjacently, so
+# `0-5` is three cores and their siblings rather than six cores -- the parallel
+# numbers measure SMT contention and read as poor scaling, and nothing in the
+# results says which happened. Checked here, against the affinity this process
+# actually has, because that is the one thing a hand-written mask cannot be trusted
+# to describe.
+if [[ -n "$physical_mask" ]]; then
+  ambient="$(python3 - "$physical_mask" <<'MASKCHECK'
+import os, sys
+
+def expand(spec):
+    out = set()
+    for part in spec.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            lo, hi = part.split("-")
+            out.update(range(int(lo), int(hi) + 1))
+        else:
+            out.add(int(part))
+    return out
+
+physical = expand(sys.argv[1])
+mine = os.sched_getaffinity(0)
+siblings = mine - physical
+if siblings and mine - siblings:
+    print("mixed " + ",".join(map(str, sorted(siblings))))
+elif siblings:
+    print("siblings-only " + ",".join(map(str, sorted(siblings))))
+else:
+    print("clean")
+MASKCHECK
+)" || ambient="unknown"
+  case "$ambient" in
+    clean)
+      echo "affinity: one thread per physical core (matches sysfs)" ;;
+    mixed*)
+      echo
+      echo "!! this run's affinity includes SMT siblings: ${ambient#mixed }" >&2
+      echo "   sysfs says node 0's physical cores are $physical_mask, and the mask" >&2
+      echo "   this process has is not one thread per core. Every parallel figure" >&2
+      echo "   below then measures siblings evicting each other and reads as poor" >&2
+      echo "   scaling -- which is a finding about the pin, not about the sort." >&2
+      echo "   Pin to the physical cores instead:" >&2
+      echo "     numactl --physcpubind=$physical_mask --membind=0 ..." >&2
+      echo "   (q4_smt deliberately uses the siblings and is unaffected.)" >&2 ;;
+    siblings-only*)
+      echo "affinity: entirely outside node 0's first-thread set (${ambient#siblings-only })" >&2 ;;
+    *)
+      echo "affinity: could not be checked against sysfs" >&2 ;;
+  esac
+fi
+
 # Q4 gets the tuned configuration and the measured keys: its thread axis is where
 # the algorithm crossover is visible, and it is only visible on real keys -- the
 # synthetic shapes are won by the quicksort at every thread count.

@@ -26,7 +26,8 @@ FIELDS = ["question", "binary", "shape", "shape_params", "rows", "columns",
           "repetitions", "ns_per_element_median", "ns_per_element_p25",
           "ns_per_element_p75", "preempted_passes", "involuntary_switches",
           "ns_materialize", "ns_sort", "ns_detect",
-          "verified", "drop_reason", "host", "governor", "clock_mhz", "compiler"]
+          "verified", "drop_reason", "host", "governor", "clock_mhz", "compiler",
+          "start_load", "pinned_cpus", "cpu_list"]
 
 
 def parse_name(name):
