@@ -1194,9 +1194,15 @@ def q2_algorithms(results: Results) -> Answer:
         "magnitude.")
 
     caveats = [
-        "Both sorters are configured from `best_config.tsv`, whose entries are the "
-        "tuner's *serial* decision. A parallel comparison built on a serially tuned "
-        "quicksort charges the quicksort for a knob nobody re-tuned — see Q0.",
+        ("Both sorters are configured from `best_config.tsv`, which carries a worker "
+         "field here, so each row ran the configuration the tuner chose at its own "
+         "thread count."
+         if _worker_keyed(results) else
+         "Both sorters are configured from `best_config.tsv`, whose entries in this "
+         "directory are the tuner's *serial* decision -- the file has no worker "
+         "field. A parallel comparison built on a serially tuned quicksort charges "
+         "the quicksort for a knob nobody re-tuned; re-run the tuner to close it. "
+         "See Q0."),
         "Six workers is one thread per physical core of one NUMA node, pinned. "
         "Numbers taken at twenty-four workers on this host oversubscribed it twice "
         "over and are not in this directory.",

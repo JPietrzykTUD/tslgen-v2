@@ -569,6 +569,31 @@ answer the equal-worker grid cannot produce. The device is not free either -- on
 host, one work queue -- which is exactly why the pairing is measured rather than
 argued.
 
+**But an idle core is the weak version of the claim.** The iso-resource pairing
+returns a *physical* core, and on a machine that already runs one thread per
+physical core -- which is how every parallel figure here is taken -- there is no
+idle core to return. The real alternative to the device at that point is the SMT
+sibling, and this host says a sibling is worth 1.12x to the samplesort and 0.88x to
+the quicksort. That is the bar the offload has to clear, and it is a low one.
+
+`q3_smt` measures it, all three points under the sibling mask so the comparison
+lives inside one affinity:
+
+| what runs | what it answers |
+| --- | --- |
+| scalar at one thread per core | the baseline the paper reports elsewhere |
+| scalar at two threads per core | what a hyperthread adds on top of it |
+| offloaded at one thread per core | what the device adds instead |
+
+If the third beats the second, the device is a better use of the machine's
+remaining capacity than SMT is, and "offloading frees cpus" becomes a measured
+claim rather than an argument. If it does not, the honest finding is that on this
+class of hardware a hyperthread is the cheaper way to spend the same silicon --
+which is worth stating either way, because it is the comparison a reader will make
+anyway. The offloaded run at doubled width is measured too, since the two are not
+mutually exclusive and a device that helps *more* under SMT pressure would be the
+strongest result available.
+
 **What the detector did, beside what it cost.** Runtime alone cannot separate "the
 offload did not pay" from "the offload never happened": a backend that declined
 every range because it fell below the offload threshold, or because its in-flight

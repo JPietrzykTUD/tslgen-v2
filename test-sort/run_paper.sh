@@ -44,7 +44,7 @@ here="$(cd "$(dirname "$0")" && pwd)"
 # Every stage this suite can run, in the order it runs them. `--stages` selects a
 # subset by name; `--list-stages` prints them.
 all_stages=(q0_tune q1_baselines q2_algorithms q3_detection q3_ladder q3_pressure
-            q3_run_length q4_scaling q4_smt q5_variants q6_portability report)
+            q3_run_length q4_scaling q4_smt q3_smt q5_variants q6_portability report)
 
 usage() {
   cat <<'USAGE'
@@ -534,7 +534,7 @@ fi
 # host's accelerators and then refused the run over a missing libaccel-config, for
 # a question it was never going to measure.
 runs_q3="no"
-for _stage in q3_detection q3_ladder q3_pressure q3_run_length; do
+for _stage in q3_detection q3_ladder q3_pressure q3_run_length q3_smt; do
   want "$_stage" && runs_q3="yes"
 done
 
@@ -750,7 +750,7 @@ for stage in "${all_stages[@]}"; do
   case "$stage" in
     report) continue ;;                    # not a measurement
     q0_tune) continue ;;                   # printed separately, before the count
-    q3_ladder|q3_pressure|q3_run_length|q4_smt)
+    q3_ladder|q3_pressure|q3_run_length|q4_smt|q3_smt)
       [[ "$quick" == "--quick" ]] && continue ;;
   esac
   stage_total=$(( stage_total + 1 ))
@@ -1125,6 +1125,42 @@ ${#first_of_core[@]} cores)"
   echo "--- q4_smt finished in $(elapsed_text $(( SECONDS - smt_began )))"
 fi
 
+# Does the offload free a core, when the only other way to use that capacity is a
+# hyperthread?
+#
+# `--iso-resource` in q3_detection already asks the fair version of "does
+# offloading pay": the offloaded run gets one worker fewer than the scalar scan it
+# is compared against, so the device is charged for the core it is supposed to be
+# freeing. But it asks it on *physical* cores, where a freed core is simply idle,
+# and that is the weak form of the claim.
+#
+# The strong form starts from a machine already using every physical core, which is
+# where a sort actually runs. There the alternative to the device is not an idle
+# core, it is the SMT sibling -- and this host's q4_smt says a sibling is worth
+# 1.12x to the samplesort and 0.88x to the quicksort, so the bar is low. Three
+# points settle it, all under the sibling mask so the comparison is inside one
+# affinity:
+#
+#   scalar at <physical>            what a core does
+#   scalar at <physical * 2>        what a sibling adds on top
+#   offloaded at <physical>         what the device adds instead
+#
+# If the offloaded run at physical width beats the scalar run at doubled width, the
+# device is a better use of the remaining capacity than a hyperthread, and "frees
+# cpus" is a measured claim rather than an argument. The offloaded row at doubled
+# width is measured too, since the two are not exclusive.
+#
+# Narrow on purpose, and the same cell as q3_ladder so the two are comparable.
+if want q3_smt && [[ -n "$sibling_mask" && "$quick" != "--quick"       && -x "$build/bench_q3_detection" ]]; then
+  smt_workers=$(( ${#first_of_core[@]} + ${#second_of_core[@]} ))
+  stage_index=$(( stage_index + 1 ))
+  q3smt_began=$SECONDS
+  echo
+  echo "=== [$stage_index/$stage_total] q3_smt (${#first_of_core[@]} cores vs $smt_workers threads, offload against a hyperthread)"
+  (cd "$build" && taskset -c "$sibling_mask" ./bench_q3_detection --tuned "$tuned"       --detectors "$q3_detectors"       --workers "${#first_of_core[@]},$smt_workers"       --cardinalities "${COSORT_Q3_LADDER_CARDINALITY:-16}"       --cols "${COSORT_Q3_LADDER_COLS:-8}" --element-bytes 4       --sizes "${COSORT_Q3_LADDER_SIZES:-4}"       --counters "$results/q3_smt_detector_counters.csv"       --csv "$results/q3_smt.csv" 2>&1) | tee "$results/q3_smt.log"
+  echo "--- q3_smt finished in $(elapsed_text $(( SECONDS - q3smt_began )))"
+fi
+
 # Q5 and Q6 are stages of the existing staged driver rather than new binaries: a
 # bench_q5_*.cpp would have to re-implement its registration, its variant
 # enumeration and its drop accounting to produce numbers it already produces.
@@ -1265,6 +1301,12 @@ what is in there, beyond one CSV per question:
                                 with both SMT siblings, against q4_scaling's one
                                 thread per core. `pinned_cpus` says which mask a
                                 row ran under
+  q3_smt.csv                    the offload measured against a hyperthread rather
+                                than against an idle core: scalar at one thread per
+                                core, scalar at two, and the offloaded backend at
+                                one. If the third beats the second, the device is a
+                                better use of the remaining capacity than SMT is,
+                                which is the strong form of "offloading frees cpus"
   q3_run_length.csv             the same two sizes with rows/cardinality held, so
                                 only the footprint changes. The pair separates
                                 "the offload likes memory pressure" from "the
