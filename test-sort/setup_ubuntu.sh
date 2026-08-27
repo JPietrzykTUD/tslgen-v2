@@ -198,9 +198,32 @@ for device in dsa iax; do
   fi
 done
 if command -v accel-config >/dev/null 2>&1; then
-  enabled="$(accel-config list 2>/dev/null | grep -c '"state":"enabled"' || true)"
-  if [[ "${enabled:-0}" -gt 0 ]]; then
-    echo "  work queues              $enabled enabled"
+  # Counted per kind, because `grep -c '"state":"enabled"'` counts the *devices*
+  # too and reported "6 enabled" on a host with three devices and three queues.
+  # The two numbers say different things and only one of them is a work queue.
+  counts="$(accel-config list 2>/dev/null | python3 -c '
+import json, sys
+try:
+    devices = json.load(sys.stdin)
+except Exception:
+    print("0 0 0"); raise SystemExit(0)
+dev = wq = usable = 0
+for device in devices:
+    if device.get("state") == "enabled":
+        dev += 1
+    for group in device.get("groups", []):
+        for queue in group.get("grouped_workqueues", []):
+            if queue.get("state") != "enabled":
+                continue
+            wq += 1
+            if queue.get("type") == "user":
+                usable += 1
+print(dev, wq, usable)
+' 2>/dev/null || echo "0 0 0")"
+  read -r accel_devices accel_queues accel_usable <<< "$counts"
+  if [[ "${accel_queues:-0}" -gt 0 ]]; then
+    echo "  devices                  $accel_devices enabled"
+    echo "  work queues              $accel_queues enabled, $accel_usable usable from userspace"
     accel-config list 2>/dev/null | python3 -c '
 import json, sys
 try:
@@ -225,6 +248,27 @@ for device in devices:
     # when it cannot *open* the queue, so a run by a user outside the group reads
     # as a missing package. Checked for the user who will actually measure, which
     # is not root when the run drops privileges (isolate_cpus.sh run does).
+    # Every queue owned by an in-kernel driver is the case that looks ready and is
+    # not: `accel-config list` shows enabled queues, the library loads, and there
+    # is still no character device to submit through, because a kernel-type queue
+    # belongs to something like iaa_crypto rather than to userspace.
+    if [[ "${accel_usable:-0}" -eq 0 ]]; then
+      echo "    !! none of these queues is type=user, so no /dev/dsa or /dev/iax" >&2
+      echo "       node exists and nothing in userspace can submit to them. They" >&2
+      echo "       belong to an in-kernel driver (iaa_crypto, dmaengine). One has" >&2
+      echo "       to be handed over, e.g. for an IAA device iax1:" >&2
+      echo "         sudo accel-config disable-wq iax1/wq1.0" >&2
+      echo "         sudo accel-config config-wq iax1/wq1.0 --type=user \\" >&2
+      echo "              --mode=dedicated --priority=1 --group-id=0 \\" >&2
+      echo "              --name=cosort_rle --wq-size=<from list>" >&2
+      echo "         sudo accel-config enable-wq iax1/wq1.0" >&2
+      echo "       A *shared* queue additionally needs PASID, so the kernel wants" >&2
+      echo "       intel_iommu=on,sm_on; dedicated queues do not. Repeat per" >&2
+      echo "       device -- IAA devices are usually odd-numbered (iax1, iax3, ...)." >&2
+      echo "       Then this check should show a type=user queue and a /dev/iax" >&2
+      echo "       node, and that node still has to be readable by the measuring" >&2
+      echo "       user." >&2
+    fi
     target_user="${SUDO_USER:-$(id -un)}"
     for node in /dev/dsa/* /dev/iax/*; do
       [[ -e "$node" ]] || continue
