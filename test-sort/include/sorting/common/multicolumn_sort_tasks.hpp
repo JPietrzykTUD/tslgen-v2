@@ -29,6 +29,29 @@ struct TslTaskExecutorMetrics {
 // "queued or running tasks". A unit registered with add_pending keeps wait()
 // blocked until resolve_pending, which is what stops the sort from reporting
 // completion while an accelerator still holds undiscovered next-column work.
+// One iteration of a spin that is waiting for a device rather than for another
+// thread.
+//
+// `pause` is the right primitive here rather than `yield`: a drain that has no
+// other work to run gains nothing from handing the core to the scheduler and pays
+// a context switch for it, while `pause` tells the core this is a spin -- it drops
+// out of speculation and saves the power. Elsewhere it is a plain `yield`, which
+// is correct if slower.
+//
+// This exists because a spin with no backoff at all is not a theoretical problem:
+// the samplesort's sequential drain polled a DSA detector in a tight loop, and
+// each of those polls takes the detector's pool lock.
+inline void tsl_cpu_pause() {
+#if defined(__x86_64__) || defined(__i386__)
+  __builtin_ia32_pause();
+#elif defined(__aarch64__)
+  asm volatile("yield" ::: "memory");
+#else
+  std::this_thread::yield();
+#endif
+}
+
+
 struct TslPendingWork {
   virtual ~TslPendingWork() = default;
   // Call BEFORE handing the work out. A completion that resolved a count which

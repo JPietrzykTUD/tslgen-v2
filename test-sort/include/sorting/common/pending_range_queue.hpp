@@ -35,6 +35,7 @@
 // detector reports an exception raised off a worker thread, and without somewhere
 // to put it that throw reaches `std::terminate`.
 
+#include "sorting/common/multicolumn_sort_tasks.hpp"
 #include "sorting/common/multicolumn_sort_types.hpp"
 
 #include <atomic>
@@ -126,13 +127,27 @@ class TslPendingRangeQueue final : public TslPendingWork {
         auto poll = poller_;
         if (poll && !polling_) {
           polling_ = true;
-          auto const before = published_;
           lock.unlock();
           poll();
           lock.lock();
           polling_ = false;
           --idle_;
-          if (published_ == before && shared_.empty() && pending_ != 0) {
+          // Back off whenever the poll left this worker with nothing to take.
+          //
+          // The condition used to be `published_ == before`, and that counter is
+          // global and monotonic: every worker's every publish moves it. A sort
+          // publishes constantly, so on a busy run it had always moved by the time
+          // the poll returned, the branch was never taken, and this loop polled at
+          // full speed. Measured on a six-worker run at eight columns: 105 polls
+          // per descriptor against 1.4 at one worker, where the same detector and
+          // the same device produce the same completions. The device was never the
+          // problem; the guard asked "did anyone publish anything" when the only
+          // thing worth asking is "did I get work".
+          //
+          // Waiting costs no latency: `resolve_pending` notifies `settled_` on
+          // every completion, so a span that lands during the interval wakes this
+          // worker immediately. What the interval bounds is the *fruitless* rate.
+          if (shared_.empty() && pending_ != 0) {
             settled_.wait_for(lock, poll_interval_);
           }
           continue;
@@ -160,9 +175,23 @@ class TslPendingRangeQueue final : public TslPendingWork {
         settled_.wait_for(lock, poll_interval_);
         continue;
       }
+      auto const before = pending_;
       lock.unlock();
       poll();
       lock.lock();
+      // Back off when that poll settled nothing. This loop is the sequential
+      // phase's drain: there is no other work to interleave, so it spins rather
+      // than sleeps -- but a spin with no backoff at all takes the detector's pool
+      // lock on every iteration, which is what turned a device that was keeping up
+      // into a lock convoy. A pause is tens of cycles against a descriptor's
+      // microseconds, so it costs no completion latency.
+      if (pending_ == before && pending_ != 0) {
+        lock.unlock();
+        for (int spin = 0; spin < 64; ++spin) {
+          tsl_cpu_pause();
+        }
+        lock.lock();
+      }
     }
     out.insert(out.end(), shared_.begin(), shared_.end());
     shared_.clear();

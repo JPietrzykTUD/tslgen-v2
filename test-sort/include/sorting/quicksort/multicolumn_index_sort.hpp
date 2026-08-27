@@ -155,22 +155,6 @@ inline auto tsl_index_since(std::chrono::steady_clock::time_point mark) -> doubl
     std::chrono::steady_clock::now() - mark).count();
 }
 
-// One iteration of a spin that is waiting for a device, not for another thread.
-//
-// `pause` is the right primitive rather than `yield`: the serial drain has nothing
-// else to run, so handing the core to the scheduler buys nothing and costs a
-// context switch, while `pause` tells the core this is a spin -- it drops the
-// pipeline out of speculation and saves the power. Elsewhere it is a plain
-// `yield`, which is correct if slower.
-inline void tsl_index_pause() {
-#if defined(__x86_64__) || defined(__i386__)
-  __builtin_ia32_pause();
-#elif defined(__aarch64__)
-  asm volatile("yield" ::: "memory");
-#else
-  std::this_thread::yield();
-#endif
-}
 
 
 // The portable detector, in the same call shape the accelerator fleets use, so a
@@ -337,7 +321,7 @@ class TslMultiColumnIndexSorter {
           }
           idle = idle < 256 ? idle * 2 + 1 : 256;
           for (std::size_t spin = 0; spin < idle; ++spin) {
-            tsl_index_pause();
+            tsl_cpu_pause();
           }
         }
         if (pending.error) {
@@ -814,7 +798,7 @@ class TslMultiColumnIndexSorter {
   // The debt an asynchronous detector registers, for a caller that is the only
   // thread involved.
   //
-  // See `tsl_index_pause` for why the drain backs off rather than spinning.
+  // See `tsl_cpu_pause` for why the drain backs off rather than spinning.
   //
   // The level loop below is bulk-synchronous: it fills `next_ranges_` from the
   // current column and cannot advance until every range of this column has
