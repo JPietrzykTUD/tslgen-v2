@@ -513,24 +513,42 @@ class Provenance:
     warnings: tuple[str, ...]
 
 
-def _contended_count(measured: pd.DataFrame) -> int:
-    """Rows whose *median* sits inside kernel interference rather than beside it.
+DISTURBED_SWITCHES_PER_PASS = 100.0
 
-    A minority of preempted passes is what the median and the quartiles are for.
-    A majority is not recoverable, and the harness records the count per row so
-    this can be decided here rather than guessed.
-    """
-    if "preempted_passes" not in measured or measured.empty:
+
+def _contended_count(measured: pd.DataFrame) -> int:
+    '''Rows the kernel interrupted often enough to move the median.
+
+    The rate matters, not whether it happened. Every timed pass on a real machine
+    sees a few involuntary switches -- the timer tick, a kworker, an IRQ -- and an
+    earlier version of this counted any of them, so it flagged 1600 of 2270 rows
+    from a run on exclusively-partitioned cores where about ten were genuinely
+    disturbed. `paper_harness.hpp` draws the same line at
+    `disturbed_switches_per_pass`; keep the two together.
+    '''
+    if "involuntary_switches" not in measured or measured.empty:
         return 0
-    preempted = numeric(measured, "preempted_passes")
-    total = numeric(measured, "repetitions")
-    return int(((preempted * 2) > total).fillna(False).sum())
+    switches = numeric(measured, "involuntary_switches")
+    reps = numeric(measured, "repetitions").replace(0, pd.NA)
+    rate = switches / reps
+    return int((rate > DISTURBED_SWITCHES_PER_PASS).fillna(False).sum())
 
 
 def _count_word(count: int) -> str:
     """Small counts as words, because "the 3 styles" reads as a defect. Used where
     the number comes from what a build could compile rather than from the plan."""
     return {1: "one", 2: "two", 3: "three", 4: "four"}.get(count, str(count))
+
+
+def _worker_keyed(results: Results) -> bool:
+    """Whether this directory's best_config.tsv can express a per-worker choice.
+
+    The key gained a fifth field for the worker count, because the tuner's parallel
+    winner differs from its serial one and a four-field key silently shipped the
+    serial one. Both forms still parse, so which one a directory holds is a fact
+    about that directory and has to be read rather than assumed.
+    """
+    return any(len(key.split("|")) > 4 for key in results.best_config)
 
 
 def numeric_or(text: str, fallback: int) -> int:
@@ -611,9 +629,10 @@ def provenance(results: Results) -> Provenance:
     contended_total = int(coverage["contended"].sum()) if not coverage.empty else 0
     if contended_total:
         warnings.append(
-            f"{contended_total} rows had more than half their timed passes "
-            "preempted by the kernel, so something else was on those cores while "
-            "they were measured. This is the interference the start-of-run load "
+            f"{contended_total} rows lost the cpu to the kernel more than "
+            f"{DISTURBED_SWITCHES_PER_PASS:.0f} times per timed pass, so something "
+            "was competing for those cores. A few switches per pass is the timer "
+            "tick and is normal; this is the interference the start-of-run load "
             "average cannot see, because it arrives after the driver launches.")
     unsettled_total = int(coverage["unsettled"].sum()) if not coverage.empty else 0
     if unsettled_total:
@@ -788,8 +807,11 @@ def q0_tuning(results: Results) -> Answer:
         stats.append(Stat("Candidates", str(int(len(knobs))),
                           "measured in the reported cell"))
 
-    # 5. best_config.tsv has no worker column, so a parallel winner cannot be
-    #    expressed in it. Whether that lost anything is measurable here.
+    # 5. What the tuner chose per condition, and whether the shipped file can
+    #    express it. It used to be keyed by algorithm|style|width|key width only,
+    #    so a parallel winner had nowhere to go; the worker field closed that, and
+    #    this now reports which of the two the directory in hand actually has --
+    #    an old file still reads, and its parallel choice is still lost.
     conflict = pd.DataFrame()
     if not knobs.empty:
         per_condition = (knobs.groupby(["algorithm", "key width", "workers"])
@@ -815,10 +837,15 @@ def q0_tuning(results: Results) -> Answer:
                 f"{int(log['cell'].nunique())} cells at "
                 f"{int(lost['workers'].max())} workers, at "
                 f"{lost['paired_ratio'].min():.3f}–{lost['paired_ratio'].max():.3f} "
-                "of the default. `best_config.tsv` is keyed by "
-                "algorithm|style|width|key width with **no worker column**, so the "
-                "parallel choice has nowhere to go and every reporting driver runs "
-                "the serial one.")
+                "of the default."
+                + (" `best_config.tsv` carries a worker field, so that choice is "
+                   "what the reporting drivers ran at that width."
+                   if _worker_keyed(results) else
+                   " `best_config.tsv` in this directory is keyed by "
+                   "algorithm|style|width|key width with **no worker column**, so "
+                   "the parallel choice has nowhere to go and every reporting "
+                   "driver ran the serial one. Re-run the tuner to get a file that "
+                   "can express it."))
 
     cells_explored = int(measured["cell"].nunique())
     priced_out = results.drops(qid)

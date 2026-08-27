@@ -347,10 +347,33 @@ struct TslPaperStats {
     return median > 0.0 ? (p75 - p25) / median : 0.0;
   }
 
-  // True when more than half the timed passes were preempted, so the median sits
-  // inside the interference rather than beside it.
+  // Involuntary switches per timed pass. The rate is the honest statistic; the
+  // count of passes that saw *any* is not, because on a real machine every pass
+  // sees a few -- the timer tick, a kworker, an IRQ -- and those are unavoidable
+  // rather than interference.
+  auto switches_per_pass() const -> double {
+    return repetitions > 0
+      ? static_cast<double>(involuntary_switches) / repetitions : 0.0;
+  }
+
+  // True when the kernel took the CPU away often enough to move the median.
+  //
+  // The threshold was "any involuntary switch in more than half the passes",
+  // which is a detector with its threshold at zero: measured across a full suite
+  // on an exclusively-partitioned host, the median row saw 2 to 12 switches per
+  // pass and 1600 of 2270 rows tripped the flag, while only about ten had a rate
+  // high enough to matter. A flag that fires on almost everything is worse than
+  // no flag, because it trains a reader to skip the line that would have caught
+  // the real case.
+  //
+  // A switch costs a few microseconds. A pass is a good fraction of a second, so
+  // a hundred of them is well under a tenth of a percent and beneath anything
+  // this harness can resolve; a thousand starts to be visible against a 1-5%
+  // spread. The line is drawn where the cost approaches the resolution.
+  static constexpr double disturbed_switches_per_pass = 100.0;
+
   auto contaminated() const -> bool {
-    return repetitions > 0 && preempted_passes * 2 > repetitions;
+    return switches_per_pass() > disturbed_switches_per_pass;
   }
 };
 
@@ -661,10 +684,13 @@ class TslPaperResults {
     }
     if (contended_ > 0) {
       text += "\n  !! " + std::to_string(contended_)
-              + " row(s) had more than half their timed passes preempted by the"
-              " kernel: something else was running on these cores while they were"
-              " measured. The start-of-run load average does not catch this, so"
-              " check the preempted_passes column before publishing those rows";
+              + " row(s) lost the cpu to the kernel more than "
+              + std::to_string(static_cast<int>(
+                  TslPaperStats::disturbed_switches_per_pass))
+              + " times per timed pass: something else was competing for these"
+              " cores. A handful of switches per pass is the timer tick and is"
+              " normal; this is not. Check involuntary_switches before publishing"
+              " those rows";
     }
     return text;
   }

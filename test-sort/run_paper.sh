@@ -1221,22 +1221,25 @@ for path in sorted(glob.glob(os.path.join(results, "*.csv"))):
     contended = total = 0
     with open(path, newline="") as handle:
         for row in csv.DictReader(handle):
-            passes = row.get("preempted_passes") or ""
+            # The rate, not whether it happened: a few involuntary switches per
+            # pass is the timer tick on any machine. See
+            # TslPaperStats::disturbed_switches_per_pass.
+            switches = row.get("involuntary_switches") or ""
             reps = row.get("repetitions") or ""
-            if not passes.strip() or not reps.strip():
+            if not switches.strip() or not reps.strip():
                 continue
             try:
-                passes, reps = int(float(passes)), int(float(reps))
+                switches, reps = float(switches), float(reps)
             except ValueError:
                 continue
             total += 1
-            if reps > 0 and passes * 2 > reps:
+            if reps > 0 and switches / reps > 100.0:
                 contended += 1
     if contended:
         worst.append((os.path.basename(path), contended, total))
 if worst:
     print()
-    print("!! rows measured while the kernel was preempting this run:")
+    print("!! rows the kernel interrupted more than 100 times per timed pass:")
     for name, contended, total in worst:
         print(f"     {name}: {contended} of {total} rows")
     print("   The scheduler put other work on these cores after the start-of-run")
