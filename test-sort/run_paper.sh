@@ -750,8 +750,12 @@ for stage in "${all_stages[@]}"; do
   case "$stage" in
     report) continue ;;                    # not a measurement
     q0_tune) continue ;;                   # printed separately, before the count
-    q3_ladder|q3_pressure|q3_run_length|q4_smt|q3_smt)
+    q3_ladder|q3_pressure|q3_run_length|q4_smt)
       [[ "$quick" == "--quick" ]] && continue ;;
+    q3_smt)
+      # Two row sets, one per span routing, so it counts twice.
+      [[ "$quick" == "--quick" ]] && continue
+      stage_total=$(( stage_total + 1 )) ;;
   esac
   stage_total=$(( stage_total + 1 ))
 done
@@ -788,8 +792,17 @@ $(date +%H:%M:%S), $(elapsed_text $(( began - suite_started ))) into the run)"
   for (( pass = 1; pass <= passes; pass++ )); do
     local scratch="$results/.$name.pass$pass.csv"
     echo "--- pass $pass of $passes" | tee -a "$results/$name.log"
-    (cd "$build" && "./$binary" "$@" --csv "$scratch" 2>&1) \
-      | tee -a "$results/$name.log"
+    # TSL_TASKSET_MASK widens the affinity for one stage. Only the SMT ladder uses
+    # it: every other stage measures the mask the run was launched with, and a
+    # stage that silently changed it would make its rows incomparable with the
+    # rest of the directory. `cpu_list` in the CSV records what each row got.
+    if [[ -n "${TSL_TASKSET_MASK:-}" ]]; then
+      (cd "$build" && taskset -c "$TSL_TASKSET_MASK" "./$binary" "$@" \
+        --csv "$scratch" 2>&1) | tee -a "$results/$name.log"
+    else
+      (cd "$build" && "./$binary" "$@" --csv "$scratch" 2>&1) \
+        | tee -a "$results/$name.log"
+    fi
     # First pass keeps the header; the rest append their rows to it. The schema is
     # identical by construction -- same binary, same flags -- so this is a longer
     # table rather than a merged one.
@@ -1218,20 +1231,38 @@ if want q3_smt && [[ -n "$sibling_mask" && "$quick" != "--quick" \
   for (( w = ${#first_of_core[@]} + 1; w <= smt_workers; w++ )); do
     q3smt_ladder="$q3smt_ladder,$w"
   done
-  stage_index=$(( stage_index + 1 ))
-  q3smt_began=$SECONDS
+  # Repeated, because the effect being resolved is a few percent and re-running
+  # this binary moves its numbers by more than that: the asynchronous path's work
+  # decomposition is timing-dependent, and a single pass of this cell has been
+  # observed at 303 and at 1031 ranges with the same flags. One pass would produce
+  # a number rather than a result.
+  #
+  # Both span routings, as two named row sets in two files. The default is what
+  # every published figure was taken with; `--async-spans-local` routes an
+  # asynchronous completion through the same share threshold a synchronous one
+  # applies instead of publishing every late span to the shared pool. They have to
+  # be compared on the same machine in the same conditions, so they run adjacently
+  # rather than in separate sessions.
+  #
+  # `taskset` inside `run_repeated` is not available, so the mask is applied by
+  # exporting it for the subshell the helper starts. Both invocations carry it.
+  q3smt_common=(--tuned "$tuned" --detectors "$q3_detectors" --iso-resource
+                --workers "$q3smt_ladder"
+                --cardinalities "${COSORT_Q3_LADDER_CARDINALITY:-16}"
+                --cols "${COSORT_Q3_LADDER_COLS:-8}" --element-bytes 4
+                --sizes "${COSORT_Q3_LADDER_SIZES:-4}")
+  q3smt_passes="${COSORT_Q3_SMT_PASSES:-3}"
   echo
-  echo "=== [$stage_index/$stage_total] q3_smt (iso-resource ladder over \
-${#first_of_core[@]}..$smt_workers threads: W-1 + device against W scalar)"
-  (cd "$build" && taskset -c "$sibling_mask" ./bench_q3_detection --tuned "$tuned" \
-      --detectors "$q3_detectors" --iso-resource \
-      --workers "$q3smt_ladder" \
-      --cardinalities "${COSORT_Q3_LADDER_CARDINALITY:-16}" \
-      --cols "${COSORT_Q3_LADDER_COLS:-8}" --element-bytes 4 \
-      --sizes "${COSORT_Q3_LADDER_SIZES:-4}" \
-      --counters "$results/q3_smt_detector_counters.csv" \
-      --csv "$results/q3_smt.csv" 2>&1) | tee "$results/q3_smt.log"
-  echo "--- q3_smt finished in $(elapsed_text $(( SECONDS - q3smt_began )))"
+  echo "SMT ladder: scalar at ${#first_of_core[@]}..$smt_workers threads against \
+the device one thread lower, x$q3smt_passes passes, both span routings"
+  TSL_TASKSET_MASK="$sibling_mask" \
+    run_repeated "$q3smt_passes" bench_q3_detection q3_smt \
+      "${q3smt_common[@]}" \
+      --counters "$results/q3_smt_detector_counters.csv"
+  TSL_TASKSET_MASK="$sibling_mask" \
+    run_repeated "$q3smt_passes" bench_q3_detection q3_smt_local \
+      "${q3smt_common[@]}" --async-spans-local \
+      --counters "$results/q3_smt_local_detector_counters.csv"
 fi
 
 # Q5 and Q6 are stages of the existing staged driver rather than new binaries: a
@@ -1374,7 +1405,7 @@ what is in there, beyond one CSV per question:
                                 with both SMT siblings, against q4_scaling's one
                                 thread per core. `pinned_cpus` says which mask a
                                 row ran under
-  q3_smt.csv                    the iso-resource pairing in the regime where it
+  q3_smt.csv / q3_smt_local.csv the iso-resource pairing in the regime where it
                                 matters: W-1 threads plus the device against W
                                 threads scalar, for W across the saturated range
                                 (one thread per core up to both siblings). The
@@ -1385,7 +1416,13 @@ what is in there, beyond one CSV per question:
                                 as two curves: the device frees a thread wherever
                                 the offloaded one meets the scalar one a step to
                                 its right. `pairing` in `variant` names each
-                                comparison
+                                comparison. Two files: the default span routing
+                                and `--async-spans-local`, which sends a late
+                                completion through the same share threshold a
+                                synchronous one applies. Three passes each, since
+                                the asynchronous decomposition is timing-dependent
+                                and one pass of this cell has been seen at both
+                                303 and 1031 ranges with identical flags
   q3_run_length.csv             the same two sizes with rows/cardinality held, so
                                 only the footprint changes. The pair separates
                                 "the offload likes memory pressure" from "the

@@ -66,6 +66,7 @@
 #endif
 
 
+// What the detector did, as plain values. This is the shape a reader gets.
 struct TslDsaAsyncMetrics {
   std::size_t ranges = 0;              // detect() calls with >= 2 elements
   std::size_t elements = 0;
@@ -79,6 +80,67 @@ struct TslDsaAsyncMetrics {
   std::size_t poll_calls = 0;
   std::size_t poll_advances = 0;       // completions observed by a poll
   std::size_t poll_empty = 0;          // polls that found nothing finished
+};
+
+
+// The same counters as they are *written*: relaxed atomics, no lock.
+//
+// These used to be plain values behind a global `metrics_mutex_`, taken once per
+// span, once per descriptor and once per poll -- about 31,000 contended
+// acquisitions per pass at six workers, in the asynchronous path's hot loop and
+// nowhere near the instrumentation switch that is supposed to keep accounting out
+// of a measured run. Counting how much work the device did must not be the reason
+// the device looks slow.
+//
+// Relaxed because none of these orders anything: they are read once, after the
+// sort, by the thread that owns the detector. Separate cache lines for the three
+// that move per span or per poll, because six workers incrementing one line is the
+// same convoy in a cheaper disguise.
+struct TslDsaAsyncCounters {
+  template <class T>
+  struct alignas(64) padded {
+    std::atomic<T> value{0};
+  };
+  std::atomic<std::size_t> ranges{0};
+  std::atomic<std::size_t> elements{0};
+  std::atomic<std::size_t> offloaded_ranges{0};
+  std::atomic<std::size_t> offloaded_elements{0};
+  std::atomic<std::size_t> fallback_small{0};
+  std::atomic<std::size_t> fallback_no_slot{0};
+  padded<std::size_t> descriptors;
+  padded<std::size_t> fired_blocks;
+  padded<std::size_t> spans_emitted;
+  padded<std::size_t> poll_calls;
+  padded<std::size_t> poll_advances;
+  padded<std::size_t> poll_empty;
+
+  static void bump(std::atomic<std::size_t> & counter, std::size_t by = 1) {
+    counter.fetch_add(by, std::memory_order_relaxed);
+  }
+  template <class T>
+  static void bump(padded<T> & counter, std::size_t by = 1) {
+    counter.value.fetch_add(by, std::memory_order_relaxed);
+  }
+
+  auto snapshot() const -> TslDsaAsyncMetrics {
+    TslDsaAsyncMetrics out;
+    auto const load = [](auto const & counter) {
+      return counter.load(std::memory_order_relaxed);
+    };
+    out.ranges = load(ranges);
+    out.elements = load(elements);
+    out.offloaded_ranges = load(offloaded_ranges);
+    out.offloaded_elements = load(offloaded_elements);
+    out.fallback_small = load(fallback_small);
+    out.fallback_no_slot = load(fallback_no_slot);
+    out.descriptors = load(descriptors.value);
+    out.fired_blocks = load(fired_blocks.value);
+    out.spans_emitted = load(spans_emitted.value);
+    out.poll_calls = load(poll_calls.value);
+    out.poll_advances = load(poll_advances.value);
+    out.poll_empty = load(poll_empty.value);
+    return out;
+  }
 };
 
 
@@ -136,8 +198,7 @@ class TslDsaAsyncRunDetector {
   std::vector<job *> free_;                   // available slots
   std::vector<job *> active_;                 // jobs with work outstanding
 
-  std::mutex metrics_mutex_;
-  TslDsaAsyncMetrics metrics_{};
+  TslDsaAsyncCounters counters_{};
 
  public:
   TslDsaAsyncRunDetector(
@@ -183,9 +244,10 @@ class TslDsaAsyncRunDetector {
   // itself saves the metrics lock below and the pool lease that follows it.
   auto min_offload_elements() const -> std::size_t { return min_offload_elements_; }
 
-  auto metrics() -> TslDsaAsyncMetrics {
-    std::lock_guard<std::mutex> lock(metrics_mutex_);
-    return metrics_;
+  // Read once, after the sort, by the thread that owns the detector -- which is
+  // why the writes can be relaxed and why this needs no lock either.
+  auto metrics() const -> TslDsaAsyncMetrics {
+    return counters_.snapshot();
   }
 
   // Detector seam. `emit` must be self-contained: it is retained past this
@@ -196,16 +258,14 @@ class TslDsaAsyncRunDetector {
       return;
     }
     {
-      std::lock_guard<std::mutex> lock(metrics_mutex_);
-      ++metrics_.ranges;
-      metrics_.elements += end - begin;
+      TslDsaAsyncCounters::bump(counters_.ranges);
+      TslDsaAsyncCounters::bump(counters_.elements, end - begin);
     }
 
     if (backend_ == TslRleBackend::SCALAR || pending_ == nullptr
         || (end - begin) < min_offload_elements_) {
       if (backend_ != TslRleBackend::SCALAR && pending_ != nullptr) {
-        std::lock_guard<std::mutex> lock(metrics_mutex_);
-        ++metrics_.fallback_small;
+        TslDsaAsyncCounters::bump(counters_.fallback_small);
       }
       scan_scalar(values, begin, end, emit);
       return;
@@ -232,8 +292,7 @@ class TslDsaAsyncRunDetector {
     }
     if (claimed == nullptr) {
       {
-        std::lock_guard<std::mutex> lock(metrics_mutex_);
-        ++metrics_.fallback_no_slot;
+        TslDsaAsyncCounters::bump(counters_.fallback_no_slot);
       }
       scan_scalar(values, begin, end, emit);
       return;
@@ -288,8 +347,7 @@ class TslDsaAsyncRunDetector {
       active_.push_back(claimed);
     }
     {
-      std::lock_guard<std::mutex> lock(metrics_mutex_);
-      ++metrics_.offloaded_ranges;
+      TslDsaAsyncCounters::bump(counters_.offloaded_ranges);
     }
   }
 
@@ -329,11 +387,10 @@ class TslDsaAsyncRunDetector {
       candidate->busy.store(false, std::memory_order_release);
     }
 
-    std::lock_guard<std::mutex> lock(metrics_mutex_);
-    ++metrics_.poll_calls;
-    metrics_.poll_advances += advances;
+    TslDsaAsyncCounters::bump(counters_.poll_calls);
+    TslDsaAsyncCounters::bump(counters_.poll_advances, advances);
     if (advances == 0) {
-      ++metrics_.poll_empty;
+      TslDsaAsyncCounters::bump(counters_.poll_empty);
     }
   }
 
@@ -345,16 +402,14 @@ class TslDsaAsyncRunDetector {
       ++spans;
       emit(span);
     });
-    std::lock_guard<std::mutex> lock(metrics_mutex_);
-    metrics_.spans_emitted += spans;
+    TslDsaAsyncCounters::bump(counters_.spans_emitted, spans);
   }
 
   // Boundary at `position` means values[position] != values[position + 1].
   void emit_boundary(job & active, std::size_t position) {
     if (position + 1 - active.run_begin > 1) {
       active.emit(TslRunSpan{active.run_begin, position + 1});
-      std::lock_guard<std::mutex> lock(metrics_mutex_);
-      ++metrics_.spans_emitted;
+      TslDsaAsyncCounters::bump(counters_.spans_emitted);
     }
     active.run_begin = position + 1;
   }
@@ -388,9 +443,8 @@ class TslDsaAsyncRunDetector {
             dml::create_delta.block_on_fault(),
             dml::make_view(source_1, delta_elems), dml::make_view(source_2, delta_elems),
             dml::make_view(delta_out, slot.deltas.size()));
-      std::lock_guard<std::mutex> lock(metrics_mutex_);
-      ++metrics_.descriptors;
-      metrics_.offloaded_elements += delta_elems;
+      TslDsaAsyncCounters::bump(counters_.descriptors);
+      TslDsaAsyncCounters::bump(counters_.offloaded_elements, delta_elems);
     }
 
     active.next_base = base + elems;
@@ -447,8 +501,7 @@ class TslDsaAsyncRunDetector {
           }
         }
       }
-      std::lock_guard<std::mutex> lock(metrics_mutex_);
-      metrics_.fired_blocks += fired;
+      TslDsaAsyncCounters::bump(counters_.fired_blocks, fired);
     }
 
     // Boundaries the compare did not cover: the ragged tail plus the seam index
@@ -468,8 +521,7 @@ class TslDsaAsyncRunDetector {
   void finalize(job & active) {
     if (active.end - active.run_begin > 1) {
       active.emit(TslRunSpan{active.run_begin, active.end});
-      std::lock_guard<std::mutex> lock(metrics_mutex_);
-      ++metrics_.spans_emitted;
+      TslDsaAsyncCounters::bump(counters_.spans_emitted);
     }
     active.finished = true;
     auto * pending = pending_;
