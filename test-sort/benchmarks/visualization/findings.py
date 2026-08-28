@@ -831,10 +831,8 @@ def q0_tuning(results: Results) -> Answer:
     #    an old file still reads, and its parallel choice is still lost.
     conflict = pd.DataFrame()
     if not knobs.empty:
-        per_condition = (knobs.groupby(["algorithm", "key width", "workers"])
-                         .apply(lambda block: block.loc[block["ratio"].idxmin()],
-                                include_groups=False)
-                         .reset_index())
+        per_condition = knobs.loc[
+            knobs.groupby(["algorithm", "key width", "workers"])["ratio"].idxmin()]
         conflict = per_condition[["algorithm", "key width", "workers", "knob",
                                   "candidate", "ratio"]]
         tables["per_condition_best"] = conflict
@@ -1352,27 +1350,45 @@ def q3_detection(results: Results) -> Answer:
             tables["cores_freed"] = freed
             usable = freed.dropna(subset=["cores_freed"])
             if not usable.empty:
-                best = usable.loc[usable["cores_freed"].idxmax()]
+                freest = usable.loc[usable["cores_freed"].idxmax()]
                 stats.append(Stat(
                     "Cores an offload replaces",
-                    f"{best['cores_freed']:.1f} of {int(best['workers_at_full_width'])}",
-                    f"`{best['detector']}` on `{best['shape']}`"))
+                    f"{freest['cores_freed']:.1f} of "
+                    f"{int(freest['workers_at_full_width'])}",
+                    f"`{freest['detector']}` on `{freest['shape']}`"))
+                # Name the cell, not just the shape: this grid sweeps columns and
+                # element width inside each shape, so a shape name alone collapses
+                # six distinct cells onto one label.
+                def cell_label(row: pd.Series) -> str:
+                    parts = [str(row["shape"])]
+                    if "columns" in row:
+                        parts.append(f"{int(row['columns'])} col")
+                    if "element_bytes" in row:
+                        parts.append(f"u{int(row['element_bytes']) * 8}")
+                    return " · ".join(parts)
+
                 for detector, block in usable.groupby("detector"):
+                    total = int((freed["detector"] == detector).sum())
                     support.append(
                         f"**`{detector}` replaces "
                         f"{block['cores_freed'].median():.1f} of "
-                        f"{int(block['workers_at_full_width'].max())} cores** at the "
-                        f"median cell: it reaches what the scalar scan does at full "
-                        f"width using {block['workers_needed'].median():.1f} workers, "
-                        f"so the rest go back to the system. Interpolated between the "
-                        f"two measured thread counts that bracket the crossing.")
+                        f"{int(block['baseline_workers'].max())} cores** in "
+                        f"{len(block)} of {total} cells — "
+                        + ", ".join(cell_label(row) for _, row in block.iterrows())
+                        + f" — reaching the best the scalar scan manages anywhere on "
+                        f"its own curve using {block['workers_needed'].median():.1f} "
+                        f"workers, so the rest go back to the system. Interpolated "
+                        f"between the two measured thread counts that bracket the "
+                        f"crossing.")
                 missed = freed[freed["cores_freed"].isna()]
                 if not missed.empty:
+                    by_det = missed.groupby("detector").size()
                     support.append(
-                        "Never reaches the full-width scalar baseline, so it frees "
-                        "nothing: "
-                        + ", ".join(f"`{row['detector']}` on `{row['shape']}`"
-                                    for _, row in missed.iterrows()) + ".")
+                        "Frees nothing — never reaches the best scalar point in "
+                        + ", ".join(f"{n} cells for `{d}`"
+                                    for d, n in by_det.items())
+                        + ". The offload has to be at least as fast as the scan it "
+                        "replaces before a thread count can be traded away.")
         verdict = (
             f"On this host the best offload is `{best}`, at "
             f"{by_detector.loc[best, 'median']:.2f}x the scalar scan at the median "
