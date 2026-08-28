@@ -787,8 +787,28 @@ run_repeated() {  # passes, binary, csv name, args...
   echo
   echo "=== [$stage_index/$stage_total] $name  x$passes passes  (started \
 $(date +%H:%M:%S), $(elapsed_text $(( began - suite_started ))) into the run)"
-  rm -f "$results/$name.csv" "$results/$name.log" \
-        "$results/${name}_detector_counters.csv"
+  # Move the previous result aside rather than deleting it.
+  #
+  # This used to `rm -f`, and that is only safe when every re-run covers at least
+  # what the last one did. It does not: the axes come from environment variables,
+  # so a narrower invocation -- one that leaves a sweep variable unset and takes a
+  # default -- silently discards a wider result that cost hours. That happened: a
+  # six-cell cardinality sweep was replaced by a single cell because one variable
+  # was missing from the next command line.
+  local keep="$results/superseded"
+  local moved=""
+  local previous
+  for previous in "$results/$name.csv" "$results/$name.log" \
+                  "$results/${name}_detector_counters.csv"; do
+    if [[ -s "$previous" ]]; then
+      mkdir -p "$keep"
+      mv "$previous" "$keep/$(basename "$previous").$(date +%Y%m%dT%H%M%S)"
+      moved="yes"
+    fi
+  done
+  if [[ -n "$moved" ]]; then
+    echo "    previous $name kept in $keep (this run replaces it)"
+  fi
   local pass
   for (( pass = 1; pass <= passes; pass++ )); do
     local scratch="$results/.$name.pass$pass.csv"
@@ -1253,6 +1273,11 @@ if want q3_smt && [[ -n "$sibling_mask" && "$quick" != "--quick" \
                 --cols "${COSORT_Q3_LADDER_COLS:-8}" --element-bytes 4
                 --sizes "${COSORT_Q3_LADDER_SIZES:-4}")
   q3smt_passes="${COSORT_Q3_SMT_PASSES:-3}"
+  # Which row sets to produce: `all` (default), `sweep` for the cardinality ones,
+  # `shapes` for the named ones. A row set costs hours, and re-running one to add
+  # another is how the sweep above came to be overwritten.
+  q3smt_sets="${COSORT_Q3_SMT_SETS:-all}"
+  wants_set() { [[ "$q3smt_sets" == "all" || "$q3smt_sets" == "$1" ]]; }
   echo
   echo "SMT ladder: scalar at ${#first_of_core[@]}..$smt_workers threads against \
 the device one thread lower, x$q3smt_passes passes, both span routings"
@@ -1275,7 +1300,7 @@ the device one thread lower, x$q3smt_passes passes, both span routings"
   #
   # A separate row set because `--shapes` replaces the cardinality sweep rather
   # than adding to it: the two cannot be in one invocation.
-  if [[ -n "${COSORT_Q3_SMT_SHAPES:-}" ]]; then
+  if [[ -n "${COSORT_Q3_SMT_SHAPES:-}" ]] && wants_set shapes; then
     q3smt_shape_common=(--tuned "$tuned" --detectors "$q3_detectors" --iso-resource
                         --workers "$q3smt_ladder"
                         --shapes "$COSORT_Q3_SMT_SHAPES"
@@ -1452,6 +1477,10 @@ what is in there, beyond one CSV per question:
                                 the asynchronous decomposition is timing-dependent
                                 and one pass of this cell has been seen at both
                                 303 and 1031 ranges with identical flags
+  superseded/                   what a re-run replaced, stamped with the time it
+                                was moved. A row set costs hours and its axes come
+                                from environment variables, so a narrower re-run
+                                would otherwise discard a wider result silently
   q3_smt_shapes*.csv            the same ladder on named catalogue shapes rather
                                 than the cardinality sweep, when
                                 COSORT_Q3_SMT_SHAPES asks for it. Uniform shapes
