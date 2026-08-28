@@ -286,6 +286,38 @@ void drain_settles_debt() {
         "drain_into returned the range the detector emitted");
 }
 
+// A completion that lands in a deferred slot during a sequential drain.
+//
+// `drain_into` used to empty only the shared pool, so a span parked in a worker's
+// slot was invisible to the caller and left `deferred_total_` above zero -- which
+// makes the finish test in `take` unable to fire, and every worker then blocks in
+// `ready_.wait` forever. A hang with no cpu use, reachable only when a completion
+// arrives during the sequential phase.
+void drain_takes_deferred_spans() {
+  // One worker, so the finish test below turns only on the deferred slot being
+  // empty rather than on how many workers happen to be idle.
+  queue pool(1);
+  pool.enable_deferred(2);
+  deferred_detector detector(3);
+  detector.bind(pool);
+  pool.set_poller([&detector] { detector.poll(); });
+  auto * sink = &pool;
+  detector.submit(4, 20, [sink](std::size_t begin, std::size_t end) {
+    sink->defer(1, range{1, begin, end});
+  });
+
+  std::vector<range> drained;
+  pool.drain_into(drained);
+  check(drained.size() == 1, "drain_into returned the deferred range");
+  check(!drained.empty() && drained.front().begin == 4 && drained.front().end == 20,
+        "drain_into returned the range the detector deferred");
+
+  // And the queue must now be able to finish: with the slot emptied and no debt,
+  // a worker asking for work is told there is none rather than blocking.
+  range taken{};
+  check(!pool.take(taken, 0), "take finishes once the deferred slot is drained");
+}
+
 }  // namespace
 
 int main() {
@@ -296,7 +328,8 @@ int main() {
          named{"no finish while pending", no_finish_while_pending},
          named{"polling delivers completions", polling_delivers_completions},
          named{"failure propagates", failure_propagates},
-         named{"drain settles debt", drain_settles_debt}}) {
+         named{"drain settles debt", drain_settles_debt},
+         named{"drain takes deferred spans", drain_takes_deferred_spans}}) {
     std::printf("-- %s\n", entry.name);
     std::fflush(stdout);
     entry.run();

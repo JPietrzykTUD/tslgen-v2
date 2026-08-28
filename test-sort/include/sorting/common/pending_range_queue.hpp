@@ -255,6 +255,18 @@ class TslPendingRangeQueue final : public TslPendingWork {
     }
     out.insert(out.end(), shared_.begin(), shared_.end());
     shared_.clear();
+    // The deferred slots too. A sequential drain has no worker to hand a slot back
+    // to, so a span parked in one is invisible to the caller *and* keeps
+    // `deferred_total_` above zero -- which makes the finish test in `take` unable
+    // to fire, and every worker blocks in `ready_.wait` forever. That is a hang
+    // with no cpu use, and it only appears when a completion lands during the
+    // sequential phase: heavy-tailed keys iterate that phase far more than uniform
+    // ones, which is why uniform shapes never hit it.
+    for (auto & slot : deferred_) {
+      out.insert(out.end(), slot.begin(), slot.end());
+      slot.clear();
+    }
+    deferred_total_ = 0;
   }
 
   // --- TslPendingWork -------------------------------------------------------
