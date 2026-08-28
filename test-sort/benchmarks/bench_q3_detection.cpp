@@ -732,9 +732,16 @@ int main(int argc, char ** argv) {
   }
   std::printf("\n");
 
+  // Only the detectors this run will actually measure. Counting every *compiled*
+  // backend made the progress line's denominator include the ones `--detectors`
+  // excluded, so a three-detector run against five compiled ones reported 84 of
+  // 140 and looked as though it had skipped 56 rows it was never going to produce.
+  auto const selected_detectors = static_cast<std::size_t>(
+    std::count_if(tsl_compiled_detectors().begin(), tsl_compiled_detectors().end(),
+                  [](TslDetectorBackend backend) { return wanted(backend); }));
   results.expect(shape_count * column_counts.size() * widths.size()
                  * worker_counts.size() * row_counts.size()
-                 * tsl_compiled_detectors().size() * g_algorithms.size());
+                 * selected_detectors * g_algorithms.size());
   for (auto const size_rows : row_counts) {
     // The cardinality that gives the requested run length at this size. Reported
     // rather than silently substituted: a catalogue without that shape drops the
