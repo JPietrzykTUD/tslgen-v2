@@ -6,7 +6,12 @@ from collections.abc import Mapping
 from dataclasses import replace
 
 from tslc.backend.primitive_rendering import body_for as _body_for
-from tslc.backend.checked_api import checked_api_plan, public_call_requires_unsafe
+from tslc.backend.checked_api import (
+    CheckedConditionPlan,
+    applicable_checked_api_plan,
+    checked_api_plan,
+    public_call_requires_unsafe,
+)
 from tslc.backend.primitive_rendering import variant_names as _variant_names
 from tslc.backend.rust_direct_calls import (
     free_function as _free_function,
@@ -36,6 +41,7 @@ from tslc.backend.rust_policy_selection import (
 from tslc.backend.rust_signatures import (
     arithmetic_preconditions as _rust_arithmetic_preconditions,
     axis_name as _axis_name,
+    checked_type_where as _checked_type_where,
     concrete_param_type as _rust_concrete_param,
     concrete_result_type as _rust_concrete_result,
     concrete_type as _rust_concrete,
@@ -64,7 +70,11 @@ from tslc.backend.rust_type_params import (
 )
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.benchmark.model import SpecializationKey
-from tslc.catalog.preconditions import PreconditionErrorKind
+from tslc.catalog.preconditions import (
+    PreconditionCheckPrimitive,
+    PreconditionErrorKind,
+    PreconditionKind,
+)
 from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS
 from tslc.lower.lowerer import (
     LoweredSpecialization,
@@ -75,6 +85,7 @@ from tslc.target_text import LoweredBody, RenderContext
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 _PRIMITIVE_TRAIT_PREFIX = "detail::primitives::"
+_PRECONDITION_METHOD = "__tsl_precondition_error"
 
 
 def _qualified_primitive_trait_prefix(module_prefix: str) -> str:
@@ -87,7 +98,132 @@ def _qualified_primitive_trait_prefix(module_prefix: str) -> str:
 def _rust_precondition_error(error: PreconditionErrorKind) -> str:
     if error is PreconditionErrorKind.INDEX_OUT_OF_BOUNDS:
         return "PreconditionError::IndexOutOfBounds"
+    if error is PreconditionErrorKind.ZERO_DIVISOR:
+        return "PreconditionError::ZeroDivisor"
     raise ValueError(f"unsupported Rust precondition error {error.value!r}")
+
+
+def _rust_trait_precondition_condition(
+    spec: LoweredSpecialization,
+) -> CheckedConditionPlan | None:
+    plan = checked_api_plan((spec,))
+    if plan is None:
+        return None
+    conditions = tuple(
+        condition
+        for condition in plan.conditions
+        if condition.kind is PreconditionKind.ACTIVE_DIVISOR_NONZERO
+    )
+    if not conditions:
+        return None
+    if len(conditions) != 1:
+        raise ValueError("Rust implementation trait supports one delegated check")
+    return conditions[0]
+
+
+def _rust_precondition_method_parameters(
+    spec: LoweredSpecialization,
+    condition: CheckedConditionPlan,
+    *,
+    owner: str,
+    arguments: bool = False,
+) -> str:
+    indexes = {condition.parameter_index}
+    if condition.mask_parameter_index is not None:
+        indexes.add(condition.mask_parameter_index)
+    parts = []
+    for index, (name, kind) in enumerate(zip(spec.param_names, spec.param_kinds)):
+        if index not in indexes:
+            continue
+        parts.append(
+            f"&{name}" if arguments else f"{name}: &{_param_kind_type(kind, owner)}"
+        )
+    return ", ".join(parts)
+
+
+def _rust_trait_precondition_declaration(spec: LoweredSpecialization) -> str:
+    condition = _rust_trait_precondition_condition(spec)
+    if condition is None:
+        return ""
+    params = _rust_precondition_method_parameters(spec, condition, owner="Self")
+    return f"    fn {_PRECONDITION_METHOD}({params}) -> Option<PreconditionError>;\n"
+
+
+def _rust_impl_precondition_method(spec: LoweredSpecialization) -> str:
+    condition = _rust_trait_precondition_condition(spec)
+    if condition is None:
+        return ""
+    params = _rust_precondition_method_parameters(spec, condition, owner="Self")
+    info = SCALAR_TYPE_INFOS.get(spec.type_tag)
+    if info is None:
+        raise ValueError(f"checked precondition has unknown type {spec.type_tag!r}")
+    if info.floating:
+        body = "None"
+    else:
+        required = {
+            PreconditionCheckPrimitive.ZERO_VECTOR,
+            PreconditionCheckPrimitive.EQUAL,
+            PreconditionCheckPrimitive.MASK_POPULATION_COUNT,
+        }
+        if not required.issubset(condition.check_primitives):
+            raise ValueError("zero-divisor check plan is missing support primitives")
+        zero = rust_raw_identifier(PreconditionCheckPrimitive.ZERO_VECTOR.value)
+        equal = rust_raw_identifier(PreconditionCheckPrimitive.EQUAL.value)
+        population = rust_raw_identifier(
+            PreconditionCheckPrimitive.MASK_POPULATION_COUNT.value
+        )
+        lines = [
+            f"let zero_divisors = {equal}::<Self>(",
+            f"    *{condition.parameter_name}, {zero}::<Self>());",
+        ]
+        checked_mask = "zero_divisors"
+        if condition.mask_parameter_name is not None:
+            if PreconditionCheckPrimitive.MASK_AND not in condition.check_primitives:
+                raise ValueError("masked zero-divisor check has no mask-and primitive")
+            mask_and = rust_raw_identifier(PreconditionCheckPrimitive.MASK_AND.value)
+            lines.extend(
+                (
+                    f"let active_zero_divisors = {mask_and}::<Self>(",
+                    f"    *{condition.mask_parameter_name}, zero_divisors);",
+                )
+            )
+            checked_mask = "active_zero_divisors"
+        lines.extend(
+            (
+                f"if {population}::<Self>({checked_mask}) != 0 {{",
+                f"    Some({_rust_precondition_error(condition.error)})",
+                "} else {",
+                "    None",
+                "}",
+            )
+        )
+        body = "\n".join(lines)
+    return (
+        f"    #[inline]\n"
+        f"    #[allow(unused_variables)]\n"
+        f"    fn {_PRECONDITION_METHOD}({params}) -> Option<PreconditionError> {{\n"
+        f"{_indent(body, 8)}\n"
+        "    }\n"
+    )
+
+
+def _rust_forwarded_precondition_method(
+    spec: LoweredSpecialization,
+    selected_trait_name: str,
+) -> str:
+    condition = _rust_trait_precondition_condition(spec)
+    if condition is None:
+        return ""
+    params = _rust_precondition_method_parameters(spec, condition, owner="Self")
+    args = _rust_precondition_method_parameters(
+        spec, condition, owner="Self", arguments=True
+    )
+    return (
+        f"    #[inline(always)]\n"
+        f"    fn {_PRECONDITION_METHOD}({params}) -> Option<PreconditionError> {{\n"
+        f"        <Self as {selected_trait_name}>::{_PRECONDITION_METHOD}({args})\n"
+        "    }\n"
+    )
 
 
 class RustBackend:
@@ -678,6 +814,7 @@ class RustBackend:
             (f"{doc}\n" if doc else "")
             + f"{trait_header} {{\n"
             "    const IMPLEMENTATION_STATE: ImplementationState;\n"
+            f"{_rust_trait_precondition_declaration(shape)}"
             f"    {_unsafe_prefix(caller_unsafe)}fn apply({params}) -> {ret};\n"
             f"}}"
         )
@@ -778,6 +915,7 @@ class RustBackend:
             f"{_index_where(spec, impl_register=impl_register, base_dispatch='concrete')} {{\n"
             f"    const IMPLEMENTATION_STATE: ImplementationState = "
             f"{_rust_implementation_state(_spec_implementation_state(spec, variant_name))};\n"
+            f"{_rust_impl_precondition_method(spec)}"
             f"{_indent(_implementation_lint_allowance(spec), 4)}\n"
             f"    {_unsafe_prefix(caller_unsafe)}fn apply({params}) -> {ret} {{\n"
             f"{preconditions}"
@@ -833,6 +971,7 @@ class RustBackend:
             f"impl {trait_name} for {key} {{\n"
             f"    const IMPLEMENTATION_STATE: ImplementationState = "
             f"<Self as {selected_trait_name}>::IMPLEMENTATION_STATE;\n"
+            f"{_rust_forwarded_precondition_method(spec, selected_trait_name)}"
             "    #[inline(always)]\n"
             f"    {_unsafe_prefix(caller_unsafe)}fn apply({params}) -> {result} {{\n"
             f"        {call}\n"
@@ -902,7 +1041,7 @@ class RustBackend:
             f"<S as {_PRIMITIVE_TRAIT_PREFIX}{rust_primitive_trait_name(primitive_name)}"
             f"{trait_args}>::apply({names})"
         )
-        call = _unsafe_call(call, shape.safety.caller_unsafe)
+        call = _unsafe_call(call, caller_unsafe)
         doc = _rust_doc(shape, context="Rust wrapper", concrete=False)
         return (
             (f"{doc}\n" if doc else "")
@@ -919,13 +1058,10 @@ class RustBackend:
         primitive_name: str,
         specializations: tuple[LoweredSpecialization, ...],
     ) -> str:
-        plan = checked_api_plan(specializations)
+        plan = applicable_checked_api_plan(specializations)
         if plan is None:
             return ""
         shape = specializations[0]
-        if len(plan.conditions) != 1:
-            raise ValueError("Rust checked wrapper supports one condition")
-        condition = plan.conditions[0]
         declarations = _generic_decls(shape)
         trait_args = _trait_args_by_name(shape)
         rendered_trait_args = f"<{', '.join(trait_args)}>" if trait_args else ""
@@ -944,18 +1080,42 @@ class RustBackend:
             f"::<{', '.join(('S', *trait_args))}>"
             f"({_runtime_names(shape)}) }}"
         )
-        body = (
-            f"    if {condition.parameter_name} >= S::lane_count() {{\n"
-            f"        return Err({_rust_precondition_error(condition.error)});\n"
-            "    }\n"
-            f"    Ok({call})"
-        )
+        checks: list[str] = []
+        for condition in plan.conditions:
+            if condition.kind is PreconditionKind.LANE_INDEX_IN_RANGE:
+                checks.extend(
+                    (
+                        f"    if {condition.parameter_name} >= S::lane_count() {{",
+                        f"        return Err({_rust_precondition_error(condition.error)});",
+                        "    }",
+                    )
+                )
+                continue
+            if condition.kind is PreconditionKind.ACTIVE_DIVISOR_NONZERO:
+                args = _rust_precondition_method_parameters(
+                    shape, condition, owner="S", arguments=True
+                )
+                checks.extend(
+                    (
+                        f"    if let Some(error) = <S as {vector_bound}>::"
+                        f"{_PRECONDITION_METHOD}({args}) {{",
+                        "        return Err(error);",
+                        "    }",
+                    )
+                )
+                continue
+            raise ValueError(
+                f"unsupported Rust checked condition {condition.kind.value!r}"
+            )
+        body = "\n".join((*checks, f"    Ok({call})"))
+        where_clause = _checked_type_where(plan, "S")
+        opening_brace = f"{where_clause}\n{{" if where_clause else " {"
         return (
             (f"{doc}\n" if doc else "")
-            + "#[must_use]\n"
             + "#[inline]\n"
             + f"pub fn {rust_raw_identifier(primitive_name + '_checked')}"
-            f"<{generics}>({params}) -> Result<{result}, PreconditionError> {{\n"
+            f"<{generics}>({params}) -> Result<{result}, PreconditionError>"
+            f"{opening_brace}\n"
             f"{body}\n"
             "}"
         )

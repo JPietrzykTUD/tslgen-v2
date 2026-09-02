@@ -23,7 +23,11 @@ from tslc.catalog.model import (
     TestArg as TslTestArg,
     TestCase as TslTestCase,
 )
-from tslc.catalog.preconditions import PreconditionKind, PrimitivePrecondition
+from tslc.catalog.preconditions import (
+    PreconditionErrorKind,
+    PreconditionKind,
+    PrimitivePrecondition,
+)
 from tslc.catalog.semantics import OperandBinding, OperandRole
 from tslc.compiler_assets import RenderAssets
 from tslc.diagnostics import Diagnostic, SourceSpan
@@ -602,7 +606,7 @@ def test_masked_immediate_cases_plan_and_render_for_both_backends(
     assert "mod_imm::<Vec, 3>(m0, a0)" in rust_source
 
 
-def test_arithmetic_failure_masked_and_immediate_corpus_cases_have_typed_coverage(
+def test_arithmetic_checked_and_immediate_corpus_cases_have_typed_coverage(
     data_root: Path,
     machine_profiles_path: Path,
 ) -> None:
@@ -627,15 +631,40 @@ def test_arithmetic_failure_masked_and_immediate_corpus_cases_have_typed_coverag
 
     for backend in ("cpp", "rust"):
         cases = [case for profile in plan.profiles_for(backend) for case in profile.cases]
-        failure_cases = [
+        checked_cases = [
             case
             for case in cases
-            if case.kind == "runtime_failure"
+            if case.kind == "checked_precondition"
             and (case.call_name.startswith("div") or case.call_name.startswith("mod"))
         ]
-        assert len(failure_cases) == 6
-        assert all(case.failure is not None for case in failure_cases)
-        assert all(case.differential is None for case in failure_cases)
+        assert len(checked_cases) == 20
+        assert {case.call_name for case in checked_cases} == {
+            "div",
+            "div_mask",
+            "div_maskz",
+            "mod",
+            "mod_mask",
+            "mod_maskz",
+        }
+        assert {case.type_tag for case in checked_cases} == {
+            "si8",
+            "ui8",
+            "si16",
+            "ui16",
+            "si32",
+            "ui32",
+            "si64",
+            "ui64",
+        }
+        assert all(case.failure is None for case in checked_cases)
+        assert all(case.differential is None for case in checked_cases)
+        assert all(
+            case.checked_precondition is not None
+            and case.checked_precondition.kind
+            is PreconditionKind.ACTIVE_DIVISOR_NONZERO
+            and case.checked_precondition.error is PreconditionErrorKind.ZERO_DIVISOR
+            for case in checked_cases
+        )
         compile_failure_cases = [
             case
             for case in cases

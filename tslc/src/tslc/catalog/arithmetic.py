@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
 
+from tslc.catalog.scalar_types import ScalarTypeInfo
 from tslc.diagnostics import SourceSpan
 
 
@@ -29,7 +30,6 @@ class ArithmeticGuarantee(StrEnum):
     INTEGER_WRAPPING = "integer_wrapping"
     INTEGER_QUOTIENT_TOWARD_ZERO = "integer_quotient_toward_zero"
     INTEGER_REMAINDER_HAS_DIVIDEND_SIGN = "integer_remainder_has_dividend_sign"
-    INTEGER_ZERO_DIVISOR_FAILS = "integer_zero_divisor_fails"
     SIGNED_MIN_DIV_NEG_ONE_RETURNS_MIN = "signed_min_div_neg_one_returns_min"
     SIGNED_MIN_REM_NEG_ONE_RETURNS_ZERO = "signed_min_rem_neg_one_returns_zero"
     FLOATING_DIVISION_IEEE754_VALUES = "floating_division_ieee754_values"
@@ -44,6 +44,19 @@ class ArithmeticNumericDomain(StrEnum):
     FLOATING = "floating"
 
 
+def matches_numeric_domain(
+    info: ScalarTypeInfo,
+    domain: ArithmeticNumericDomain,
+) -> bool:
+    """Return whether one concrete scalar type belongs to an arithmetic domain."""
+
+    if domain is ArithmeticNumericDomain.FLOATING:
+        return info.floating
+    if domain is ArithmeticNumericDomain.SIGNED_INTEGER:
+        return info.signed and not info.floating
+    return not info.floating
+
+
 class ArithmeticMaskRequirement(StrEnum):
     ANY = "any"
     MASKED = "masked"
@@ -53,7 +66,6 @@ class ArithmeticConflictGroup(StrEnum):
     INTEGER_OVERFLOW = "integer_overflow"
     INTEGER_QUOTIENT_ROUNDING = "integer_quotient_rounding"
     INTEGER_REMAINDER_SIGN = "integer_remainder_sign"
-    INTEGER_ZERO_DIVISOR = "integer_zero_divisor"
     SIGNED_DIVISION_OVERFLOW = "signed_division_overflow"
     SIGNED_REMAINDER_OVERFLOW = "signed_remainder_overflow"
     FLOATING_DIVISION = "floating_division"
@@ -208,9 +220,6 @@ def _spec(
 _DIVISION = frozenset({ArithmeticOperation.DIVISION})
 _REMAINDER = frozenset({ArithmeticOperation.REMAINDER})
 _NEGATION = frozenset({ArithmeticOperation.NEGATION})
-_DIVISION_OR_REMAINDER = frozenset(
-    {ArithmeticOperation.DIVISION, ArithmeticOperation.REMAINDER}
-)
 _DIVISOR = frozenset({ArithmeticOperandRole.DIVISOR})
 _WRAPPING_OPERATIONS = frozenset(
     {
@@ -248,14 +257,6 @@ ARITHMETIC_GUARANTEE_SPECS: Mapping[
             domain=ArithmeticNumericDomain.INTEGER,
             roles=_DIVISOR,
             conflict=ArithmeticConflictGroup.INTEGER_REMAINDER_SIGN,
-        ),
-        ArithmeticGuarantee.INTEGER_ZERO_DIVISOR_FAILS: _spec(
-            ArithmeticGuarantee.INTEGER_ZERO_DIVISOR_FAILS,
-            "A participating integer zero divisor prevents normal return.",
-            any_operations=_DIVISION_OR_REMAINDER,
-            domain=ArithmeticNumericDomain.INTEGER,
-            roles=_DIVISOR,
-            conflict=ArithmeticConflictGroup.INTEGER_ZERO_DIVISOR,
         ),
         ArithmeticGuarantee.SIGNED_MIN_DIV_NEG_ONE_RETURNS_MIN: _spec(
             ArithmeticGuarantee.SIGNED_MIN_DIV_NEG_ONE_RETURNS_MIN,
@@ -335,6 +336,7 @@ __all__ = (
     "ArithmeticOperandBinding",
     "ArithmeticOperandRole",
     "ArithmeticOperation",
+    "matches_numeric_domain",
     "arithmetic_guarantee_values",
     "arithmetic_operand_role_values",
     "arithmetic_operation_values",

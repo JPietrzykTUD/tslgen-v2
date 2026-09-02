@@ -94,9 +94,9 @@ FAMILIES = (
     SemanticFamily(
         "integer_zero_divisor",
         "dynamic precondition",
-        "C++ throws or traps and Rust panics in the current generated implementation.",
-        "complete for runtime integer division/remainder; check active divisor lanes",
-        "Floating-point zero remains valid and masked forms inspect active lanes only.",
+        "Unchecked C++ and unsafe Rust assume nonzero active integer divisors; checked companions report a typed zero-divisor error before invocation.",
+        "implemented for runtime integer division/remainder; checks active divisor lanes",
+        "Floating-point zero remains valid, static immediates remain compile-time constraints, and masked forms inspect active lanes only.",
     ),
     SemanticFamily(
         "lane_index",

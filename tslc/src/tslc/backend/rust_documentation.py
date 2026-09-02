@@ -10,6 +10,7 @@ from tslc.catalog.preconditions import (
     PRECONDITION_DESCRIPTORS,
     PreconditionErrorKind,
     PrimitivePrecondition,
+    precondition_applies_to_type,
 )
 from tslc.documentation import (
     DocumentationBlock,
@@ -33,7 +34,7 @@ def rust_doc(
     rendered = render_rust_doc(
         _doc_block(spec, context=context, concrete=concrete, checked=checked)
     )
-    preconditions = spec.primitive_semantics.preconditions
+    preconditions = _documented_preconditions(spec, concrete=concrete)
     if concrete or not preconditions:
         return rendered
     detail = precondition_fact(
@@ -44,7 +45,7 @@ def rust_doc(
         "/// # Errors\n"
         "///\n"
         f"/// {_rust_checked_error_facts(preconditions)} The unchecked operation "
-        f"is not invoked. {detail}"
+        "is not invoked."
         if checked
         else "/// # Safety\n///\n/// " + detail
     )
@@ -55,8 +56,8 @@ def _rust_checked_error_facts(
     preconditions: tuple[PrimitivePrecondition, ...],
 ) -> str:
     return " ".join(
-        f"Returns `{_rust_error_name(descriptor.error)}` when "
-        f"{descriptor.description[:1].lower() + descriptor.description[1:]}"
+        f"Returns `{_rust_error_name(descriptor.error)}` when this precondition "
+        f"is violated: {descriptor.description}"
         for descriptor in (
             PRECONDITION_DESCRIPTORS[item.kind] for item in preconditions
         )
@@ -66,6 +67,8 @@ def _rust_checked_error_facts(
 def _rust_error_name(error: PreconditionErrorKind) -> str:
     if error is PreconditionErrorKind.INDEX_OUT_OF_BOUNDS:
         return "PreconditionError::IndexOutOfBounds"
+    if error is PreconditionErrorKind.ZERO_DIVISOR:
+        return "PreconditionError::ZeroDivisor"
     raise ValueError(f"unsupported Rust precondition error {error.value!r}")
 
 
@@ -78,7 +81,7 @@ def _doc_block(
 ) -> DocumentationBlock:
     if not concrete:
         preconditions = precondition_fact(
-            spec.primitive_semantics.preconditions,
+            _documented_preconditions(spec, concrete=concrete),
             include_unchecked_consequence=False,
         )
         condition_facts = (
@@ -131,16 +134,33 @@ def _doc_block(
     )
     documented_safety = (
         replace(spec.safety, caller_unsafe=True)
-        if spec.primitive_semantics.preconditions
+        if _documented_preconditions(spec, concrete=concrete)
         else spec.safety
     )
     facts.append(("Safety", safety_fact(documented_safety)))
-    if preconditions := precondition_fact(spec.primitive_semantics.preconditions):
+    if preconditions := precondition_fact(
+        _documented_preconditions(spec, concrete=concrete)
+    ):
         facts.append(("Caller preconditions", preconditions))
     return documentation_block(
         spec.documentation,
         facts=tuple(facts),
         facts_title="Specialization",
+    )
+
+
+def _documented_preconditions(
+    spec: LoweredSpecialization,
+    *,
+    concrete: bool,
+) -> tuple[PrimitivePrecondition, ...]:
+    preconditions = spec.primitive_semantics.preconditions
+    if not concrete:
+        return preconditions
+    return tuple(
+        item
+        for item in preconditions
+        if precondition_applies_to_type(item, spec.type_tag)
     )
 
 

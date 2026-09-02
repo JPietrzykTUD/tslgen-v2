@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from collections import Counter
 
+from tslc.catalog.arithmetic import ArithmeticContract, ArithmeticOperandBinding
 from tslc.catalog.preconditions import (
     PRECONDITION_DESCRIPTORS,
     PreconditionKind,
     PrimitivePrecondition,
     precondition_values,
 )
-from tslc.catalog.semantics import PrimitiveSemanticContract
+from tslc.catalog.semantics import OperandBinding, PrimitiveSemanticContract
 from tslc.diagnostics import Diagnostic, RelatedLocation, SourceSpan, diagnostic_at
 from tslc.syntax.access import source_span
 from tslc.syntax.ast import (
@@ -23,6 +24,7 @@ from tslc.syntax.ast import (
 def build_preconditions(
     declaration: ParsedPrimitiveDeclaration,
     operation: PrimitiveSemanticContract | None,
+    arithmetic: ArithmeticContract | None,
     diagnostics: list[Diagnostic],
 ) -> tuple[PrimitivePrecondition, ...]:
     fields = declaration.fields_by_name("preconditions")
@@ -101,7 +103,7 @@ def build_preconditions(
                 )
             )
 
-    if operation is None and kinds:
+    if operation is None and arithmetic is None and kinds:
         invalid = True
         diagnostics.append(
             diagnostic_at(
@@ -109,33 +111,81 @@ def build_preconditions(
                 code="TSL-CATALOG-PRECONDITION-MISSING-OPERATION",
                 message=(
                     f"primitive {declaration.name!r} preconditions require an "
-                    "operation and operand_roles contract"
+                    "operation or arithmetic contract with operand roles"
                 ),
                 source=source_span(field.source),
             )
         )
-    if invalid or operation is None:
+    if invalid or (operation is None and arithmetic is None):
         return ()
 
-    bindings_by_role = {binding.role: binding for binding in operation.operand_bindings}
     promoted: list[PrimitivePrecondition] = []
     for kind, item in kinds:
         descriptor = PRECONDITION_DESCRIPTORS[kind]
-        if operation.kind not in descriptor.compatible_operations:
+        semantic_compatible = (
+            operation is not None
+            and operation.kind in descriptor.compatible_operations
+        )
+        arithmetic_compatible = (
+            arithmetic is not None
+            and bool(
+                arithmetic.operations.intersection(
+                    descriptor.compatible_arithmetic_operations
+                )
+            )
+        )
+        if not semantic_compatible and not arithmetic_compatible:
+            actual = (
+                repr(operation.kind.value)
+                if operation is not None
+                else ", ".join(
+                    repr(value.value) for value in arithmetic.ordered_operations
+                )
+                if arithmetic is not None
+                else "none"
+            )
             diagnostics.append(
                 diagnostic_at(
                     severity="error",
                     code="TSL-CATALOG-INCOMPATIBLE-PRECONDITION-OPERATION",
                     message=(
                         f"precondition {kind.value!r} is incompatible with operation "
-                        f"{operation.kind.value!r} on primitive {declaration.name!r}"
+                        f"{actual} on primitive {declaration.name!r}"
                     ),
                     source=_item_source(item),
                 )
             )
             continue
-        missing = descriptor.required_roles - bindings_by_role.keys()
-        if missing:
+        bindings: list[OperandBinding | ArithmeticOperandBinding] = []
+        missing_names: list[str] = []
+        if semantic_compatible:
+            assert operation is not None
+            by_role = {binding.role: binding for binding in operation.operand_bindings}
+            missing = descriptor.required_roles - by_role.keys()
+            missing_names.extend(role.value for role in missing)
+            bindings.extend(
+                by_role[role]
+                for role in sorted(descriptor.required_roles, key=lambda role: role.value)
+                if role in by_role
+            )
+        if arithmetic_compatible:
+            assert arithmetic is not None
+            by_arithmetic_role = {
+                binding.role: binding for binding in arithmetic.operand_bindings
+            }
+            missing_arithmetic = (
+                descriptor.required_arithmetic_roles - by_arithmetic_role.keys()
+            )
+            missing_names.extend(role.value for role in missing_arithmetic)
+            bindings.extend(
+                by_arithmetic_role[role]
+                for role in sorted(
+                    descriptor.required_arithmetic_roles,
+                    key=lambda role: role.value,
+                )
+                if role in by_arithmetic_role
+            )
+        if missing_names:
             diagnostics.append(
                 diagnostic_at(
                     severity="error",
@@ -143,21 +193,56 @@ def build_preconditions(
                     message=(
                         f"precondition {kind.value!r} on primitive "
                         f"{declaration.name!r} requires operand roles "
-                        + ", ".join(repr(role.value) for role in sorted(missing))
+                        + ", ".join(repr(role) for role in sorted(missing_names))
                     ),
                     source=_item_source(item),
                 )
             )
             continue
+        if descriptor.checkable_arithmetic_binding_kinds:
+            incompatible_bindings = tuple(
+                binding
+                for binding in bindings
+                if isinstance(binding, ArithmeticOperandBinding)
+                and binding.parameter_kind
+                not in descriptor.checkable_arithmetic_binding_kinds
+            )
+            if incompatible_bindings:
+                static_only = all(
+                    binding.parameter_kind == "sImm"
+                    for binding in incompatible_bindings
+                )
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code=(
+                            "TSL-CATALOG-PRECONDITION-STATIC-OPERAND"
+                            if static_only
+                            else "TSL-CATALOG-PRECONDITION-UNCHECKABLE-OPERAND"
+                        ),
+                        message=(
+                            f"precondition {kind.value!r} on primitive "
+                            f"{declaration.name!r} cannot be checked for operand kind(s) "
+                            + ", ".join(
+                                repr(binding.parameter_kind)
+                                for binding in incompatible_bindings
+                            )
+                            + "; supported checkable kinds are "
+                            + ", ".join(
+                                repr(value)
+                                for value in sorted(
+                                    descriptor.checkable_arithmetic_binding_kinds
+                                )
+                            )
+                        ),
+                        source=_item_source(item),
+                    )
+                )
+                continue
         promoted.append(
             PrimitivePrecondition(
                 kind=kind,
-                operand_bindings=tuple(
-                    bindings_by_role[role]
-                    for role in sorted(
-                        descriptor.required_roles, key=lambda role: role.value
-                    )
-                ),
+                operand_bindings=tuple(bindings),
                 source=_item_source(item),
             )
         )

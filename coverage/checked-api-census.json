@@ -50,9 +50,9 @@
     {
       "id": "integer_zero_divisor",
       "classification": "dynamic precondition",
-      "backend_consequence": "C++ throws or traps and Rust panics in the current generated implementation.",
-      "checked_feasibility": "complete for runtime integer division/remainder; check active divisor lanes",
-      "review": "Floating-point zero remains valid and masked forms inspect active lanes only."
+      "backend_consequence": "Unchecked C++ and unsafe Rust assume nonzero active integer divisors; checked companions report a typed zero-divisor error before invocation.",
+      "checked_feasibility": "implemented for runtime integer division/remainder; checks active divisor lanes",
+      "review": "Floating-point zero remains valid, static immediates remain compile-time constraints, and masked forms inspect active lanes only."
     },
     {
       "id": "lane_index",
@@ -1413,22 +1413,6 @@
       "family": "tooling_only"
     },
     {
-      "id": "tslc/src/tslc/backend/assets/tsl_core.hpp|arith_zero_divisor_fail|throw|c9937bbea48530f0|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_core.hpp",
-      "owner": "arith_zero_divisor_fail",
-      "kind": "throw",
-      "excerpt": "throw std::domain_error(\"TSL_ARITH_INTEGER_ZERO_DIVISOR\");",
-      "family": "integer_zero_divisor"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_core.hpp|arith_zero_divisor_fail|trap|b375913dce9106f7|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_core.hpp",
-      "owner": "arith_zero_divisor_fail",
-      "kind": "trap",
-      "excerpt": "__builtin_trap();",
-      "family": "integer_zero_divisor"
-    },
-    {
       "id": "tslc/src/tslc/backend/assets/tsl_core.hpp|require_same_lanes|throw|8a50669413a63275|0",
       "path": "tslc/src/tslc/backend/assets/tsl_core.hpp",
       "owner": "require_same_lanes",
@@ -1443,14 +1427,6 @@
       "kind": "trap",
       "excerpt": "__builtin_trap();",
       "family": "static_representation_or_lane_shape"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_core.rs|arith_zero_divisor_fail|panic|8bb4d1bee8cc89af|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_core.rs",
-      "owner": "arith_zero_divisor_fail",
-      "kind": "panic",
-      "excerpt": "panic!(\"TSL_ARITH_INTEGER_ZERO_DIVISOR\")",
-      "family": "integer_zero_divisor"
     },
     {
       "id": "tslc/src/tslc/backend/assets/tsl_core.rs|bit_cast|assert_eq|51144d90f8521bbf|0",

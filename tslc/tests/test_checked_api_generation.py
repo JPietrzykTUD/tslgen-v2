@@ -12,13 +12,21 @@ import subprocess
 import pytest
 
 from tslc.api import generate_project, write_artifacts
-from tslc.backend.checked_api import checked_api_plan, public_call_requires_unsafe
+from tslc.backend.checked_api import (
+    applicable_checked_api_plan,
+    checked_api_plan,
+    public_call_requires_unsafe,
+)
 from tslc.backend.cpp import CppBackend
 from tslc.backend.cpp_checked_api import plan_cpp_checked_api
 from tslc.backend.rust import RustBackend
 from tslc.backend.registry import create_backend_dialect
 from tslc.catalog.machine_profiles import MachineProfile
-from tslc.catalog.model import Catalog
+from tslc.catalog.model import Catalog, PrimitiveMaskMode
+from tslc.catalog.preconditions import (
+    PreconditionErrorKind,
+    PreconditionKind,
+)
 from tslc.diagnostics import has_errors
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer
 from tslc.select.selector import Selector
@@ -32,21 +40,24 @@ def _lowered(
     profiles: Mapping[str, MachineProfile],
     primitive_name: str,
     backend: str,
+    *,
+    type_tag: str = "si32",
+    mask_mode: PrimitiveMaskMode | None = None,
+    extension_name: str = "avx2",
 ) -> LoweredSpecialization:
     selected = Selector().select_profile(
         catalog,
         profiles["avx2"],
         primitive_name,
-        ("si32",),
+        (type_tag,),
         backend_id=backend,
     )
     assert selected.diagnostics == ()
     slot = next(
         item
         for item in selected.selected
-        if item.extension.name == "avx2"
-        and item.primitive.name == primitive_name
-        and item.primitive.attributes.get("mask") is None
+        if item.extension.name == extension_name
+        and item.primitive.mask_mode is mask_mode
     )
     result = Lowerer().lower(slot, catalog, create_backend_dialect(catalog, backend))
     assert result.specialization is not None, result.diagnostics
@@ -152,6 +163,143 @@ def test_rust_insert_uses_an_unchecked_storage_write(
     assert "lanes[index]" not in spec.body_text
 
 
+@pytest.mark.parametrize("primitive_name", ("div", "mod"))
+def test_cpp_runtime_integer_divisor_gets_an_explicit_checked_twin(
+    catalog: Catalog,
+    machine_profiles: Mapping[str, MachineProfile],
+    primitive_name: str,
+) -> None:
+    spec = _lowered(catalog, machine_profiles, primitive_name, "cpp")
+    backend = CppBackend()
+    ordinary = backend.render_ordinary_wrappers(primitive_name, (spec,))
+    checked = backend.render_checked_wrappers(primitive_name, (spec,))
+    docs = backend.render_documentation_api_declaration(primitive_name, (spec,))
+
+    plan = checked_api_plan((spec,))
+    assert plan is not None
+    assert tuple(condition.kind for condition in plan.conditions) == (
+        PreconditionKind.ACTIVE_DIVISOR_NONZERO,
+    )
+    assert plan.conditions[0].error is PreconditionErrorKind.ZERO_DIVISOR
+    assert "zero_divisor" not in ordinary
+    assert "mask_population_count<Vec>(zero_divisors)" in checked
+    assert "std::enable_if_t<(std::is_integral_v<typename Vec::base_type>)" in checked
+    assert "error = ::tsl::precondition_error::zero_divisor;" in checked
+    assert f"return ::tsl::{primitive_name}<Vec>(dividend, divisor);" in checked
+    assert "precondition_error::zero_divisor" in docs
+    assert "does not invoke the unchecked operation" in docs
+
+
+@pytest.mark.parametrize(
+    "mask_mode",
+    (PrimitiveMaskMode.ZERO, PrimitiveMaskMode.PASS_THROUGH),
+)
+def test_cpp_masked_divisor_check_observes_only_active_lanes(
+    catalog: Catalog,
+    machine_profiles: Mapping[str, MachineProfile],
+    mask_mode: PrimitiveMaskMode,
+) -> None:
+    emitted_name = "div_maskz" if mask_mode is PrimitiveMaskMode.ZERO else "div_mask"
+    spec = _lowered(
+        catalog,
+        machine_profiles,
+        "div",
+        "cpp",
+        mask_mode=mask_mode,
+        extension_name="generic",
+    )
+    checked = CppBackend().render_checked_wrappers(emitted_name, (spec,))
+
+    assert "mask_binary_and<Vec>(" in checked
+    assert "mask, zero_divisors" in checked
+    assert "mask_population_count<Vec>(active_zero_divisors)" in checked
+
+
+def test_checked_divisor_dependencies_are_typed_and_domain_specific(
+    catalog: Catalog,
+    machine_profiles: Mapping[str, MachineProfile],
+) -> None:
+    integer = _lowered(catalog, machine_profiles, "div", "cpp")
+    floating = _lowered(
+        catalog,
+        machine_profiles,
+        "div",
+        "cpp",
+        type_tag="f32",
+    )
+
+    assert {
+        origin.dependency.primitive for origin in integer.call_dependency_origins
+    } >= {"equal", "mask_population_count", "set_zero"}
+    assert not {
+        origin
+        for origin in floating.call_dependency_origins
+        if origin.origin.startswith("checked precondition")
+    }
+    assert applicable_checked_api_plan((integer,)) is not None
+    assert applicable_checked_api_plan((floating,)) is None
+    assert plan_cpp_checked_api(
+        (floating,), result_type="typename Vec::register_type"
+    ) is None
+
+    floating_rust = _lowered(
+        catalog,
+        machine_profiles,
+        "div",
+        "rust",
+        type_tag="f32",
+    )
+    assert not public_call_requires_unsafe((floating_rust,))
+    floating_public = RustBackend().render_primitive_public(
+        "div", (floating_rust,)
+    )
+    assert "pub fn div<" in floating_public
+    assert "pub unsafe fn div<" not in floating_public
+    assert "div_checked" not in floating_public
+
+
+@pytest.mark.parametrize("primitive_name", ("div", "mod"))
+def test_rust_runtime_integer_divisor_is_unsafe_with_a_safe_checked_twin(
+    catalog: Catalog,
+    machine_profiles: Mapping[str, MachineProfile],
+    primitive_name: str,
+) -> None:
+    spec = _lowered(catalog, machine_profiles, primitive_name, "rust")
+    backend = RustBackend()
+    public = backend.render_primitive_public(primitive_name, (spec,))
+    internal = backend.render_primitive_internal(primitive_name, (spec,))
+    docs = backend.render_documentation_api(primitive_name, (spec,))
+    rendered_name = "r#mod" if primitive_name == "mod" else primitive_name
+
+    assert f"pub unsafe fn {rendered_name}<" in public
+    assert f"pub fn {primitive_name}_checked<" in public
+    assert "-> Result<S::RegisterType, PreconditionError>" in public
+    assert "return Err(error);" in public
+    assert "S::BaseType: CheckedIntegerLane" in public
+    assert "S::BaseType: CheckedIntegerLane,\n{" in public
+    assert "CheckedIntegerLane, {" not in public
+    assert f"Ok(unsafe {{ {rendered_name}::<S>" in public
+    assert "fn __tsl_precondition_error(" in internal
+    assert "mask_population_count::<Self>(zero_divisors)" in internal
+    assert "PreconditionError::ZeroDivisor" in internal
+    assert "/// # Errors" in docs
+    assert "is not invoked. active_divisor_nonzero" not in docs
+
+
+def test_runtime_immediate_divisor_keeps_static_rejection_without_checked_twin(
+    catalog: Catalog,
+    machine_profiles: Mapping[str, MachineProfile],
+) -> None:
+    for backend_id, backend in (("cpp", CppBackend()), ("rust", RustBackend())):
+        spec = _lowered(catalog, machine_profiles, "mod_imm", backend_id)
+        rendered = backend.render_primitive("mod_imm", (spec,))
+        assert checked_api_plan((spec,)) is None
+        assert "mod_imm_checked" not in rendered
+        if backend_id == "rust":
+            assert "unsafe { r#mod::<" in spec.body_text
+            assert not public_call_requires_unsafe((spec,))
+
+
 def test_checked_error_assets_are_evolution_safe_and_debug_inline_is_portable(
     render_assets,
 ) -> None:
@@ -162,6 +310,9 @@ def test_checked_error_assets_are_evolution_safe_and_debug_inline_is_portable(
     assert "#if defined(_DEBUG)" in cpp
     assert "#define TSL_FORCE_INLINE inline\n#endif" in cpp
     assert "#[non_exhaustive]\npub enum PreconditionError" in rust
+    assert "zero_divisor," in cpp
+    assert "ZeroDivisor," in rust
+    assert "pub trait CheckedIntegerLane" in rust
 
 
 @pytest.fixture(scope="module")
@@ -188,6 +339,59 @@ def checked_lane_cpp_project(
     report = write_artifacts(result.artifacts, output_root)
     assert not has_errors(report.diagnostics), report.diagnostics
     return output_root / "cpp" / "include"
+
+
+@pytest.fixture(scope="module")
+def checked_division_cpp_project(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Path:
+    output_root = tmp_path_factory.mktemp("checked-division-project")
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["add", "div", "mod"],
+        profiles=["scalar", "avx2"],
+        type_tags=(
+            "si8",
+            "ui8",
+            "si16",
+            "ui16",
+            "si32",
+            "ui32",
+            "si64",
+            "ui64",
+            "f32",
+            "f64",
+        ),
+        backends=["cpp"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    report = write_artifacts(result.artifacts, output_root)
+    assert not has_errors(report.diagnostics), report.diagnostics
+    return output_root / "cpp" / "include"
+
+
+@pytest.fixture(scope="module")
+def checked_division_rust_project(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Path:
+    output_root = tmp_path_factory.mktemp("checked-division-rust-project")
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["div"],
+        profiles=["scalar"],
+        type_tags=("si32",),
+        backends=["rust"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    report = write_artifacts(result.artifacts, output_root)
+    assert not has_errors(report.diagnostics), report.diagnostics
+    return output_root / "rust"
 
 
 def _cpp_compilers() -> tuple[str, ...]:
@@ -304,3 +508,173 @@ def test_unchecked_lane_codegen_has_no_validation_branch(
         assert re.search(r"\bj[a-z]+\b", unchecked.group()) is None
         assert re.search(r"\bcmp\b", checked.group()) is not None
         assert re.search(r"\bj[a-z]+\b", checked.group()) is not None
+
+
+@pytest.mark.generated_build
+def test_checked_division_cpp_consumer_covers_domains_masks_and_no_invocation(
+    checked_division_cpp_project: Path,
+    tmp_path: Path,
+) -> None:
+    compilers = _cpp_compilers()
+    if not compilers:
+        pytest.skip("GCC or Clang C++ compiler required")
+    source = _FIXTURES / "division_scalar_consumer.cpp"
+
+    for compiler in compilers:
+        compiler_id = Path(compiler).name.replace("+", "x")
+        binary = tmp_path / f"division-{compiler_id}"
+        subprocess.run(
+            (
+                compiler,
+                "-std=c++17",
+                "-O2",
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "-fno-exceptions",
+                "-I",
+                str(checked_division_cpp_project),
+                str(source),
+                "-o",
+                str(binary),
+            ),
+            check=True,
+        )
+        subprocess.run((str(binary),), check=True)
+
+    sanitizer_binary = tmp_path / "division-sanitizer"
+    subprocess.run(
+        (
+            compilers[0],
+            "-std=c++17",
+            "-O1",
+            "-g",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-fsanitize=address,undefined",
+            "-fno-omit-frame-pointer",
+            "-I",
+            str(checked_division_cpp_project),
+            str(source),
+            "-o",
+            str(sanitizer_binary),
+        ),
+        check=True,
+    )
+    environment = os.environ.copy()
+    environment["ASAN_OPTIONS"] = "detect_leaks=0"
+    subprocess.run((str(sanitizer_binary),), check=True, env=environment)
+
+
+def _assembly_function(assembly: str, name: str) -> str:
+    match = re.search(
+        rf"(?ms)^{re.escape(name)}:.*?^\s*\.size\s+{re.escape(name)}\b",
+        assembly,
+    )
+    assert match is not None, f"assembly has no function body for {name}"
+    return match.group(0).lower()
+
+
+@pytest.mark.generated_build
+@pytest.mark.parametrize("compiler_name", ("g++", "clang++"))
+def test_generated_checked_division_preserves_raw_register_return_abi(
+    checked_division_cpp_project: Path,
+    tmp_path: Path,
+    compiler_name: str,
+) -> None:
+    compiler = shutil.which(compiler_name)
+    if compiler is None:
+        pytest.skip(f"{compiler_name} is not available")
+    source = _FIXTURES / "division_avx2_codegen.cpp"
+    assembly_path = tmp_path / f"division-{compiler_name.replace('+', 'p')}.s"
+    completed = subprocess.run(
+        (
+            compiler,
+            "-std=c++17",
+            "-O3",
+            "-mavx2",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-Wno-unused-parameter",
+            "-fno-exceptions",
+            "-S",
+            "-masm=intel",
+            "-I",
+            str(checked_division_cpp_project),
+            str(source),
+            "-o",
+            str(assembly_path),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assembly = assembly_path.read_text(encoding="utf-8")
+
+    checked = _assembly_function(assembly, "checked_divide_avx2")
+    consumed = _assembly_function(assembly, "consume_checked_divide_avx2")
+    unchecked = _assembly_function(assembly, "consume_unchecked_divide_avx2")
+
+    for body in (checked, consumed, unchecked):
+        assert "ymm0" in body
+        assert "ret" in body
+    assert re.search(r"byte ptr\s+\[rdi(?:\s*\+\s*0)?\]", checked)
+    assert not re.search(r"ymmword ptr\s+\[rdi", checked)
+    assert not re.search(
+        r"\bcall\w*\s+(?:_?consume_unchecked_divide_avx2|"
+        r"_?checked_divide_avx2)\b",
+        consumed,
+    )
+    assert not re.search(r"\[(?:r|e)sp(?:\s*[+\-])?", consumed)
+
+
+@pytest.mark.generated_build
+def test_optimized_rust_unchecked_division_has_no_zero_validation_path(
+    checked_division_rust_project: Path,
+    tmp_path: Path,
+) -> None:
+    cargo = shutil.which("cargo")
+    if cargo is None:
+        pytest.skip("cargo is not available")
+    source = _FIXTURES / "division_rust_codegen.rs"
+    binary_source = checked_division_rust_project / "src" / "bin"
+    binary_source.mkdir(parents=True)
+    shutil.copyfile(source, binary_source / source.name)
+    target_dir = tmp_path / "cargo-target"
+    environment = os.environ.copy()
+    environment["CARGO_TARGET_DIR"] = str(target_dir)
+    completed = subprocess.run(
+        (
+            cargo,
+            "rustc",
+            "--release",
+            "--bin",
+            "division_rust_codegen",
+            "--",
+            "--emit=llvm-ir",
+        ),
+        cwd=checked_division_rust_project,
+        env=environment,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+    ir_files = sorted(
+        (target_dir / "release" / "deps").glob("division_rust_codegen-*.ll")
+    )
+    assert ir_files
+    ir = ir_files[0].read_text(encoding="utf-8")
+    function = re.search(
+        r"(?ms)^define .*@unchecked_divide_rust\(.*?^}",
+        ir,
+    )
+    assert function is not None
+    body = function.group(0)
+
+    assert "panic_const_div_by_zero" not in body
+    assert "precondition_check" not in body
+    assert "panic" not in body

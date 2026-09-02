@@ -7,11 +7,12 @@ from collections.abc import Hashable
 from tslc.catalog.arithmetic import (
     ARITHMETIC_GUARANTEE_SPECS,
     ArithmeticGuarantee,
-    ArithmeticNumericDomain,
     ArithmeticOperandRole,
+    ArithmeticOperation,
+    matches_numeric_domain,
 )
 from tslc.catalog.model import Catalog, Primitive
-from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS, ScalarTypeInfo
+from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS
 from tslc.diagnostics import Diagnostic, RelatedLocation, SourceSpan, diagnostic_at
 
 
@@ -113,8 +114,22 @@ def _validate_failure_cases(
             continue
         contract = primitive.arithmetic
         source = case.failure_source or case.source or primitive.source
-        if contract is None or not contract.has_guarantee(
-            ArithmeticGuarantee.INTEGER_ZERO_DIVISOR_FAILS
+        if case.role == "runtime_failure":
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-RUNTIME-FAILURE-IS-PRECONDITION",
+                    message=(
+                        f"primitive {primitive.name!r} test {case.name!r}: "
+                        "runtime integer-zero-divisor cases must be expressed by "
+                        "the active_divisor_nonzero precondition and checked tests"
+                    ),
+                    source=source,
+                )
+            )
+            continue
+        if contract is None or not contract.operations.intersection(
+            {ArithmeticOperation.DIVISION, ArithmeticOperation.REMAINDER}
         ):
             diagnostics.append(
                 diagnostic_at(
@@ -122,8 +137,8 @@ def _validate_failure_cases(
                     code="TSL-CATALOG-TEST-FAILURE-CONTRACT",
                     message=(
                         f"primitive {primitive.name!r} test {case.name!r}: "
-                        "integer-zero-divisor failure requires arithmetic guarantee "
-                        f"{ArithmeticGuarantee.INTEGER_ZERO_DIVISOR_FAILS.value!r}"
+                        "integer-zero-divisor compile failure requires an "
+                        "arithmetic division or remainder operation"
                     ),
                     source=source,
                 )
@@ -156,21 +171,14 @@ def _validate_failure_cases(
                     source=source,
                 )
             )
-        expected_kind = "sImm" if case.role == "compile_failure" else None
-        phase_matches = (
-            binding.parameter_kind == expected_kind
-            if expected_kind is not None
-            else binding.parameter_kind != "sImm"
-        )
-        if not phase_matches:
-            phase = "compile-time sImm" if case.role == "compile_failure" else "runtime"
+        if binding.parameter_kind != "sImm":
             diagnostics.append(
                 diagnostic_at(
                     severity="error",
                     code="TSL-CATALOG-TEST-FAILURE-PHASE",
                     message=(
                         f"primitive {primitive.name!r} test {case.name!r}: role "
-                        f"{case.role!r} requires a {phase} divisor binding, got "
+                        f"{case.role!r} requires a compile-time sImm divisor binding, got "
                         f"{binding.parameter_kind!r}"
                     ),
                     source=source,
@@ -202,7 +210,7 @@ def _validate_domains(
         return
     for guarantee in contract.ordered_guarantees:
         domain = ARITHMETIC_GUARANTEE_SPECS[guarantee].numeric_domain
-        if domain is None or any(_matches_domain(info, domain) for info in infos):
+        if domain is None or any(matches_numeric_domain(info, domain) for info in infos):
             continue
         diagnostics.append(
             diagnostic_at(
@@ -215,14 +223,6 @@ def _validate_domains(
                 source=contract.guarantees_source or contract.source or primitive.source,
             )
         )
-
-
-def _matches_domain(info: ScalarTypeInfo, domain: ArithmeticNumericDomain) -> bool:
-    if domain is ArithmeticNumericDomain.FLOATING:
-        return info.floating
-    if domain is ArithmeticNumericDomain.SIGNED_INTEGER:
-        return info.signed and not info.floating
-    return not info.floating
 
 
 def _unique_source_declarations(primitives: list[Primitive]) -> tuple[Primitive, ...]:

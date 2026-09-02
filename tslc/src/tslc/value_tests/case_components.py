@@ -53,6 +53,7 @@ class ValueTestInvalidPreconditionValue(Enum):
 
     LANE_COUNT = auto()
     SIZE_MAX = auto()
+    ACTIVE_DIVISOR_ZERO = auto()
 
 
 @dataclass(frozen=True, slots=True)

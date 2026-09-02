@@ -142,20 +142,59 @@ def hover_text(
             f"**Primitive precondition** `{kind.value}`",
             precondition_descriptor.description,
             f"**Hazard:** `{precondition_descriptor.hazard.value}`",
-            "**Required operand roles:** "
-            + _inline_code(
-                sorted(role.value for role in precondition_descriptor.required_roles)
-            ),
-            "**Compatible operations:** "
-            + _inline_code(
-                sorted(
-                    operation.value
-                    for operation in precondition_descriptor.compatible_operations
-                )
-            ),
-            "**Unchecked consequence:** "
-            f"{precondition_descriptor.unchecked_consequence}",
         ]
+        if precondition_descriptor.required_roles:
+            facts.append(
+                "**Required operand roles:** "
+                + _inline_code(
+                    sorted(
+                        role.value
+                        for role in precondition_descriptor.required_roles
+                    )
+                )
+            )
+        if precondition_descriptor.required_arithmetic_roles:
+            facts.append(
+                "**Required arithmetic operand roles:** "
+                + _inline_code(
+                    sorted(
+                        role.value
+                        for role in precondition_descriptor.required_arithmetic_roles
+                    )
+                )
+            )
+        if precondition_descriptor.compatible_operations:
+            facts.append(
+                "**Compatible operations:** "
+                + _inline_code(
+                    sorted(
+                        operation.value
+                        for operation in precondition_descriptor.compatible_operations
+                    )
+                )
+            )
+        if precondition_descriptor.compatible_arithmetic_operations:
+            facts.append(
+                "**Compatible arithmetic operations:** "
+                + _inline_code(
+                    sorted(
+                        operation.value
+                        for operation in precondition_descriptor.compatible_arithmetic_operations
+                    )
+                )
+            )
+        if precondition_descriptor.numeric_domain is not None:
+            facts.append(
+                "**Numeric domain:** "
+                f"`{precondition_descriptor.numeric_domain.value}`"
+            )
+        facts.extend(
+            (
+                f"**Checked error:** `{precondition_descriptor.error.value}`",
+                "**Unchecked consequence:** "
+                f"{precondition_descriptor.unchecked_consequence}",
+            )
+        )
         hover[("precondition", kind.value)] = "\n\n".join(facts)
     semantic_descriptions: tuple[
         tuple[SymbolKind, str, Iterable[tuple[object, str]]], ...

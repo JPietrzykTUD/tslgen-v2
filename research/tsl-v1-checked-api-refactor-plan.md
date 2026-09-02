@@ -2,8 +2,8 @@
 
 Date: 2026-09-02
 
-Status: revised pre-v1 public-contract plan; C++ checked-value representation decided;
-no implementation is included
+Status: accepted pre-v1 public-contract plan; Slices 0-3 are implemented and
+committed; Slice 4 is next
 
 Related evidence: [TSL v1.0.0 generated API and documentation audit](tsl-v1-generated-api-docs-audit.md)
 
@@ -94,6 +94,20 @@ The intended mapping is therefore:
 This preserves the requested unsuffixed/`*_checked` pairing without permitting
 safe Rust to invoke undefined behavior.
 
+Stable Rust does not currently expose stable `unchecked_div` or
+`unchecked_rem` integer operations. Its wrapping division/remainder methods
+preserve TSL's signed `MIN / -1` and `MIN % -1` guarantees but retain a
+language-provided zero-divisor panic path until optimization can use the unsafe
+nonzero assumption. The generated Rust implementation may therefore express
+the source precondition as an unsafe optimizer assumption and use the wrapping
+operation. Optimized release code must contain no TSL validation branch or
+zero-divisor panic path. Debug, unoptimized, or compiler UB-check builds may
+retain language/toolchain guards whose diagnostics fire after a caller violates
+the unsafe contract; those guards are outside the zero-overhead promise and
+must not be described as the checked API. Requiring nightly intrinsics or
+target-specific inline assembly merely to suppress those diagnostics would be
+a worse v1 contract.
+
 ### C++ value results return directly and report errors separately
 
 The C++ API must not use
@@ -139,6 +153,14 @@ through memory. The C++ API deliberately helps rather than attempts to force an
 expert caller: the error argument is explicit, generated examples inspect it
 before relying on the result, and documentation must not claim stronger static
 enforcement.
+
+That non-enforcement is an intentional part of the public contract. The
+ordinary function remains the concise expert path, and the checked function
+lets a caller choose whether and how to react to failure. Neither the API shape
+nor its documentation may imply that storing an error status proves it was
+inspected. Tooling should diagnose an obviously discarded checked value where
+the language supports that warning, but it must not turn the checked companion
+into a mandatory control-flow discipline.
 
 The backend-owned checked-wrapper plan chooses the cheapest well-defined
 placeholder for each result representation, such as reusing an already-live
@@ -267,10 +289,14 @@ Every checked operation must satisfy the following rules:
 - document both the checked conditions and any residual obligation that the
   language/runtime cannot prove.
 
-The unchecked operation must not contain compiler-injected runtime assertions,
-throws, panics, or validation branches. Natural hardware traps or target
-language behavior are not a substitute for a contract and must be documented
-as consequences of violating the precondition, not as the checked API.
+The unchecked operation must not contain TSL-authored runtime assertions,
+throws, panics, or validation branches. Optimized supported builds must not
+retain a validation branch introduced solely for the public precondition.
+Natural hardware traps and target-language or compiler UB-check behavior are
+not a substitute for a contract and must be documented as possible consequences
+of violating the precondition, not as the checked API. The stable-Rust
+division/remainder limitation above is the deliberate unoptimized-build
+exception; it does not permit ordinary safe Rust APIs for hazardous calls.
 
 ## Proposed public API shape
 
@@ -319,6 +345,9 @@ auto div<Vec>(reg_param_t<Vec> dividend, reg_param_t<Vec> divisor)
 ```
 
 For floating-point lanes, zero is valid IEEE-754 input and must not be rejected.
+The checked overload must be unavailable when its selected vector has a
+floating-point lane type; a shared generic backend surface uses a type-domain
+constraint, while concrete facades omit the checked method entirely.
 For masked integer division, only active divisor lanes are checked. The existing
 defined `MIN / -1 -> MIN` behavior remains a semantic guarantee, not an error.
 
@@ -490,7 +519,7 @@ The initial closed condition vocabulary, added incrementally by the lane and
 division slices, is deliberately limited to:
 
 - `lane_index_in_range`; and
-- `active_integer_divisor_nonzero`.
+- `active_divisor_nonzero`.
 
 These names are enum values under the `preconditions` field rather than new
 parser tokens. They are added to the parser's known primitive-field projection,
@@ -512,7 +541,7 @@ operand-role contract. Its typed mask mode and mask-argument signature identify
 which lanes participate, so it can declare:
 
 ```text
-preconditions [active_integer_divisor_nonzero]
+preconditions [active_divisor_nonzero]
 ```
 
 For an unmasked declaration, every lane is active. For a masked declaration,
@@ -839,7 +868,7 @@ Deliverables:
   checked-error contracts;
 - preserve compile-time rejection of an invalid immediate divisor;
 - preserve signed `MIN / -1` and `MIN % -1` result guarantees;
-- remove compiler-injected throw/panic checks from ordinary runtime
+- remove TSL-authored throw/panic checks from ordinary runtime
   division/remainder;
 - generate `div_checked` and `mod_checked`;
 - check only active lanes in masked variants; and
@@ -860,6 +889,8 @@ Validation:
 - GCC, Clang, and available MSVC warnings-as-errors builds plus inspected
   optimized call-site assembly for representative fixed-width registers;
 - exception-disabled C++ builds; and
+- optimized Rust IR or assembly proving that the unsafe nonzero assumption
+  removes the stable wrapping operation's zero-divisor panic path; and
 - differential generated value tests.
 
 ### Slice 4 — Contiguous load/store checked signatures
@@ -1195,7 +1226,8 @@ The refactor is complete when:
 9. exact API and checked-coverage baselines prevent silent loss or accidental
    exposure;
 10. the showcase demonstrates zero added checking overhead in the ordinary
-    path and quantifies the chosen checked-path cost;
+    path for supported optimized builds and quantifies the chosen checked-path
+    cost;
 11. C++ value-returning checked APIs return the ordinary value type and accept a
     final error reference, use no value-owning result aggregate or vector output
     parameter, assign the error on every path, and return only an initialized

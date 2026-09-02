@@ -179,7 +179,6 @@ def _arithmetic_spec(
         ArithmeticOperation.DIVISION: frozenset(
             {
                 ArithmeticGuarantee.INTEGER_QUOTIENT_TOWARD_ZERO,
-                ArithmeticGuarantee.INTEGER_ZERO_DIVISOR_FAILS,
                 ArithmeticGuarantee.SIGNED_MIN_DIV_NEG_ONE_RETURNS_MIN,
                 ArithmeticGuarantee.FLOATING_DIVISION_IEEE754_VALUES,
             }

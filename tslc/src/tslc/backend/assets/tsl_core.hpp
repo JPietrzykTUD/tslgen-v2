@@ -55,6 +55,7 @@ enum class implementation_state {
 enum class precondition_error : std::uint8_t {
     none,
     index_out_of_bounds,
+    zero_divisor,
 };
 
 template <auto Value>
@@ -414,7 +415,8 @@ inline void lane_set_unchecked(
 
 inline void require_same_lanes(std::size_t source_lanes, std::size_t target_lanes) {
     if (source_lanes != target_lanes) {
-#if defined(__SYCL_DEVICE_ONLY__) || defined(__wasm__)
+#if defined(__SYCL_DEVICE_ONLY__) || defined(__wasm__) || \
+    (!defined(__cpp_exceptions) && !defined(_CPPUNWIND))
         __builtin_trap();
 #else
         throw std::invalid_argument(
@@ -471,19 +473,9 @@ inline T arith_sub(T a, T b) {
         return a - b;
     }
 }
-[[noreturn]] inline void arith_zero_divisor_fail() {
-#if defined(__SYCL_DEVICE_ONLY__) || defined(__wasm__)
-    __builtin_trap();
-#else
-    throw std::domain_error("TSL_ARITH_INTEGER_ZERO_DIVISOR");
-#endif
-}
 template <class T>
 inline T arith_div(T a, T b) {
     if constexpr (std::is_integral_v<T>) {
-        if (b == T{0}) {
-            arith_zero_divisor_fail();
-        }
         if constexpr (std::is_signed_v<T>) {
             if (a == std::numeric_limits<T>::lowest() && b == T{-1}) {
                 return a;
@@ -509,14 +501,11 @@ inline T arith_mul(T a, T b) {
         return a * b;
     }
 }
-// Normalized remainder for emulated `mod` loops: checked integer `%`, or `std::fmod`
-// for floats (where `%` is ill-formed).
+// Normalized remainder for emulated `mod` loops: integer `%` under the public
+// nonzero-divisor precondition, or `std::fmod` for floats (where `%` is ill-formed).
 template <class T>
 inline T arith_rem(T a, T b) {
     if constexpr (std::is_integral_v<T>) {
-        if (b == T{0}) {
-            arith_zero_divisor_fail();
-        }
         if constexpr (std::is_signed_v<T>) {
             if (a == std::numeric_limits<T>::lowest() && b == T{-1}) {
                 return T{0};

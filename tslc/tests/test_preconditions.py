@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from tslc.authoring_completion import authoring_completions
+from tslc.catalog.arithmetic import ArithmeticOperandRole
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.model import Catalog
 from tslc.catalog.preconditions import PreconditionKind
@@ -195,6 +196,93 @@ def test_total_integral_mask_test_has_no_inferred_precondition(catalog: Catalog)
     assert primitive.preconditions == ()
 
 
+def test_runtime_divisor_precondition_promotes_arithmetic_binding() -> None:
+    source = (
+        "prim<v:=(v,v)> divide(dividend, divisor):\n"
+        "  arithmetic:\n"
+        "    operations [division]\n"
+        "    operand_roles:\n"
+        "      primary dividend\n"
+        "      divisor divisor\n"
+        "    guarantees []\n"
+        "  preconditions [active_divisor_nonzero]\n"
+    )
+
+    _parsed, catalog, diagnostics = _build(source)
+
+    assert diagnostics == ()
+    condition = catalog.primitives[0].preconditions[0]
+    assert condition.kind is PreconditionKind.ACTIVE_DIVISOR_NONZERO
+    binding = condition.arithmetic_binding(ArithmeticOperandRole.DIVISOR)
+    assert binding is not None
+    assert (binding.parameter_name, binding.parameter_index, binding.parameter_kind) == (
+        "divisor",
+        1,
+        "v",
+    )
+
+    edited = source.split("active_divisor_nonzero", 1)[0] + "active_divisor_"
+    context = authoring_cursor_context(_parsed, _PATH, edited, len(edited))
+    assert {item.label for item in authoring_completions(context, catalog)} == {
+        "active_divisor_nonzero"
+    }
+    index = build_catalog_index(catalog, _parsed)
+    occurrence = next(
+        item
+        for item in index.occurrences_by_path[_PATH]
+        if item.kind == "precondition"
+    )
+    hover = index.hover(occurrence) or ""
+    assert "Required arithmetic operand roles" in hover
+    assert "`divisor`" in hover
+    assert "Compatible arithmetic operations" in hover
+    assert "`division`" in hover
+    assert "Numeric domain" in hover
+    assert "`integer`" in hover
+    assert "Checked error" in hover
+    assert "`zero_divisor`" in hover
+
+
+def test_runtime_divisor_precondition_rejects_compile_time_immediate() -> None:
+    source = (
+        "prim<v:=(v,sImm)> divide(dividend, divisor):\n"
+        "  arithmetic:\n"
+        "    operations [division]\n"
+        "    operand_roles:\n"
+        "      primary dividend\n"
+        "      divisor divisor\n"
+        "    guarantees []\n"
+        "  preconditions [active_divisor_nonzero]\n"
+    )
+
+    _parsed, _catalog, diagnostics = _build(source)
+
+    assert any(
+        item.code == "TSL-CATALOG-PRECONDITION-STATIC-OPERAND"
+        for item in diagnostics
+    )
+
+
+def test_runtime_scalar_divisor_is_rejected_until_its_check_shape_is_supported() -> None:
+    source = (
+        "prim<v:=(v,s)> divide(dividend, divisor):\n"
+        "  arithmetic:\n"
+        "    operations [division]\n"
+        "    operand_roles:\n"
+        "      primary dividend\n"
+        "      divisor divisor\n"
+        "    guarantees []\n"
+        "  preconditions [active_divisor_nonzero]\n"
+    )
+
+    _parsed, _catalog, diagnostics = _build(source)
+
+    assert any(
+        item.code == "TSL-CATALOG-PRECONDITION-UNCHECKABLE-OPERAND"
+        for item in diagnostics
+    )
+
+
 @pytest.mark.parametrize(
     "primitive_name",
     ("extract_value_at", "insert_value_at", "set_mask_lane"),
@@ -208,3 +296,15 @@ def test_current_lane_index_families_declare_precondition(
         tuple(condition.kind for condition in primitive.preconditions)
         for primitive in declarations
     } == {(PreconditionKind.LANE_INDEX_IN_RANGE,)}
+
+
+@pytest.mark.parametrize("primitive_name", ("div", "mod"))
+def test_runtime_division_families_declare_nonzero_precondition(
+    catalog: Catalog, primitive_name: str
+) -> None:
+    declarations = catalog.primitives_named(primitive_name, unmasked=False)
+    assert declarations
+    assert {
+        tuple(condition.kind for condition in primitive.preconditions)
+        for primitive in declarations
+    } == {(PreconditionKind.ACTIVE_DIVISOR_NONZERO,)}

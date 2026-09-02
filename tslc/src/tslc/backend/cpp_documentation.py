@@ -8,6 +8,7 @@ from tslc.catalog.preconditions import (
     PRECONDITION_DESCRIPTORS,
     PreconditionErrorKind,
     PrimitivePrecondition,
+    precondition_applies_to_type,
 )
 from tslc.documentation import (
     DocumentationBlock,
@@ -66,7 +67,7 @@ def _doc_block(
 ) -> DocumentationBlock:
     if not concrete:
         preconditions = precondition_fact(
-            spec.primitive_semantics.preconditions,
+            _documented_preconditions(spec, concrete=concrete),
             include_unchecked_consequence=not checked,
         )
         condition_facts = (
@@ -128,12 +129,29 @@ def _doc_block(
         )
     )
     facts.append(("Safety", safety_fact(spec.safety)))
-    if preconditions := precondition_fact(spec.primitive_semantics.preconditions):
+    if preconditions := precondition_fact(
+        _documented_preconditions(spec, concrete=concrete)
+    ):
         facts.append(("Caller preconditions", preconditions))
     return documentation_block(
         spec.documentation,
         facts=tuple(facts),
         facts_title="Specialization",
+    )
+
+
+def _documented_preconditions(
+    spec: LoweredSpecialization,
+    *,
+    concrete: bool,
+) -> tuple[PrimitivePrecondition, ...]:
+    preconditions = spec.primitive_semantics.preconditions
+    if not concrete:
+        return preconditions
+    return tuple(
+        item
+        for item in preconditions
+        if precondition_applies_to_type(item, spec.type_tag)
     )
 
 
@@ -155,6 +173,8 @@ def _cpp_checked_errors(
 def _cpp_error_name(error: PreconditionErrorKind) -> str:
     if error is PreconditionErrorKind.INDEX_OUT_OF_BOUNDS:
         return "index_out_of_bounds"
+    if error is PreconditionErrorKind.ZERO_DIVISOR:
+        return "zero_divisor"
     raise ValueError(f"unsupported C++ precondition error {error.value!r}")
 
 

@@ -27,7 +27,6 @@ _PATH = Path("tslctmp/arithmetic-contract.tsl").resolve()
 _GUARANTEES = (
     "integer_quotient_toward_zero, "
     "integer_remainder_has_dividend_sign, "
-    "integer_zero_divisor_fails, "
     "signed_min_div_neg_one_returns_min, "
     "signed_min_rem_neg_one_returns_zero, "
     "floating_division_ieee754_values, "
@@ -72,9 +71,14 @@ def _failure_source(
         _source(
             _contract(
                 operations="division",
-                guarantees="integer_zero_divisor_fails",
+                guarantees="",
             ),
             signature=signature,
+        )
+        + (
+            "  preconditions [active_divisor_nonzero]\n"
+            if role == "runtime_failure" and signature == "v:=(v,v)"
+            else ""
         )
         + "  tests:\n"
         + f'    - {{role "{role}", tags [failure], type "{type_tag}", '
@@ -199,7 +203,7 @@ def test_combined_arithmetic_contract_promotes_explicit_operations_and_binding()
         (
             _contract(
                 guarantees=(
-                    "integer_zero_divisor_fails, integer_zero_divisor_fails"
+                    "integer_quotient_toward_zero, integer_quotient_toward_zero"
                 )
             ),
             "TSL-CATALOG-ARITHMETIC-DUPLICATE-GUARANTEE",
@@ -269,13 +273,11 @@ def test_arithmetic_guarantee_requires_a_declared_numeric_domain() -> None:
 def test_masked_family_binding_compares_non_mask_ordinal() -> None:
     source = (
         "prim<v:=(v,v)> family_probe(dividend, divisor):\n"
-        + _contract(operations="division", guarantees="integer_zero_divisor_fails")
+        + _contract(operations="division", guarantees="")
         + "prim<v:=(m,v,v)>[mask=zero] family_probe(mask, dividend, divisor):\n"
         + _contract(
             operations="division",
-            guarantees=(
-                "integer_zero_divisor_fails, inactive_lanes_do_not_participate"
-            ),
+            guarantees="inactive_lanes_do_not_participate",
         )
     )
 
@@ -314,12 +316,8 @@ def test_runtime_failure_case_promotes_closed_reason_with_source() -> None:
             "TSL-CATALOG-TEST-FAILURE-HAS-EXPECTED",
         ),
         (
-            _failure_source(type_tag="f32"),
-            "TSL-CATALOG-TEST-FAILURE-DOMAIN",
-        ),
-        (
             _failure_source(signature="v:=(v,sImm)"),
-            "TSL-CATALOG-TEST-FAILURE-PHASE",
+            "TSL-CATALOG-RUNTIME-FAILURE-IS-PRECONDITION",
         ),
         (
             _failure_source(role="compile_failure"),
@@ -351,9 +349,7 @@ def test_arithmetic_failure_cases_reject_invalid_reason_domain_and_phase(
             _contract(
                 operations="division",
                 divisor="dividend",
-                guarantees=(
-                    "integer_zero_divisor_fails, inactive_lanes_do_not_participate"
-                ),
+                guarantees="inactive_lanes_do_not_participate",
             ),
             "TSL-CATALOG-ARITHMETIC-FAMILY-MISMATCH",
         ),
@@ -365,7 +361,7 @@ def test_same_name_arithmetic_family_rejects_inconsistent_members(
 ) -> None:
     source = (
         "prim<v:=(v,v)> family_probe(dividend, divisor):\n"
-        + _contract(operations="division", guarantees="integer_zero_divisor_fails")
+        + _contract(operations="division", guarantees="")
         + "prim<v:=(m,v,v)>[mask=zero] family_probe(mask, dividend, divisor):\n"
         + (masked_contract or '  brief_description "no contract"\n')
     )
@@ -394,9 +390,9 @@ def test_arithmetic_completion_tokens_hover_and_navigation_share_typed_vocabular
     ) == {"guarantees"}
     operation_edit = source.split("division, remainder", 1)[0] + "div"
     assert _completion_labels(catalog, source, operation_edit) == {"division"}
-    guarantee_edit = source.split(_GUARANTEES, 1)[0] + "integer_zero_divisor_f"
+    guarantee_edit = source.split(_GUARANTEES, 1)[0] + "integer_quotient_toward_z"
     assert _completion_labels(catalog, source, guarantee_edit) == {
-        "integer_zero_divisor_fails"
+        "integer_quotient_toward_zero"
     }
     operand_edit = source.split("divisor divisor", 1)[0] + "divisor div"
     assert _completion_labels(catalog, source, operand_edit) == {
@@ -434,7 +430,7 @@ def test_arithmetic_completion_tokens_hover_and_navigation_share_typed_vocabular
         for token in tokens
     }
     assert ("enumMember", "division") in token_text
-    assert ("enumMember", "integer_zero_divisor_fails") in token_text
+    assert ("enumMember", "integer_quotient_toward_zero") in token_text
     assert ("parameter", "divisor") in token_text
 
 

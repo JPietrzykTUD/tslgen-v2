@@ -534,7 +534,6 @@ def test_every_registered_region_completes_at_a_valid_tsil_boundary(
                 "arith_div",
                 "arith_mul",
                 "arith_rem",
-                "arith_zero_divisor_fail",
             },
         ),
         ("op<a", {"add"}),

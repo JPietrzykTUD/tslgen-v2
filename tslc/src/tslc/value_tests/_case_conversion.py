@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from tslc.catalog.arithmetic import ArithmeticGuarantee, ArithmeticOperandRole
+from tslc.catalog.arithmetic import ArithmeticOperandRole
 from tslc.catalog.model import Catalog, Primitive, TestCase
-from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS
+from tslc.catalog.preconditions import (
+    PreconditionKind,
+    precondition_applies_to_type,
+)
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 from tslc.value_tests.case_helpers import (
@@ -589,14 +592,13 @@ def _fuzz_nonzero_argument_index(
 ) -> int | None:
     if primitive is None:
         return None
-    info = SCALAR_TYPE_INFOS.get(type_tag)
     contract = primitive.arithmetic
     if (
-        info is None
-        or info.floating
-        or contract is None
-        or not contract.has_guarantee(
-            ArithmeticGuarantee.INTEGER_ZERO_DIVISOR_FAILS
+        contract is None
+        or not any(
+            condition.kind is PreconditionKind.ACTIVE_DIVISOR_NONZERO
+            and precondition_applies_to_type(condition, type_tag)
+            for condition in primitive.preconditions
         )
     ):
         return None

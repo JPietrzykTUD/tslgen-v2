@@ -5,7 +5,10 @@ from __future__ import annotations
 import re
 from collections import defaultdict
 
-from tslc.backend.checked_api import checked_api_plan, public_call_requires_unsafe
+from tslc.backend.checked_api import (
+    applicable_checked_api_plan,
+    public_call_requires_unsafe,
+)
 from tslc.backend.primitive_facade import (
     DataparallelPrimitiveFacadeKind,
     plan_dataparallel_primitive_facade,
@@ -36,14 +39,10 @@ from tslc.backend.rust_api_model import (
     RustFacadeCheckedCondition,
 )
 from tslc.backend.rust_api_types import RUST_FACADE_SIGNATURE_TYPES
-from tslc.catalog.arithmetic import ArithmeticGuarantee, ArithmeticOperandRole
 from tslc.catalog.conversion import LaneCountRelation
 from tslc.catalog.memory import MemoryAccess
 from tslc.catalog.model import PrimitiveMaskMode
-from tslc.catalog.preconditions import (
-    PRECONDITION_DESCRIPTORS,
-)
-from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS
+from tslc.catalog.preconditions import precondition_applies_to_type
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
 from tslc.diagnostics import Diagnostic
 
@@ -242,6 +241,15 @@ def _comprehensive_method(
             caller_unsafe=public_call_requires_unsafe(
                 tuple(spec for _profile_name, spec in candidate.specs)
             ),
+            caller_unsafe_type_tags=tuple(
+                sorted(
+                    {
+                        spec.type_tag
+                        for _profile_name, spec in candidate.specs
+                        if public_call_requires_unsafe((spec,))
+                    }
+                )
+            ),
             safety_requirements=_safety_requirements(candidate),
             panic_conditions=_panic_conditions(candidate),
             checked_conditions=_checked_conditions(candidate),
@@ -300,7 +308,7 @@ def _public_name(
 
 
 def _checked_conditions(candidate: _Candidate) -> tuple[RustFacadeCheckedCondition, ...]:
-    plan = checked_api_plan(
+    plan = applicable_checked_api_plan(
         tuple(spec for _profile_name, spec in candidate.specs)
     )
     if plan is None:
@@ -310,18 +318,34 @@ def _checked_conditions(candidate: _Candidate) -> tuple[RustFacadeCheckedConditi
             condition.kind,
             condition.parameter_name,
             condition.error,
+            condition.mask_parameter_name,
+            tuple(
+                sorted(
+                    {
+                        spec.type_tag
+                        for _profile_name, spec in candidate.specs
+                        for precondition in spec.primitive_semantics.preconditions
+                        if precondition.kind is condition.kind
+                        and precondition_applies_to_type(precondition, spec.type_tag)
+                    }
+                )
+            ),
         )
         for condition in plan.conditions
     )
 
 
 def _safety_requirements(candidate: _Candidate) -> tuple[str, ...]:
-    preconditions = candidate.representative.primitive_semantics.preconditions
-    if not candidate.representative.safety.caller_unsafe and not preconditions:
+    unsafe_specs = tuple(
+        spec
+        for _profile_name, spec in candidate.specs
+        if spec.safety.caller_unsafe
+    )
+    if not unsafe_specs:
         return ()
     reasons = frozenset(
         reason
-        for _profile_name, spec in candidate.specs
+        for spec in unsafe_specs
         for reason in spec.safety.reasons
     )
     requirements: list[str] = []
@@ -336,43 +360,15 @@ def _safety_requirements(candidate: _Candidate) -> tuple[str, ...]:
             "Every memory argument must satisfy the source primitive's validity, "
             "initialization, aliasing, and extent requirements."
         )
-    if candidate.representative.safety.caller_unsafe:
-        requirements.append(
-            "The caller must uphold every remaining source-declared safety "
-            "precondition for this primitive."
-        )
-    requirements.extend(
-        PRECONDITION_DESCRIPTORS[item.kind].description
-        for item in preconditions
+    requirements.append(
+        "The caller must uphold every remaining source-declared safety "
+        "precondition for this primitive."
     )
     return tuple(requirements)
 
 
 def _panic_conditions(candidate: _Candidate) -> tuple[str, ...]:
-    conditions: list[str] = []
-    arithmetic = candidate.representative.primitive_semantics.arithmetic
-    divisor = (
-        arithmetic.binding(ArithmeticOperandRole.DIVISOR)
-        if arithmetic is not None
-        else None
-    )
-    if (
-        arithmetic is not None
-        and arithmetic.has_guarantee(
-            ArithmeticGuarantee.INTEGER_ZERO_DIVISOR_FAILS
-        )
-        and divisor is not None
-        and divisor.parameter_kind != "sImm"
-        and any(
-            type_tag in SCALAR_TYPE_INFOS
-            and not SCALAR_TYPE_INFOS[type_tag].floating
-            for type_tag in candidate.type_tags
-        )
-    ):
-        conditions.append(
-            "For integer element types, panics when an active divisor lane is zero."
-        )
-    return tuple(conditions)
+    return ()
 
 
 def _method_for_candidate(

@@ -272,10 +272,6 @@ def _classify_runtime_site(
         return "tooling_only"
     if path.endswith("render/rust_dispatch.py"):
         return "tooling_only"
-    if "tsl_arith_integer_zero_divisor" in lowered or (
-        kind == "trap" and "arith_zero_divisor_fail" in context.lower()
-    ):
-        return "integer_zero_divisor"
     if (
         "size_of::<from>()" in lowered
         or "lane-preserving conversion" in lowered
@@ -481,7 +477,7 @@ def render_markdown(census: Census, context: RepoContext) -> str:
     lines = [
         "# TSL v1 checked-API baseline census",
         "",
-        "This generated maintenance report freezes the evidence reviewed before the checked-API refactor. "
+        "This generated maintenance report tracks the reviewed evidence at the current checked-API migration checkpoint. "
         "Its lexical runtime-site scan is tooling evidence only; production semantics must come from typed "
         "source/catalog facts and finalized backend plans.",
         "",

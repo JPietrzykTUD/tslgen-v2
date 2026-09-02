@@ -505,6 +505,7 @@ class RustComprehensiveMethod:
     type_tags: tuple[str, ...]
     shape_keys: tuple[tuple[str, int], ...]
     caller_unsafe: bool
+    caller_unsafe_type_tags: tuple[str, ...]
     safety_requirements: tuple[str, ...]
     panic_conditions: tuple[str, ...]
     checked_conditions: tuple["RustFacadeCheckedCondition", ...]
@@ -524,6 +525,14 @@ class RustFacadeCheckedCondition:
     kind: PreconditionKind
     parameter_name: str
     error: PreconditionErrorKind
+    mask_parameter_name: str | None
+    applicable_type_tags: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not self.applicable_type_tags:
+            raise ValueError(
+                "Rust facade checked conditions require an applicable type domain"
+            )
 
 
 @dataclass(frozen=True, slots=True)

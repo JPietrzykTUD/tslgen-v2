@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from tslc.catalog.preconditions import PreconditionKind
 from tslc.value_tests.case_capabilities import DEFAULT_VALUE_TEST_CASE_REQUIREMENTS
 from tslc.value_tests.case_components import (
     InputArity,
@@ -277,10 +278,22 @@ class ValueTestCasePlan:
                 f"value-test case {self.function_name!r} checked parameter "
                 "index is outside the invocation signature"
             )
-        if self.invocation.param_kinds[checked.parameter_index] != "usize":
+        expected_kind = (
+            "usize"
+            if checked.kind is PreconditionKind.LANE_INDEX_IN_RANGE
+            else "v"
+            if checked.kind is PreconditionKind.ACTIVE_DIVISOR_NONZERO
+            else None
+        )
+        if expected_kind is None:
             raise ValueError(
-                f"value-test case {self.function_name!r} checked lane index "
-                "must bind a runtime usize parameter"
+                f"value-test case {self.function_name!r} has unsupported checked "
+                f"precondition {checked.kind.value!r}"
+            )
+        if self.invocation.param_kinds[checked.parameter_index] != expected_kind:
+            raise ValueError(
+                f"value-test case {self.function_name!r} checked precondition "
+                f"must bind a runtime {expected_kind} parameter"
             )
 
     def _expected_error(self, expectation: str) -> str:

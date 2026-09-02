@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from tslc.backend.checked_api import CheckedApiPlan
 from tslc.backend.rust_type_params import (
     type_param_decls,
     type_param_names,
 )
 from tslc.backend.signature_types import RUST_SIGNATURE_TYPES, rust_free_type
 from tslc.backend.target_capability import rust_extension_tag
+from tslc.catalog.arithmetic import ArithmeticNumericDomain
 from tslc.lower.lowerer import (
     LoweredArithmeticPrecondition,
     LoweredArithmeticPreconditionKind,
@@ -22,6 +24,21 @@ def unsafe_prefix(enabled: bool) -> str:
 
 def unsafe_call(call: str, enabled: bool) -> str:
     return f"unsafe {{ {call} }}" if enabled else call
+
+
+def checked_type_where(plan: CheckedApiPlan, owner: str) -> str:
+    """Format the type-domain bound that makes a conditional check callable."""
+
+    domains = frozenset(
+        condition.numeric_domain
+        for condition in plan.conditions
+        if condition.numeric_domain is not None
+    )
+    if any(condition.numeric_domain is None for condition in plan.conditions):
+        return ""
+    if domains == {ArithmeticNumericDomain.INTEGER}:
+        return f"\nwhere\n    {owner}::BaseType: CheckedIntegerLane,"
+    raise ValueError("Rust checked wrapper has an unsupported conditional type domain")
 
 
 def free_kind_type(kind: str, spec: LoweredSpecialization) -> str:
@@ -198,6 +215,7 @@ def trait_args_by_value(spec: LoweredSpecialization) -> list[str]:
 __all__ = (
     "arithmetic_preconditions",
     "axis_name",
+    "checked_type_where",
     "concrete_array",
     "concrete_param_type",
     "concrete_result_type",

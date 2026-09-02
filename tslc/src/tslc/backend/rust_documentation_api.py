@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from tslc.backend.checked_api import checked_api_plan
+from tslc.backend.checked_api import applicable_checked_api_plan
 from tslc.backend.rust_documentation import rust_doc
 from tslc.backend.rust_signatures import (
+    checked_type_where,
     free_kind_type,
     generic_decls,
     kind_type,
@@ -61,7 +62,7 @@ def documentation_checked_wrapper(
     primitive_name: str,
     specializations: tuple[LoweredSpecialization, ...],
 ) -> str:
-    plan = checked_api_plan(specializations)
+    plan = applicable_checked_api_plan(specializations)
     if plan is None:
         return ""
     shape = specializations[0]
@@ -75,12 +76,14 @@ def documentation_checked_wrapper(
         concrete=False,
         checked=True,
     )
+    where_clause = checked_type_where(plan, "S")
+    opening_brace = f"{where_clause}\n{{" if where_clause else " {"
     return (
         (f"{doc}\n" if doc else "")
-        + "#[must_use]\n"
         + "#[inline]\n"
         + f"pub fn {rust_raw_identifier(primitive_name + '_checked')}"
-        f"<{generics}>({rendered_params}) -> Result<{result_type}, PreconditionError> {{\n"
+        f"<{generics}>({rendered_params}) -> Result<{result_type}, PreconditionError>"
+        f"{opening_brace}\n"
         "    unimplemented!()\n"
         "}"
     )

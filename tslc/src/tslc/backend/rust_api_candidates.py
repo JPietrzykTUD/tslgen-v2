@@ -16,7 +16,11 @@ from tslc.backend.rust_static_selection import (
     RustStaticSelectionPlan,
     RustStaticVectorMapping,
 )
-from tslc.catalog.arithmetic import ArithmeticOperandRole, ArithmeticOperation
+from tslc.catalog.arithmetic import (
+    ArithmeticOperandBinding,
+    ArithmeticOperandRole,
+    ArithmeticOperation,
+)
 from tslc.catalog.conversion import (
     ConversionKind,
     LaneCountRelation,
@@ -26,7 +30,7 @@ from tslc.catalog.memory import MemoryAccess, MemoryAddressing
 from tslc.catalog.model import Extension, PrimitiveMaskMode, VectorBitsKind
 from tslc.catalog.preconditions import PreconditionKind
 from tslc.catalog.scalar_types import scalar_bit_width
-from tslc.catalog.semantics import OperandRole, PrimitiveOperation
+from tslc.catalog.semantics import OperandBinding, OperandRole, PrimitiveOperation
 from tslc.diagnostics import Diagnostic, diagnostic_at
 from tslc.lower.lowerer import LoweredSpecialization, varying_positions
 
@@ -57,7 +61,7 @@ class _CandidateKey:
     operation: PrimitiveOperation | None
     operation_roles: tuple[tuple[OperandRole, int, str], ...]
     preconditions: tuple[
-        tuple[PreconditionKind, tuple[tuple[OperandRole, int, str], ...]], ...
+        tuple[PreconditionKind, tuple[tuple[str, str, int, str], ...]], ...
     ]
     arithmetic_operations: tuple[ArithmeticOperation, ...]
     arithmetic_roles: tuple[tuple[ArithmeticOperandRole, int, str], ...]
@@ -241,6 +245,17 @@ def _specialization_vector_type_tags(
     )
 
 
+def _precondition_binding_key(
+    binding: OperandBinding | ArithmeticOperandBinding,
+) -> tuple[str, str, int, str]:
+    return (
+        "arithmetic" if isinstance(binding, ArithmeticOperandBinding) else "operation",
+        binding.role.value,
+        binding.parameter_index,
+        binding.parameter_kind,
+    )
+
+
 def _candidate_key(spec: LoweredSpecialization) -> _CandidateKey:
     semantics = spec.primitive_semantics
     operation = semantics.operation
@@ -293,14 +308,10 @@ def _candidate_key(spec: LoweredSpecialization) -> _CandidateKey:
                 tuple(
                     sorted(
                         (
-                            (
-                                binding.role,
-                                binding.parameter_index,
-                                binding.parameter_kind,
-                            )
+                            _precondition_binding_key(binding)
                             for binding in item.operand_bindings
                         ),
-                        key=lambda binding: binding[0].value,
+                        key=lambda binding: binding,
                     )
                 ),
             )

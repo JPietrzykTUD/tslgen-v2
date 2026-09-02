@@ -11,6 +11,7 @@ from tslc.backend.rust_api_model import (
     RustComprehensiveMethod,
     RustFacadeConstParameter,
     RustFacadeConstParameterSource,
+    RustFacadeCheckedCondition,
     RustFacadeParameter,
     RustFacadeParameterPlacement,
     RustFacadePlan,
@@ -201,7 +202,7 @@ def _public_items(
             _public_inherent_method(method, shape),
             *(
                 (_public_inherent_method(method, shape, checked=True),)
-                if method.checked_conditions
+                if _checked_conditions_for_type(method, shape.type_tag)
                 else ()
             ),
         )
@@ -214,6 +215,8 @@ def _public_inherent_method(
     *,
     checked: bool = False,
 ) -> str:
+    checked_conditions = _checked_conditions_for_type(method, shape.type_tag)
+    shape_caller_unsafe = shape.type_tag in method.caller_unsafe_type_tags
     owner = (
         f"Simd<{shape.base_spelling}, {shape.lanes}>"
         if method.receiver_kind is RustFacadeReceiverKind.VECTOR
@@ -287,18 +290,33 @@ def _public_inherent_method(
         target_element="U" if target is not None else None,
     )
     body = [
-        *(_checked_guards(method, str(shape.lanes), indent="        ") if checked else ()),
+        *(
+            _checked_guards(
+                method,
+                checked_conditions,
+                str(shape.lanes),
+                indent="        ",
+            )
+            if checked
+            else ()
+        ),
         *((
             (
                 "        // SAFETY: checked above before forwarding."
                 if checked
-                else "        // SAFETY: upheld by this method's caller contract."
+                else (
+                    "        // SAFETY: upheld by this method's caller contract."
+                    if shape_caller_unsafe
+                    else "        // SAFETY: this lane type has no applicable public precondition."
+                )
             ),
         ) if method.caller_unsafe else ()),
         f"        {'Ok(' if checked else ''}{result}{')' if checked else ''}",
     ]
     attributes = _public_attributes(
-        method, has_private_bound=needs_private_bound
+        method,
+        has_private_bound=needs_private_bound,
+        checked=checked,
     )
     rendered_return_type = (
         f"Result<{return_type}, crate::PreconditionError>"
@@ -307,7 +325,7 @@ def _public_inherent_method(
     )
     public_name = method.public_name + ("_checked" if checked else "")
     signature = (
-        f"    pub {'unsafe ' if method.caller_unsafe and not checked else ''}fn "
+        f"    pub {'unsafe ' if shape_caller_unsafe and not checked else ''}fn "
         f"{rust_raw_identifier(public_name)}{generic_declarations}"
         f"({signature_parameters})"
         f"{'' if method.result_kind == 'void' and not checked else f' -> {rendered_return_type}'}"
@@ -317,7 +335,12 @@ def _public_inherent_method(
             f"impl {owner} {{",
             _indent(
                 _method_docs(
-                    method, shape.base_spelling, str(shape.lanes), checked=checked
+                    method,
+                    shape.base_spelling,
+                    str(shape.lanes),
+                    checked=checked,
+                    caller_unsafe=shape_caller_unsafe,
+                    checked_conditions=checked_conditions,
                 ),
                 4,
             ),
@@ -386,7 +409,16 @@ def _public_free_function(
         target_element="U" if target is not None else None,
     )
     body = [
-        *(_checked_guards(method, "N", indent="    ") if checked else ()),
+        *(
+            _checked_guards(
+                method,
+                method.checked_conditions,
+                "N",
+                indent="    ",
+            )
+            if checked
+            else ()
+        ),
         *((
             (
                 "    // SAFETY: checked above before forwarding."
@@ -407,7 +439,11 @@ def _public_free_function(
             _method_docs(method, "T", "N", checked=checked),
             *(
                 line.removeprefix("    ")
-                for line in _public_attributes(method, has_private_bound=True)
+                for line in _public_attributes(
+                    method,
+                    has_private_bound=True,
+                    checked=checked,
+                )
             ),
             (
                 f"pub {'unsafe ' if method.caller_unsafe and not checked else ''}fn "
@@ -430,7 +466,13 @@ def _method_docs(
     lanes: str,
     *,
     checked: bool = False,
+    caller_unsafe: bool | None = None,
+    checked_conditions: tuple[RustFacadeCheckedCondition, ...] | None = None,
 ) -> str:
+    if caller_unsafe is None:
+        caller_unsafe = method.caller_unsafe
+    if checked_conditions is None:
+        checked_conditions = method.checked_conditions
     receiver = {
         RustFacadeReceiverKind.VECTOR: f"`Simd<{element}, {lanes}>`",
         RustFacadeReceiverKind.MASK: f"`Mask<{element}, {lanes}>`",
@@ -463,7 +505,11 @@ def _method_docs(
     lines = rendered.splitlines() if rendered else [
         f"/// Calls the source `{method.source_primitive_name}` primitive."
     ]
-    call_form = _example_call(method, checked=checked)
+    call_form = _example_call(
+        method,
+        checked=checked,
+        caller_unsafe=caller_unsafe,
+    )
     lines.extend(("///", "/// # Examples", "/// ```ignore", f"/// {call_form}", "/// ```"))
     if method.panic_conditions:
         lines.extend(("///", "/// # Panics", "///"))
@@ -473,20 +519,30 @@ def _method_docs(
         lines.extend(
             "/// Returns "
             f"`{_facade_precondition_error(condition.error).removeprefix('crate::')}` "
-            "when "
-            f"{PRECONDITION_DESCRIPTORS[condition.kind].description[:1].lower()}"
-            f"{PRECONDITION_DESCRIPTORS[condition.kind].description[1:]}"
-            for condition in method.checked_conditions
+            "when this precondition is violated: "
+            f"{PRECONDITION_DESCRIPTORS[condition.kind].description}"
+            for condition in checked_conditions
         )
-    elif method.caller_unsafe:
+    elif caller_unsafe:
         lines.extend(("///", "/// # Safety", "///"))
         lines.extend(
             f"/// {requirement}" for requirement in method.safety_requirements
         )
+        lines.extend(
+            f"/// {PRECONDITION_DESCRIPTORS[condition.kind].description}"
+            for condition in checked_conditions
+        )
     return "\n".join(lines)
 
 
-def _example_call(method: RustComprehensiveMethod, *, checked: bool = False) -> str:
+def _example_call(
+    method: RustComprehensiveMethod,
+    *,
+    checked: bool = False,
+    caller_unsafe: bool | None = None,
+) -> str:
+    if caller_unsafe is None:
+        caller_unsafe = method.caller_unsafe
     const_arguments = [
         "false" if parameter.type_spelling == "bool" else "0"
         for parameter in method.const_parameters
@@ -519,7 +575,7 @@ def _example_call(method: RustComprehensiveMethod, *, checked: bool = False) -> 
             f"value.{rust_raw_identifier(method.public_name + ('_checked' if checked else ''))}"
             f"{generic}({arguments})"
         )
-    if method.caller_unsafe and not checked:
+    if caller_unsafe and not checked:
         call = f"unsafe {{ {call} }}"
     prefix = "let result = " if method.must_use else ""
     return f"{prefix}{call};"
@@ -529,10 +585,11 @@ def _public_attributes(
     method: RustComprehensiveMethod,
     *,
     has_private_bound: bool,
+    checked: bool,
 ) -> tuple[str, ...]:
     return (
         "    #[inline]",
-        *(("    #[must_use]",) if method.must_use else ()),
+        *(("    #[must_use]",) if method.must_use and not checked else ()),
         *(("    #[track_caller]",) if method.panic_conditions else ()),
         *(
             ("    #[allow(clippy::should_implement_trait)]",)
@@ -545,27 +602,87 @@ def _public_attributes(
 
 def _checked_guards(
     method: RustComprehensiveMethod,
+    conditions: tuple[RustFacadeCheckedCondition, ...],
     lanes: str,
     *,
     indent: str,
 ) -> tuple[str, ...]:
     guards: list[str] = []
-    for condition in method.checked_conditions:
-        if condition.kind is not PreconditionKind.LANE_INDEX_IN_RANGE:
-            raise ValueError(
-                f"unsupported Rust facade check {condition.kind.value!r}"
-            )
+    for condition_index, condition in enumerate(conditions):
         error = _facade_precondition_error(condition.error)
-        guards.append(
-            f"{indent}if {_identifier(condition.parameter_name)} >= {lanes} {{"
-            f" return Err({error}); }}"
-        )
+        if condition.kind is PreconditionKind.LANE_INDEX_IN_RANGE:
+            parameter = _checked_parameter_expression(
+                method, condition.parameter_name
+            )
+            guards.append(
+                f"{indent}if {parameter} >= {lanes} {{"
+                f" return Err({error}); }}"
+            )
+            continue
+        if condition.kind is PreconditionKind.ACTIVE_DIVISOR_NONZERO:
+            divisor = _checked_parameter_expression(
+                method, condition.parameter_name
+            )
+            divisor_lanes = f"__tsl_checked_divisors_{condition_index}"
+            guards.append(f"{indent}let {divisor_lanes} = {divisor}.to_array();")
+            if condition.mask_parameter_name is not None:
+                mask = _checked_parameter_expression(
+                    method, condition.mask_parameter_name
+                )
+                active_lanes = f"__tsl_checked_active_{condition_index}"
+                guards.append(f"{indent}let {active_lanes} = {mask}.to_array();")
+                guards.extend(
+                    (
+                        f"{indent}if {divisor_lanes}.into_iter().enumerate().any(",
+                        f"{indent}    |(lane, value)| {active_lanes}[lane] "
+                        "&& value == 0,",
+                        f"{indent}) {{ return Err({error}); }}",
+                    )
+                )
+            else:
+                guards.extend(
+                    (
+                        f"{indent}if {divisor_lanes}.into_iter().any(",
+                        f"{indent}    |value| value == 0,",
+                        f"{indent}) {{ return Err({error}); }}",
+                    )
+                )
+            continue
+        raise ValueError(f"unsupported Rust facade check {condition.kind.value!r}")
     return tuple(guards)
+
+
+def _checked_conditions_for_type(
+    method: RustComprehensiveMethod,
+    type_tag: str,
+) -> tuple[RustFacadeCheckedCondition, ...]:
+    return tuple(
+        condition
+        for condition in method.checked_conditions
+        if type_tag in condition.applicable_type_tags
+    )
+
+
+def _checked_parameter_expression(
+    method: RustComprehensiveMethod,
+    source_name: str,
+) -> str:
+    parameter = next(
+        (item for item in method.parameters if item.source_name == source_name),
+        None,
+    )
+    if parameter is None:
+        raise ValueError(f"checked facade parameter {source_name!r} is unresolved")
+    if parameter.placement is RustFacadeParameterPlacement.RECEIVER:
+        return "self"
+    return _identifier(parameter.public_name)
 
 
 def _facade_precondition_error(error: PreconditionErrorKind) -> str:
     if error is PreconditionErrorKind.INDEX_OUT_OF_BOUNDS:
         return "crate::PreconditionError::IndexOutOfBounds"
+    if error is PreconditionErrorKind.ZERO_DIVISOR:
+        return "crate::PreconditionError::ZeroDivisor"
     raise ValueError(f"unsupported Rust facade precondition error {error.value!r}")
 
 

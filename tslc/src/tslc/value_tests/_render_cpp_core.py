@@ -103,21 +103,87 @@ def _compile_only(case: ValueTestCasePlan) -> str:
 def _checked_precondition(case: ValueTestCasePlan) -> str:
     checked = case.checked_precondition
     assert checked is not None
+    if case.scalable is not None:
+        return _scalable_checked_precondition(case)
     lines = [
         f"int {case.function_name}() {{",
         f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",
     ]
     args = _append_call_args(lines, case)
-    args[checked.parameter_index] = {
-        ValueTestInvalidPreconditionValue.LANE_COUNT: "Vec::lane_count()",
-        ValueTestInvalidPreconditionValue.SIZE_MAX: (
-            "std::numeric_limits<std::size_t>::max()"
-        ),
-    }[checked.invalid_value]
+    if checked.invalid_value is not ValueTestInvalidPreconditionValue.ACTIVE_DIVISOR_ZERO:
+        args[checked.parameter_index] = {
+            ValueTestInvalidPreconditionValue.LANE_COUNT: "Vec::lane_count()",
+            ValueTestInvalidPreconditionValue.SIZE_MAX: (
+                "std::numeric_limits<std::size_t>::max()"
+            ),
+        }[checked.invalid_value]
     error = {
         PreconditionErrorKind.INDEX_OUT_OF_BOUNDS: (
             "tsl::precondition_error::index_out_of_bounds"
         ),
+        PreconditionErrorKind.ZERO_DIVISOR: "tsl::precondition_error::zero_divisor",
+    }[checked.error]
+    lines.extend(
+        (
+            "  tsl::precondition_error error = tsl::precondition_error::none;",
+            f"  auto result = tsl::{case.call_name}_checked<Vec>("
+            f"{', '.join((*args, 'error'))});",
+            "  (void)result;",
+            f"  return error == {error} ? 0 : 1;",
+            "}",
+        )
+    )
+    return "\n".join(lines)
+
+
+def _scalable_checked_precondition(case: ValueTestCasePlan) -> str:
+    checked = case.checked_precondition
+    assert checked is not None
+    lines = _scalable_header(case)
+    args: list[str] = []
+    vector_index = 0
+    mask_index = 0
+    scalar_index = 0
+    for kind in case.invocation.param_kinds:
+        if kind == "v":
+            args.append(_append_runtime_vector_input(lines, case, vector_index))
+            vector_index += 1
+        elif kind == "m":
+            lines.append(
+                f"  typename Vec::mask_type m{mask_index} = "
+                f"{_scalable_mask_from_bits(case, mask_index)};"
+            )
+            args.append(f"m{mask_index}")
+            mask_index += 1
+        elif kind == "s":
+            value = cpp_literal(case.inputs.scalars[scalar_index], case.type_tag)
+            lines.append(f"  {case.base_spelling} s{scalar_index} = {value};")
+            args.append(f"s{scalar_index}")
+            scalar_index += 1
+        elif kind == "usize":
+            lines.append(
+                f"  std::size_t s{scalar_index} = static_cast<std::size_t>("
+                f"{case.inputs.scalars[scalar_index]});"
+            )
+            args.append(f"s{scalar_index}")
+            scalar_index += 1
+        else:
+            raise ValueError(
+                "scalable checked-precondition test does not support argument kind "
+                f"{kind!r}"
+            )
+    if checked.invalid_value is not ValueTestInvalidPreconditionValue.ACTIVE_DIVISOR_ZERO:
+        args[checked.parameter_index] = {
+            ValueTestInvalidPreconditionValue.LANE_COUNT: "Vec::lane_count()",
+            ValueTestInvalidPreconditionValue.SIZE_MAX: (
+                "std::numeric_limits<std::size_t>::max()"
+            ),
+        }[checked.invalid_value]
+    error = {
+        PreconditionErrorKind.INDEX_OUT_OF_BOUNDS: (
+            "tsl::precondition_error::index_out_of_bounds"
+        ),
+        PreconditionErrorKind.ZERO_DIVISOR: "tsl::precondition_error::zero_divisor",
     }[checked.error]
     lines.extend(
         (

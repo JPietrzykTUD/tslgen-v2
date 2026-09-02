@@ -307,6 +307,7 @@ def test_runtime_lane_mutation_value_tests_build_and_pass(
     assert cases
     assert {case.call_name for case in cases} == set(primitives)
     assert {case.kind for case in cases} == {
+        "checked_precondition",
         "differential",
         "mask_result",
         "scalar_result",

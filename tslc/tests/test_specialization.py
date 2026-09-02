@@ -441,19 +441,23 @@ def test_cpp_core_vectors_expose_metadata_constants(
     )
 
 
-def test_cpp_zero_divisor_failure_traps_on_non_unwinding_targets(
+def test_cpp_static_lane_mismatch_traps_on_non_unwinding_targets(
     specialization_artifacts: dict[str, str]
 ) -> None:
     core = specialization_artifacts["cpp/include/tsl_core.hpp"]
 
     assert "defined(__SYCL_DEVICE_ONLY__) || defined(__wasm__)" in core
+    assert "!defined(__cpp_exceptions) && !defined(_CPPUNWIND)" in core
     assert (
         "if (source_lanes != target_lanes) {\n"
-        "#if defined(__SYCL_DEVICE_ONLY__) || defined(__wasm__)\n"
+            "#if defined(__SYCL_DEVICE_ONLY__) || defined(__wasm__) || \\\n"
+            "    (!defined(__cpp_exceptions) && !defined(_CPPUNWIND))\n"
         "        __builtin_trap();"
         in core
     )
-    assert '__builtin_trap();\n#else\n    throw std::domain_error(' in core
+    assert '__builtin_trap();\n#else\n        throw std::invalid_argument(' in core
+    assert "arith_zero_divisor_fail" not in core
+    assert "TSL_ARITH_INTEGER_ZERO_DIVISOR" not in core
 
 
 def test_cpp_core_base_dispatch_admits_explicit_scalar_types(
@@ -689,7 +693,7 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     documentation = specialization_artifacts["rust/src/tsl_documentation.rs"]
 
     assert sha256(avx2.encode()).hexdigest() == (
-        "e48112f44dacdfcca25d112a5cc69512e04fb9122a3ec7da8d26ee63482fc41b"
+        "b40e89dacb656b43e42e6ac9c0229eb49c73b81f752cc8ab4f16d502ed79cf0e"
     )
 
     assert 'name = "tsl"' in cargo

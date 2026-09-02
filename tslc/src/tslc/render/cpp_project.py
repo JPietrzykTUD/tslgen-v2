@@ -165,18 +165,34 @@ def _cpp_profile_header(
         )
         for declared in header.declarations
     )
-    wrappers = "\n\n".join(
+    ordinary_wrappers = "\n\n".join(
         rendered
         for declared in header.declarations
         if (
-            rendered := backend.render_wrappers(
+            rendered := backend.render_ordinary_wrappers(
+                declared.name, declared.specializations
+            )
+        )
+    )
+    checked_wrappers = "\n\n".join(
+        rendered
+        for declared in header.declarations
+        if (
+            rendered := backend.render_checked_wrappers(
                 declared.name, declared.specializations
             )
         )
     )
     definitions = _cpp_conditioned_definitions(backend, header)
     bodies = "\n\n".join(
-        part for part in (implementation_declarations, wrappers, definitions) if part
+        part
+        for part in (
+            implementation_declarations,
+            ordinary_wrappers,
+            checked_wrappers,
+            definitions,
+        )
+        if part
     )
     content = assets.fill(
         "cpp_profile_header.hpp.tmpl",

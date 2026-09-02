@@ -20,7 +20,7 @@ from dataclasses import replace
 
 from tslc.backend import translation_common
 from tslc.backend.translation import BackendDialect
-from tslc.catalog.arithmetic import ArithmeticGuarantee, ArithmeticOperandRole
+from tslc.catalog.arithmetic import ArithmeticOperandRole, ArithmeticOperation
 from tslc.catalog.memory import resolve_memory_alignment
 from tslc.catalog.model import (
     BOOLEAN_WILDCARD_ATTRIBUTES,
@@ -30,6 +30,10 @@ from tslc.catalog.model import (
     RESULT_DIM_VECTOR,
 )
 from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS, scalar_bit_width_or_default
+from tslc.catalog.preconditions import (
+    PRECONDITION_DESCRIPTORS,
+    precondition_applies_to_type,
+)
 from tslc.catalog.signatures import SignatureShape, parse_signature
 from tslc.diagnostics import Diagnostic, SourceSpan, sort_diagnostics
 from tslc.documentation import primitive_documentation
@@ -52,7 +56,13 @@ from tslc.lower._diagnostics import (
     lowering_skip_diagnostic,
     primitive_signature_source as _primitive_signature_source,
 )
-from tslc.lower.dependencies import origin_sort_key, symbolic_call_dependency_error
+from tslc.lower.dependencies import (
+    CallDependency,
+    CallDependencyOrigin,
+    VectorIdentity,
+    origin_sort_key,
+    symbolic_call_dependency_error,
+)
 from tslc.lower.fixed_native import lower_preferred_fixed_native
 from tslc.lower.region_handlers import (
     DEFAULT_REGION_LOWERERS,
@@ -347,6 +357,7 @@ class Lowerer:
         effective_safety = safety
         diagnostics = [*default_body.diagnostics]
         call_dependency_origins = set(context.effects.call_dependency_origins)
+        call_dependency_origins.update(_checked_precondition_dependencies(selected))
         for variant, variant_segments in variant_sources:
             variant_context = body_context(
                 replace(
@@ -554,8 +565,8 @@ def _arithmetic_preconditions(
     info = SCALAR_TYPE_INFOS.get(selected.type_tag)
     if contract is None or info is None or info.floating or immediate is None:
         return ()
-    if not contract.has_guarantee(
-        ArithmeticGuarantee.INTEGER_ZERO_DIVISOR_FAILS
+    if not contract.operations.intersection(
+        {ArithmeticOperation.DIVISION, ArithmeticOperation.REMAINDER}
     ):
         return ()
     binding = contract.binding(ArithmeticOperandRole.DIVISOR)
@@ -572,6 +583,32 @@ def _arithmetic_preconditions(
             lane_bit_width=info.bit_width,
         ),
     )
+
+
+def _checked_precondition_dependencies(
+    selected: SelectedImplementation,
+) -> tuple[CallDependencyOrigin, ...]:
+    current = VectorIdentity(selected.type_tag, selected.extension.isa_name)
+    dependencies: list[CallDependencyOrigin] = []
+    for precondition in selected.primitive.preconditions:
+        descriptor = PRECONDITION_DESCRIPTORS[precondition.kind]
+        if not precondition_applies_to_type(precondition, selected.type_tag):
+            continue
+        check_primitives = descriptor.check_primitives
+        if selected.primitive.mask_mode is not None:
+            check_primitives += descriptor.masked_check_primitives
+        dependencies.extend(
+            CallDependencyOrigin(
+                dependency=CallDependency(
+                    primitive=primitive.value,
+                    mask_policy=None,
+                    source=current,
+                ),
+                origin=f"checked precondition {precondition.kind.value!r}",
+            )
+            for primitive in check_primitives
+        )
+    return tuple(dependencies)
 
 
 def _resolve_immediate_range(

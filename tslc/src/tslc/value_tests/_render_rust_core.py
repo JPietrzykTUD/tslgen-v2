@@ -424,20 +424,22 @@ def _checked_precondition(case: ValueTestCasePlan) -> str:
         f"        type Vec = Simd<{case.base_spelling}, Generic<{case.lanes}>>;",
     ]
     args = append_call_args(lines, case)
-    replaced_arg = args[checked.parameter_index]
-    args[checked.parameter_index] = {
-        ValueTestInvalidPreconditionValue.LANE_COUNT: "Vec::lane_count()",
-        ValueTestInvalidPreconditionValue.SIZE_MAX: "usize::MAX",
-    }[checked.invalid_value]
-    lines = [
-        line
-        for line in lines
-        if not line.startswith(f"        let {replaced_arg}:")
-    ]
+    if checked.invalid_value is not ValueTestInvalidPreconditionValue.ACTIVE_DIVISOR_ZERO:
+        replaced_arg = args[checked.parameter_index]
+        args[checked.parameter_index] = {
+            ValueTestInvalidPreconditionValue.LANE_COUNT: "Vec::lane_count()",
+            ValueTestInvalidPreconditionValue.SIZE_MAX: "usize::MAX",
+        }[checked.invalid_value]
+        lines = [
+            line
+            for line in lines
+            if not line.startswith(f"        let {replaced_arg}:")
+        ]
     error = {
         PreconditionErrorKind.INDEX_OUT_OF_BOUNDS: (
             "PreconditionError::IndexOutOfBounds"
         ),
+        PreconditionErrorKind.ZERO_DIVISOR: "PreconditionError::ZeroDivisor",
     }[checked.error]
     lines.extend(
         (

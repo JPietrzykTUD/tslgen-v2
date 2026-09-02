@@ -280,8 +280,8 @@ def test_representative_project_shape_is_byte_stable(
         "cpp/tests/smoke_scalar.cpp": "43046adfe06468b6eb75f351dc8883cb1e35635e66f40fc3f033d41651554a1e",
         "rust/Cargo.toml": "ec632691434d5f98f5bb2035539e9df258ec7fb252f84e5b4cb21a0aa2a144cc",
         "rust/src/lib.rs": "62a0f75a3abc17e447aab02802ee31511504c4810e40cf52a083c3357ee7d3af",
-        "rust/src/tsl_documentation.rs": "1d8163784f4c50ee49b04b9ab93e82bbd8cb8adeab3479deea8092658de251f5",
-        "rust/src/tsl_scalar.rs": "47265f9bdac4047ba76d43f083bbdb744bce7846c4be91c5a3de333bd71e8999",
+        "rust/src/tsl_documentation.rs": "8c1a64628fd0bceed693d46f7875fd046bed0e6e895371eee6e7f5f3506cb28b",
+        "rust/src/tsl_scalar.rs": "cc9ab7400566c486e0d2bea018c347bcf593ac0c7f86e13f3f6527ca4ff0be5d",
         "rust/tests/smoke.rs": "a4d108f502689e7f29ba5259e22779e8ef0afa36ab83c239022e2772d68d6b44",
     }
     actual = {
@@ -1264,16 +1264,28 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
     assert "test_scalable_rvv_div_f32_basic" in values
     assert "test_scalable_rvv_div_si32_basic" in values
     assert "test_scalable_rvv_div_si32_edge_overflow_signs" in values
-    assert "test_scalable_rvv_div_si32_failure_zero_divisor" in values
-    assert "test_scalable_rvv_div_si32_mask_failure_active_zero" in values
-    assert "test_scalable_rvv_div_si32_maskz_failure_active_zero" in values
+    assert "test_scalable_rvv_div_si32_basic__checked_active_zero" in values
+    assert (
+        "test_scalable_rvv_div_mask_div_si32_mask_inactive_zero"
+        "__checked_active_zero"
+    ) in values
+    assert (
+        "test_scalable_rvv_div_maskz_div_si32_maskz_inactive_zero"
+        "__checked_active_zero"
+    ) in values
     assert "test_scalable_rvv_div_maskz_div_si32_maskz_inactive_zero" in values
     assert "test_scalable_rvv_div_mask_div_si32_mask_inactive_zero" in values
     assert "test_scalable_rvv_mod_si32_basic" in values
     assert "test_scalable_rvv_mod_si32_edge_overflow" in values
-    assert "test_scalable_rvv_mod_si32_failure_zero_divisor" in values
-    assert "test_scalable_rvv_mod_si32_mask_failure_active_zero" in values
-    assert "test_scalable_rvv_mod_si32_maskz_failure_active_zero" in values
+    assert "test_scalable_rvv_mod_si32_basic__checked_active_zero" in values
+    assert (
+        "test_scalable_rvv_mod_mask_mod_si32_mask_inactive_zero"
+        "__checked_active_zero"
+    ) in values
+    assert (
+        "test_scalable_rvv_mod_maskz_mod_si32_maskz_inactive_zero"
+        "__checked_active_zero"
+    ) in values
     assert "test_scalable_rvv_mod_maskz_mod_si32_maskz_inactive_zero" in values
     assert "test_scalable_rvv_mod_mask_mod_si32_mask_inactive_zero" in values
     assert "test_scalable_rvv_mod_f32_basic_float" in values

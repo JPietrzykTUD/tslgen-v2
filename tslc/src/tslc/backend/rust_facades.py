@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+from tslc.backend.checked_api import public_call_requires_unsafe
 from tslc.backend.primitive_facade import (
     DataparallelPrimitiveFacade,
     DataparallelPrimitiveFacadeKind,
@@ -31,6 +32,7 @@ def rust_algorithm_primitive_facades(
         if function_name in reserved_names:
             continue
         specs = by_primitive[primitive_name]
+        caller_unsafe = public_call_requires_unsafe(specs)
         facade = classify_dataparallel_primitive_facade(primitive_name, specs)
         if facade is None:
             continue
@@ -61,14 +63,23 @@ def rust_algorithm_primitive_facades(
         parts.append(
             "\n".join(
                 (
-                    f"    pub fn {function_name}<{function_generics}>(",
+                    f"    pub {'unsafe ' if caller_unsafe else ''}fn "
+                    f"{function_name}<{function_generics}>(",
                     *params,
                     f"    ) -> {result_type}",
                     "    where",
                     f"        Policy: VectorFor<Profile, {source_type}>,",
                     f"        {source_vec}: {vec_bound},",
                     "    {",
-                    f"        super::{function_name}::<{source_vec}{', ' + target_vec if target_vec is not None else ''}>({args})",
+                    (
+                        "        unsafe { "
+                        f"super::{function_name}::<{source_vec}"
+                        f"{', ' + target_vec if target_vec is not None else ''}>({args})"
+                        " }"
+                        if caller_unsafe
+                        else f"        super::{function_name}::<{source_vec}"
+                        f"{', ' + target_vec if target_vec is not None else ''}>({args})"
+                    ),
                     "    }",
                 )
             )

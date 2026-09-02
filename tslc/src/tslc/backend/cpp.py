@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from tslc.backend.cpp_compiler_capabilities import cpp_compiler_capability
-from tslc.backend.cpp_checked_api import plan_cpp_checked_api
+from tslc.backend.checked_api import CheckedConditionPlan
+from tslc.backend.cpp_checked_api import CppCheckedApiPlan, plan_cpp_checked_api
 from tslc.backend.cpp_documentation import (
     cpp_doc as _cpp_doc,
     cpp_register_doc as _cpp_register_doc,
@@ -19,7 +20,11 @@ from tslc.backend.primitive_facade import (
 from tslc.backend.primitive_rendering import body_for as _body_for
 from tslc.backend.primitive_rendering import variant_names as _variant_names
 from tslc.backend.signature_types import CPP_SIGNATURE_TYPES
-from tslc.catalog.preconditions import PreconditionErrorKind
+from tslc.catalog.preconditions import (
+    PreconditionCheckPrimitive,
+    PreconditionErrorKind,
+    PreconditionKind,
+)
 from tslc.lower.lowerer import (
     LoweredArithmeticPrecondition,
     LoweredArithmeticPreconditionKind,
@@ -78,7 +83,68 @@ def _cpp_compiler_diagnostic(
 def _cpp_precondition_error(error: PreconditionErrorKind) -> str:
     if error is PreconditionErrorKind.INDEX_OUT_OF_BOUNDS:
         return "::tsl::precondition_error::index_out_of_bounds"
+    if error is PreconditionErrorKind.ZERO_DIVISOR:
+        return "::tsl::precondition_error::zero_divisor"
     raise ValueError(f"unsupported C++ precondition error {error.value!r}")
+
+
+def _cpp_checked_failure(
+    condition: CheckedConditionPlan,
+    plan: CppCheckedApiPlan,
+    *,
+    indent: str,
+) -> str:
+    return (
+        f"{indent}{plan.error_parameter_name} = "
+        f"{_cpp_precondition_error(condition.error)};\n"
+        f"{indent}return {plan.failure_placeholder_expression};"
+    )
+
+
+def _cpp_checked_condition(
+    condition: CheckedConditionPlan,
+    plan: CppCheckedApiPlan,
+) -> str:
+    if condition.kind is PreconditionKind.LANE_INDEX_IN_RANGE:
+        return (
+            f"    if ({condition.parameter_name} >= Vec::lane_count()) {{\n"
+            f"{_cpp_checked_failure(condition, plan, indent='        ')}\n"
+            "    }"
+        )
+    if condition.kind is not PreconditionKind.ACTIVE_DIVISOR_NONZERO:
+        raise ValueError(f"unsupported C++ checked condition {condition.kind.value!r}")
+    required = {
+        PreconditionCheckPrimitive.ZERO_VECTOR,
+        PreconditionCheckPrimitive.EQUAL,
+        PreconditionCheckPrimitive.MASK_POPULATION_COUNT,
+    }
+    if not required.issubset(condition.check_primitives):
+        raise ValueError("zero-divisor check plan is missing support primitives")
+    lines = [
+        "    if constexpr (std::is_integral_v<typename Vec::base_type>) {",
+        "        auto zero_divisors = ::tsl::equal<Vec>(",
+        f"            {condition.parameter_name}, ::tsl::set_zero<Vec>());",
+    ]
+    checked_mask = "zero_divisors"
+    if condition.mask_parameter_name is not None:
+        if PreconditionCheckPrimitive.MASK_AND not in condition.check_primitives:
+            raise ValueError("masked zero-divisor check plan has no mask-and primitive")
+        lines.extend(
+            (
+                "        auto active_zero_divisors = ::tsl::mask_binary_and<Vec>(",
+                f"            {condition.mask_parameter_name}, zero_divisors);",
+            )
+        )
+        checked_mask = "active_zero_divisors"
+    lines.extend(
+        (
+            f"        if (::tsl::mask_population_count<Vec>({checked_mask}) != 0) {{",
+            _cpp_checked_failure(condition, plan, indent="            "),
+            "        }",
+            "    }",
+        )
+    )
+    return "\n".join(lines)
 
 
 def _cpp_body_text(
@@ -244,6 +310,26 @@ class CppBackend:
         checked = self._checked_wrapper(primitive_name, specializations, define=True)
         return "\n\n".join(part for part in (ordinary, checked) if part)
 
+    def render_ordinary_wrappers(
+        self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
+    ) -> str:
+        shape = specializations[0]
+        if DEFAULT_SUPPORT_POLICY.is_free_function_signature(
+            shape.result_kind, shape.param_kinds
+        ):
+            return ""
+        return self._wrapper(primitive_name, specializations)
+
+    def render_checked_wrappers(
+        self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
+    ) -> str:
+        shape = specializations[0]
+        if DEFAULT_SUPPORT_POLICY.is_free_function_signature(
+            shape.result_kind, shape.param_kinds
+        ):
+            return ""
+        return self._checked_wrapper(primitive_name, specializations, define=True)
+
     def render_definitions(
         self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
     ) -> str:
@@ -326,29 +412,28 @@ class CppBackend:
             concrete=False,
             checked=True,
         )
-        if len(plan.conditions) != 1:
-            raise ValueError("C++ checked wrapper supports one condition")
-        condition = plan.conditions[0]
         params = (
             f"{signature.params}, {plan.error_parameter_declaration}"
             if signature.params
             else plan.error_parameter_declaration
         )
+        template_params = signature.template_params + (
+            (plan.template_constraint,) if plan.template_constraint is not None else ()
+        )
         head = (
-            f"template <{', '.join(signature.template_params)}>\n"
+            f"template <{', '.join(template_params)}>\n"
             f"{plan.inline_specifier} auto {primitive_name}_checked({params}) "
             f"noexcept -> {signature.result_type}"
         )
         prefix = f"{doc}\n" if doc else ""
         if not define:
             return prefix + head + ";"
+        checks = "\n".join(
+            _cpp_checked_condition(condition, plan) for condition in plan.conditions
+        )
         return prefix + (
             f"{head} {{\n"
-            f"    if ({condition.parameter_name} >= Vec::lane_count()) {{\n"
-            f"        {plan.error_parameter_name} = "
-            f"{_cpp_precondition_error(condition.error)};\n"
-            f"        return {plan.failure_placeholder_expression};\n"
-            "    }\n"
+            f"{checks}\n"
             f"    {plan.error_parameter_name} = {plan.success_error_expression};\n"
             f"    return ::tsl::{primitive_name}<{signature.impl_args}>"
             f"({signature.argument_names});\n"

@@ -143,6 +143,7 @@ def test_declared_lane_precondition_produces_unsafe_and_checked_facade_methods()
     rendered = render_comprehensive_facade(plan).public_items
 
     assert method.caller_unsafe
+    assert method.caller_unsafe_type_tags == ("si32",)
     assert tuple(item.kind for item in method.checked_conditions) == (
         PreconditionKind.LANE_INDEX_IN_RANGE,
     )
@@ -175,6 +176,7 @@ def test_checked_facade_is_omitted_when_a_caller_obligation_remains() -> None:
     rendered = render_comprehensive_facade(plan).public_items
 
     assert method.caller_unsafe
+    assert method.caller_unsafe_type_tags == ("si32",)
     assert method.checked_conditions == ()
     assert "extract_value_at_checked" not in rendered
 

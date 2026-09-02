@@ -11,6 +11,10 @@ from tslc.catalog.model import (
     Catalog,
     RESULT_DIM_VECTOR,
 )
+from tslc.catalog.preconditions import (
+    PRECONDITION_DESCRIPTORS,
+    PreconditionHazard,
+)
 from tslc.catalog.signatures import parse_signature
 from tslc.ir.region_syntax import parse_call_selector
 from tslc.ir.scan import scan
@@ -234,7 +238,17 @@ def _primitive_caller_unsafe(
             implementation.safety.caller_unsafe
             for implementation in primitive.implementations
         )
-        values[primitive.name] = values.get(primitive.name, False) or inferred or authored
+        preconditioned = any(
+            PRECONDITION_DESCRIPTORS[item.kind].hazard
+            is PreconditionHazard.CATASTROPHIC
+            for item in primitive.preconditions
+        )
+        values[primitive.name] = (
+            values.get(primitive.name, False)
+            or inferred
+            or authored
+            or preconditioned
+        )
     return values
 
 

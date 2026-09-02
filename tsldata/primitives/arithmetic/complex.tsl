@@ -937,9 +937,9 @@ prim<v:=(v,v)> div(dividend, divisor):
   detailed_description """
     Computes lane-wise division of two vector registers. Each output lane depends
     only on the corresponding lanes of the input registers. Integer quotients
-    round toward zero, an integer zero divisor fails before division, and signed
-    MIN divided by -1 returns MIN. Floating lanes preserve IEEE 754 returned-value
-    behavior.
+    round toward zero, and signed MIN divided by -1 returns MIN. Every divisor
+    lane in a valid integer call is nonzero. Floating lanes preserve IEEE 754
+    returned-value behavior.
     """
   arithmetic:
     operations [division]
@@ -948,16 +948,15 @@ prim<v:=(v,v)> div(dividend, divisor):
       divisor divisor
     guarantees [
       integer_quotient_toward_zero,
-      integer_zero_divisor_fails,
       signed_min_div_neg_one_returns_min,
       floating_division_ieee754_values
     ]
+  preconditions [active_divisor_nonzero]
   semantics """
     input: register dividend, register divisor
+    precondition: if lane type is integer, every divisor lane is nonzero
     for each lane i:
-      if lane type is integer and divisor[i] == 0:
-        fail without returning a value
-      else if lane type is signed integer and dividend[i] == MIN and divisor[i] == -1:
+      if lane type is signed integer and dividend[i] == MIN and divisor[i] == -1:
         result[i] = MIN
       else:
         result[i] = dividend[i] / divisor[i]
@@ -968,7 +967,6 @@ prim<v:=(v,v)> div(dividend, divisor):
     operand_domains:
       divisor nonzero
   tests:
-    - {role "runtime_failure", tags [failure, zero_divisor], type "si32", case {inputs [[8, -9, 10, -12], [2, 0, -2, 4]], failure "integer_zero_divisor"}}
     - {tags [basic], type "f32", case {inputs [[8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [4.0, -3.0, -5.0, -3.0]}}
     - {tags [edge, signed_zero, zero_divisor], type "f32", case {inputs [[0.0, -0.0, 1.0, -1.0], [1.0, 1.0, 0.0, 0.0]], expected [0.0, -0.0, INFINITY, "-INFINITY"]}}
     - {tags [edge, nan, infinity], type "f32", case {inputs [[0.0, INFINITY, NAN, 1.0], [0.0, INFINITY, 1.0, NAN]], expected [NAN, NAN, NAN, NAN]}}
@@ -1218,13 +1216,6 @@ prim<v:=(v,v)> div(dividend, divisor):
           reasons [intrinsic]
         implementation:
           tsil """
-            var<const_infer>(zero_divisors, call<primitive=equal>(
-              divisor,
-              call<primitive=set_zero[Vec]>()
-            ));
-            if (call<primitive=mask_population_count[Vec]>(zero_divisors) != 0) {
-              helper<arith_zero_divisor_fail>();
-            }
             complete(intrin<svdiv, build[post=x]>(
               call<primitive=mask_true[Vec]>(),
               dividend,
@@ -1240,13 +1231,6 @@ prim<v:=(v,v)> div(dividend, divisor):
           reasons [intrinsic]
         implementation:
           tsil """
-            var<const_infer>(zero_divisors, call<primitive=equal>(
-              divisor,
-              call<primitive=set_zero[Vec]>()
-            ));
-            if (call<primitive=mask_population_count[Vec]>(zero_divisors) != 0) {
-              helper<arith_zero_divisor_fail>();
-            }
             complete(
               intrin<vdiv, build[infix="vv", infix_sep="_"]>(
                 dividend,
@@ -1263,13 +1247,6 @@ prim<v:=(v,v)> div(dividend, divisor):
           reasons [intrinsic]
         implementation:
           tsil """
-            var<const_infer>(zero_divisors, call<primitive=equal>(
-              divisor,
-              call<primitive=set_zero[Vec]>()
-            ));
-            if (call<primitive=mask_population_count[Vec]>(zero_divisors) != 0) {
-              helper<arith_zero_divisor_fail>();
-            }
             complete(
               intrin<vdivu, build[infix="vv", infix_sep="_"]>(
                 dividend,
@@ -1299,8 +1276,9 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, dividend, divisor):
   detailed_description """
     Computes lane-wise division for lanes enabled by the mask. Disabled lanes are
     set to zero and do not participate. Active integer lanes use quotient rounding
-    toward zero, fail on a zero divisor, and return MIN for signed MIN divided by
-    -1. Active floating lanes preserve IEEE 754 returned-value behavior.
+    toward zero and return MIN for signed MIN divided by -1. Every active divisor
+    lane in a valid integer call is nonzero. Active floating lanes preserve IEEE
+    754 returned-value behavior.
     """
   arithmetic:
     operations [division]
@@ -1309,18 +1287,17 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, dividend, divisor):
       divisor divisor
     guarantees [
       integer_quotient_toward_zero,
-      integer_zero_divisor_fails,
       signed_min_div_neg_one_returns_min,
       floating_division_ieee754_values,
       inactive_lanes_do_not_participate
     ]
+  preconditions [active_divisor_nonzero]
   semantics """
     input: mask mask, register dividend, register divisor
+    precondition: if lane type is integer, every active divisor lane is nonzero
     for each lane i:
       if mask[i] is active:
-        if lane type is integer and divisor[i] == 0:
-          fail without returning a value
-        else if lane type is signed integer and dividend[i] == MIN and divisor[i] == -1:
+        if lane type is signed integer and dividend[i] == MIN and divisor[i] == -1:
           result[i] = MIN
         else:
           result[i] = dividend[i] / divisor[i]
@@ -1329,7 +1306,6 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, dividend, divisor):
     return result
     """
   tests:
-    - {role "runtime_failure", tags [maskz, failure, active_zero], type "si32", case {inputs [10, [8, -9, 10, -12], [2, 0, -2, 4]], failure "integer_zero_divisor"}}
     - {tags [maskz, basic], type "f32", case {inputs [10, [8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [0.0, -3.0, 0.0, -3.0]}}
     - {tags [maskz, zero], type "f32", case {inputs [0, [8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [0.0, 0.0, 0.0, 0.0]}}
     - {tags [maskz, inactive_zero, rvv], extension "rvv", type "f32", case {inputs [10, [1.0, 8.0, -1.0, -12.0], [0.0, 2.0, 0.0, 4.0]], expected [0.0, 4.0, 0.0, -3.0]}}
@@ -1467,17 +1443,6 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, dividend, divisor):
           reasons [intrinsic]
         implementation:
           tsil """
-            var<const_infer>(zero_divisors, call<primitive=equal>(
-              divisor,
-              call<primitive=set_zero[Vec]>()
-            ));
-            var<const_infer>(active_zero_divisors, call<primitive=mask_binary_and>(
-              mask,
-              zero_divisors
-            ));
-            if (call<primitive=mask_population_count[Vec]>(active_zero_divisors) != 0) {
-              helper<arith_zero_divisor_fail>();
-            }
             complete(intrin<svdiv, build[post=z]>(mask, dividend, divisor));
           """
     rvv:
@@ -1528,9 +1493,9 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, dividend, divisor):
   detailed_description """
     Computes lane-wise division for lanes enabled by the mask. Disabled lanes
     keep the corresponding dividend lane and do not participate. Active integer
-    lanes use quotient rounding toward zero, fail on a zero divisor, and return
-    MIN for signed MIN divided by -1. Active floating lanes preserve IEEE 754
-    returned-value behavior.
+    lanes use quotient rounding toward zero and return MIN for signed MIN divided
+    by -1. Every active divisor lane in a valid integer call is nonzero. Active
+    floating lanes preserve IEEE 754 returned-value behavior.
     """
   arithmetic:
     operations [division]
@@ -1539,18 +1504,17 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, dividend, divisor):
       divisor divisor
     guarantees [
       integer_quotient_toward_zero,
-      integer_zero_divisor_fails,
       signed_min_div_neg_one_returns_min,
       floating_division_ieee754_values,
       inactive_lanes_do_not_participate
     ]
+  preconditions [active_divisor_nonzero]
   semantics """
     input: mask mask, register dividend, register divisor
+    precondition: if lane type is integer, every active divisor lane is nonzero
     for each lane i:
       if mask[i] is active:
-        if lane type is integer and divisor[i] == 0:
-          fail without returning a value
-        else if lane type is signed integer and dividend[i] == MIN and divisor[i] == -1:
+        if lane type is signed integer and dividend[i] == MIN and divisor[i] == -1:
           result[i] = MIN
         else:
           result[i] = dividend[i] / divisor[i]
@@ -1559,7 +1523,6 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, dividend, divisor):
     return result
     """
   tests:
-    - {role "runtime_failure", tags [mask, failure, active_zero], type "si32", case {inputs [10, [8, -9, 10, -12], [2, 0, -2, 4]], failure "integer_zero_divisor"}}
     - {tags [mask, basic], type "f32", case {inputs [10, [8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [8.0, -3.0, 10.0, -3.0]}}
     - {tags [mask, zero], type "f32", case {inputs [0, [8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [8.0, -9.0, 10.0, -12.0]}}
     - {tags [mask, inactive_zero, rvv], extension "rvv", type "f32", case {inputs [10, [1.0, 8.0, -1.0, -12.0], [0.0, 2.0, 0.0, 4.0]], expected [1.0, 4.0, -1.0, -3.0]}}
@@ -1697,17 +1660,6 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, dividend, divisor):
           reasons [intrinsic]
         implementation:
           tsil """
-            var<const_infer>(zero_divisors, call<primitive=equal>(
-              divisor,
-              call<primitive=set_zero[Vec]>()
-            ));
-            var<const_infer>(active_zero_divisors, call<primitive=mask_binary_and>(
-              mask,
-              zero_divisors
-            ));
-            if (call<primitive=mask_population_count[Vec]>(active_zero_divisors) != 0) {
-              helper<arith_zero_divisor_fail>();
-            }
             complete(intrin<svdiv, build[post=m]>(mask, dividend, divisor));
           """
     rvv:
@@ -1926,7 +1878,8 @@ prim<v:=(v,v)> mod(dividend, divisor):
     Computes the lane-wise remainder of two vector registers. Each output lane
     depends only on the corresponding lanes of the input registers. Integer
     remainder uses a quotient truncated toward zero, has the dividend's sign,
-    fails on a zero divisor, and returns zero for signed MIN modulo -1.
+    and returns zero for signed MIN modulo -1. Every divisor lane in a valid
+    integer call is nonzero.
     Floating remainder has truncating-quotient/fmod returned-value behavior.
     """
   arithmetic:
@@ -1936,16 +1889,15 @@ prim<v:=(v,v)> mod(dividend, divisor):
       divisor divisor
     guarantees [
       integer_remainder_has_dividend_sign,
-      integer_zero_divisor_fails,
       signed_min_rem_neg_one_returns_zero,
       floating_remainder_truncating
     ]
+  preconditions [active_divisor_nonzero]
   semantics """
     input: register dividend, register divisor
+    precondition: if lane type is integer, every divisor lane is nonzero
     for each lane i:
-      if lane type is integer and divisor[i] == 0:
-        fail without returning a value
-      else if lane type is signed integer and dividend[i] == MIN and divisor[i] == -1:
+      if lane type is signed integer and dividend[i] == MIN and divisor[i] == -1:
         result[i] = 0
       else:
         result[i] = truncating_remainder(dividend[i], divisor[i])
@@ -1956,7 +1908,6 @@ prim<v:=(v,v)> mod(dividend, divisor):
     operand_domains:
       divisor nonzero
   tests:
-    - {role "runtime_failure", tags [failure, zero_divisor], type "si32", case {inputs [[10, -9, 8, -7], [3, 0, 5, 2]], failure "integer_zero_divisor"}}
     - {tags [basic], type "si32", case {inputs [[10, -9, 8, -7, 6, -5, 4, -3], [3, 4, 5, 2, 3, 2, 3, 2]], expected [1, -1, 3, -1, 0, -1, 1, -1]}}
     - {tags [edge, signs], type "si32", case {inputs [[-7, 7, -7, 7], [3, 3, -3, -3]], expected [-1, 1, -1, 1]}}
     - {tags [edge, overflow], type "si32", case {inputs [[-2147483648, -2147483648, -7, 7], [-1, 1, -3, -3]], expected [0, 0, -1, 1]}}
@@ -2355,13 +2306,6 @@ prim<v:=(v,v)> mod(dividend, divisor):
           reasons [intrinsic]
         implementation:
           tsil """
-            var<const_infer>(zero_divisors, call<primitive=equal>(
-              divisor,
-              call<primitive=set_zero[Vec]>()
-            ));
-            if (call<primitive=mask_population_count[Vec]>(zero_divisors) != 0) {
-              helper<arith_zero_divisor_fail>();
-            }
             complete(intrin<vrem, build[infix="vv", infix_sep="_"]>(
               dividend,
               divisor,
@@ -2376,13 +2320,6 @@ prim<v:=(v,v)> mod(dividend, divisor):
           reasons [intrinsic]
         implementation:
           tsil """
-            var<const_infer>(zero_divisors, call<primitive=equal>(
-              divisor,
-              call<primitive=set_zero[Vec]>()
-            ));
-            if (call<primitive=mask_population_count[Vec]>(zero_divisors) != 0) {
-              helper<arith_zero_divisor_fail>();
-            }
             complete(intrin<vremu, build[infix="vv", infix_sep="_"]>(
               dividend,
               divisor,
@@ -2499,7 +2436,8 @@ prim<v:=(m,v,v)>[mask=zero] mod(mask, dividend, divisor):
   detailed_description """
     Computes the lane-wise remainder for lanes enabled by the mask. Disabled
     lanes are set to zero and do not participate. Active integer lanes use the
-    dividend's sign, fail on zero, and return zero for signed MIN modulo -1.
+    dividend's sign and return zero for signed MIN modulo -1. Every active
+    divisor lane in a valid integer call is nonzero.
     Active floating lanes have truncating-quotient/fmod returned-value behavior.
     """
   arithmetic:
@@ -2509,18 +2447,17 @@ prim<v:=(m,v,v)>[mask=zero] mod(mask, dividend, divisor):
       divisor divisor
     guarantees [
       integer_remainder_has_dividend_sign,
-      integer_zero_divisor_fails,
       signed_min_rem_neg_one_returns_zero,
       floating_remainder_truncating,
       inactive_lanes_do_not_participate
     ]
+  preconditions [active_divisor_nonzero]
   semantics """
     input: mask mask, register dividend, register divisor
+    precondition: if lane type is integer, every active divisor lane is nonzero
     for each lane i:
       if mask[i] is active:
-        if lane type is integer and divisor[i] == 0:
-          fail without returning a value
-        else if lane type is signed integer and dividend[i] == MIN and divisor[i] == -1:
+        if lane type is signed integer and dividend[i] == MIN and divisor[i] == -1:
           result[i] = 0
         else:
           result[i] = truncating_remainder(dividend[i], divisor[i])
@@ -2529,7 +2466,6 @@ prim<v:=(m,v,v)>[mask=zero] mod(mask, dividend, divisor):
     return result
     """
   tests:
-    - {role "runtime_failure", tags [maskz, failure, active_zero], type "si32", case {inputs [10, [10, -9, 8, -7], [3, 0, 5, 2]], failure "integer_zero_divisor"}}
     - {tags [maskz, basic], extension "generic", type "si32", case {inputs [10, [10, -9, 8, -7], [3, 4, 5, 2]], expected [0, -1, 0, -1]}}
     - {tags [maskz, inactive_zero], type "si32", case {inputs [10, [-2147483648, -2147483648, 7, -7], [0, -1, 0, -3]], expected [0, 0, 0, -1]}}
     - {tags [maskz, float, rvv], extension "rvv", type "f32", case {inputs [10, [5.5, -5.5, 7.0, -7.0], [2.0, 2.0, 3.0, 3.0]], expected [0.0, -1.5, 0.0, -1.0]}}
@@ -2619,9 +2555,9 @@ prim<v:=(m,v,v)>[mask=pass_through] mod(mask, dividend, divisor):
   detailed_description """
     Computes the lane-wise remainder for lanes enabled by the mask. Disabled
     lanes keep the corresponding dividend lane and do not participate. Active
-    integer lanes use the dividend's sign, fail on zero, and return zero for
-    signed MIN modulo -1. Active floating lanes have truncating-quotient/fmod
-    returned-value behavior.
+    integer lanes use the dividend's sign and return zero for signed MIN modulo
+    -1. Every active divisor lane in a valid integer call is nonzero. Active
+    floating lanes have truncating-quotient/fmod returned-value behavior.
     """
   arithmetic:
     operations [remainder]
@@ -2630,18 +2566,17 @@ prim<v:=(m,v,v)>[mask=pass_through] mod(mask, dividend, divisor):
       divisor divisor
     guarantees [
       integer_remainder_has_dividend_sign,
-      integer_zero_divisor_fails,
       signed_min_rem_neg_one_returns_zero,
       floating_remainder_truncating,
       inactive_lanes_do_not_participate
     ]
+  preconditions [active_divisor_nonzero]
   semantics """
     input: mask mask, register dividend, register divisor
+    precondition: if lane type is integer, every active divisor lane is nonzero
     for each lane i:
       if mask[i] is active:
-        if lane type is integer and divisor[i] == 0:
-          fail without returning a value
-        else if lane type is signed integer and dividend[i] == MIN and divisor[i] == -1:
+        if lane type is signed integer and dividend[i] == MIN and divisor[i] == -1:
           result[i] = 0
         else:
           result[i] = truncating_remainder(dividend[i], divisor[i])
@@ -2650,7 +2585,6 @@ prim<v:=(m,v,v)>[mask=pass_through] mod(mask, dividend, divisor):
     return result
     """
   tests:
-    - {role "runtime_failure", tags [mask, failure, active_zero], type "si32", case {inputs [10, [10, -9, 8, -7], [3, 0, 5, 2]], failure "integer_zero_divisor"}}
     - {tags [mask, basic], extension "generic", type "si32", case {inputs [10, [10, -9, 8, -7], [3, 4, 5, 2]], expected [10, -1, 8, -1]}}
     - {tags [mask, inactive_zero], type "si32", case {inputs [10, [-2147483648, -2147483648, 7, -7], [0, -1, 0, -3]], expected [-2147483648, 0, 7, -1]}}
     - {tags [mask, float, rvv], extension "rvv", type "f32", case {inputs [10, [5.5, -5.5, 7.0, -7.0], [2.0, 2.0, 3.0, 3.0]], expected [5.5, -1.5, 7.0, -1.0]}}
@@ -2751,7 +2685,6 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
       divisor divisor
     guarantees [
       integer_remainder_has_dividend_sign,
-      integer_zero_divisor_fails,
       signed_min_rem_neg_one_returns_zero,
       floating_remainder_truncating
     ]
@@ -2828,7 +2761,6 @@ prim<v:=(m,v,sImm)>[mask=zero] mod_imm(mask, dividend, divisor):
       divisor divisor
     guarantees [
       integer_remainder_has_dividend_sign,
-      integer_zero_divisor_fails,
       signed_min_rem_neg_one_returns_zero,
       floating_remainder_truncating,
       inactive_lanes_do_not_participate
@@ -2903,7 +2835,6 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mod_imm(mask, dividend, divisor):
       divisor divisor
     guarantees [
       integer_remainder_has_dividend_sign,
-      integer_zero_divisor_fails,
       signed_min_rem_neg_one_returns_zero,
       floating_remainder_truncating,
       inactive_lanes_do_not_participate

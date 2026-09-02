@@ -507,7 +507,7 @@ def test_rust_path_dependency_consumer_builds(
     (consumer / "src" / "main.rs").write_text(
         textwrap.dedent(
             """
-            use tsl::{Mask, Simd};
+            use tsl::{Mask, PreconditionError, Simd};
             use tsl::tsl_core::{Scalar, Simd as LowerSimd};
 
             fn main() {
@@ -592,18 +592,25 @@ def test_rust_path_dependency_consumer_builds(
                 assigned *= Simd::splat(2);
                 assert_eq!(assigned.to_array(), [2, -4, -2, 0]);
 
-                let dividend = Simd::<i32, 4>::from_array([7, -7, i32::MIN, 9]);
-                let divisor = Simd::<i32, 4>::from_array([3, 3, -1, 2]);
-                assert_eq!((dividend / divisor).to_array(), [2, -2, i32::MIN, 4]);
-                assert_eq!((dividend % divisor).to_array(), [1, -1, 0, 1]);
-                assert!(std::panic::catch_unwind(|| {
-                    let _ = dividend / Simd::from_array([1, 0, 1, 1]);
-                })
-                .is_err());
-                assert!(std::panic::catch_unwind(|| {
-                    let _ = dividend % Simd::from_array([1, 0, 1, 1]);
-                })
-                .is_err());
+            let dividend = Simd::<i32, 4>::from_array([7, -7, i32::MIN, 9]);
+            let divisor = Simd::<i32, 4>::from_array([3, 3, -1, 2]);
+            assert_eq!(
+                unsafe { dividend.div(divisor) }.to_array(),
+                [2, -2, i32::MIN, 4],
+            );
+            assert_eq!(
+                unsafe { dividend.r#mod(divisor) }.to_array(),
+                [1, -1, 0, 1],
+            );
+            let zero_divisor = Simd::from_array([1, 0, 1, 1]);
+            assert!(matches!(
+                dividend.div_checked(zero_divisor),
+                Err(PreconditionError::ZeroDivisor),
+            ));
+            assert!(matches!(
+                dividend.mod_checked(zero_divisor),
+                Err(PreconditionError::ZeroDivisor),
+            ));
 
                 assert_eq!((left & right).to_array(), [0, 2, 1, i32::MIN]);
                 assert_eq!((left | right).to_array(), [3, -1, i32::MAX, -1]);
@@ -664,7 +671,7 @@ def test_rust_path_dependency_consumer_builds(
                     Simd::<f32, 4>::from_array([0.0, -0.0, 1.0, f32::NAN]);
                 let floating_divisor =
                     Simd::<f32, 4>::from_array([1.0, 1.0, 0.0, 1.0]);
-                let floating_quotient = floating_dividend / floating_divisor;
+            let floating_quotient = floating_dividend.div(floating_divisor);
                 assert_eq!(floating_quotient.to_bits().to_array()[..2], [0, 0x8000_0000]);
                 assert!(floating_quotient.to_array()[2].is_infinite());
                 assert!(floating_quotient.to_array()[3].is_nan());

@@ -32,18 +32,6 @@ def test_runtime_site_classification_does_not_leak_from_adjacent_context() -> No
     )
 
 
-def test_trap_uses_helper_context_for_review_classification() -> None:
-    assert (
-        _classify_runtime_site(
-            "tslc/src/tslc/backend/assets/tsl_core.hpp",
-            "trap",
-            "__builtin_trap();",
-            "void arith_zero_divisor_fail() { __builtin_trap(); }",
-        )
-        == "integer_zero_divisor"
-    )
-
-
 def test_census_matches_reviewed_baseline_and_report() -> None:
     context = _repo_context.find_repo_context()
     assert context is not None
@@ -56,7 +44,7 @@ def test_census_matches_reviewed_baseline_and_report() -> None:
     assert render_markdown(census, context) == canonical_report_path(context).read_text(
         encoding="utf-8"
     )
-    assert len(census.runtime_sites) == 232
+    assert len(census.runtime_sites) == 229
     assert len(census.caller_unsafe_paths) == 33
     assert sum(gap.caller_unsafe_required for gap in census.metadata_gaps) == 26
 
