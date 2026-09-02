@@ -203,9 +203,9 @@ The operand is an immediate rather than caller-controlled runtime data.
 
 Floating-point zero remains valid and masked forms inspect active lanes only.
 
-- `tslc/src/tslc/backend/assets/tsl_core.hpp:421` — owner `arith_zero_divisor_fail` — `throw` — `throw std::domain_error("TSL_ARITH_INTEGER_ZERO_DIVISOR");`
-- `tslc/src/tslc/backend/assets/tsl_core.hpp:419` — owner `arith_zero_divisor_fail` — `trap` — `__builtin_trap();`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:688` — owner `arith_zero_divisor_fail` — `panic` — `panic!("TSL_ARITH_INTEGER_ZERO_DIVISOR")`
+- `tslc/src/tslc/backend/assets/tsl_core.hpp:441` — owner `arith_zero_divisor_fail` — `throw` — `throw std::domain_error("TSL_ARITH_INTEGER_ZERO_DIVISOR");`
+- `tslc/src/tslc/backend/assets/tsl_core.hpp:439` — owner `arith_zero_divisor_fail` — `trap` — `__builtin_trap();`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:691` — owner `arith_zero_divisor_fail` — `panic` — `panic!("TSL_ARITH_INTEGER_ZERO_DIVISOR")`
 
 ### `lane_index` (5)
 
@@ -330,11 +330,11 @@ The check requires a valid index slice and input extent.
 
 This is a compiler/backend defect if reachable, not invalid caller data.
 
-- `tslc/src/tslc/backend/assets/tsl_core.rs:1019` — owner `saturating_cast_value` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:976` — owner `saturating_from_f64` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:891` — owner `saturating_from_i128` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:934` — owner `saturating_from_u128` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:848` — owner `scalar_as_cast_value` — `panic` — `panic!("unsupported scalar-as cast")`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:1022` — owner `saturating_cast_value` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:979` — owner `saturating_from_f64` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:894` — owner `saturating_from_i128` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:937` — owner `saturating_from_u128` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:851` — owner `scalar_as_cast_value` — `panic` — `panic!("unsupported scalar-as cast")`
 
 ### `implementation_invariant` (3)
 

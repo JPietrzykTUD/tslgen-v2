@@ -20,19 +20,36 @@ from _select_lower_backend_support import (
 )
 
 
-def test_lower_scalar_add_has_no_unsafe(catalog: Catalog, machine_profiles) -> None:
-    slot = _by_key(catalog, machine_profiles["scalar"], "add")[("si32", "scalar")]
+@pytest.mark.parametrize(
+    ("primitive", "arguments", "helper"),
+    (
+        ("add", "left, right", "arith_add"),
+        ("sub", "left, right", "arith_sub"),
+        ("mul", "factor1, factor2", "arith_mul"),
+    ),
+)
+def test_lower_scalar_wrapping_arithmetic_uses_typed_helper(
+    catalog: Catalog,
+    machine_profiles,
+    primitive: str,
+    arguments: str,
+    helper: str,
+) -> None:
+    slot = _by_key(catalog, machine_profiles["scalar"], primitive)[
+        ("si32", "scalar")
+    ]
     cpp = Lowerer().lower(
         slot, catalog, create_backend_dialect(catalog, "cpp")
     ).specialization
     assert cpp.base_type_spelling == "int32_t"
-    # `op<add>` lowers per backend: C++ keeps wrapping `+`, Rust uses the wrapping lane op.
-    assert cpp.body_text == "return (left + right);"
+    assert cpp.body_text == f"return ::tsl::detail::helpers::{helper}({arguments});"
     rust = Lowerer().lower(
         slot, catalog, create_backend_dialect(catalog, "rust")
     ).specialization
     assert rust.base_type_spelling == "i32"
-    assert rust.body_text == "return left.tsl_add(right);"
+    assert rust.body_text == (
+        f"return crate::tsl_core::detail::helpers::{helper}({arguments});"
+    )
 
 
 def test_lower_to_vector_lane_bitmask_identity_is_native(

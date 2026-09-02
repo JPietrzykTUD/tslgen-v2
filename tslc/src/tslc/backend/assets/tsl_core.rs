@@ -682,6 +682,9 @@ pub mod detail {
     pub fn arith_add<T: LaneArith>(a: T, b: T) -> T {
         a.tsl_add(b)
     }
+    pub fn arith_sub<T: LaneArith>(a: T, b: T) -> T {
+        a.tsl_sub(b)
+    }
     #[cold]
     #[inline(never)]
     pub fn arith_zero_divisor_fail() -> ! {

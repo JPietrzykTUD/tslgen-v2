@@ -404,7 +404,10 @@ template <class T>
 inline T arith_add(T a, T b) {
     if constexpr (std::is_integral_v<T>) {
         using U = std::make_unsigned_t<T>;
-        const U result = static_cast<U>(a) + static_cast<U>(b);
+        const U result = static_cast<U>(
+            static_cast<std::uintmax_t>(static_cast<U>(a))
+            + static_cast<std::uintmax_t>(static_cast<U>(b))
+        );
         if constexpr (std::is_signed_v<T>) {
             return ::tsl::bit_cast<T>(result);
         } else {
@@ -412,6 +415,23 @@ inline T arith_add(T a, T b) {
         }
     } else {
         return a + b;
+    }
+}
+template <class T>
+inline T arith_sub(T a, T b) {
+    if constexpr (std::is_integral_v<T>) {
+        using U = std::make_unsigned_t<T>;
+        const U result = static_cast<U>(
+            static_cast<std::uintmax_t>(static_cast<U>(a))
+            - static_cast<std::uintmax_t>(static_cast<U>(b))
+        );
+        if constexpr (std::is_signed_v<T>) {
+            return ::tsl::bit_cast<T>(result);
+        } else {
+            return result;
+        }
+    } else {
+        return a - b;
     }
 }
 [[noreturn]] inline void arith_zero_divisor_fail() {
@@ -439,7 +459,10 @@ template <class T>
 inline T arith_mul(T a, T b) {
     if constexpr (std::is_integral_v<T>) {
         using U = std::make_unsigned_t<T>;
-        const U result = static_cast<U>(a) * static_cast<U>(b);
+        const U result = static_cast<U>(
+            static_cast<std::uintmax_t>(static_cast<U>(a))
+            * static_cast<std::uintmax_t>(static_cast<U>(b))
+        );
         if constexpr (std::is_signed_v<T>) {
             return ::tsl::bit_cast<T>(result);
         } else {

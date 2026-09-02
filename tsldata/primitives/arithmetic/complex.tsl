@@ -9,9 +9,9 @@ prim<v:=(v,v)> mul(factor1, factor2):
   brief_description "Multiplies the corresponding lanes of two vector registers."
   detailed_description """
     Computes lane-wise multiplication of two vector registers. Each output lane
-    depends only on the corresponding lanes of the input registers. The result is
-    represented in the destination lane type; truncation, overflow, and
-    floating-point behavior follow the selected backend and lane type.
+    depends only on the corresponding lanes of the input registers. Integer
+    multiplication wraps modulo the lane width; floating-point results follow the
+    selected backend floating-point behavior.
     """
   semantics """
     input: register factor1, register factor2
@@ -23,9 +23,11 @@ prim<v:=(v,v)> mul(factor1, factor2):
     latency_chain factor1
   tests:
     - {tags [basic], type "si32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [2, 0, -1, -2, 3, -3, 4, -4]], expected [2, 0, -3, -8, 15, -18, 28, -32]}}
+    - {tags [wrapping], type "si32", case {inputs [[2147483647, -2147483648, 65536, -2000000000, -1, 1073741824, 0, 42], [2, -1, 65536, 2, -2147483648, 4, -2147483648, -42]], expected [-2, -2147483648, 0, 294967296, -2147483648, 0, 0, -1764]}}
     - {tags [zero], type "si32", case {inputs [[0, 1, -1, 0, 2, -2, 0, 3], [5, 0, 7, -8, 0, 9, 0, -10]], expected [0, 0, -7, 0, 0, -18, 0, -30]}}
     - {tags [basic], type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [2, 3, 4, 5, 6, 7, 8, 9]], expected [2, 6, 12, 20, 30, 42, 56, 72]}}
     - {tags [basic], type "si16", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8, 9, -10, 11, -12, 13, -14, 15, -16], [2, 3, 4, 5, 6, 7, 8, 9, -1, -2, -3, -4, -5, -6, -7, -8]], expected [2, -6, 12, -20, 30, -42, 56, -72, -9, 20, -33, 48, -65, 84, -105, 128]}}
+    - {tags [wrapping, promotion], type "si16", case {inputs [[32767, -32768, 32767, -32768, 256, -256, 12345, -12345], [32767, -1, 2, 2, 256, 256, -3, -3]], expected [1, -32768, -2, 0, 0, 0, 28501, -28501]}}
     - {tags [basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [2, 3, 4, 5, 6, 7, 8, 9, 1, 2, 3, 4, 5, 6, 7, 8]], expected [2, 6, 12, 20, 30, 42, 56, 72, 9, 20, 33, 48, 65, 84, 105, 128]}}
     - {tags [basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 4, 9, 16, 25, 36, 49, 64, 81, 100, 121, 144, 169, 196, 225, 0]}}
     - {tags [edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 1, 1, 4, 4, 9, 16, 25, 0, 1, 1, 4, 4, 9, 16, 25]}}
@@ -52,7 +54,7 @@ prim<v:=(v,v)> mul(factor1, factor2):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(op<mul>(factor1, factor2));"
+          tsil "complete(helper<arith_mul>(factor1, factor2));"
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
         requires []
@@ -556,9 +558,9 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
   brief_description "Multiplies active lanes of two vector registers and writes zero to inactive mask lanes."
   detailed_description """
     Computes lane-wise multiplication for lanes enabled by the mask. Disabled
-    lanes are set to zero. The result is represented in the destination lane
-    type; truncation, overflow, and floating-point behavior follow the selected
-    backend and lane type.
+    lanes are set to zero. Active integer multiplication wraps modulo the lane
+    width; floating-point results follow the selected backend floating-point
+    behavior.
     """
   semantics """
     input: mask mask, register factor1, register factor2
@@ -571,6 +573,7 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
     """
   tests:
     - {tags [maskz, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [0.0, 4.0, 0.0, 20.25]}}
+    - {tags [maskz, wrapping], extension "generic", type "si32", case {inputs [10, [2147483647, 2147483647, 2147483647, 2147483647], [2, 2, 2, 2]], expected [0, -2, 0, -2]}}
     - {tags [maskz, basic], extension "generic", type "si32", case {inputs [10, [1, 2, 3, 4], [2, 0, -1, -2]], expected [0, 0, 0, -8]}}
     - {tags [maskz, basic, rvv], extension "rvv", type "si32", case {inputs [10, [1, 2, 3, 4], [2, 0, -1, -2]], expected [0, 0, 0, -8]}}
   impls:
@@ -747,9 +750,9 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
   brief_description "Multiplies active lanes of two vector registers and keeps the left lane where the mask is inactive."
   detailed_description """
     Computes lane-wise multiplication for lanes enabled by the mask. Disabled
-    lanes keep the corresponding lane from `factor1`. The result is represented
-    in the destination lane type; truncation, overflow, and floating-point
-    behavior follow the selected backend and lane type.
+    lanes keep the corresponding lane from `factor1`. Active integer multiplication
+    wraps modulo the lane width; floating-point results follow the selected backend
+    floating-point behavior.
     """
   semantics """
     input: mask mask, register factor1, register factor2
@@ -762,6 +765,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
     """
   tests:
     - {tags [mask, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [1.0, 4.0, 3.5, 20.25]}}
+    - {tags [mask, wrapping], extension "generic", type "si32", case {inputs [10, [2147483647, 2147483647, 2147483647, 2147483647], [2, 2, 2, 2]], expected [2147483647, -2, 2147483647, -2]}}
     - {tags [mask, basic], extension "generic", type "si32", case {inputs [10, [1, 2, 3, 4], [2, 0, -1, -2]], expected [1, 0, 3, -8]}}
     - {tags [mask, basic, rvv], extension "rvv", type "si32", case {inputs [10, [1, 2, 3, 4], [2, 0, -1, -2]], expected [1, 0, 3, -8]}}
   impls:
