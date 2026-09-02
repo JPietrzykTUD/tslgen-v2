@@ -13,8 +13,8 @@ mod private {
         fn vector_from_array(values: [Self; N]) -> Self::Vector;
         fn vector_to_array(value: Self::Vector) -> [Self; N];
         fn vector_zero() -> Self::Vector;
-        fn extract_lane(value: Self::Vector, index: usize) -> Self;
-        fn insert_lane(value: Self::Vector, index: usize, lane: Self) -> Self::Vector;
+        unsafe fn extract_lane(value: Self::Vector, index: usize) -> Self;
+        unsafe fn insert_lane(value: Self::Vector, index: usize, lane: Self) -> Self::Vector;
         unsafe fn load(source: *const Self) -> Self::Vector;
         unsafe fn store(destination: *mut Self, value: Self::Vector);
 
@@ -23,7 +23,7 @@ mod private {
         fn mask_from_bitmask(bits: u64) -> Self::Mask;
         fn mask_to_bitmask(value: Self::Mask) -> u64;
         fn mask_test(value: Self::Mask, index: usize) -> bool;
-        fn mask_set(value: Self::Mask, index: usize, active: bool) -> Self::Mask;
+        unsafe fn mask_set(value: Self::Mask, index: usize, active: bool) -> Self::Mask;
         fn mask_count(value: Self::Mask) -> usize;
         fn mask_and(left: Self::Mask, right: Self::Mask) -> Self::Mask;
         fn mask_or(left: Self::Mask, right: Self::Mask) -> Self::Mask;
@@ -155,7 +155,8 @@ where
     #[track_caller]
     pub fn lane(&self, index: usize) -> T {
         assert!(index < N, "lane index {index} is out of bounds for {N} lanes");
-        <T as private::FacadeOps<N>>::extract_lane(self.value, index)
+        // SAFETY: checked immediately above.
+        unsafe { <T as private::FacadeOps<N>>::extract_lane(self.value, index) }
     }
 
     /// Replaces one logical lane.
@@ -167,7 +168,10 @@ where
     #[track_caller]
     pub fn set_lane(&mut self, index: usize, value: T) {
         assert!(index < N, "lane index {index} is out of bounds for {N} lanes");
-        self.value = <T as private::FacadeOps<N>>::insert_lane(self.value, index, value);
+        // SAFETY: checked immediately above.
+        self.value = unsafe {
+            <T as private::FacadeOps<N>>::insert_lane(self.value, index, value)
+        };
     }
 
     /// Loads the first `N` elements of `source`.
@@ -295,8 +299,10 @@ where
         let mut result = Self::splat(false);
         let mut index = 0;
         while index < N {
-            result.value =
-                <T as private::FacadeOps<N>>::mask_set(result.value, index, values[index]);
+            // SAFETY: the loop condition proves `index < N`.
+            result.value = unsafe {
+                <T as private::FacadeOps<N>>::mask_set(result.value, index, values[index])
+            };
             index += 1;
         }
         result
@@ -337,7 +343,10 @@ where
     #[track_caller]
     pub fn set(&mut self, index: usize, value: bool) {
         assert!(index < N, "mask index {index} is out of bounds for {N} lanes");
-        self.value = <T as private::FacadeOps<N>>::mask_set(self.value, index, value);
+        // SAFETY: checked immediately above.
+        self.value = unsafe {
+            <T as private::FacadeOps<N>>::mask_set(self.value, index, value)
+        };
     }
 
     /// Returns whether at least one lane is active.

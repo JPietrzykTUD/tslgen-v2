@@ -73,6 +73,7 @@ KNOWN_PRIMITIVE_FIELDS = frozenset(
         "operation",
         "operand_roles",
         "overload",
+        "preconditions",
         "param_types",
         "params",
         "return_type",

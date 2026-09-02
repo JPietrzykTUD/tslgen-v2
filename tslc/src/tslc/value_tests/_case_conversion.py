@@ -17,6 +17,7 @@ from tslc.value_tests.case_helpers import (
     load_convert_match as _load_convert_match,
     lane_convert_match as _lane_convert_match,
     mask_inputs as _mask_inputs,
+    public_call_requires_unsafe,
     repr_cast_match as _repr_cast_match,
     sanitize as _sanitize,
     scalar_inputs as _scalar_inputs,
@@ -672,6 +673,7 @@ def differential_cases(
                         for _name, _type, default in specs[0].generic_params
                     ),
                     immediate=immediate,
+                    caller_unsafe=public_call_requires_unsafe(specs),
                 ),
                 differential=ValueTestDifferential(
                     hardware_extension=spec.extension_name,

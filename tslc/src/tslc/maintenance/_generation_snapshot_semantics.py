@@ -35,6 +35,7 @@ from tslc.output.verify_model import (
 )
 from tslc.pipeline import CoverageEntry, GenerationResult, SkippedEntry
 from tslc.value_tests.case_components import (
+    ValueTestCheckedPrecondition,
     ValueTestDifferential,
     ValueTestExpectation,
     ValueTestFailure,
@@ -310,6 +311,9 @@ def _serialize_value_test_case(case: ValueTestCasePlan) -> dict[str, object]:
         "inputs": _serialize_value_test_inputs(case.inputs),
         "expectation": _serialize_value_test_expectation(case.expectation),
         "failure": _serialize_value_test_failure(case.failure),
+        "checked_precondition": _serialize_value_test_checked_precondition(
+            case.checked_precondition
+        ),
         "invocation": _serialize_value_test_invocation(case.invocation),
         "target": _serialize_value_test_target(case.target),
         "index": _serialize_value_test_index(case.index),
@@ -348,6 +352,19 @@ def _serialize_value_test_failure(
     return {"reason": value.reason.value, "phase": value.phase}
 
 
+def _serialize_value_test_checked_precondition(
+    value: ValueTestCheckedPrecondition | None,
+) -> dict[str, object] | None:
+    if value is None:
+        return None
+    return {
+        "kind": value.kind.value,
+        "error": value.error.value,
+        "parameter_index": value.parameter_index,
+        "invalid_value": value.invalid_value.name.lower(),
+    }
+
+
 def _serialize_value_test_invocation(value: ValueTestInvocation) -> dict[str, object]:
     return {
         "result_kind": value.result_kind,
@@ -356,6 +373,7 @@ def _serialize_value_test_invocation(value: ValueTestInvocation) -> dict[str, ob
         "immediate": value.immediate,
         "generic_defaults": value.generic_defaults,
         "inferred_type_args": value.inferred_type_args,
+        "caller_unsafe": value.caller_unsafe,
     }
 
 

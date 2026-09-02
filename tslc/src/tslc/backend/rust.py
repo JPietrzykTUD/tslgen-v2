@@ -6,9 +6,9 @@ from collections.abc import Mapping
 from dataclasses import replace
 
 from tslc.backend.primitive_rendering import body_for as _body_for
+from tslc.backend.checked_api import checked_api_plan, public_call_requires_unsafe
 from tslc.backend.primitive_rendering import variant_names as _variant_names
 from tslc.backend.rust_direct_calls import (
-    any_caller_unsafe as _any_caller_unsafe,
     free_function as _free_function,
     free_variant_functions as _free_variant_functions,
     implementation_lint_allowance as _implementation_lint_allowance,
@@ -20,6 +20,7 @@ from tslc.backend.rust_direct_calls import (
     variant_primitive_name as _variant_primitive_name,
 )
 from tslc.backend.rust_documentation_api import (
+    documentation_checked_wrapper as _documentation_checked_wrapper,
     documentation_free_function as _documentation_free_function,
     documentation_overloaded_wrapper as _documentation_overloaded_wrapper,
     documentation_wrapper as _documentation_wrapper,
@@ -63,6 +64,7 @@ from tslc.backend.rust_type_params import (
 )
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.benchmark.model import SpecializationKey
+from tslc.catalog.preconditions import PreconditionErrorKind
 from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS
 from tslc.lower.lowerer import (
     LoweredSpecialization,
@@ -80,6 +82,12 @@ def _qualified_primitive_trait_prefix(module_prefix: str) -> str:
     if not module:
         return _PRIMITIVE_TRAIT_PREFIX
     return f"{module}::{_PRIMITIVE_TRAIT_PREFIX}"
+
+
+def _rust_precondition_error(error: PreconditionErrorKind) -> str:
+    if error is PreconditionErrorKind.INDEX_OUT_OF_BOUNDS:
+        return "PreconditionError::IndexOutOfBounds"
+    raise ValueError(f"unsupported Rust precondition error {error.value!r}")
 
 
 class RustBackend:
@@ -151,7 +159,9 @@ class RustBackend:
             )
         return self._selection_impl(
             selection,
-            caller_unsafe=selection.specialization.safety.caller_unsafe,
+            caller_unsafe=public_call_requires_unsafe(
+                (selection.specialization,)
+            ),
         )
 
     def render_primitive_internal(
@@ -181,7 +191,7 @@ class RustBackend:
                 )
             )
             return "\n\n".join(parts)
-        caller_unsafe = _any_caller_unsafe(specializations)
+        caller_unsafe = public_call_requires_unsafe(specializations)
         trait = self._trait(primitive_name, shape, caller_unsafe=caller_unsafe)
         impls = [
             self._impl(spec, caller_unsafe=caller_unsafe)
@@ -250,12 +260,14 @@ class RustBackend:
             # A non-vector primitive (`allocate`/`deallocate`): a plain `pub fn` in the module,
             # not a `SimdVector`-bound trait/impl/wrapper.
             return _free_function(shape, backend=self)
-        caller_unsafe = _any_caller_unsafe(specializations)
+        caller_unsafe = public_call_requires_unsafe(specializations)
         if varying_positions(specializations):
             return self._render_overloaded_wrapper(
                 primitive_name, specializations, caller_unsafe=caller_unsafe
             )
-        return self._wrapper(primitive_name, shape, caller_unsafe=caller_unsafe)
+        ordinary = self._wrapper(primitive_name, shape, caller_unsafe=caller_unsafe)
+        checked = self._checked_wrapper(primitive_name, specializations)
+        return "\n\n".join(part for part in (ordinary, checked) if part)
 
     def render_documentation_api(
         self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
@@ -274,18 +286,20 @@ class RustBackend:
             shape.param_kinds,
         ):
             return _documentation_free_function(shape)
-        caller_unsafe = _any_caller_unsafe(specializations)
+        caller_unsafe = public_call_requires_unsafe(specializations)
         if varying_positions(specializations):
             return _documentation_overloaded_wrapper(
                 primitive_name,
                 specializations,
                 caller_unsafe=caller_unsafe,
             )
-        return _documentation_wrapper(
+        ordinary = _documentation_wrapper(
             primitive_name,
             shape,
             caller_unsafe=caller_unsafe,
         )
+        checked = _documentation_checked_wrapper(primitive_name, specializations)
+        return "\n\n".join(part for part in (ordinary, checked) if part)
 
     def render_implementation_state_queries(
         self,
@@ -410,7 +424,7 @@ class RustBackend:
             f"<{self.concrete_vector_type(spec)} as {trait_prefix}{trait_name}"
             f"{generic_args}>::apply({', '.join(arguments)})"
         )
-        return _unsafe_call(call, spec.safety.caller_unsafe)
+        return _unsafe_call(call, public_call_requires_unsafe((spec,)))
 
     def _render_overloaded_internal(
         self,
@@ -421,7 +435,7 @@ class RustBackend:
     ) -> str:
         shape = specs[0]
         internal_name = _variant_primitive_name(primitive_name, variant_name)
-        caller_unsafe = _any_caller_unsafe(specs)
+        caller_unsafe = public_call_requires_unsafe(specs)
         # Exactly one varying position: wider overloads were rejected by
         # validate_rust_profiles (TSL-BACKEND-RUST-UNSUPPORTED-MULTI-POSITION-OVERLOAD).
         vi = varying_positions(specs)[0]
@@ -888,7 +902,7 @@ class RustBackend:
             f"<S as {_PRIMITIVE_TRAIT_PREFIX}{rust_primitive_trait_name(primitive_name)}"
             f"{trait_args}>::apply({names})"
         )
-        call = _unsafe_call(call, caller_unsafe)
+        call = _unsafe_call(call, shape.safety.caller_unsafe)
         doc = _rust_doc(shape, context="Rust wrapper", concrete=False)
         return (
             (f"{doc}\n" if doc else "")
@@ -898,6 +912,52 @@ class RustBackend:
             f"({params}) -> {ret}{_index_where(shape, base_dispatch='projection')} {{\n"
             f"    {call}\n"
             f"}}"
+        )
+
+    def _checked_wrapper(
+        self,
+        primitive_name: str,
+        specializations: tuple[LoweredSpecialization, ...],
+    ) -> str:
+        plan = checked_api_plan(specializations)
+        if plan is None:
+            return ""
+        shape = specializations[0]
+        if len(plan.conditions) != 1:
+            raise ValueError("Rust checked wrapper supports one condition")
+        condition = plan.conditions[0]
+        declarations = _generic_decls(shape)
+        trait_args = _trait_args_by_name(shape)
+        rendered_trait_args = f"<{', '.join(trait_args)}>" if trait_args else ""
+        vector_bound = (
+            f"{_PRIMITIVE_TRAIT_PREFIX}"
+            f"{rust_primitive_trait_name(primitive_name)}{rendered_trait_args}"
+        )
+        generics = ", ".join((f"S: {vector_bound}", *declarations))
+        params = _params(shape, "S")
+        result = _kind_type(shape.result_kind, "S")
+        doc = _rust_doc(
+            shape, context="Rust checked wrapper", concrete=False, checked=True
+        )
+        call = (
+            f"unsafe {{ {rust_raw_identifier(primitive_name)}"
+            f"::<{', '.join(('S', *trait_args))}>"
+            f"({_runtime_names(shape)}) }}"
+        )
+        body = (
+            f"    if {condition.parameter_name} >= S::lane_count() {{\n"
+            f"        return Err({_rust_precondition_error(condition.error)});\n"
+            "    }\n"
+            f"    Ok({call})"
+        )
+        return (
+            (f"{doc}\n" if doc else "")
+            + "#[must_use]\n"
+            + "#[inline]\n"
+            + f"pub fn {rust_raw_identifier(primitive_name + '_checked')}"
+            f"<{generics}>({params}) -> Result<{result}, PreconditionError> {{\n"
+            f"{body}\n"
+            "}"
         )
 
     def _target_feature_body(

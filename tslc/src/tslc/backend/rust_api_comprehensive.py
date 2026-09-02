@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from collections import defaultdict
 
+from tslc.backend.checked_api import checked_api_plan, public_call_requires_unsafe
 from tslc.backend.primitive_facade import (
     DataparallelPrimitiveFacadeKind,
     plan_dataparallel_primitive_facade,
@@ -32,12 +33,16 @@ from tslc.backend.rust_api_model import (
     RustFacadeReceiverKind,
     RustFacadeTypeParameter,
     RustFacadeTypeParameterRole,
+    RustFacadeCheckedCondition,
 )
 from tslc.backend.rust_api_types import RUST_FACADE_SIGNATURE_TYPES
 from tslc.catalog.arithmetic import ArithmeticGuarantee, ArithmeticOperandRole
 from tslc.catalog.conversion import LaneCountRelation
 from tslc.catalog.memory import MemoryAccess
 from tslc.catalog.model import PrimitiveMaskMode
+from tslc.catalog.preconditions import (
+    PRECONDITION_DESCRIPTORS,
+)
 from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
 from tslc.diagnostics import Diagnostic
@@ -234,10 +239,12 @@ def _comprehensive_method(
             result_kind=key.result_kind,
             type_tags=candidate.type_tags,
             shape_keys=(),
-            caller_unsafe=next(iter(safety_values)),
+            caller_unsafe=public_call_requires_unsafe(
+                tuple(spec for _profile_name, spec in candidate.specs)
+            ),
             safety_requirements=_safety_requirements(candidate),
             panic_conditions=_panic_conditions(candidate),
-            bounds_checked_parameters=_bounds_checked_parameters(candidate),
+            checked_conditions=_checked_conditions(candidate),
             must_use=key.result_kind != "void",
             suppress_should_implement_trait_lint=(
                 public_name in _STANDARD_TRAIT_METHOD_NAMES
@@ -292,23 +299,25 @@ def _public_name(
     return name, None
 
 
-def _bounds_checked_parameters(candidate: _Candidate) -> tuple[str, ...]:
-    if candidate.key.operation not in {
-        PrimitiveOperation.EXTRACT_LANE,
-        PrimitiveOperation.INSERT_LANE,
-        PrimitiveOperation.INTEGRAL_MASK_TEST,
-        PrimitiveOperation.MASK_SET_LANE,
-    }:
+def _checked_conditions(candidate: _Candidate) -> tuple[RustFacadeCheckedCondition, ...]:
+    plan = checked_api_plan(
+        tuple(spec for _profile_name, spec in candidate.specs)
+    )
+    if plan is None:
         return ()
     return tuple(
-        candidate.key.param_names[index]
-        for role, index, _kind in candidate.key.operation_roles
-        if role is OperandRole.INDEX and 0 <= index < len(candidate.key.param_names)
+        RustFacadeCheckedCondition(
+            condition.kind,
+            condition.parameter_name,
+            condition.error,
+        )
+        for condition in plan.conditions
     )
 
 
 def _safety_requirements(candidate: _Candidate) -> tuple[str, ...]:
-    if not candidate.representative.safety.caller_unsafe:
+    preconditions = candidate.representative.primitive_semantics.preconditions
+    if not candidate.representative.safety.caller_unsafe and not preconditions:
         return ()
     reasons = frozenset(
         reason
@@ -327,18 +336,20 @@ def _safety_requirements(candidate: _Candidate) -> tuple[str, ...]:
             "Every memory argument must satisfy the source primitive's validity, "
             "initialization, aliasing, and extent requirements."
         )
-    requirements.append(
-        "The caller must uphold every remaining source-declared safety precondition "
-        "for this primitive."
+    if candidate.representative.safety.caller_unsafe:
+        requirements.append(
+            "The caller must uphold every remaining source-declared safety "
+            "precondition for this primitive."
+        )
+    requirements.extend(
+        PRECONDITION_DESCRIPTORS[item.kind].description
+        for item in preconditions
     )
     return tuple(requirements)
 
 
 def _panic_conditions(candidate: _Candidate) -> tuple[str, ...]:
-    conditions = [
-        f"Panics when `{name}` is not less than `N`."
-        for name in _bounds_checked_parameters(candidate)
-    ]
+    conditions: list[str] = []
     arithmetic = candidate.representative.primitive_semantics.arithmetic
     divisor = (
         arithmetic.binding(ArithmeticOperandRole.DIVISOR)
@@ -392,6 +403,13 @@ def _method_collision_diagnostics(
         grouped[(comprehensive_method.receiver_kind, comprehensive_method.public_name)].append(
             comprehensive_method.source_primitive_name
         )
+        if comprehensive_method.checked_conditions:
+            grouped[
+                (
+                    comprehensive_method.receiver_kind,
+                    comprehensive_method.public_name + "_checked",
+                )
+            ].append(comprehensive_method.source_primitive_name)
     for curated_method in curated:
         grouped[(curated_method.receiver_kind, curated_method.public_name)].append(
             curated_method.source_primitive_name

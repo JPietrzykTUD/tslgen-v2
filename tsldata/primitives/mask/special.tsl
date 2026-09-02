@@ -62,6 +62,7 @@ prim<m:=(m,usize,usize)> set_mask_lane(mask, index, value):
     primary mask
     index index
     value value
+  preconditions [lane_index_in_range]
   brief_description "Returns the mask with one valid runtime-indexed lane replaced."
   detailed_description """
     Returns a mask equal to `mask` except that the lane at the runtime index is

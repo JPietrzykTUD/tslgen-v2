@@ -10,6 +10,7 @@ from tslc.catalog.arithmetic_promotion import build_arithmetic_contract
 from tslc.catalog.benchmark_promotion import build_benchmark_spec
 from tslc.catalog.conversion_promotion import build_conversion_contract
 from tslc.catalog.memory_promotion import build_memory_contract
+from tslc.catalog.precondition_promotion import build_preconditions
 from tslc.catalog.semantic_promotion import build_semantic_contract
 from tslc.catalog.shift_promotion import build_shift_contract
 from tslc.catalog.model import (
@@ -85,6 +86,7 @@ def _build_primitives(
     semantics = _primitive_field_text(declaration, "semantics")
     arithmetic = build_arithmetic_contract(declaration, diagnostics)
     operation = build_semantic_contract(declaration, diagnostics)
+    preconditions = build_preconditions(declaration, operation, diagnostics)
     memory = build_memory_contract(declaration, operation, diagnostics)
     conversion = build_conversion_contract(
         declaration,
@@ -116,6 +118,7 @@ def _build_primitives(
             semantics=semantics,
             arithmetic=arithmetic,
             operation=operation,
+            preconditions=preconditions,
             memory=memory,
             conversion=conversion,
             shift=shift,

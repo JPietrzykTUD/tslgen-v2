@@ -48,6 +48,12 @@ _CASE_REQUIREMENTS = {
         ),
         vector_inputs_match_lanes=True,
     ),
+    "checked_precondition": ValueTestCaseRequirements(
+        required_facts=frozenset(
+            {ValueTestFact.RESULT_KIND, ValueTestFact.CHECKED_PRECONDITION}
+        ),
+        vector_inputs_match_lanes=True,
+    ),
     "convert": ValueTestCaseRequirements(
         expected="target_lanes",
         vector_inputs="one",

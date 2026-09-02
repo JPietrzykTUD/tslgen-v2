@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 
+from tslc.backend.checked_api import checked_api_plan
 from tslc.catalog.model import Catalog, Primitive, TestCase
 from tslc.diagnostics import Diagnostic, SourceSpan
 from tslc.lower.lowerer import LoweredSpecialization
@@ -18,6 +19,10 @@ from tslc.value_tests._pattern_base import (
     unplanned_case_reason,
 )
 from tslc.value_tests.case_capabilities import DEFAULT_VALUE_TEST_CASE_REQUIREMENTS
+from tslc.value_tests.case_components import (
+    ValueTestCheckedPrecondition,
+    ValueTestInvalidPreconditionValue,
+)
 from tslc.value_tests.case_plans import (
     compile_failure_case,
     compile_only_case,
@@ -106,6 +111,7 @@ class ValueTestPlanner:
     ) -> ValueTestProfilePlan:
         backend = self._backend_supports[profile.backend_id]
         cases: list[ValueTestCasePlan] = []
+        checked_case_keys: set[tuple[str, str, tuple[str, ...], str]] = set()
         for emitted_name in sorted(profile.specializations):
             emitted_specs = profile.specializations[emitted_name]
             inferred_type_args = (
@@ -221,6 +227,37 @@ class ValueTestPlanner:
                         diagnostics,
                     )
                     cases.extend(supported)
+                    checked_key = (
+                        emitted_name,
+                        source_name,
+                        specs[0].param_kinds,
+                        test_case.type_tag,
+                    )
+                    if checked_key not in checked_case_keys:
+                        checked_planned = _checked_precondition_cases(supported, specs)
+                        checked_supported, checked_drops = self._supported_cases(
+                            checked_planned,
+                            backend,
+                            profile.observes_runtime_failures,
+                            profile.specializations,
+                            diagnostics,
+                        )
+                        cases.extend(checked_supported)
+                        if checked_planned:
+                            checked_case_keys.add(checked_key)
+                        for drop in checked_drops:
+                            diagnostics.append(
+                                Diagnostic(
+                                    severity="error",
+                                    code="TSL-VALUE-TEST-CHECKED-CASE-DROPPED",
+                                    message=(
+                                        f"{profile.backend_id} checked-precondition "
+                                        f"case {drop.case.function_name!r} was dropped: "
+                                        f"{drop.detail or drop.cause}"
+                                    ),
+                                    span=specs[0].source,
+                                )
+                            )
                     entry = case_coverage(
                         backend=backend,
                         profile_name=profile.profile_name,
@@ -485,6 +522,50 @@ def _duplicate_case_diagnostics(
                 )
             )
     return tuple(diagnostics)
+
+
+def _checked_precondition_cases(
+    supported: tuple[ValueTestCasePlan, ...],
+    specs: tuple[LoweredSpecialization, ...],
+) -> tuple[ValueTestCasePlan, ...]:
+    plan = checked_api_plan(specs)
+    if plan is None or not supported:
+        return ()
+    base = next(
+        (
+            case
+            for case in supported
+            if case.scalable is None
+            and case.differential is None
+            and case.failure is None
+        ),
+        None,
+    )
+    if base is None:
+        return ()
+    result: list[ValueTestCasePlan] = []
+    for condition in plan.conditions:
+        for suffix, invalid_value in (
+            ("lane_count", ValueTestInvalidPreconditionValue.LANE_COUNT),
+            ("size_max", ValueTestInvalidPreconditionValue.SIZE_MAX),
+        ):
+            result.append(
+                replace(
+                    base,
+                    kind="checked_precondition",
+                    function_name=f"{base.function_name}__checked_{suffix}",
+                    case_name=f"{base.case_name} checked {suffix}",
+                    expectation=replace(base.expectation, values=(), text=None),
+                    invocation=replace(base.invocation, caller_unsafe=False),
+                    checked_precondition=ValueTestCheckedPrecondition(
+                        condition.kind,
+                        condition.error,
+                        condition.parameter_index,
+                        invalid_value,
+                    ),
+                )
+            )
+    return tuple(result)
 
 
 def _value_test_spec_groups(

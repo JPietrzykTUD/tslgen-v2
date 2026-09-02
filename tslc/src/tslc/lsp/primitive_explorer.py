@@ -94,6 +94,7 @@ class ExplorerPrimitive:
 
     name: str
     signatures: tuple[str, ...]
+    preconditions: tuple[str, ...]
     definitions: tuple[SourceSpan, ...]
     available_slots: int
     total_slots: int
@@ -233,6 +234,17 @@ class PrimitiveExplorerCache:
                             for primitive in catalog.primitives_named(
                                 name, unmasked=False
                             )
+                        }
+                    )
+                ),
+                preconditions=tuple(
+                    sorted(
+                        {
+                            condition.kind.value
+                            for primitive in catalog.primitives_named(
+                                name, unmasked=False
+                            )
+                            for condition in primitive.preconditions
                         }
                     )
                 ),

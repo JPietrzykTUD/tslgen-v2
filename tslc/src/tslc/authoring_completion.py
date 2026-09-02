@@ -38,6 +38,7 @@ from tslc.catalog.model import (
     Primitive,
     RESULT_DIM_VECTOR,
 )
+from tslc.catalog.preconditions import precondition_values
 from tslc.catalog.semantics import operand_role_values, primitive_operation_values
 from tslc.catalog.scalar_types import KNOWN_SCALAR_TYPE_TAGS
 from tslc.catalog.shift import shift_count_rule_values, shift_lane_rule_values
@@ -499,6 +500,9 @@ def _value_completions(
     elif field == "operation" and context.block_path == ("primitive",):
         values = primitive_operation_values()
         detail = "primitive operation"
+    elif field == "preconditions" and context.block_path == ("primitive",):
+        values = precondition_values()
+        detail = "primitive precondition"
     elif field == "access" and context.block_path == ("primitive", "memory"):
         values = memory_access_values()
         detail = "memory access"

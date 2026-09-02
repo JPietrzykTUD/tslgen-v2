@@ -191,6 +191,7 @@ def _primitive(item: Primitive) -> dict[str, object]:
         "brief": item.brief_description,
         "arithmetic": _arithmetic(item),
         "operation": _operation(item),
+        "preconditions": [condition.kind.value for condition in item.preconditions],
         "memory": (
             None
             if item.memory is None

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from tslc.backend.cpp_compiler_capabilities import cpp_compiler_capability
+from tslc.backend.cpp_checked_api import plan_cpp_checked_api
 from tslc.backend.cpp_documentation import (
     cpp_doc as _cpp_doc,
     cpp_register_doc as _cpp_register_doc,
@@ -18,6 +19,7 @@ from tslc.backend.primitive_facade import (
 from tslc.backend.primitive_rendering import body_for as _body_for
 from tslc.backend.primitive_rendering import variant_names as _variant_names
 from tslc.backend.signature_types import CPP_SIGNATURE_TYPES
+from tslc.catalog.preconditions import PreconditionErrorKind
 from tslc.lower.lowerer import (
     LoweredArithmeticPrecondition,
     LoweredArithmeticPreconditionKind,
@@ -71,6 +73,12 @@ def _cpp_compiler_diagnostic(
         cpp_compiler_capability(capability_id).diagnostic
         for capability_id in capability_ids
     )
+
+
+def _cpp_precondition_error(error: PreconditionErrorKind) -> str:
+    if error is PreconditionErrorKind.INDEX_OUT_OF_BOUNDS:
+        return "::tsl::precondition_error::index_out_of_bounds"
+    raise ValueError(f"unsupported C++ precondition error {error.value!r}")
 
 
 def _cpp_body_text(
@@ -232,7 +240,9 @@ class CppBackend:
             shape.param_kinds,
         ):
             return ""
-        return self._wrapper(primitive_name, specializations)
+        ordinary = self._wrapper(primitive_name, specializations)
+        checked = self._checked_wrapper(primitive_name, specializations, define=True)
+        return "\n\n".join(part for part in (ordinary, checked) if part)
 
     def render_definitions(
         self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
@@ -292,14 +302,64 @@ class CppBackend:
             shape.param_kinds,
         ):
             return _free_function(shape, define=False)
-        return self._wrapper_declaration(primitive_name, specializations)
+        ordinary = self._wrapper_declaration(primitive_name, specializations)
+        checked = self._checked_wrapper(primitive_name, specializations, define=False)
+        return "\n\n".join(part for part in (ordinary, checked) if part)
+
+    def _checked_wrapper(
+        self,
+        primitive_name: str,
+        specializations: tuple[LoweredSpecialization, ...],
+        *,
+        define: bool,
+    ) -> str:
+        signature = _wrapper_signature(specializations)
+        plan = plan_cpp_checked_api(
+            specializations,
+            result_type=signature.result_type,
+        )
+        if plan is None:
+            return ""
+        doc = _cpp_doc(
+            specializations[0],
+            context="C++ checked wrapper",
+            concrete=False,
+            checked=True,
+        )
+        if len(plan.conditions) != 1:
+            raise ValueError("C++ checked wrapper supports one condition")
+        condition = plan.conditions[0]
+        params = (
+            f"{signature.params}, {plan.error_parameter_declaration}"
+            if signature.params
+            else plan.error_parameter_declaration
+        )
+        head = (
+            f"template <{', '.join(signature.template_params)}>\n"
+            f"{plan.inline_specifier} auto {primitive_name}_checked({params}) "
+            f"noexcept -> {signature.result_type}"
+        )
+        prefix = f"{doc}\n" if doc else ""
+        if not define:
+            return prefix + head + ";"
+        return prefix + (
+            f"{head} {{\n"
+            f"    if ({condition.parameter_name} >= Vec::lane_count()) {{\n"
+            f"        {plan.error_parameter_name} = "
+            f"{_cpp_precondition_error(condition.error)};\n"
+            f"        return {plan.failure_placeholder_expression};\n"
+            "    }\n"
+            f"    {plan.error_parameter_name} = {plan.success_error_expression};\n"
+            f"    return ::tsl::{primitive_name}<{signature.impl_args}>"
+            f"({signature.argument_names});\n"
+            "}"
+        )
 
     def documentation_register_type(self, spec: LoweredSpecialization) -> str:
         return _cpp_register_doc(spec)
 
     def documentation_target_register_type(self, spec: LoweredSpecialization) -> str:
         return _cpp_target_register_doc(spec)
-
     def _specialization(
         self,
         group: list[LoweredSpecialization],
@@ -359,7 +419,13 @@ class CppBackend:
                 continue
             seen.add(signature)
             index_type = spec.type_params[0].name if spec.type_params else None
+            parameter_attribute = (
+                "[[maybe_unused]] "
+                if spec.primitive_semantics.preconditions
+                else ""
+            )
             params = ", ".join(
+                f"{parameter_attribute}"
                 f"{_param_type_for(spec, i, kind, index_type)} {name}"
                 for i, (name, kind) in enumerate(
                     zip(spec.param_names, spec.param_kinds)

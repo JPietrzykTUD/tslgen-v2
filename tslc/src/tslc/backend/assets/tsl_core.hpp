@@ -25,6 +25,24 @@
 #define TSL_UNROLL(n)
 #endif
 
+#ifndef TSL_FORCE_INLINE
+#if defined(_MSC_VER)
+#if defined(_DEBUG)
+#define TSL_FORCE_INLINE inline
+#else
+#define TSL_FORCE_INLINE __forceinline
+#endif
+#elif defined(__GNUC__) || defined(__clang__)
+#if defined(__OPTIMIZE__)
+#define TSL_FORCE_INLINE inline __attribute__((always_inline))
+#else
+#define TSL_FORCE_INLINE inline
+#endif
+#else
+#define TSL_FORCE_INLINE inline
+#endif
+#endif
+
 namespace tsl {
 
 enum class implementation_state {
@@ -32,6 +50,11 @@ enum class implementation_state {
     composed,
     fallback,
     unknown,
+};
+
+enum class precondition_error : std::uint8_t {
+    none,
+    index_out_of_bounds,
 };
 
 template <auto Value>
@@ -374,6 +397,20 @@ struct reg_param<simd<T, generic<LANES>>> {
 // Scalar-core helpers used by emulated (loop) bodies. Grows one function at a time as the
 // primitives that call `helper<...>` land; `arith_add` is the reductions' accumulate step.
 namespace detail::helpers {
+
+template <class Array>
+inline decltype(auto) lane_get_unchecked(Array&& value, std::size_t index) {
+    return static_cast<Array&&>(value)[index];
+}
+
+template <class Array, class Value>
+inline void lane_set_unchecked(
+    Array* value,
+    std::size_t index,
+    Value&& lane
+) {
+    (*value)[index] = static_cast<Value&&>(lane);
+}
 
 inline void require_same_lanes(std::size_t source_lanes, std::size_t target_lanes) {
     if (source_lanes != target_lanes) {

@@ -401,9 +401,12 @@ def test_facade_owner_equivalence_and_wrapper_audit(
     assert rendered.public_items.count("pub fn ") + rendered.public_items.count(
         "pub unsafe fn "
     ) == sum(
-        1
-        if method.receiver_kind is RustFacadeReceiverKind.FREE
-        else len(method.public_shapes)
+        (
+            1
+            if method.receiver_kind is RustFacadeReceiverKind.FREE
+            else len(method.public_shapes)
+        )
+        * (2 if method.checked_conditions else 1)
         for method in plan.comprehensive_methods
     )
     delegate_lines = tuple(

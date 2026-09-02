@@ -2,11 +2,19 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from tslc.backend.primitive_rendering import runtime_parameter_summary
 from tslc.backend.signature_types import RUST_SIGNATURE_TYPES, rust_free_type
+from tslc.catalog.preconditions import (
+    PRECONDITION_DESCRIPTORS,
+    PreconditionErrorKind,
+    PrimitivePrecondition,
+)
 from tslc.documentation import (
     DocumentationBlock,
     documentation_block,
+    precondition_fact,
     render_rust_doc,
     result_summary,
     safety_fact,
@@ -20,8 +28,45 @@ def rust_doc(
     *,
     context: str,
     concrete: bool = True,
+    checked: bool = False,
 ) -> str:
-    return render_rust_doc(_doc_block(spec, context=context, concrete=concrete))
+    rendered = render_rust_doc(
+        _doc_block(spec, context=context, concrete=concrete, checked=checked)
+    )
+    preconditions = spec.primitive_semantics.preconditions
+    if concrete or not preconditions:
+        return rendered
+    detail = precondition_fact(
+        preconditions,
+        include_unchecked_consequence=not checked,
+    )
+    section = (
+        "/// # Errors\n"
+        "///\n"
+        f"/// {_rust_checked_error_facts(preconditions)} The unchecked operation "
+        f"is not invoked. {detail}"
+        if checked
+        else "/// # Safety\n///\n/// " + detail
+    )
+    return f"{rendered}\n///\n{section}" if rendered else section
+
+
+def _rust_checked_error_facts(
+    preconditions: tuple[PrimitivePrecondition, ...],
+) -> str:
+    return " ".join(
+        f"Returns `{_rust_error_name(descriptor.error)}` when "
+        f"{descriptor.description[:1].lower() + descriptor.description[1:]}"
+        for descriptor in (
+            PRECONDITION_DESCRIPTORS[item.kind] for item in preconditions
+        )
+    )
+
+
+def _rust_error_name(error: PreconditionErrorKind) -> str:
+    if error is PreconditionErrorKind.INDEX_OUT_OF_BOUNDS:
+        return "PreconditionError::IndexOutOfBounds"
+    raise ValueError(f"unsupported Rust precondition error {error.value!r}")
 
 
 def _doc_block(
@@ -29,14 +74,25 @@ def _doc_block(
     *,
     context: str,
     concrete: bool,
+    checked: bool,
 ) -> DocumentationBlock:
     if not concrete:
+        preconditions = precondition_fact(
+            spec.primitive_semantics.preconditions,
+            include_unchecked_consequence=False,
+        )
+        condition_facts = (
+            (("Checks", preconditions),)
+            if checked and preconditions
+            else ()
+        )
         return documentation_block(
             spec.documentation,
             facts=(
                 ("Type parameters", _type_parameter_summary(spec)),
                 ("Returns", _result_summary(spec, concrete=False)),
                 ("Parameters", runtime_parameter_summary(spec)),
+                *condition_facts,
             ),
             facts_title="API",
         )
@@ -73,7 +129,14 @@ def _doc_block(
             else "none",
         )
     )
-    facts.append(("Safety", safety_fact(spec.safety)))
+    documented_safety = (
+        replace(spec.safety, caller_unsafe=True)
+        if spec.primitive_semantics.preconditions
+        else spec.safety
+    )
+    facts.append(("Safety", safety_fact(documented_safety)))
+    if preconditions := precondition_fact(spec.primitive_semantics.preconditions):
+        facts.append(("Caller preconditions", preconditions))
     return documentation_block(
         spec.documentation,
         facts=tuple(facts),

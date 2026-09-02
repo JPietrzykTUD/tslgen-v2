@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from tslc.backend.checked_api import public_call_requires_unsafe
 from tslc.catalog.model import TestCase
 from tslc.catalog.scalar_types import scalar_bit_width
 from tslc.lower.lowerer import LoweredSpecialization
@@ -112,6 +113,7 @@ def plan_case(
             axis_args=axis_args,
             immediate=immediate_value,
             generic_defaults=generic_defaults,
+            caller_unsafe=public_call_requires_unsafe(specs),
         ),
         target=target,
         index=case_index,

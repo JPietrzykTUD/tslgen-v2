@@ -8,6 +8,7 @@ from tslc.value_tests.case_capabilities import DEFAULT_VALUE_TEST_CASE_REQUIREME
 from tslc.value_tests.case_components import (
     InputArity,
     ValueTestCaseRequirements,
+    ValueTestCheckedPrecondition,
     ValueTestDifferential,
     ValueTestExpectation,
     ValueTestFailure,
@@ -45,6 +46,7 @@ class ValueTestCasePlan:
     scalable: ValueTestScalable | None = None
     differential: ValueTestDifferential | None = None
     failure: ValueTestFailure | None = None
+    checked_precondition: ValueTestCheckedPrecondition | None = None
     # Optional generated C++ header group needed by this case (for example
     # ``clang`` for compiler-builtin overlay extensions). The runner guards
     # such cases and the build emits a matching opt-in value-test target.
@@ -65,6 +67,7 @@ class ValueTestCasePlan:
         self._validate_inputs(requirements)
         self._validate_fuzz(requirements)
         self._validate_differential_helpers(requirements)
+        self._validate_checked_precondition()
 
     def _validate_common_fields(self) -> None:
         for field_name in (
@@ -261,8 +264,24 @@ class ValueTestCasePlan:
             ),
             ValueTestFact.DIFFERENTIAL: self.differential is not None,
             ValueTestFact.FAILURE: self.failure is not None,
+            ValueTestFact.CHECKED_PRECONDITION: self.checked_precondition is not None,
         }
         return checks[fact]
+
+    def _validate_checked_precondition(self) -> None:
+        checked = self.checked_precondition
+        if checked is None:
+            return
+        if checked.parameter_index >= len(self.invocation.param_kinds):
+            raise ValueError(
+                f"value-test case {self.function_name!r} checked parameter "
+                "index is outside the invocation signature"
+            )
+        if self.invocation.param_kinds[checked.parameter_index] != "usize":
+            raise ValueError(
+                f"value-test case {self.function_name!r} checked lane index "
+                "must bind a runtime usize parameter"
+            )
 
     def _expected_error(self, expectation: str) -> str:
         return (

@@ -4,9 +4,15 @@ from __future__ import annotations
 
 from tslc.backend.primitive_rendering import runtime_parameter_summary
 from tslc.backend.signature_types import CPP_SIGNATURE_TYPES
+from tslc.catalog.preconditions import (
+    PRECONDITION_DESCRIPTORS,
+    PreconditionErrorKind,
+    PrimitivePrecondition,
+)
 from tslc.documentation import (
     DocumentationBlock,
     documentation_block,
+    precondition_fact,
     render_cpp_doc,
     result_summary,
     safety_fact,
@@ -21,9 +27,11 @@ def cpp_doc(
     context: str,
     indent: str = "",
     concrete: bool = True,
+    checked: bool = False,
 ) -> str:
     return render_cpp_doc(
-        _doc_block(spec, context=context, concrete=concrete), indent=indent
+        _doc_block(spec, context=context, concrete=concrete, checked=checked),
+        indent=indent,
     )
 
 
@@ -54,14 +62,40 @@ def _doc_block(
     *,
     context: str,
     concrete: bool,
+    checked: bool,
 ) -> DocumentationBlock:
     if not concrete:
+        preconditions = precondition_fact(
+            spec.primitive_semantics.preconditions,
+            include_unchecked_consequence=not checked,
+        )
+        condition_facts = (
+            (
+                ("Checks", preconditions),
+                (
+                    "Success",
+                    "sets `precondition_error::none` and returns the operation result",
+                ),
+                (
+                    "Failure",
+                    f"sets {_cpp_checked_errors(spec.primitive_semantics.preconditions)}, "
+                    "returns a fully initialized "
+                    "placeholder with no TSL-defined value, and does not invoke "
+                    "the unchecked operation",
+                ),
+            )
+            if checked and preconditions
+            else (("Caller preconditions", preconditions),)
+            if preconditions
+            else ()
+        )
         return documentation_block(
             spec.documentation,
             facts=(
                 ("Template parameters", _template_summary(spec)),
                 ("Returns", _result_summary(spec, concrete=False)),
                 ("Parameters", runtime_parameter_summary(spec)),
+                *condition_facts,
             ),
             facts_title="API",
         )
@@ -94,11 +128,34 @@ def _doc_block(
         )
     )
     facts.append(("Safety", safety_fact(spec.safety)))
+    if preconditions := precondition_fact(spec.primitive_semantics.preconditions):
+        facts.append(("Caller preconditions", preconditions))
     return documentation_block(
         spec.documentation,
         facts=tuple(facts),
         facts_title="Specialization",
     )
+
+
+def _cpp_checked_errors(
+    preconditions: tuple[PrimitivePrecondition, ...],
+) -> str:
+    return ", ".join(
+        f"`precondition_error::{_cpp_error_name(error)}`"
+        for error in sorted(
+            {
+                PRECONDITION_DESCRIPTORS[item.kind].error
+                for item in preconditions
+            },
+            key=lambda item: item.value,
+        )
+    )
+
+
+def _cpp_error_name(error: PreconditionErrorKind) -> str:
+    if error is PreconditionErrorKind.INDEX_OUT_OF_BOUNDS:
+        return "index_out_of_bounds"
+    raise ValueError(f"unsupported C++ precondition error {error.value!r}")
 
 
 def _template_summary(spec: LoweredSpecialization) -> str:

@@ -20,6 +20,11 @@ from tslc.backend.rust_api_model import (
 from tslc.backend.rust_api_types import RUST_FACADE_SIGNATURE_TYPES
 from tslc.backend.rust_names import rust_primitive_tag_name
 from tslc.backend.rust_translation import rust_raw_identifier
+from tslc.catalog.preconditions import (
+    PRECONDITION_DESCRIPTORS,
+    PreconditionErrorKind,
+    PreconditionKind,
+)
 from tslc.documentation import documentation_block, render_rust_doc
 from tslc.render.rust_facade_common import (
     arm_selection_cfg,
@@ -181,16 +186,33 @@ def _public_items(
     method: RustComprehensiveMethod,
 ) -> tuple[str, ...]:
     if method.receiver_kind is RustFacadeReceiverKind.FREE:
-        return (_public_free_function(method),)
+        return (
+            _public_free_function(method),
+            *(
+                (_public_free_function(method, checked=True),)
+                if method.checked_conditions
+                else ()
+            ),
+        )
     return tuple(
-        _public_inherent_method(method, shape)
+        block
         for shape in method.public_shapes
+        for block in (
+            _public_inherent_method(method, shape),
+            *(
+                (_public_inherent_method(method, shape, checked=True),)
+                if method.checked_conditions
+                else ()
+            ),
+        )
     )
 
 
 def _public_inherent_method(
     method: RustComprehensiveMethod,
     shape: RustFacadeShape,
+    *,
+    checked: bool = False,
 ) -> str:
     owner = (
         f"Simd<{shape.base_spelling}, {shape.lanes}>"
@@ -265,25 +287,40 @@ def _public_inherent_method(
         target_element="U" if target is not None else None,
     )
     body = [
-        *_bounds_checks(method, str(shape.lanes)),
+        *(_checked_guards(method, str(shape.lanes), indent="        ") if checked else ()),
         *((
-            "        // SAFETY: upheld by this method's caller contract.",
+            (
+                "        // SAFETY: checked above before forwarding."
+                if checked
+                else "        // SAFETY: upheld by this method's caller contract."
+            ),
         ) if method.caller_unsafe else ()),
-        f"        {result}",
+        f"        {'Ok(' if checked else ''}{result}{')' if checked else ''}",
     ]
     attributes = _public_attributes(
         method, has_private_bound=needs_private_bound
     )
+    rendered_return_type = (
+        f"Result<{return_type}, crate::PreconditionError>"
+        if checked
+        else return_type
+    )
+    public_name = method.public_name + ("_checked" if checked else "")
     signature = (
-        f"    pub {'unsafe ' if method.caller_unsafe else ''}fn "
-        f"{rust_raw_identifier(method.public_name)}{generic_declarations}"
+        f"    pub {'unsafe ' if method.caller_unsafe and not checked else ''}fn "
+        f"{rust_raw_identifier(public_name)}{generic_declarations}"
         f"({signature_parameters})"
-        f"{'' if method.result_kind == 'void' else f' -> {return_type}'}"
+        f"{'' if method.result_kind == 'void' and not checked else f' -> {rendered_return_type}'}"
     )
     return "\n".join(
         (
             f"impl {owner} {{",
-            _indent(_method_docs(method, shape.base_spelling, str(shape.lanes)), 4),
+            _indent(
+                _method_docs(
+                    method, shape.base_spelling, str(shape.lanes), checked=checked
+                ),
+                4,
+            ),
             *attributes,
             signature,
             *(("    where", *where_lines) if where_lines else ()),
@@ -295,7 +332,9 @@ def _public_inherent_method(
     )
 
 
-def _public_free_function(method: RustComprehensiveMethod) -> str:
+def _public_free_function(
+    method: RustComprehensiveMethod, *, checked: bool = False
+) -> str:
     runtime_parameters = _runtime_parameters(method)
     parameter_declarations = ", ".join(
         f"{_identifier(parameter.public_name)}: "
@@ -347,24 +386,34 @@ def _public_free_function(method: RustComprehensiveMethod) -> str:
         target_element="U" if target is not None else None,
     )
     body = [
-        *_bounds_checks(method, "N"),
+        *(_checked_guards(method, "N", indent="    ") if checked else ()),
         *((
-            "    // SAFETY: upheld by this function's caller contract.",
+            (
+                "    // SAFETY: checked above before forwarding."
+                if checked
+                else "    // SAFETY: upheld by this function's caller contract."
+            ),
         ) if method.caller_unsafe else ()),
-        f"    {result}",
+        f"    {'Ok(' if checked else ''}{result}{')' if checked else ''}",
     ]
+    rendered_return_type = (
+        f"Result<{return_type}, crate::PreconditionError>"
+        if checked
+        else return_type
+    )
+    public_name = method.public_name + ("_checked" if checked else "")
     return "\n".join(
         (
-            _method_docs(method, "T", "N"),
+            _method_docs(method, "T", "N", checked=checked),
             *(
                 line.removeprefix("    ")
                 for line in _public_attributes(method, has_private_bound=True)
             ),
             (
-                f"pub {'unsafe ' if method.caller_unsafe else ''}fn "
-                f"{rust_raw_identifier(method.public_name)}{generic_declarations}"
+                f"pub {'unsafe ' if method.caller_unsafe and not checked else ''}fn "
+                f"{rust_raw_identifier(public_name)}{generic_declarations}"
                 f"({parameter_declarations})"
-                f"{'' if method.result_kind == 'void' else f' -> {return_type}'}"
+                f"{'' if method.result_kind == 'void' and not checked else f' -> {rendered_return_type}'}"
             ),
             "where",
             *where_lines,
@@ -379,6 +428,8 @@ def _method_docs(
     method: RustComprehensiveMethod,
     element: str,
     lanes: str,
+    *,
+    checked: bool = False,
 ) -> str:
     receiver = {
         RustFacadeReceiverKind.VECTOR: f"`Simd<{element}, {lanes}>`",
@@ -412,12 +463,22 @@ def _method_docs(
     lines = rendered.splitlines() if rendered else [
         f"/// Calls the source `{method.source_primitive_name}` primitive."
     ]
-    call_form = _example_call(method)
+    call_form = _example_call(method, checked=checked)
     lines.extend(("///", "/// # Examples", "/// ```ignore", f"/// {call_form}", "/// ```"))
     if method.panic_conditions:
         lines.extend(("///", "/// # Panics", "///"))
         lines.extend(f"/// {condition}" for condition in method.panic_conditions)
-    if method.caller_unsafe:
+    if checked:
+        lines.extend(("///", "/// # Errors", "///"))
+        lines.extend(
+            "/// Returns "
+            f"`{_facade_precondition_error(condition.error).removeprefix('crate::')}` "
+            "when "
+            f"{PRECONDITION_DESCRIPTORS[condition.kind].description[:1].lower()}"
+            f"{PRECONDITION_DESCRIPTORS[condition.kind].description[1:]}"
+            for condition in method.checked_conditions
+        )
+    elif method.caller_unsafe:
         lines.extend(("///", "/// # Safety", "///"))
         lines.extend(
             f"/// {requirement}" for requirement in method.safety_requirements
@@ -425,7 +486,7 @@ def _method_docs(
     return "\n".join(lines)
 
 
-def _example_call(method: RustComprehensiveMethod) -> str:
+def _example_call(method: RustComprehensiveMethod, *, checked: bool = False) -> str:
     const_arguments = [
         "false" if parameter.type_spelling == "bool" else "0"
         for parameter in method.const_parameters
@@ -443,7 +504,7 @@ def _example_call(method: RustComprehensiveMethod) -> str:
             *const_arguments,
         ]
         call = (
-            f"tsl::{rust_raw_identifier(method.public_name)}"
+            f"tsl::{rust_raw_identifier(method.public_name + ('_checked' if checked else ''))}"
             f"::<{', '.join(generic_arguments)}>({arguments})"
         )
     else:
@@ -455,10 +516,10 @@ def _example_call(method: RustComprehensiveMethod) -> str:
             f"::<{', '.join(generic_arguments)}>" if generic_arguments else ""
         )
         call = (
-            f"value.{rust_raw_identifier(method.public_name)}"
+            f"value.{rust_raw_identifier(method.public_name + ('_checked' if checked else ''))}"
             f"{generic}({arguments})"
         )
-    if method.caller_unsafe:
+    if method.caller_unsafe and not checked:
         call = f"unsafe {{ {call} }}"
     prefix = "let result = " if method.must_use else ""
     return f"{prefix}{call};"
@@ -482,18 +543,30 @@ def _public_attributes(
     )
 
 
-def _bounds_checks(
+def _checked_guards(
     method: RustComprehensiveMethod,
     lanes: str,
+    *,
+    indent: str,
 ) -> tuple[str, ...]:
-    return tuple(
-        (
-            f'        assert!({_identifier(name)} < {lanes}, '
-            f'"lane index {{}} is out of bounds for {{}} lanes", '
-            f"{_identifier(name)}, {lanes});"
+    guards: list[str] = []
+    for condition in method.checked_conditions:
+        if condition.kind is not PreconditionKind.LANE_INDEX_IN_RANGE:
+            raise ValueError(
+                f"unsupported Rust facade check {condition.kind.value!r}"
+            )
+        error = _facade_precondition_error(condition.error)
+        guards.append(
+            f"{indent}if {_identifier(condition.parameter_name)} >= {lanes} {{"
+            f" return Err({error}); }}"
         )
-        for name in method.bounds_checked_parameters
-    )
+    return tuple(guards)
+
+
+def _facade_precondition_error(error: PreconditionErrorKind) -> str:
+    if error is PreconditionErrorKind.INDEX_OUT_OF_BOUNDS:
+        return "crate::PreconditionError::IndexOutOfBounds"
+    raise ValueError(f"unsupported Rust facade precondition error {error.value!r}")
 
 
 def _unsafe_forward(method: RustComprehensiveMethod, call: str) -> str:

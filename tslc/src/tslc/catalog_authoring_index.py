@@ -19,6 +19,7 @@ from tslc.catalog.conversion import (
 )
 from tslc.catalog.memory import memory_access_values, memory_addressing_values
 from tslc.catalog.model import RESULT_DIM_VECTOR
+from tslc.catalog.preconditions import precondition_values
 from tslc.catalog.semantics import primitive_operation_values
 from tslc.catalog.shift import shift_count_rule_values, shift_lane_rule_values
 from tslc.catalog.validation._schema_benchmarks import KNOWN_OPERAND_DOMAINS
@@ -92,6 +93,7 @@ _CLOSED_ENUM_VALUES = frozenset(
         *KNOWN_TEST_ROLES,
         *arithmetic_operation_values(),
         *arithmetic_guarantee_values(),
+        *precondition_values(),
         *shift_count_rule_values(),
         *shift_lane_rule_values(),
         *(value for values in KNOWN_PRIMITIVE_ATTRIBUTES.values() for value in values),

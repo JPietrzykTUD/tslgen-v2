@@ -239,6 +239,7 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
             item for item in explorer["primitives"] if item["name"] == "add"
         )
         assert 0 < add_entry["availableSlots"] < add_entry["totalSlots"]
+        assert add_entry["preconditions"] == []
         assert add_entry["definitions"][0]["uri"] == path.as_uri()
         assert "mov" in add_entry["calls"]
         assert any(

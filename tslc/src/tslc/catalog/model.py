@@ -21,6 +21,7 @@ from tslc.catalog.overloads import (
     PrimitiveOverload,
     ResolvedPrimitiveOverload,
 )
+from tslc.catalog.preconditions import PrimitivePrecondition
 from tslc.catalog.semantics import PrimitiveSemanticContract
 from tslc.catalog.shift import PrimitiveShiftContract
 from tslc.catalog.signature_kinds import PointerMutability
@@ -317,6 +318,7 @@ class Primitive:
     # and conversion add only their domain-specific facts; no target spelling
     # or facade policy is source data.
     operation: PrimitiveSemanticContract | None = None
+    preconditions: tuple[PrimitivePrecondition, ...] = ()
     memory: PrimitiveMemoryContract | None = None
     conversion: PrimitiveConversionContract | None = None
     shift: PrimitiveShiftContract | None = None

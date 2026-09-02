@@ -24,6 +24,7 @@ from tslc.catalog.conversion import (
 )
 from tslc.catalog.memory import MemoryAccess, MemoryAddressing
 from tslc.catalog.model import Extension, PrimitiveMaskMode, VectorBitsKind
+from tslc.catalog.preconditions import PreconditionKind
 from tslc.catalog.scalar_types import scalar_bit_width
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
 from tslc.diagnostics import Diagnostic, diagnostic_at
@@ -55,6 +56,9 @@ class _CandidateKey:
     overload: tuple[str, str, bool] | None
     operation: PrimitiveOperation | None
     operation_roles: tuple[tuple[OperandRole, int, str], ...]
+    preconditions: tuple[
+        tuple[PreconditionKind, tuple[tuple[OperandRole, int, str], ...]], ...
+    ]
     arithmetic_operations: tuple[ArithmeticOperation, ...]
     arithmetic_roles: tuple[tuple[ArithmeticOperandRole, int, str], ...]
     param_type_overrides: tuple[str | None, ...]
@@ -283,6 +287,25 @@ def _candidate_key(spec: LoweredSpecialization) -> _CandidateKey:
         )
         if operation is not None
         else (),
+        preconditions=tuple(
+            (
+                item.kind,
+                tuple(
+                    sorted(
+                        (
+                            (
+                                binding.role,
+                                binding.parameter_index,
+                                binding.parameter_kind,
+                            )
+                            for binding in item.operand_bindings
+                        ),
+                        key=lambda binding: binding[0].value,
+                    )
+                ),
+            )
+            for item in semantics.preconditions
+        ),
         arithmetic_operations=arithmetic.ordered_operations if arithmetic else (),
         arithmetic_roles=tuple(
             sorted(

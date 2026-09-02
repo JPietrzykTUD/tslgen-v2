@@ -1549,6 +1549,14 @@
       "family": "tooling_only"
     },
     {
+      "id": "tslc/src/tslc/backend/rust_documentation_api.py|documentation_checked_wrapper|unimplemented|4ceb0b06904fae95|0",
+      "path": "tslc/src/tslc/backend/rust_documentation_api.py",
+      "owner": "documentation_checked_wrapper",
+      "kind": "unimplemented",
+      "excerpt": "\" unimplemented!()\\n\"",
+      "family": "tooling_only"
+    },
+    {
       "id": "tslc/src/tslc/backend/rust_documentation_api.py|documentation_free_function|unimplemented|4ceb0b06904fae95|0",
       "path": "tslc/src/tslc/backend/rust_documentation_api.py",
       "owner": "documentation_free_function",
@@ -1717,14 +1725,6 @@
       "family": "tooling_only"
     },
     {
-      "id": "tslc/src/tslc/render/rust_facade_comprehensive.py|_bounds_checks|assert|ed6f3aa7481369c6|0",
-      "path": "tslc/src/tslc/render/rust_facade_comprehensive.py",
-      "owner": "_bounds_checks",
-      "kind": "assert",
-      "excerpt": "f' assert!({_identifier(name)} < {lanes}, '",
-      "family": "lane_index"
-    },
-    {
       "id": "tslc/src/tslc/value_tests/_render_rust_conversion.py|_convert|assert|0945f54a4ccd7ec7|0",
       "path": "tslc/src/tslc/value_tests/_render_rust_conversion.py",
       "owner": "_convert",
@@ -1826,6 +1826,14 @@
       "owner": "_target_imask",
       "kind": "assert_eq",
       "excerpt": "f' assert_eq!(result, expected, \"{case.case_name}: expected {{:?}}, got {{:?}}\", expected, result);',",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_core.py|_checked_precondition|assert|ad4b839b58d8432b|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_core.py",
+      "owner": "_checked_precondition",
+      "kind": "assert",
+      "excerpt": "f\" assert!(matches!(result, Err({error})), \"",
       "family": "tooling_only"
     },
     {

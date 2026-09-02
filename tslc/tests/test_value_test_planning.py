@@ -23,9 +23,12 @@ from tslc.catalog.model import (
     TestArg as TslTestArg,
     TestCase as TslTestCase,
 )
+from tslc.catalog.preconditions import PreconditionKind, PrimitivePrecondition
+from tslc.catalog.semantics import OperandBinding, OperandRole
 from tslc.compiler_assets import RenderAssets
 from tslc.diagnostics import Diagnostic, SourceSpan
 from tslc.lower.lowerer import LoweredSpecialization
+from tslc.lower.primitive_semantics import LoweredPrimitiveSemantics
 from tslc.lower.target_vectors import TargetVector
 from tslc.backend.emitted_names import finalize_emitted_names
 from tslc.target_text import LoweredBody
@@ -138,6 +141,7 @@ def ValueTestCasePlan(*identity: object, **fields: Any) -> _ValueTestCasePlan:
             axis_args=values.pop("axis_args", ()),
             immediate=values.pop("immediate_value", None),
             generic_defaults=values.pop("generic_defaults", ()),
+            caller_unsafe=values.pop("caller_unsafe", False),
         ),
         target=ValueTestTarget(**target_values) if any(value is not None for value in target_values.values()) else None,
         index=ValueTestIndex(**index_values) if any(value is not None for value in index_values.values()) else None,
@@ -467,6 +471,7 @@ def test_differential_renderers_support_runtime_lane_scalar_kinds() -> None:
         hardware_extension="avx2",
         from_array_name="from_array",
         to_array_name="to_array",
+        caller_unsafe=True,
     )
     insert = ValueTestCasePlan(
         "differential",
@@ -483,6 +488,7 @@ def test_differential_renderers_support_runtime_lane_scalar_kinds() -> None:
         hardware_extension="avx2",
         from_array_name="from_array",
         to_array_name="to_array",
+        caller_unsafe=True,
     )
     set_mask = ValueTestCasePlan(
         "differential",
@@ -501,18 +507,23 @@ def test_differential_renderers_support_runtime_lane_scalar_kinds() -> None:
         to_array_name="to_array",
         to_integral_name="to_integral",
         to_mask_name="to_mask",
+        caller_unsafe=True,
     )
 
     cpp_extract = CPP_VALUE_TEST_RENDERER.render_case(extract)
     rust_extract = RUST_VALUE_TEST_RENDERER.render_case(extract)
     assert "extract_value_at<Hw>(tsl::from_array<Hw>(hin0), static_cast<std::size_t>(7))" in cpp_extract
     assert "check_scalar<i32>" in cpp_extract
-    assert "extract_value_at::<Hw>(from_array::<Hw>(&hin0), 7usize)" in rust_extract
+    assert (
+        "unsafe { extract_value_at::<Hw>(from_array::<Hw>(&hin0), 7usize) }"
+        in rust_extract
+    )
     assert "hw.lane_eq(reference)" in rust_extract
 
     cpp_insert = CPP_VALUE_TEST_RENDERER.render_case(insert)
     rust_insert = RUST_VALUE_TEST_RENDERER.render_case(insert)
     assert "static_cast<std::size_t>(7), 9" in cpp_insert
+    assert "unsafe { insert_value_at::<Hw>" in rust_insert
     assert "7usize, 9" in rust_insert
 
     cpp_mask = CPP_VALUE_TEST_RENDERER.render_case(set_mask)
@@ -520,7 +531,7 @@ def test_differential_renderers_support_runtime_lane_scalar_kinds() -> None:
     assert "static_cast<std::size_t>(1)" in cpp_mask
     assert "to_integral<Hw>(tsl::set_mask_lane<Hw>" in cpp_mask
     assert "1usize" in rust_mask
-    assert "to_integral::<Hw>(set_mask_lane::<Hw>" in rust_mask
+    assert "to_integral::<Hw>(unsafe { set_mask_lane::<Hw>" in rust_mask
 
 
 def test_masked_immediate_cases_plan_and_render_for_both_backends(
@@ -1259,7 +1270,19 @@ def test_planner_emits_fixed_masked_mask_result_cases() -> None:
     assert {entry.status for entry in plan.coverage} == {"emitted"}
 
 
-def test_runtime_lane_and_mask_mutation_shapes_reuse_typed_case_kinds() -> None:
+def test_runtime_lane_and_mask_mutation_shapes_reuse_typed_case_kinds(
+    render_assets: RenderAssets,
+) -> None:
+    lane_precondition = PrimitivePrecondition(
+        PreconditionKind.LANE_INDEX_IN_RANGE,
+        (
+            OperandBinding(OperandRole.PRIMARY, "p0", 0, "v"),
+            OperandBinding(OperandRole.INDEX, "p1", 1, "usize"),
+        ),
+    )
+    lane_semantics = LoweredPrimitiveSemantics(
+        preconditions=(lane_precondition,)
+    )
     extract = Primitive(
         "extract_value_at",
         "s:=(v,usize)",
@@ -1329,6 +1352,7 @@ def test_runtime_lane_and_mask_mutation_shapes_reuse_typed_case_kinds() -> None:
                 "extract_value_at",
                 result_kind="s",
                 param_kinds=("v", "usize"),
+                primitive_semantics=lane_semantics,
             ),
         ),
         "insert_value_at": (
@@ -1336,6 +1360,7 @@ def test_runtime_lane_and_mask_mutation_shapes_reuse_typed_case_kinds() -> None:
                 "insert_value_at",
                 "insert_value_at",
                 param_kinds=("v", "usize", "s"),
+                primitive_semantics=lane_semantics,
             ),
         ),
         "set_mask_lane": (
@@ -1344,6 +1369,7 @@ def test_runtime_lane_and_mask_mutation_shapes_reuse_typed_case_kinds() -> None:
                 "set_mask_lane",
                 result_kind="m",
                 param_kinds=("m", "usize", "usize"),
+                primitive_semantics=lane_semantics,
             ),
         ),
     }
@@ -1356,9 +1382,41 @@ def test_runtime_lane_and_mask_mutation_shapes_reuse_typed_case_kinds() -> None:
     cases = plan.profiles_for("cpp")[0].cases
     assert [(case.call_name, case.kind) for case in cases] == [
         ("extract_value_at", "scalar_result"),
+        ("extract_value_at", "checked_precondition"),
+        ("extract_value_at", "checked_precondition"),
         ("insert_value_at", "scalar_vector"),
+        ("insert_value_at", "checked_precondition"),
+        ("insert_value_at", "checked_precondition"),
         ("set_mask_lane", "mask_result"),
+        ("set_mask_lane", "checked_precondition"),
+        ("set_mask_lane", "checked_precondition"),
     ]
+    checked = [case for case in cases if case.kind == "checked_precondition"]
+    cpp = render_cpp_values_runner(
+        ValueTestProfilePlan("cpp", "unit", tuple(checked)), render_assets
+    )
+    assert "Vec::lane_count()" in cpp
+    assert "std::numeric_limits<std::size_t>::max()" in cpp
+    assert "precondition_error::index_out_of_bounds" in cpp
+    rust_cases = tuple(
+        replace(case, base_spelling="i32") for case in cases
+    )
+    rust = render_rust_values_file(
+        (
+            ValueTestProfilePlan(
+                "rust",
+                "unit",
+                rust_cases,
+            ),
+        ),
+        render_assets,
+    )
+    assert "unsafe { extract_value_at::<Vec>" in rust
+    assert "unsafe { insert_value_at::<Vec>" in rust
+    assert "unsafe { set_mask_lane::<Vec>" in rust
+    assert "Vec::lane_count()" in rust
+    assert "usize::MAX" in rust
+    assert "PreconditionError::IndexOutOfBounds" in rust
     assert {entry.status for entry in plan.coverage} == {"emitted"}
 
 
@@ -4086,6 +4144,7 @@ def _spec(
     extension_name: str = "generic",
     uses_sized_vector: bool = True,
     lane_parameter: str | None = "4",
+    primitive_semantics: LoweredPrimitiveSemantics = LoweredPrimitiveSemantics(),
 ) -> LoweredSpecialization:
     return LoweredSpecialization(
         backend_id="cpp",
@@ -4104,4 +4163,5 @@ def _spec(
         axis=axis,
         immediate=immediate,
         mask_policy=mask_policy,
+        primitive_semantics=primitive_semantics,
     )

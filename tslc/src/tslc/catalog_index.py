@@ -155,6 +155,7 @@ def build_catalog_index(
         "arithmetic-operand": {},
         "primitive-operation": {},
         "operand-role": {},
+        "precondition": {},
         "semantic-operand": {},
         "memory-access": {},
         "memory-addressing": {},
@@ -178,6 +179,7 @@ def build_catalog_index(
         "arithmetic-operand": {},
         "primitive-operation": {},
         "operand-role": {},
+        "precondition": {},
         "semantic-operand": {},
         "memory-access": {},
         "memory-addressing": {},
@@ -310,6 +312,7 @@ def _build_document_index(document: ParsedOuterTslDocument) -> _DocumentIndex:
         "arithmetic-operand": {},
         "primitive-operation": {},
         "operand-role": {},
+        "precondition": {},
         "semantic-operand": {},
         "memory-access": {},
         "memory-addressing": {},
@@ -333,6 +336,7 @@ def _build_document_index(document: ParsedOuterTslDocument) -> _DocumentIndex:
         "arithmetic-operand": {},
         "primitive-operation": {},
         "operand-role": {},
+        "precondition": {},
         "semantic-operand": {},
         "memory-access": {},
         "memory-addressing": {},
@@ -662,6 +666,18 @@ def _index_primitive_semantics(
                 _source_span(source),
                 False,
             )
+    for parsed in primitive.fields_by_name("preconditions"):
+        value = parsed.field.value
+        if not isinstance(value, ParsedTslListValue):
+            continue
+        for item in value.items:
+            if isinstance(item, ParsedTslScalarValue):
+                _record_scalar_reference(
+                    item,
+                    references,
+                    occurrences,
+                    "precondition",
+                )
     semantic_members: tuple[
         tuple[str, tuple[tuple[str, SymbolKind], ...]], ...
     ] = (

@@ -30,9 +30,11 @@ from tslc.catalog.memory import (
 )
 from tslc.catalog.model import ImplementationSafety
 from tslc.catalog.overloads import ResolvedPrimitiveOverload
+from tslc.catalog.preconditions import PreconditionKind
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.lower.primitive_semantics import LoweredMemoryAlignment
+from tslc.render.rust_facade_comprehensive import render_comprehensive_facade
 
 
 @pytest.mark.parametrize(
@@ -120,6 +122,107 @@ def test_public_name_components_are_composed_once(
     plan = plan_rust_facade((), _plan(spec))
 
     assert [method.public_name for method in plan.comprehensive_methods] == [expected]
+
+
+def test_declared_lane_precondition_produces_unsafe_and_checked_facade_methods() -> None:
+    spec = _spec(
+        "extract_value_at",
+        result_kind="s",
+        param_names=("data", "index"),
+        param_kinds=("v", "usize"),
+        operation=PrimitiveOperation.EXTRACT_LANE,
+        roles=(
+            (OperandRole.PRIMARY, 0, "v"),
+            (OperandRole.INDEX, 1, "usize"),
+        ),
+        preconditions=(PreconditionKind.LANE_INDEX_IN_RANGE,),
+    )
+
+    plan = plan_rust_facade((), _plan(spec))
+    method = plan.comprehensive_methods[0]
+    rendered = render_comprehensive_facade(plan).public_items
+
+    assert method.caller_unsafe
+    assert tuple(item.kind for item in method.checked_conditions) == (
+        PreconditionKind.LANE_INDEX_IN_RANGE,
+    )
+    assert "pub unsafe fn extract_value_at(self, index: usize)" in rendered
+    assert "pub fn extract_value_at_checked(self, index: usize)" in rendered
+    assert "if index >=" in rendered
+    assert "PreconditionError::IndexOutOfBounds" in rendered
+
+
+def test_checked_facade_is_omitted_when_a_caller_obligation_remains() -> None:
+    spec = _spec(
+        "extract_value_at",
+        result_kind="s",
+        param_names=("data", "index"),
+        param_kinds=("v", "usize"),
+        operation=PrimitiveOperation.EXTRACT_LANE,
+        roles=(
+            (OperandRole.PRIMARY, 0, "v"),
+            (OperandRole.INDEX, 1, "usize"),
+        ),
+        preconditions=(PreconditionKind.LANE_INDEX_IN_RANGE,),
+        safety=ImplementationSafety(
+            caller_unsafe=True,
+            reasons=("unmatched_test_obligation",),
+        ),
+    )
+
+    plan = plan_rust_facade((), _plan(spec))
+    method = plan.comprehensive_methods[0]
+    rendered = render_comprehensive_facade(plan).public_items
+
+    assert method.caller_unsafe
+    assert method.checked_conditions == ()
+    assert "extract_value_at_checked" not in rendered
+
+
+def test_total_integral_mask_test_does_not_infer_a_bounds_check() -> None:
+    spec = _spec(
+        "test_imask",
+        result_kind="im",
+        param_names=("mask", "index"),
+        param_kinds=("im", "usize"),
+        operation=PrimitiveOperation.INTEGRAL_MASK_TEST,
+        roles=(
+            (OperandRole.PRIMARY, 0, "im"),
+            (OperandRole.INDEX, 1, "usize"),
+        ),
+    )
+
+    plan = plan_rust_facade((), _plan(spec))
+    method = plan.comprehensive_methods[0]
+    rendered = render_comprehensive_facade(plan).public_items
+
+    assert not method.caller_unsafe
+    assert method.checked_conditions == ()
+    assert "test_imask_checked" not in rendered
+    assert "assert!(index" not in rendered
+
+
+def test_generated_checked_name_collision_is_diagnosed() -> None:
+    lane = _spec(
+        "lane_at",
+        result_kind="s",
+        param_names=("data", "index"),
+        param_kinds=("v", "usize"),
+        operation=PrimitiveOperation.EXTRACT_LANE,
+        roles=(
+            (OperandRole.PRIMARY, 0, "v"),
+            (OperandRole.INDEX, 1, "usize"),
+        ),
+        preconditions=(PreconditionKind.LANE_INDEX_IN_RANGE,),
+    )
+    authored_collision = _spec("lane_at_checked")
+
+    with pytest.raises(RustFacadePlanningError) as raised:
+        plan_rust_facade((), _plan(lane, authored_collision))
+
+    assert {
+        item.code for item in raised.value.diagnostics
+    } == {"TSL-BACKEND-RUST-FACADE-NAME-COLLISION"}
 
 
 def test_receiver_is_finalized_before_explicit_arguments() -> None:

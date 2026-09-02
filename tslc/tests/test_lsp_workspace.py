@@ -237,6 +237,48 @@ def test_initial_invalid_overlay_seeds_last_valid_parsed_context(
     assert retained.declarations
 
 
+def test_invalid_precondition_overlay_keeps_exact_live_authoring_spans(
+    data_root: Path,
+) -> None:
+    workspace = AuthoringWorkspace.from_root(data_root.parent)
+    initial = workspace.check()
+    assert initial is not None
+    assert initial.index is not None
+    path = data_root / "primitives" / "load_store" / "array.tsl"
+    original = path.read_text(encoding="utf-8")
+    typo = "lane_index_in_ragne"
+    edited = original.replace("lane_index_in_range", typo, 1)
+
+    generation = workspace.open(path, edited, 1)
+    snapshot = workspace.check(generation)
+
+    assert snapshot is not None
+    assert snapshot.index is not None
+    diagnostic = next(
+        item
+        for item in snapshot.diagnostics
+        if item.code == "TSL-CATALOG-UNKNOWN-PRECONDITION"
+    )
+    assert diagnostic.span is not None
+    line = edited.splitlines()[diagnostic.span.line - 1]
+    assert (
+        line[diagnostic.span.column - 1 : diagnostic.span.end_column - 1]
+        == typo
+    )
+    occurrence = next(
+        item
+        for item in snapshot.index.occurrences_by_path[path.resolve()]
+        if item.kind == "precondition" and item.name == typo
+    )
+    assert occurrence.span == diagnostic.span
+    assert snapshot.index.hover(occurrence) is None
+    assert snapshot.index.references(occurrence) == (diagnostic.span,)
+    assert all(
+        token.span != diagnostic.span
+        for token in snapshot.index.semantic_tokens_by_path[path.resolve()]
+    )
+
+
 def test_specialization_context_uses_cursor_scope_and_selector_slots(
     data_root: Path,
 ) -> None:
@@ -502,6 +544,7 @@ def test_primitive_explorer_projects_file_slots_counts_and_dependencies(
     assert "mov" in add.calls
     assert "mul" in add.called_by
     assert all(span.path.resolve() == path.resolve() for span in add.definitions)
+    assert add.preconditions == ()
 
     avx2_si32 = next(
         slot
@@ -522,7 +565,6 @@ def test_primitive_explorer_projects_file_slots_counts_and_dependencies(
     assert avx512_si32.status == "not-selected"
     assert avx512_si32.implementations
     assert "does not select it" in (avx512_si32.detail or "")
-
     rust = primitive_explorer(
         snapshot.catalog,
         snapshot.index,
@@ -576,6 +618,32 @@ def test_primitive_explorer_projects_file_slots_counts_and_dependencies(
     )
     assert cached.selected_primitive == "sub"
     assert cached.slots
+
+
+def test_primitive_explorer_projects_authored_preconditions(data_root: Path) -> None:
+    workspace = AuthoringWorkspace.from_root(data_root.parent)
+    snapshot = workspace.check()
+    assert snapshot is not None
+    assert snapshot.catalog is not None
+    assert snapshot.index is not None
+    path = data_root / "primitives" / "load_store" / "array.tsl"
+
+    explorer = primitive_explorer(
+        snapshot.catalog,
+        snapshot.index,
+        workspace.config.profiles,
+        workspace.config.backends,
+        mode="authored",
+        profile="avx2",
+        backend="rust",
+        path=path,
+        selected_primitive="extract_value_at",
+    )
+
+    primitive = next(
+        item for item in explorer.primitives if item.name == "extract_value_at"
+    )
+    assert primitive.preconditions == ("lane_index_in_range",)
 
 
 def test_primitive_explorer_carries_selector_rejection_reasons(
@@ -1069,7 +1137,7 @@ def test_overload_live_features_project_the_latest_catalog_index(
     ) == {"per_lane", "uniform"}
 
 
-def test_overload_diagnostics_retain_related_locations_and_last_valid_index(
+def test_overload_diagnostics_retain_related_locations_and_live_index(
     data_root: Path,
 ) -> None:
     workspace = AuthoringWorkspace.from_root(data_root.parent)
@@ -1082,7 +1150,7 @@ def test_overload_diagnostics_retain_related_locations_and_last_valid_index(
     invalid_pair = original.replace("    value uniform", "    value vector", 1)
     invalid = workspace.check(workspace.open(path, invalid_pair, 1))
     assert invalid is not None
-    assert invalid.index is initial.index
+    assert invalid.index is not initial.index
     assert any(
         item.code == "TSL-CATALOG-OVERLOAD-INVALID-VALUE"
         for item in invalid.diagnostics
@@ -1095,7 +1163,7 @@ def test_overload_diagnostics_retain_related_locations_and_last_valid_index(
     )
     duplicate = workspace.check(workspace.change(path, duplicate_source, 2))
     assert duplicate is not None
-    assert duplicate.index is initial.index
+    assert duplicate.index is not initial.index
     diagnostic = next(
         item
         for item in duplicate.diagnostics

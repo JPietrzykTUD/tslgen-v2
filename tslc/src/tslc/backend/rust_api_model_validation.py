@@ -59,6 +59,10 @@ def _validate_surface_identity(plan: RustFacadePlan) -> _ShapeIndex:
         (item.receiver_kind, item.public_name)
         for item in plan.comprehensive_methods
     ) + tuple(
+        (item.receiver_kind, item.public_name + "_checked")
+        for item in plan.comprehensive_methods
+        if item.checked_conditions
+    ) + tuple(
         (item.receiver_kind, item.public_name) for item in plan.curated_methods
     )
     if len(set(method_keys)) != len(method_keys):

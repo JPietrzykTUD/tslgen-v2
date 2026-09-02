@@ -16,6 +16,12 @@ pub enum ImplementationState {
     Unknown,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum PreconditionError {
+    IndexOutOfBounds,
+}
+
 pub trait ImplementationStateOf<Primitive, Vec, Args = ()> {
     const VALUE: ImplementationState;
 }
@@ -681,6 +687,30 @@ pub mod detail {
 
     pub fn arith_add<T: LaneArith>(a: T, b: T) -> T {
         a.tsl_add(b)
+    }
+    /// Reads an array lane without a runtime bounds check.
+    ///
+    /// # Safety
+    ///
+    /// `index` must be smaller than `N`.
+    pub unsafe fn lane_get_unchecked<T: Copy, const N: usize>(
+        value: ArrayStorage<T, N>,
+        index: usize,
+    ) -> T {
+        unsafe { *value.storage.get_unchecked(index) }
+    }
+    /// Replaces an array lane without a runtime bounds check.
+    ///
+    /// # Safety
+    ///
+    /// `value` must point to a live `ArrayStorage`, and `index` must be smaller
+    /// than `N`.
+    pub unsafe fn lane_set_unchecked<T, const N: usize>(
+        value: *mut ArrayStorage<T, N>,
+        index: usize,
+        lane: T,
+    ) {
+        unsafe { *(*value).storage.get_unchecked_mut(index) = lane };
     }
     pub fn arith_sub<T: LaneArith>(a: T, b: T) -> T {
         a.tsl_sub(b)

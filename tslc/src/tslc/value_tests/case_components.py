@@ -8,6 +8,11 @@ from typing import Literal
 
 from tslc.catalog.arithmetic import ARITHMETIC_INTEGER_IMMEDIATE_ZERO_MARKER
 from tslc.catalog.model import TestComparison, TestFailureReason
+from tslc.catalog.preconditions import (
+    PRECONDITION_DESCRIPTORS,
+    PreconditionErrorKind,
+    PreconditionKind,
+)
 
 ExpectedArity = Literal["optional", "non_empty", "one", "lanes", "target_lanes"]
 InputArity = Literal["optional", "non_empty", "one"]
@@ -40,6 +45,14 @@ class ValueTestFact(Enum):
     SCALABLE_LOAD = auto()
     DIFFERENTIAL = auto()
     FAILURE = auto()
+    CHECKED_PRECONDITION = auto()
+
+
+class ValueTestInvalidPreconditionValue(Enum):
+    """Boundary values synthesized without target-language literal spellings."""
+
+    LANE_COUNT = auto()
+    SIZE_MAX = auto()
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,6 +132,22 @@ class ValueTestFailure:
 
 
 @dataclass(frozen=True, slots=True)
+class ValueTestCheckedPrecondition:
+    """One invalid checked call and its expected typed error."""
+
+    kind: PreconditionKind
+    error: PreconditionErrorKind
+    parameter_index: int
+    invalid_value: ValueTestInvalidPreconditionValue
+
+    def __post_init__(self) -> None:
+        if self.parameter_index < 0:
+            raise ValueError("checked precondition parameter index must be non-negative")
+        if PRECONDITION_DESCRIPTORS[self.kind].error is not self.error:
+            raise ValueError("checked precondition error must match its descriptor")
+
+
+@dataclass(frozen=True, slots=True)
 class ValueTestInvocation:
     """Facts needed to spell the primitive invocation."""
 
@@ -128,6 +157,7 @@ class ValueTestInvocation:
     immediate: str | None = None
     generic_defaults: tuple[str, ...] = ()
     inferred_type_args: int = 0
+    caller_unsafe: bool = False
 
 
 @dataclass(frozen=True, slots=True)

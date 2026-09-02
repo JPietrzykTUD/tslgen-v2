@@ -59,6 +59,7 @@ def validate_semantic_contracts(
                 first_contract,
                 diagnostics,
             )
+            _validate_preconditions(name, primitive, first, diagnostics)
             _validate_domain_contract(name, primitive, first, "memory", diagnostics)
             _validate_domain_contract(name, primitive, first, "conversion", diagnostics)
             _validate_domain_contract(name, primitive, first, "shift", diagnostics)
@@ -165,6 +166,62 @@ def _validate_domain_contract(
             primitive.source if actual is None else actual.source,
             first,
             first.source if expected is None else expected.source,
+        )
+    )
+
+
+def _validate_preconditions(
+    name: str,
+    primitive: Primitive,
+    first: Primitive,
+    diagnostics: list[Diagnostic],
+) -> None:
+    assert primitive.operation is not None
+    assert first.operation is not None
+    actual = {
+        item.kind: tuple(
+            sorted(
+                (
+                    binding.role,
+                    _logical_parameter_index(
+                        primitive.operation, binding.parameter_index
+                    ),
+                )
+                for binding in item.operand_bindings
+            )
+        )
+        for item in primitive.preconditions
+    }
+    expected = {
+        item.kind: tuple(
+            sorted(
+                (
+                    binding.role,
+                    _logical_parameter_index(first.operation, binding.parameter_index),
+                )
+                for binding in item.operand_bindings
+            )
+        )
+        for item in first.preconditions
+    }
+    if actual == expected:
+        return
+    actual_source = next(
+        (item.source for item in primitive.preconditions if item.source is not None),
+        primitive.source,
+    )
+    expected_source = next(
+        (item.source for item in first.preconditions if item.source is not None),
+        first.source,
+    )
+    diagnostics.append(
+        _mismatch(
+            name,
+            "precondition contract",
+            primitive,
+            actual_source,
+            first,
+            expected_source,
         )
     )
 

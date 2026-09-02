@@ -26,6 +26,7 @@ from tslc.catalog.memory import (
 )
 from tslc.catalog.model import Extension, ImplementationSafety
 from tslc.catalog.overloads import ResolvedPrimitiveOverload
+from tslc.catalog.preconditions import PreconditionKind, PrimitivePrecondition
 from tslc.catalog.semantics import (
     OperandBinding,
     OperandRole,
@@ -75,7 +76,9 @@ def _spec(
     memory: PrimitiveMemoryContract | None = None,
     memory_alignment: LoweredMemoryAlignment | None = None,
     emitted_name: str | None = None,
+    preconditions: tuple[PreconditionKind, ...] = (),
 ) -> LoweredSpecialization:
+    operation_contract = _operation(operation, roles, param_names)
     return LoweredSpecialization(
         backend_id="rust",
         primitive_name=emitted_name or name,
@@ -91,7 +94,11 @@ def _spec(
         primitive_semantics=LoweredPrimitiveSemantics(
             overload=overload,
             arithmetic=arithmetic,
-            operation=_operation(operation, roles, param_names),
+            operation=operation_contract,
+            preconditions=tuple(
+                PrimitivePrecondition(kind, operation_contract.operand_bindings)
+                for kind in preconditions
+            ),
             memory=memory,
             memory_alignment=memory_alignment,
             conversion=conversion,

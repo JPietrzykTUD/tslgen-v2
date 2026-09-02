@@ -23,6 +23,7 @@ from tslc.backend.rust_static_selection import (
 from tslc.catalog.arithmetic import ArithmeticOperandRole, ArithmeticOperation
 from tslc.catalog.memory import MemoryAccess, MemoryAddressing, MemoryAlignment
 from tslc.catalog.model import PrimitiveMaskMode, VectorBitsKind
+from tslc.catalog.preconditions import PreconditionErrorKind, PreconditionKind
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
 from tslc.documentation import PrimitiveDocumentation
 
@@ -506,7 +507,7 @@ class RustComprehensiveMethod:
     caller_unsafe: bool
     safety_requirements: tuple[str, ...]
     panic_conditions: tuple[str, ...]
-    bounds_checked_parameters: tuple[str, ...]
+    checked_conditions: tuple["RustFacadeCheckedCondition", ...]
     must_use: bool
     suppress_should_implement_trait_lint: bool
     documentation: PrimitiveDocumentation
@@ -516,6 +517,13 @@ class RustComprehensiveMethod:
     implementation_arms: tuple[
         RustComprehensivePrivateImplementationArm, ...
     ] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class RustFacadeCheckedCondition:
+    kind: PreconditionKind
+    parameter_name: str
+    error: PreconditionErrorKind
 
 
 @dataclass(frozen=True, slots=True)

@@ -228,7 +228,6 @@ class AuthoringWorkspace:
                 return None
             previous = self._latest
             catalog = result.catalog if result.catalog is not None else previous.catalog
-            index = result.index if result.index is not None else previous.index
             versions = {item.path: item.version for item in self._documents.values()}
             paths = tuple(
                 sorted(
@@ -237,6 +236,24 @@ class AuthoringWorkspace:
                 )
             )
             parsed = _merge_parsed(result.parsed, previous.parsed, paths)
+            index = result.index
+            # Semantic catalog errors retain the last valid typed catalog, but
+            # parseable overlay syntax still owns current occurrence spans.
+            # Rebuilding this projection keeps hover/reference/token locations
+            # honest without promoting invalid source into catalog semantics.
+            if (
+                index is None
+                and catalog is not None
+                and parsed is not None
+                and not parsed.diagnostics
+            ):
+                index = build_catalog_index(
+                    catalog,
+                    parsed,
+                    cache=self.cache.index_cache,
+                )
+            if index is None:
+                index = previous.index
             snapshot = WorkspaceSnapshot(
                 generation,
                 catalog,

@@ -25,13 +25,17 @@ from tslc.catalog.model import (
     Extension,
     ExtensionMetadata,
     MaskPolicy,
+    ImplementationSafety,
 )
+from tslc.catalog.preconditions import PreconditionKind, PrimitivePrecondition
+from tslc.catalog.semantics import OperandBinding, OperandRole
 from tslc.catalog.target_families import (
     BackendProfileFamily,
     ExtensionFamilyCapability,
     ProfileFamilyCapability,
 )
 from tslc.diagnostics import SourceSpan
+from tslc.lower.primitive_semantics import LoweredPrimitiveSemantics
 
 
 @dataclass(frozen=True)
@@ -47,6 +51,76 @@ class _Specialization:
     immediate: tuple[str, str] | None = None
     generic_params: tuple[tuple[str, str, str], ...] = ()
     source: SourceSpan | None = None
+    safety: ImplementationSafety = ImplementationSafety()
+    primitive_semantics: LoweredPrimitiveSemantics = LoweredPrimitiveSemantics()
+
+
+def test_cpp_checked_twin_rejects_an_authored_name_collision() -> None:
+    source = SourceSpan(Path("lane.tsl"), 6, 18, 6, 37)
+    precondition = PrimitivePrecondition(
+        PreconditionKind.LANE_INDEX_IN_RANGE,
+        (
+            OperandBinding(OperandRole.PRIMARY, "data", 0, "v"),
+            OperandBinding(OperandRole.INDEX, "index", 1, "usize"),
+        ),
+        source,
+    )
+    lane = _Specialization(
+        "scalar",
+        result_kind="s",
+        param_kinds=("v", "usize"),
+        primitive_semantics=LoweredPrimitiveSemantics(
+            preconditions=(precondition,)
+        ),
+    )
+    profile = _profile(
+        cpp={
+            "lane_at": (lane,),
+            "lane_at_checked": (_Specialization("scalar"),),
+        },
+        extensions={"scalar": _extension("scalar", cpp=True)},
+    )
+
+    diagnostic = next(
+        item
+        for item in validate_cpp_profiles((profile,))
+        if item.code == "TSL-BACKEND-CPP-CHECKED-NAME-COLLISION"
+    )
+    assert diagnostic.span == source
+
+
+def test_rust_checked_twin_rejects_an_authored_name_collision() -> None:
+    source = SourceSpan(Path("lane.tsl"), 6, 18, 6, 37)
+    precondition = PrimitivePrecondition(
+        PreconditionKind.LANE_INDEX_IN_RANGE,
+        (
+            OperandBinding(OperandRole.PRIMARY, "data", 0, "v"),
+            OperandBinding(OperandRole.INDEX, "index", 1, "usize"),
+        ),
+        source,
+    )
+    lane = _Specialization(
+        "scalar",
+        result_kind="s",
+        param_kinds=("v", "usize"),
+        primitive_semantics=LoweredPrimitiveSemantics(
+            preconditions=(precondition,)
+        ),
+    )
+    profile = _profile(
+        rust={
+            "lane_at": (lane,),
+            "lane_at_checked": (_Specialization("scalar"),),
+        },
+        extensions={"scalar": _extension("scalar", rust=True)},
+    )
+
+    diagnostic = next(
+        item
+        for item in validate_rust_profiles((profile,))
+        if item.code == "TSL-BACKEND-RUST-CHECKED-NAME-COLLISION"
+    )
+    assert diagnostic.span == source
 
 
 def test_cpp_unsupported_width_indexed_register_is_source_located() -> None:

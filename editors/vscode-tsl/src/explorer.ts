@@ -15,6 +15,7 @@ import {
   countDescription,
   groupSlots,
   implementationLabel,
+  preconditionDescription,
   slotCallableLabel,
   slotStatusDescription,
   slotTypeLabel,
@@ -1209,6 +1210,9 @@ function primitiveTooltip(
       : `${String(primitive.availableSlots)} of ${String(primitive.totalSlots)} slots selected.\n\n`,
   );
   value.appendMarkdown(`Signatures: ${primitive.signatures.map(code).join(", ")}\n\n`);
+  value.appendMarkdown(
+    `Preconditions: ${preconditionDescription(primitive.preconditions)}\n\n`,
+  );
   value.appendMarkdown(
     `Calls: ${primitive.calls.length ? primitive.calls.map(code).join(", ") : "none"}\n\n`,
   );

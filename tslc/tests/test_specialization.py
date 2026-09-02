@@ -689,7 +689,7 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     documentation = specialization_artifacts["rust/src/tsl_documentation.rs"]
 
     assert sha256(avx2.encode()).hexdigest() == (
-        "cc73c86ee78b07693b90b6f12b9853d0c4543f93c2b26c9fe50b946e17f59778"
+        "e48112f44dacdfcca25d112a5cc69512e04fb9122a3ec7da8d26ee63482fc41b"
     )
 
     assert 'name = "tsl"' in cargo
@@ -721,7 +721,17 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     )
     assert documented_functions.count("add") == 1
     assert len(documented_functions) == len(set(documented_functions))
-    assert len(documented_functions) == lib.count("    pub struct ")
+    checked_functions = {
+        name for name in documented_functions if name.endswith("_checked")
+    }
+    assert checked_functions == {
+        "extract_value_at_checked",
+        "insert_value_at_checked",
+        "set_mask_lane_checked",
+    }
+    assert len(documented_functions) - len(checked_functions) == lib.count(
+        "    pub struct "
+    )
     assert "detail::primitives" not in documentation
     assert "unimplemented!()" in documentation
     assert "pub mod dataparallel" in helper

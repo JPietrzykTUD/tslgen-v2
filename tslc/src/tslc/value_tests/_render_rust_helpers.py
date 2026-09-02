@@ -118,6 +118,12 @@ def scalar_expected(case: ValueTestCasePlan, result_type: str) -> str:
     return rust_literal(token, case.type_tag)
 
 
+def public_call(case: ValueTestCasePlan, call: str) -> str:
+    """Frame a valid public invocation with its finalized Rust safety contract."""
+
+    return f"unsafe {{ {call} }}" if case.invocation.caller_unsafe else call
+
+
 def rust_string_literal(value: str) -> str:
     escaped = (
         value.replace("\\", "\\\\")
@@ -132,6 +138,7 @@ def rust_string_literal(value: str) -> str:
 __all__ = [
     "append_call_args",
     "axis_args",
+    "public_call",
     "rust_extension_tag",
     "rust_string_literal",
     "scalar_expected",

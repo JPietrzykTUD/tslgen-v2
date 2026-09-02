@@ -6,6 +6,10 @@ from dataclasses import dataclass
 from textwrap import dedent
 
 from tslc.catalog.model import ImplementationSafety
+from tslc.catalog.preconditions import (
+    PRECONDITION_DESCRIPTORS,
+    PrimitivePrecondition,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,6 +94,22 @@ def safety_fact(safety: ImplementationSafety) -> str:
     if safety.reasons:
         parts.append("reasons: " + ", ".join(sorted(safety.reasons)))
     return "; ".join(parts)
+
+
+def precondition_fact(
+    preconditions: tuple[PrimitivePrecondition, ...],
+    *,
+    include_unchecked_consequence: bool = True,
+) -> str:
+    return "; ".join(
+        f"{item.kind.value}: {PRECONDITION_DESCRIPTORS[item.kind].description}"
+        + (
+            f" {PRECONDITION_DESCRIPTORS[item.kind].unchecked_consequence}"
+            if include_unchecked_consequence
+            else ""
+        )
+        for item in preconditions
+    )
 
 
 def render_cpp_doc(block: DocumentationBlock, *, indent: str = "") -> str:
@@ -193,6 +213,7 @@ __all__ = [
     "kind_description",
     "parameter_summary",
     "primitive_documentation",
+    "precondition_fact",
     "render_cpp_doc",
     "render_rust_doc",
     "result_summary",

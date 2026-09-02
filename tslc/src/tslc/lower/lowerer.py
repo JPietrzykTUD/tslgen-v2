@@ -468,6 +468,7 @@ class Lowerer:
                 overload=catalog.resolve_primitive_overload(selected.primitive),
                 arithmetic=selected.primitive.arithmetic,
                 operation=selected.primitive.operation,
+                preconditions=selected.primitive.preconditions,
                 memory=selected.primitive.memory,
                 memory_alignment=_lowered_memory_alignment(
                     selected.primitive

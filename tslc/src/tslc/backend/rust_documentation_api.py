@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from tslc.backend.checked_api import checked_api_plan
 from tslc.backend.rust_documentation import rust_doc
 from tslc.backend.rust_signatures import (
     free_kind_type,
@@ -51,6 +52,35 @@ def documentation_wrapper(
         + f"pub {unsafe_prefix(caller_unsafe)}fn {rust_raw_identifier(primitive_name)}"
         f"<{generics}>({rendered_params}) -> {result_type}"
         f"{index_where(shape, base_dispatch='projection')} {{\n"
+        "    unimplemented!()\n"
+        "}"
+    )
+
+
+def documentation_checked_wrapper(
+    primitive_name: str,
+    specializations: tuple[LoweredSpecialization, ...],
+) -> str:
+    plan = checked_api_plan(specializations)
+    if plan is None:
+        return ""
+    shape = specializations[0]
+    declarations = generic_decls(shape)
+    generics = ", ".join(("S: StaticSimdVector", *declarations))
+    rendered_params = params(shape, "S")
+    result_type = kind_type(shape.result_kind, "S")
+    doc = rust_doc(
+        shape,
+        context="Rust checked documentation facade",
+        concrete=False,
+        checked=True,
+    )
+    return (
+        (f"{doc}\n" if doc else "")
+        + "#[must_use]\n"
+        + "#[inline]\n"
+        + f"pub fn {rust_raw_identifier(primitive_name + '_checked')}"
+        f"<{generics}>({rendered_params}) -> Result<{result_type}, PreconditionError> {{\n"
         "    unimplemented!()\n"
         "}"
     )
@@ -107,6 +137,7 @@ def documentation_free_function(spec: LoweredSpecialization) -> str:
 
 
 __all__ = (
+    "documentation_checked_wrapper",
     "documentation_free_function",
     "documentation_overloaded_wrapper",
     "documentation_wrapper",

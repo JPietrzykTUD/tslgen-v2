@@ -34,6 +34,7 @@ from tslc.benchmark.model import (
     SpecializationKey,
 )
 from tslc.catalog.model import TestFailureReason as FailureReason
+from tslc.catalog.preconditions import PreconditionErrorKind, PreconditionKind
 from tslc.diagnostics import Diagnostic, SourceLocation, SourceSpan
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.maintenance import _generation_snapshot_semantics as semantics_module
@@ -56,12 +57,14 @@ from tslc.output.verify_model import (
 from tslc.pipeline import CoverageEntry, GenerationResult, SkippedEntry
 from tslc.render.project import RenderedProject
 from tslc.value_tests.case_components import (
+    ValueTestCheckedPrecondition,
     ValueTestDifferential,
     ValueTestExpectation,
     ValueTestFailure,
     ValueTestIndex,
     ValueTestInputs,
     ValueTestInvocation,
+    ValueTestInvalidPreconditionValue,
     ValueTestMemory,
     ValueTestRepresentation,
     ValueTestScalable,
@@ -456,6 +459,22 @@ def _serialized_records() -> list[tuple[object, dict[str, object]]]:
             ValueTestFailure(FailureReason.INTEGER_ZERO_DIVISOR),
             semantics_module._serialize_value_test_failure(
                 ValueTestFailure(FailureReason.INTEGER_ZERO_DIVISOR)
+            ),
+        ),
+        (
+            ValueTestCheckedPrecondition(
+                PreconditionKind.LANE_INDEX_IN_RANGE,
+                PreconditionErrorKind.INDEX_OUT_OF_BOUNDS,
+                1,
+                ValueTestInvalidPreconditionValue.LANE_COUNT,
+            ),
+            semantics_module._serialize_value_test_checked_precondition(
+                ValueTestCheckedPrecondition(
+                    PreconditionKind.LANE_INDEX_IN_RANGE,
+                    PreconditionErrorKind.INDEX_OUT_OF_BOUNDS,
+                    1,
+                    ValueTestInvalidPreconditionValue.LANE_COUNT,
+                )
             ),
         ),
         (

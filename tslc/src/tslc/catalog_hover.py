@@ -16,6 +16,7 @@ from tslc.catalog.conversion import (
 )
 from tslc.catalog.memory import MEMORY_ACCESS_DESCRIPTIONS, MEMORY_ADDRESSING_DESCRIPTIONS
 from tslc.catalog.model import Catalog, Primitive
+from tslc.catalog.preconditions import PRECONDITION_DESCRIPTORS
 from tslc.catalog.semantics import OPERAND_ROLE_DESCRIPTIONS, PRIMITIVE_OPERATION_DESCRIPTIONS
 from tslc.catalog.shift import SHIFT_COUNT_RULE_DESCRIPTIONS, SHIFT_LANE_RULE_DESCRIPTIONS
 from tslc.catalog_index_model import SymbolKind, sorted_spans
@@ -136,6 +137,26 @@ def hover_text(
         if spec.numeric_domain is not None:
             facts.append(f"**Numeric domain:** `{spec.numeric_domain.value}`")
         hover[("arithmetic-guarantee", guarantee.value)] = "\n\n".join(facts)
+    for kind, precondition_descriptor in PRECONDITION_DESCRIPTORS.items():
+        facts = [
+            f"**Primitive precondition** `{kind.value}`",
+            precondition_descriptor.description,
+            f"**Hazard:** `{precondition_descriptor.hazard.value}`",
+            "**Required operand roles:** "
+            + _inline_code(
+                sorted(role.value for role in precondition_descriptor.required_roles)
+            ),
+            "**Compatible operations:** "
+            + _inline_code(
+                sorted(
+                    operation.value
+                    for operation in precondition_descriptor.compatible_operations
+                )
+            ),
+            "**Unchecked consequence:** "
+            f"{precondition_descriptor.unchecked_consequence}",
+        ]
+        hover[("precondition", kind.value)] = "\n\n".join(facts)
     semantic_descriptions: tuple[
         tuple[SymbolKind, str, Iterable[tuple[object, str]]], ...
     ] = (

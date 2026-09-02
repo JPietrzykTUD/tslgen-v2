@@ -793,6 +793,7 @@ prim<s:=(v,usize)> extract_value_at(data, index):
   operand_roles:
     primary data
     index index
+  preconditions [lane_index_in_range]
   brief_description "Returns the scalar lane value at a valid runtime index."
   detailed_description """
     Extracts one scalar lane from a vector register at a runtime index. The
@@ -846,13 +847,13 @@ prim<s:=(v,usize)> extract_value_at(data, index):
           sve [sve]
           wasm128 [simd128]
         safety:
-          internal_unsafe false
+          internal_unsafe true
           caller_unsafe false
-          reasons []
+          reasons [unchecked_index]
         implementation:
           tsil """
             var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
-            complete(lanes[index]);
+            complete(helper<lane_get_unchecked>(lanes, index));
           """
 
 prim<v:=(v,usize,s)> insert_value_at(data, index, value):
@@ -861,6 +862,7 @@ prim<v:=(v,usize,s)> insert_value_at(data, index, value):
     primary data
     index index
     value value
+  preconditions [lane_index_in_range]
   brief_description "Returns the vector with one valid runtime-indexed lane replaced."
   detailed_description """
     Returns a vector equal to `data` except that the lane at the runtime index
@@ -917,12 +919,14 @@ prim<v:=(v,usize,s)> insert_value_at(data, index, value):
           sve [sve]
           wasm128 [simd128]
         safety:
-          internal_unsafe false
+          internal_unsafe true
           caller_unsafe false
-          reasons []
+          reasons [unchecked_index]
         implementation:
           tsil """
             var<infer>(lanes, call<primitive=to_array[Vec]>(data));
-            array<set>(lanes, index, value);
+            helper<lane_set_unchecked>(
+              address<borrow_mut>(lanes), index, value
+            );
             complete(call<primitive=from_array[Vec]>(lanes));
           """

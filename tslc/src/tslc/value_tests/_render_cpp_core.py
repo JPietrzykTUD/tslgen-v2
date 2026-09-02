@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tslc.catalog.preconditions import PreconditionErrorKind
+from tslc.value_tests.case_components import ValueTestInvalidPreconditionValue
 from tslc.value_tests.literals import cpp_literal, cpp_literal_list
 from tslc.value_tests.model import ValueTestCasePlan
 from tslc.value_tests.render_cpp_helpers import (
@@ -95,6 +97,38 @@ def _compile_only(case: ValueTestCasePlan) -> str:
         lines.append("  (void)result;")
     lines.append("  return 0;")
     lines.append("}")
+    return "\n".join(lines)
+
+
+def _checked_precondition(case: ValueTestCasePlan) -> str:
+    checked = case.checked_precondition
+    assert checked is not None
+    lines = [
+        f"int {case.function_name}() {{",
+        f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",
+    ]
+    args = _append_call_args(lines, case)
+    args[checked.parameter_index] = {
+        ValueTestInvalidPreconditionValue.LANE_COUNT: "Vec::lane_count()",
+        ValueTestInvalidPreconditionValue.SIZE_MAX: (
+            "std::numeric_limits<std::size_t>::max()"
+        ),
+    }[checked.invalid_value]
+    error = {
+        PreconditionErrorKind.INDEX_OUT_OF_BOUNDS: (
+            "tsl::precondition_error::index_out_of_bounds"
+        ),
+    }[checked.error]
+    lines.extend(
+        (
+            "  tsl::precondition_error error = tsl::precondition_error::none;",
+            f"  auto result = tsl::{case.call_name}_checked<Vec>("
+            f"{', '.join((*args, 'error'))});",
+            "  (void)result;",
+            f"  return error == {error} ? 0 : 1;",
+            "}",
+        )
+    )
     return "\n".join(lines)
 
 
@@ -333,6 +367,7 @@ __all__ = (
     "_mask_to_vector",
     "_immediate",
     "_compile_only",
+    "_checked_precondition",
     "_runtime_failure",
     "_scalable_runtime_failure",
     "_array_to_vector",

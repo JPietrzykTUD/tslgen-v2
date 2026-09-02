@@ -692,6 +692,7 @@ def _primitive_explorer_payload(
             {
                 "name": primitive.name,
                 "signatures": list(primitive.signatures),
+                "preconditions": list(primitive.preconditions),
                 "definitions": [
                     _location_payload(span, workspace, texts)
                     for span in primitive.definitions
