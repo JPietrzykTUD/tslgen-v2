@@ -1,0 +1,3497 @@
+{
+  "version": 1,
+  "policy": {
+    "checked_suffix": "_checked",
+    "eligibility": "catastrophic dynamic caller precondition; complete pre-side-effect check must be expressible from the checked signature",
+    "cpp_value_result": "direct value return plus final precondition_error& output",
+    "cpp_void_result": "nodiscard precondition_error return",
+    "rust_value_result": "Result<T, PreconditionError>",
+    "rust_void_result": "Result<(), PreconditionError>",
+    "unchecked_rust": "unsafe fn when violating the caller contract can cause UB",
+    "failure_value": "initialized backend-owned placeholder with no TSL-defined value; the ordinary operation is not invoked"
+  },
+  "abi_evidence": {
+    "environment": "x86-64 System V",
+    "gcc": "GCC 15.2.0",
+    "clang": "Clang 21.1.8",
+    "msvc": "not available in the Slice 0 Linux environment",
+    "raw_return": "value returned in ymm0; no value-result memory output",
+    "chosen_return": "value returned in ymm0; scalar error written through rdi",
+    "aggregate_return": "hidden result pointer in rdi; vector value written to memory",
+    "status_with_value_output": "status returned in eax; vector value written through rdi",
+    "optimized_inline_call": "immediately consumed vector result did not materialize on the stack"
+  },
+  "validation_limits": {
+    "all_profile_rust_render": "not a valid census input: the current all-profile Rust request reports TSL-BACKEND-RUST-AMBIGUOUS-TARGET-PROFILES before artifact rendering",
+    "census_strategy": "scan canonical source bodies, render assets, and emitters; obtain public caller-safety identities from the validated typed catalog"
+  },
+  "families": [
+    {
+      "id": "tooling_only",
+      "classification": "tooling-only validation",
+      "backend_consequence": "Failure is confined to generated tests, builds, documentation stubs, or benchmarks.",
+      "checked_feasibility": "not applicable",
+      "review": "It is not part of a generated runtime API contract."
+    },
+    {
+      "id": "static_representation_or_lane_shape",
+      "classification": "static well-formedness constraint",
+      "backend_consequence": "C++ or Rust currently diagnoses an impossible compiler-selected representation at runtime.",
+      "checked_feasibility": "no checked twin; validate statically",
+      "review": "Sizes, lane counts, and mask-storage capacity are compiler-owned specialization facts."
+    },
+    {
+      "id": "static_immediate_nonzero",
+      "classification": "static well-formedness constraint",
+      "backend_consequence": "Rust emits a const assertion; invalid authored immediates do not reach a call.",
+      "checked_feasibility": "no checked twin; keep a compile-time diagnostic",
+      "review": "The operand is an immediate rather than caller-controlled runtime data."
+    },
+    {
+      "id": "integer_zero_divisor",
+      "classification": "dynamic precondition",
+      "backend_consequence": "C++ throws or traps and Rust panics in the current generated implementation.",
+      "checked_feasibility": "complete for runtime integer division/remainder; check active divisor lanes",
+      "review": "Floating-point zero remains valid and masked forms inspect active lanes only."
+    },
+    {
+      "id": "lane_index",
+      "classification": "dynamic precondition",
+      "backend_consequence": "Rust facade calls panic today; an unchecked C++ or Rust primitive may access outside its logical lanes.",
+      "checked_feasibility": "complete from the runtime index and typed logical lane count",
+      "review": "Total operations such as test_imask remain excluded when out-of-range has defined semantics."
+    },
+    {
+      "id": "contiguous_extent",
+      "classification": "dynamic precondition",
+      "backend_consequence": "Rust slice facades panic when a contiguous input or output is too short.",
+      "checked_feasibility": "complete with a valid slice/span signature; not honest for a bare pointer",
+      "review": "The checked signature must establish an addressable extent."
+    },
+    {
+      "id": "algorithm_equal_extents",
+      "classification": "dynamic precondition",
+      "backend_consequence": "Rust generated algorithms panic when related slices have different extents.",
+      "checked_feasibility": "complete from the checked algorithm's slice arguments",
+      "review": "All extents can be compared before dispatch or output writes."
+    },
+    {
+      "id": "algorithm_output_capacity",
+      "classification": "dynamic precondition",
+      "backend_consequence": "Rust generated algorithms panic when an output/index buffer is too short.",
+      "checked_feasibility": "complete from the checked algorithm's input and output slices",
+      "review": "Capacity can be checked before the raw kernel performs a write."
+    },
+    {
+      "id": "algorithm_mask_capacity",
+      "classification": "dynamic precondition",
+      "backend_consequence": "Rust generated algorithms panic when mask storage cannot cover the input.",
+      "checked_feasibility": "complete from the input extent, mask layout, lane count, and mask slice",
+      "review": "The finalized algorithm plan already owns these facts."
+    },
+    {
+      "id": "algorithm_selected_index",
+      "classification": "dynamic precondition",
+      "backend_consequence": "Rust generated algorithms panic when a selected row index is outside the input.",
+      "checked_feasibility": "complete by validating every selected index before kernel dispatch",
+      "review": "The check requires a valid index slice and input extent."
+    },
+    {
+      "id": "implementation_exhaustiveness",
+      "classification": "implementation hazard",
+      "backend_consequence": "Rust panics if compiler-selected scalar cast types escape the supported closed set.",
+      "checked_feasibility": "no checked twin; repair typed validation/exhaustiveness",
+      "review": "This is a compiler/backend defect if reachable, not invalid caller data."
+    },
+    {
+      "id": "implementation_invariant",
+      "classification": "implementation hazard",
+      "backend_consequence": "A debug assertion or unwrap fails if an internal compiler-owned invariant is broken.",
+      "checked_feasibility": "no checked twin; retain or replace with compiler validation",
+      "review": "The condition is not part of the public call domain."
+    },
+    {
+      "id": "contiguous_memory_contract",
+      "classification": "dynamic precondition",
+      "backend_consequence": "Raw C++ pointers remain unchecked; Rust public exposure must be unsafe until a safe slice wrapper discharges the contract.",
+      "checked_feasibility": "requires a span/slice carrying readable or writable extent and selected alignment",
+      "review": "A pointer and caller-claimed count cannot establish lifetime or provenance."
+    },
+    {
+      "id": "mask_memory_contract",
+      "classification": "dynamic precondition",
+      "backend_consequence": "Raw mask representation loads/stores have the same pointer hazard plus layout-dependent capacity.",
+      "checked_feasibility": "requires a span/slice and a typed mask-layout capacity plan",
+      "review": "Packed and lane-mask representations require different element counts."
+    },
+    {
+      "id": "selected_memory_contract",
+      "classification": "dynamic precondition",
+      "backend_consequence": "Expand/compress operations may access a mask-dependent number of elements.",
+      "checked_feasibility": "requires a range plus capacity derived from the active mask",
+      "review": "Validation must precede any compress-store output write."
+    },
+    {
+      "id": "indexed_memory_contract",
+      "classification": "dynamic precondition",
+      "backend_consequence": "Gather/scatter paths may access invalid addresses for active indices.",
+      "checked_feasibility": "requires a valid base view, extent, typed scale, and active-index validation",
+      "review": "Bare pointers do not provide enough evidence for an honest checked twin."
+    },
+    {
+      "id": "deallocation_provenance",
+      "classification": "dynamic precondition",
+      "backend_consequence": "Mismatched, dead, or foreign allocation provenance can cause undefined behavior.",
+      "checked_feasibility": "no honest pointer-only checked twin; design an owning allocation API separately",
+      "review": "A runtime pointer inspection cannot prove matching live allocation provenance."
+    },
+    {
+      "id": "random_output_contract",
+      "classification": "dynamic precondition",
+      "backend_consequence": "The random-step intrinsic writes through a raw output pointer on success.",
+      "checked_feasibility": "requires a mutable reference/view, or an owning optional/result value API",
+      "review": "The current status result does not establish output pointer validity."
+    },
+    {
+      "id": "raw_copy_contract",
+      "classification": "dynamic precondition",
+      "backend_consequence": "Invalid ranges or prohibited overlap can cause undefined behavior or corruption.",
+      "checked_feasibility": "requires valid source/destination views plus an explicit overlap contract/check",
+      "review": "Omit the twin unless every range and overlap obligation is represented."
+    },
+    {
+      "id": "conversion_input_contract",
+      "classification": "dynamic precondition",
+      "backend_consequence": "Widening loads read multiple source elements through a raw pointer.",
+      "checked_feasibility": "requires a source span/slice with the lowering-resolved element count",
+      "review": "The result-target relationship determines the exact required source extent."
+    }
+  ],
+  "declaration_digests": {
+    "tslc/tests/fixtures/checked_api/cpp_declarations.snap": "c169448a749ec24aec1fad506862e89058b168b6251db9e0d3eb0571e447567a",
+    "tslc/tests/fixtures/checked_api/rust_declarations.snap": "c582eb98aaa07166b7ef7d30c39549d93f0e7aa52bd074ccad515013a9f30bcf"
+  },
+  "runtime_sites": [
+    {
+      "id": "tslc/src/tslc/backend/assets/cpp_benchmark.cpp.tmpl|if|throw|2a43af56d77de3e3|0",
+      "path": "tslc/src/tslc/backend/assets/cpp_benchmark.cpp.tmpl",
+      "owner": "if",
+      "kind": "throw",
+      "excerpt": "throw std::runtime_error(\"--threshold must be in [0, 1)\");",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/cpp_benchmark.cpp.tmpl|if|throw|6ca91cd018bdab59|0",
+      "path": "tslc/src/tslc/backend/assets/cpp_benchmark.cpp.tmpl",
+      "owner": "if",
+      "kind": "throw",
+      "excerpt": "throw std::runtime_error(\"unknown benchmark option: \" + argument);",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/cpp_benchmark.cpp.tmpl|if|throw|846ff68f81d6f66a|0",
+      "path": "tslc/src/tslc/backend/assets/cpp_benchmark.cpp.tmpl",
+      "owner": "if",
+      "kind": "throw",
+      "excerpt": "throw std::runtime_error(\"--rounds must be at least 3\");",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/cpp_benchmark.cpp.tmpl|main|throw|ff84368966d365bc|0",
+      "path": "tslc/src/tslc/backend/assets/cpp_benchmark.cpp.tmpl",
+      "owner": "main",
+      "kind": "throw",
+      "excerpt": "throw std::runtime_error(\"--render-policy requires --policy-header\");",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/cpp_benchmark.cpp.tmpl|output|throw|e47ae963f32b325c|0",
+      "path": "tslc/src/tslc/backend/assets/cpp_benchmark.cpp.tmpl",
+      "owner": "output",
+      "kind": "throw",
+      "excerpt": "throw std::runtime_error(\"cannot open results output\");",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/cpp_benchmark.cpp.tmpl|parse_options|throw|4fceb7c86b74dee9|0",
+      "path": "tslc/src/tslc/backend/assets/cpp_benchmark.cpp.tmpl",
+      "owner": "parse_options",
+      "kind": "throw",
+      "excerpt": "throw std::runtime_error(\"missing value for \" + argument);",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/cpp_benchmark.cpp.tmpl|read_policy|throw|34182fcd352dfe98|0",
+      "path": "tslc/src/tslc/backend/assets/cpp_benchmark.cpp.tmpl",
+      "owner": "read_policy",
+      "kind": "throw",
+      "excerpt": "throw std::runtime_error(\"variant policy has missing or unexpected decisions\");",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/cpp_benchmark.cpp.tmpl|read_policy|throw|e4b6efd7b099193b|0",
+      "path": "tslc/src/tslc/backend/assets/cpp_benchmark.cpp.tmpl",
+      "owner": "read_policy",
+      "kind": "throw",
+      "excerpt": "throw std::runtime_error( \"variant policy does not match this manifest, compiler context, and CPU\");",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/cpp_benchmark.cpp.tmpl|render_policy_header|throw|1e2cb86e4a858bae|0",
+      "path": "tslc/src/tslc/backend/assets/cpp_benchmark.cpp.tmpl",
+      "owner": "render_policy_header",
+      "kind": "throw",
+      "excerpt": "throw std::runtime_error(\"policy contains an unknown specialization or candidate: \" + decision.stable_id + \"/\" + decision.selected);",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/rust_benchmark.rs.tmpl|cross_target_build_is_not_native|assert|ba16c4eeba78933b|0",
+      "path": "tslc/src/tslc/backend/assets/rust_benchmark.rs.tmpl",
+      "owner": "cross_target_build_is_not_native",
+      "kind": "assert",
+      "excerpt": "assert!(!super::native_build_matches( \"x86_64-unknown-linux-gnu\", \"aarch64-unknown-linux-gnu\", ));",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/rust_benchmark_main.rs.tmpl|file_scope|panic|796a6ca3443c92a6|0",
+      "path": "tslc/src/tslc/backend/assets/rust_benchmark_main.rs.tmpl",
+      "owner": "file_scope",
+      "kind": "panic",
+      "excerpt": "panic!(\"TSL_RUST_VARIANT_POLICY_FILE must be unset for benchmark targets\");",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/rust_build.rs|command_verbose_version|panic|239cd58ea472602e|0",
+      "path": "tslc/src/tslc/backend/assets/rust_build.rs",
+      "owner": "command_verbose_version",
+      "kind": "panic",
+      "excerpt": "panic!(\"{label} --version --verbose failed while capturing the benchmark tune context\");",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/rust_build.rs|command_verbose_version|panic|45ab47c9fcbae893|0",
+      "path": "tslc/src/tslc/backend/assets/rust_build.rs",
+      "owner": "command_verbose_version",
+      "kind": "panic",
+      "excerpt": "panic!(\"{label} --version --verbose did not produce UTF-8\")",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/rust_build.rs|command_verbose_version|panic|d1a26b7f439ee848|0",
+      "path": "tslc/src/tslc/backend/assets/rust_build.rs",
+      "owner": "command_verbose_version",
+      "kind": "panic",
+      "excerpt": "panic!(\"cannot execute {label} to capture the benchmark tune context: {error}\")",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/rust_build.rs|emit|panic|4daf76f6d098ff75|0",
+      "path": "tslc/src/tslc/backend/assets/rust_build.rs",
+      "owner": "emit",
+      "kind": "panic",
+      "excerpt": "panic!(\"benchmark tune-context value {} contains a newline\", name);",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/rust_build.rs|force_context_revalidation|panic|0d9dd406c0db8f97|0",
+      "path": "tslc/src/tslc/backend/assets/rust_build.rs",
+      "owner": "force_context_revalidation",
+      "kind": "panic",
+      "excerpt": "panic!( \"cannot inspect reserved Rust context revalidation path {}: {error}\", sentinel.display() )",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/rust_build.rs|force_context_revalidation|panic|5d5e944d86e80f70|0",
+      "path": "tslc/src/tslc/backend/assets/rust_build.rs",
+      "owner": "force_context_revalidation",
+      "kind": "panic",
+      "excerpt": "panic!(\"Rust context revalidation path cannot contain line breaks\");",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/rust_build.rs|force_context_revalidation|panic|a87732cef968a906|0",
+      "path": "tslc/src/tslc/backend/assets/rust_build.rs",
+      "owner": "force_context_revalidation",
+      "kind": "panic",
+      "excerpt": "panic!( \"reserved Rust context revalidation path {} must remain absent\", sentinel.display() )",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/rust_build.rs|main|panic|427c1cdae91247e8|0",
+      "path": "tslc/src/tslc/backend/assets/rust_build.rs",
+      "owner": "main",
+      "kind": "panic",
+      "excerpt": "panic!(\"Rust variant policy validation failed: {error}\")",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/rust_build.rs|main|panic|974f032c6c3cf761|0",
+      "path": "tslc/src/tslc/backend/assets/rust_build.rs",
+      "owner": "main",
+      "kind": "panic",
+      "excerpt": "panic!(\"Rust authored-default mapping failed: {error}\")",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/rust_build.rs|required|panic|2e5218bfa893ddd2|0",
+      "path": "tslc/src/tslc/backend/assets/rust_build.rs",
+      "owner": "required",
+      "kind": "panic",
+      "excerpt": "panic!(\"Cargo did not provide {}\", name)",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/rust_dispatch.rs.tmpl|transform_binary|assert_eq|2cedc026812f47e9|0",
+      "path": "tslc/src/tslc/backend/assets/rust_dispatch.rs.tmpl",
+      "owner": "transform_binary",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), right.len(), \"runtime transform_binary requires equally sized inputs\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/rust_dispatch.rs.tmpl|transform_binary|assert_eq|5a7a71d6277567d5|0",
+      "path": "tslc/src/tslc/backend/assets/rust_dispatch.rs.tmpl",
+      "owner": "transform_binary",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), output.len(), \"runtime transform_binary requires equally sized input and output\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/rust_dispatch_external_test.rs.tmpl|explicit_and_convenience_dispatch_match|assert_eq|566c0e3442245b08|0",
+      "path": "tslc/src/tslc/backend/assets/rust_dispatch_external_test.rs.tmpl",
+      "owner": "explicit_and_convenience_dispatch_match",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!(convenient, explicit);",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/rust_dispatch_external_test.rs.tmpl|explicit_and_convenience_dispatch_match|assert_eq|beb5fbf96c5f49a9|0",
+      "path": "tslc/src/tslc/backend/assets/rust_dispatch_external_test.rs.tmpl",
+      "owner": "explicit_and_convenience_dispatch_match",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!(explicit, [9_i32; 8]);",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/rust_dispatch_external_test.rs.tmpl|mutable_user_operation_state_is_preserved|assert_eq|e635686ea7bfbc93|0",
+      "path": "tslc/src/tslc/backend/assets/rust_dispatch_external_test.rs.tmpl",
+      "owner": "mutable_user_operation_state_is_preserved",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!(output, [9_i32; 8]);",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/rust_dispatch_external_test.rs.tmpl|mutable_user_operation_state_is_preserved|assert|ce5a8bb8bb777928|0",
+      "path": "tslc/src/tslc/backend/assets/rust_dispatch_external_test.rs.tmpl",
+      "owner": "mutable_user_operation_state_is_preserved",
+      "kind": "assert",
+      "excerpt": "assert!(operation.applications > 0);",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/rust_facade.rs.tmpl|copy_to_slice|assert|cd12d4bb0d51e1de|0",
+      "path": "tslc/src/tslc/backend/assets/rust_facade.rs.tmpl",
+      "owner": "copy_to_slice",
+      "kind": "assert",
+      "excerpt": "assert!( destination.len() >= N, \"destination slice has {} elements but {N} are required\", destination.len() );",
+      "family": "contiguous_extent"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/rust_facade.rs.tmpl|from_slice|assert|bc54f414243f672c|0",
+      "path": "tslc/src/tslc/backend/assets/rust_facade.rs.tmpl",
+      "owner": "from_slice",
+      "kind": "assert",
+      "excerpt": "assert!( source.len() >= N, \"source slice has {} elements but {N} are required\", source.len() );",
+      "family": "contiguous_extent"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/rust_facade.rs.tmpl|lane|assert|6eaf02fddf124bd2|0",
+      "path": "tslc/src/tslc/backend/assets/rust_facade.rs.tmpl",
+      "owner": "lane",
+      "kind": "assert",
+      "excerpt": "assert!(index < N, \"lane index {index} is out of bounds for {N} lanes\");",
+      "family": "lane_index"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/rust_facade.rs.tmpl|set_lane|assert|6eaf02fddf124bd2|0",
+      "path": "tslc/src/tslc/backend/assets/rust_facade.rs.tmpl",
+      "owner": "set_lane",
+      "kind": "assert",
+      "excerpt": "assert!(index < N, \"lane index {index} is out of bounds for {N} lanes\");",
+      "family": "lane_index"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/rust_facade.rs.tmpl|set|assert|9585fc839ad48f48|0",
+      "path": "tslc/src/tslc/backend/assets/rust_facade.rs.tmpl",
+      "owner": "set",
+      "kind": "assert",
+      "excerpt": "assert!(index < N, \"mask index {index} is out of bounds for {N} lanes\");",
+      "family": "lane_index"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/rust_facade.rs.tmpl|test|assert|9585fc839ad48f48|0",
+      "path": "tslc/src/tslc/backend/assets/rust_facade.rs.tmpl",
+      "owner": "test",
+      "kind": "assert",
+      "excerpt": "assert!(index < N, \"mask index {index} is out of bounds for {N} lanes\");",
+      "family": "lane_index"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/rust_smoke.rs|smoke|assert|abe68d1f183fdad0|0",
+      "path": "tslc/src/tslc/backend/assets/rust_smoke.rs",
+      "owner": "smoke",
+      "kind": "assert",
+      "excerpt": "assert!(true);",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|aggregate_binary_raw|assert|7b082c760cd6673e|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "aggregate_binary_raw",
+      "kind": "assert",
+      "excerpt": "assert!( lanes > 0, \"tsl::algo::aggregate_binary requires a vector with at least one lane\", );",
+      "family": "static_representation_or_lane_shape"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|aggregate_binary|assert_eq|d7cf095cf7505d26|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "aggregate_binary",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::aggregate_binary requires left and right slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|aggregate_masked_binary|assert_eq|5452dad1d3bcb7de|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "aggregate_masked_binary",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::aggregate_masked_binary requires left and right slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|aggregate_masked_binary|assert|e571460fe5afc003|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "aggregate_masked_binary",
+      "kind": "assert",
+      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::aggregate_masked_binary requires enough mask chunks for the input\", );",
+      "family": "algorithm_mask_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|aggregate_masked_unary|assert|85514a649cfcbd5d|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "aggregate_masked_unary",
+      "kind": "assert",
+      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::aggregate_masked_unary requires enough mask chunks for the input\", );",
+      "family": "algorithm_mask_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|aggregate_selected_binary_scaled_raw|assert|a59ffd90bc9f7f41|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "aggregate_selected_binary_scaled_raw",
+      "kind": "assert",
+      "excerpt": "assert!( lanes > 0, \"tsl::algo::aggregate_selected_binary requires a vector with at least one lane\", );",
+      "family": "static_representation_or_lane_shape"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|aggregate_selected_binary|assert_eq|991b6f4ff51e34d8|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "aggregate_selected_binary",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::aggregate_selected_binary requires left and right slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|aggregate_selected_unary_scaled_raw|assert|f12921fac0b7b310|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "aggregate_selected_unary_scaled_raw",
+      "kind": "assert",
+      "excerpt": "assert!( lanes > 0, \"tsl::algo::aggregate_selected_unary requires a vector with at least one lane\", );",
+      "family": "static_representation_or_lane_shape"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|aggregate_unary_raw|assert|989a7a51ef0909fe|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "aggregate_unary_raw",
+      "kind": "assert",
+      "excerpt": "assert!( lanes > 0, \"tsl::algo::aggregate_unary requires a vector with at least one lane\", );",
+      "family": "static_representation_or_lane_shape"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|consume_binary_raw|assert|2e5d6b0573b68afc|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "consume_binary_raw",
+      "kind": "assert",
+      "excerpt": "assert!( lanes > 0, \"tsl::algo::consume_binary requires a vector with at least one lane\", );",
+      "family": "static_representation_or_lane_shape"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|consume_binary|assert_eq|536b9aabe950f85c|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "consume_binary",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::consume_binary requires left and right slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|consume_masked_binary|assert_eq|4463e6823d2f75e3|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "consume_masked_binary",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::consume_masked_binary requires left and right slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|consume_masked_binary|assert|c4d18c43e7b05c1c|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "consume_masked_binary",
+      "kind": "assert",
+      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::consume_masked_binary requires enough mask chunks for the input\", );",
+      "family": "algorithm_mask_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|consume_masked_unary|assert|40ff1b1eb2c3fc3e|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "consume_masked_unary",
+      "kind": "assert",
+      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::consume_masked_unary requires enough mask chunks for the input\", );",
+      "family": "algorithm_mask_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|consume_selected_binary_scaled_raw|assert|23afa8db4db42dc9|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "consume_selected_binary_scaled_raw",
+      "kind": "assert",
+      "excerpt": "assert!( lanes > 0, \"tsl::algo::consume_selected_binary requires a vector with at least one lane\", );",
+      "family": "static_representation_or_lane_shape"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|consume_selected_binary|assert_eq|ae7f0b44e7bdff46|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "consume_selected_binary",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::consume_selected_binary requires left and right slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|consume_selected_unary_scaled_raw|assert|1ebe8ea50fb992af|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "consume_selected_unary_scaled_raw",
+      "kind": "assert",
+      "excerpt": "assert!( lanes > 0, \"tsl::algo::consume_selected_unary requires a vector with at least one lane\", );",
+      "family": "static_representation_or_lane_shape"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|consume_unary_raw|assert|9021618cd8a9dd5b|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "consume_unary_raw",
+      "kind": "assert",
+      "excerpt": "assert!( lanes > 0, \"tsl::algo::consume_unary requires a vector with at least one lane\", );",
+      "family": "static_representation_or_lane_shape"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|count_binary|assert_eq|15fb2308716b0ad8|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "count_binary",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::count_binary requires left and right slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|count_masked_binary_mask_layout|assert_eq|806a2c9b99cdd323|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "count_masked_binary_mask_layout",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::count_masked_binary_mask_layout requires left and right slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|count_masked_binary_mask_layout|assert|5371df005e2a8bf1|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "count_masked_binary_mask_layout",
+      "kind": "assert",
+      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::count_masked_binary_mask_layout requires enough mask storage for the input\", );",
+      "family": "algorithm_mask_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|count_masked_binary|assert_eq|346c8f3d868e5e46|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "count_masked_binary",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::count_masked_binary requires left and right slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|count_masked_binary|assert|f30d2ac58a81c295|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "count_masked_binary",
+      "kind": "assert",
+      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::count_masked_binary requires enough mask chunks for the input\", );",
+      "family": "algorithm_mask_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|count_masked_unary_mask_layout|assert|f834503f621595f8|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "count_masked_unary_mask_layout",
+      "kind": "assert",
+      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::count_masked_unary_mask_layout requires enough mask storage for the input\", );",
+      "family": "algorithm_mask_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|count_masked_unary|assert|2627bd15309bff85|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "count_masked_unary",
+      "kind": "assert",
+      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::count_masked_unary requires enough mask chunks for the input\", );",
+      "family": "algorithm_mask_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|count_selected_binary|assert_eq|cecf9c07e77cc48d|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "count_selected_binary",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::count_selected_binary requires left and right slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|for_each_chunk_raw|assert|d23a82219d4650bc|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "for_each_chunk_raw",
+      "kind": "assert",
+      "excerpt": "assert!( lanes > 0, \"tsl::algo::for_each_chunk requires a vector with at least one lane\", );",
+      "family": "static_representation_or_lane_shape"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|lane_is_set|debug_assert|11ba74dffcc606a9|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "lane_is_set",
+      "kind": "debug_assert",
+      "excerpt": "debug_assert!(lane < <Self as IntegralMaskWord>::BITS);",
+      "family": "implementation_invariant"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|one_at|debug_assert|11ba74dffcc606a9|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "one_at",
+      "kind": "debug_assert",
+      "excerpt": "debug_assert!(lane < <Self as IntegralMaskWord>::BITS);",
+      "family": "implementation_invariant"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|predicate_binary_mask_layout|assert_eq|6050aecfe234c70e|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "predicate_binary_mask_layout",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::predicate_binary_mask_layout requires left and right slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|predicate_binary_mask_layout|assert|cbce3b8590163076|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "predicate_binary_mask_layout",
+      "kind": "assert",
+      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::predicate_binary_mask_layout requires enough mask storage for the input\", );",
+      "family": "algorithm_mask_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|predicate_binary|assert_eq|04406e982ab291f5|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "predicate_binary",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::predicate_binary requires left and right slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|predicate_binary|assert|099a528b05b062b0|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "predicate_binary",
+      "kind": "assert",
+      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::predicate_binary requires enough mask chunks for the input\", );",
+      "family": "algorithm_mask_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|predicate_unary_mask_layout|assert|a3ad901432be22b1|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "predicate_unary_mask_layout",
+      "kind": "assert",
+      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::predicate_unary_mask_layout requires enough mask storage for the input\", );",
+      "family": "algorithm_mask_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|predicate_unary|assert|45c1f62e231a113f|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "predicate_unary",
+      "kind": "assert",
+      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::predicate_unary requires enough mask chunks for the input\", );",
+      "family": "algorithm_mask_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_binary|assert_eq|d03ba37d30700c81|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "select_binary",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::select_binary requires left and right slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_binary|assert|107bcd7b2442a793|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "select_binary",
+      "kind": "assert",
+      "excerpt": "assert!( output.len() >= left.len(), \"tsl::algo::select_binary requires enough output slots for the input\", );",
+      "family": "algorithm_output_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_indices_binary|assert_eq|29ae892b717c7c3f|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "select_indices_binary",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::select_indices_binary requires left and right slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_indices_binary|assert|c84dcba75053d0df|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "select_indices_binary",
+      "kind": "assert",
+      "excerpt": "assert!( indices.len() >= left.len(), \"tsl::algo::select_indices_binary requires enough output slots for the input\", );",
+      "family": "algorithm_output_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_indices_unary|assert|7a783df0417e64c5|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "select_indices_unary",
+      "kind": "assert",
+      "excerpt": "assert!( indices.len() >= input.len(), \"tsl::algo::select_indices_unary requires enough output slots for the input\", );",
+      "family": "algorithm_output_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_binary_mask_layout|assert_eq|ed1c60dc0476e3db|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "select_masked_binary_mask_layout",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::select_masked_binary_mask_layout requires left and right slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_binary_mask_layout|assert|9b22e10c3bf52e77|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "select_masked_binary_mask_layout",
+      "kind": "assert",
+      "excerpt": "assert!( output.len() >= left.len(), \"tsl::algo::select_masked_binary_mask_layout requires enough output slots for the input\", );",
+      "family": "algorithm_output_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_binary_mask_layout|assert|d8fd1a65e8211833|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "select_masked_binary_mask_layout",
+      "kind": "assert",
+      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::select_masked_binary_mask_layout requires enough mask storage for the input\", );",
+      "family": "algorithm_mask_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_binary|assert_eq|13dcabdac7305287|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "select_masked_binary",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::select_masked_binary requires left and right slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_binary|assert|4ec9774b5016d864|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "select_masked_binary",
+      "kind": "assert",
+      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::select_masked_binary requires enough mask chunks for the input\", );",
+      "family": "algorithm_mask_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_binary|assert|e22b7ff07fe7abde|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "select_masked_binary",
+      "kind": "assert",
+      "excerpt": "assert!( output.len() >= left.len(), \"tsl::algo::select_masked_binary requires enough output slots for the input\", );",
+      "family": "algorithm_output_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_indices_binary_mask_layout|assert_eq|e4c032692ca0bff9|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "select_masked_indices_binary_mask_layout",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::select_masked_indices_binary_mask_layout requires left and right slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_indices_binary_mask_layout|assert|0f7ddc01f95678a9|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "select_masked_indices_binary_mask_layout",
+      "kind": "assert",
+      "excerpt": "assert!( indices.len() >= left.len(), \"tsl::algo::select_masked_indices_binary_mask_layout requires enough output slots for the input\", );",
+      "family": "algorithm_output_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_indices_binary_mask_layout|assert|75cb1b075809f807|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "select_masked_indices_binary_mask_layout",
+      "kind": "assert",
+      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::select_masked_indices_binary_mask_layout requires enough mask storage for the input\", );",
+      "family": "algorithm_mask_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_indices_binary|assert_eq|925e8f99c64d8ebc|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "select_masked_indices_binary",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::select_masked_indices_binary requires left and right slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_indices_binary|assert|5deb43f6445786a2|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "select_masked_indices_binary",
+      "kind": "assert",
+      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::select_masked_indices_binary requires enough mask chunks for the input\", );",
+      "family": "algorithm_mask_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_indices_binary|assert|ffe382c24e32ab0f|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "select_masked_indices_binary",
+      "kind": "assert",
+      "excerpt": "assert!( indices.len() >= left.len(), \"tsl::algo::select_masked_indices_binary requires enough output slots for the input\", );",
+      "family": "algorithm_output_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_indices_unary_mask_layout|assert|2cdf1a46fdffa9ff|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "select_masked_indices_unary_mask_layout",
+      "kind": "assert",
+      "excerpt": "assert!( indices.len() >= input.len(), \"tsl::algo::select_masked_indices_unary_mask_layout requires enough output slots for the input\", );",
+      "family": "algorithm_output_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_indices_unary_mask_layout|assert|89f2d89a18c3a15a|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "select_masked_indices_unary_mask_layout",
+      "kind": "assert",
+      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::select_masked_indices_unary_mask_layout requires enough mask storage for the input\", );",
+      "family": "algorithm_mask_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_indices_unary|assert|98fcf4c9d1ce3f94|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "select_masked_indices_unary",
+      "kind": "assert",
+      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::select_masked_indices_unary requires enough mask chunks for the input\", );",
+      "family": "algorithm_mask_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_indices_unary|assert|dbd736d7baee55ee|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "select_masked_indices_unary",
+      "kind": "assert",
+      "excerpt": "assert!( indices.len() >= input.len(), \"tsl::algo::select_masked_indices_unary requires enough output slots for the input\", );",
+      "family": "algorithm_output_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_unary_mask_layout|assert|78435670e98e622d|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "select_masked_unary_mask_layout",
+      "kind": "assert",
+      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::select_masked_unary_mask_layout requires enough mask storage for the input\", );",
+      "family": "algorithm_mask_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_unary_mask_layout|assert|bea01cf913eb6bdd|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "select_masked_unary_mask_layout",
+      "kind": "assert",
+      "excerpt": "assert!( output.len() >= input.len(), \"tsl::algo::select_masked_unary_mask_layout requires enough output slots for the input\", );",
+      "family": "algorithm_output_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_unary|assert|cfdd99145ab60e7f|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "select_masked_unary",
+      "kind": "assert",
+      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::select_masked_unary requires enough mask chunks for the input\", );",
+      "family": "algorithm_mask_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_unary|assert|d08860b168eb17bc|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "select_masked_unary",
+      "kind": "assert",
+      "excerpt": "assert!( output.len() >= input.len(), \"tsl::algo::select_masked_unary requires enough output slots for the input\", );",
+      "family": "algorithm_output_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_selected_indices_binary|assert_eq|7de94bf18bd27ddf|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "select_selected_indices_binary",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::select_selected_indices_binary requires left and right slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_selected_indices_binary|assert|7cdbaf75b16b1869|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "select_selected_indices_binary",
+      "kind": "assert",
+      "excerpt": "assert!( output_indices.len() >= input_indices.len(), \"tsl::algo::select_selected_indices_binary requires enough output slots for the selected rows\", );",
+      "family": "algorithm_output_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_selected_indices_unary|assert|98d2a7ed75b57e5c|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "select_selected_indices_unary",
+      "kind": "assert",
+      "excerpt": "assert!( output_indices.len() >= input_indices.len(), \"tsl::algo::select_selected_indices_unary requires enough output slots for the selected rows\", );",
+      "family": "algorithm_output_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_unary|assert|a8d74f82467ec4f5|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "select_unary",
+      "kind": "assert",
+      "excerpt": "assert!( output.len() >= input.len(), \"tsl::algo::select_unary requires enough output slots for the input\", );",
+      "family": "algorithm_output_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|selected_row_scale|assert|25facbb8a5372fa0|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "selected_row_scale",
+      "kind": "assert",
+      "excerpt": "assert!(scale > 0, \"tsl::algo selected-row scale must be nonzero\");",
+      "family": "static_immediate_nonzero"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_binary_raw|assert|efcd9e30c6585633|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "transform_binary_raw",
+      "kind": "assert",
+      "excerpt": "assert!( lanes > 0, \"tsl::algo::transform_binary requires a vector with at least one lane\", );",
+      "family": "static_representation_or_lane_shape"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_binary|assert_eq|1714df738866b817|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "transform_binary",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::transform_binary requires left and right slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_binary|assert_eq|72905fda8e60364c|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "transform_binary",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), output.len(), \"tsl::algo::transform_binary requires input and output slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_masked_binary_mask_layout|assert_eq|7c11b8723850398c|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "transform_masked_binary_mask_layout",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::transform_masked_binary_mask_layout requires left and right slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_masked_binary_mask_layout|assert_eq|b4360ea7f1aab97e|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "transform_masked_binary_mask_layout",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), output.len(), \"tsl::algo::transform_masked_binary_mask_layout requires input and output slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_masked_binary_mask_layout|assert|a79297786be220a9|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "transform_masked_binary_mask_layout",
+      "kind": "assert",
+      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::transform_masked_binary_mask_layout requires enough mask storage for the input\", );",
+      "family": "algorithm_mask_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_masked_binary|assert_eq|308790796fcc3f63|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "transform_masked_binary",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::transform_masked_binary requires left and right slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_masked_binary|assert_eq|c81c3390b6a1c928|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "transform_masked_binary",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), output.len(), \"tsl::algo::transform_masked_binary requires input and output slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_masked_binary|assert|613d8f26e0d556cc|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "transform_masked_binary",
+      "kind": "assert",
+      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::transform_masked_binary requires enough mask chunks for the input\", );",
+      "family": "algorithm_mask_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_masked_unary_mask_layout|assert_eq|59d8991db6e33c45|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "transform_masked_unary_mask_layout",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( input.len(), output.len(), \"tsl::algo::transform_masked_unary_mask_layout requires input and output slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_masked_unary_mask_layout|assert|58d18d68bbb5ec23|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "transform_masked_unary_mask_layout",
+      "kind": "assert",
+      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::transform_masked_unary_mask_layout requires enough mask storage for the input\", );",
+      "family": "algorithm_mask_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_masked_unary|assert_eq|fb641a0ffb78622b|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "transform_masked_unary",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( input.len(), output.len(), \"tsl::algo::transform_masked_unary requires input and output slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_masked_unary|assert|6fb4b02fe479a0dd|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "transform_masked_unary",
+      "kind": "assert",
+      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::transform_masked_unary requires enough mask chunks for the input\", );",
+      "family": "algorithm_mask_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_selected_binary_scaled_raw|assert|595dae8e3efbb61e|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "transform_selected_binary_scaled_raw",
+      "kind": "assert",
+      "excerpt": "assert!( lanes > 0, \"tsl::algo::transform_selected_binary requires a vector with at least one lane\", );",
+      "family": "static_representation_or_lane_shape"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_selected_binary|assert_eq|0ea82a3459e582c4|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "transform_selected_binary",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::transform_selected_binary requires left and right slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_selected_binary|assert|a1445353e88b3069|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "transform_selected_binary",
+      "kind": "assert",
+      "excerpt": "assert!( output.len() >= indices.len(), \"tsl::algo::transform_selected_binary requires enough output slots for the selected rows\", );",
+      "family": "algorithm_output_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_selected_unary_scaled_raw|assert|ff68601aea5a705f|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "transform_selected_unary_scaled_raw",
+      "kind": "assert",
+      "excerpt": "assert!( lanes > 0, \"tsl::algo::transform_selected_unary requires a vector with at least one lane\", );",
+      "family": "static_representation_or_lane_shape"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_selected_unary|assert|86322c5fcfed9b5c|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "transform_selected_unary",
+      "kind": "assert",
+      "excerpt": "assert!( output.len() >= indices.len(), \"tsl::algo::transform_selected_unary requires enough output slots for the selected rows\", );",
+      "family": "algorithm_output_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_unary_raw|assert|fe9af0de1aa58a7b|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "transform_unary_raw",
+      "kind": "assert",
+      "excerpt": "assert!( lanes > 0, \"tsl::algo::transform_unary requires a vector with at least one lane\", );",
+      "family": "static_representation_or_lane_shape"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_unary|assert_eq|da785403fb9b03ed|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "transform_unary",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( input.len(), output.len(), \"tsl::algo::transform_unary requires input and output slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_where_binary_mask_layout|assert_eq|109b785d35bff84b|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "transform_where_binary_mask_layout",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::transform_where_binary_mask_layout requires left and right slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_where_binary_mask_layout|assert_eq|a462ac4aa98da498|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "transform_where_binary_mask_layout",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), output.len(), \"tsl::algo::transform_where_binary_mask_layout requires input and output slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_where_binary_mask_layout|assert|aa26406deae0bdbd|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "transform_where_binary_mask_layout",
+      "kind": "assert",
+      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::transform_where_binary_mask_layout requires enough mask storage for the input\", );",
+      "family": "algorithm_mask_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_where_binary|assert_eq|05ff8e2b748bf634|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "transform_where_binary",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::transform_where_binary requires left and right slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_where_binary|assert_eq|11ff5b1d932b7913|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "transform_where_binary",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( left.len(), output.len(), \"tsl::algo::transform_where_binary requires input and output slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_where_binary|assert|6b98cfded8ca62b2|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "transform_where_binary",
+      "kind": "assert",
+      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::transform_where_binary requires enough mask chunks for the input\", );",
+      "family": "algorithm_mask_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_where_unary_mask_layout|assert_eq|6cc17f1f4f988d05|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "transform_where_unary_mask_layout",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( input.len(), output.len(), \"tsl::algo::transform_where_unary_mask_layout requires input and output slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_where_unary_mask_layout|assert|d342c37cfaaf8800|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "transform_where_unary_mask_layout",
+      "kind": "assert",
+      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::transform_where_unary_mask_layout requires enough mask storage for the input\", );",
+      "family": "algorithm_mask_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_where_unary|assert_eq|8d89e78def008211|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "transform_where_unary",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( input.len(), output.len(), \"tsl::algo::transform_where_unary requires input and output slices of equal length\", );",
+      "family": "algorithm_equal_extents"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_where_unary|assert|f4d578cde89654c7|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "transform_where_unary",
+      "kind": "assert",
+      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::transform_where_unary requires enough mask chunks for the input\", );",
+      "family": "algorithm_mask_capacity"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|validate_integral_mask_vector|assert|abb4d8f31cd6eb0b|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "validate_integral_mask_vector",
+      "kind": "assert",
+      "excerpt": "assert!( lanes <= <V::ImaskType as IntegralMaskWord>::BITS, \"{} requires an integral mask storage type with at least one bit per lane\", helper_name, );",
+      "family": "static_representation_or_lane_shape"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|validate_integral_mask_vector|assert|f5e8d48a2db3f183|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "validate_integral_mask_vector",
+      "kind": "assert",
+      "excerpt": "assert!( lanes > 0, \"{} requires a vector with at least one lane\", helper_name, );",
+      "family": "static_representation_or_lane_shape"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|validate_selected_indices|assert|d9aff6a73bee937e|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+      "owner": "validate_selected_indices",
+      "kind": "assert",
+      "excerpt": "assert!( index < input.len(), \"{} requires selected row ids to be valid element indexes\", helper_name, );",
+      "family": "algorithm_selected_index"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_benchmark_core.hpp|calibrate|throw|5c3bdb7ae5d482ca|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_benchmark_core.hpp",
+      "owner": "calibrate",
+      "kind": "throw",
+      "excerpt": "throw std::runtime_error(\"benchmark calibration exceeded iteration limit\");",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_benchmark_core.hpp|input|throw|0a2b6b3db2126174|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_benchmark_core.hpp",
+      "owner": "input",
+      "kind": "throw",
+      "excerpt": "throw std::runtime_error(\"cannot open policy file: \" + path);",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_benchmark_core.hpp|json_string_field|throw|4ea89559f8dd6415|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_benchmark_core.hpp",
+      "owner": "json_string_field",
+      "kind": "throw",
+      "excerpt": "throw std::runtime_error(\"policy is missing field '\" + field + \"'\");",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_benchmark_core.hpp|json_string_field|throw|9c094de44110b8f4|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_benchmark_core.hpp",
+      "owner": "json_string_field",
+      "kind": "throw",
+      "excerpt": "throw std::runtime_error(\"unterminated policy string field '\" + field + \"'\");",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_benchmark_core.hpp|json_string_field|throw|aa36d0dddee94404|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_benchmark_core.hpp",
+      "owner": "json_string_field",
+      "kind": "throw",
+      "excerpt": "throw std::runtime_error(\"policy field '\" + field + \"' has no value\");",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_benchmark_core.hpp|json_string_field|throw|c1730112e1e4606b|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_benchmark_core.hpp",
+      "owner": "json_string_field",
+      "kind": "throw",
+      "excerpt": "throw std::runtime_error(\"policy field '\" + field + \"' is not a string\");",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_benchmark_core.hpp|output|throw|1ed0168edb614340|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_benchmark_core.hpp",
+      "owner": "output",
+      "kind": "throw",
+      "excerpt": "throw std::runtime_error(\"cannot write benchmark artifact: \" + path);",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_benchmark_core.hpp|output|throw|41e67ee56ed3ad78|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_benchmark_core.hpp",
+      "owner": "output",
+      "kind": "throw",
+      "excerpt": "throw std::runtime_error(\"cannot finish benchmark artifact: \" + path);",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_benchmark_core.hpp|reducer_self_test|throw|3a15d0af1d2a675a|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_benchmark_core.hpp",
+      "owner": "reducer_self_test",
+      "kind": "throw",
+      "excerpt": "throw std::runtime_error(\"benchmark reducer self-test failed\");",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_benchmark_core.hpp|rotating_mask_bits|throw|4b394b7f3d3414d6|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_benchmark_core.hpp",
+      "owner": "rotating_mask_bits",
+      "kind": "throw",
+      "excerpt": "throw std::runtime_error(\"invalid compact-mask benchmark dimensions\");",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_benchmark_core.rs|json_escape|unwrap|768ddb73b8a45e55|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_benchmark_core.rs",
+      "owner": "json_escape",
+      "kind": "unwrap",
+      "excerpt": ".unwrap();",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_benchmark_policy.rs|render_policy_json|unwrap|768ddb73b8a45e55|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_benchmark_policy.rs",
+      "owner": "render_policy_json",
+      "kind": "unwrap",
+      "excerpt": ".unwrap();",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_benchmark_policy.rs|render_policy_json|unwrap|768ddb73b8a45e55|1",
+      "path": "tslc/src/tslc/backend/assets/tsl_benchmark_policy.rs",
+      "owner": "render_policy_json",
+      "kind": "unwrap",
+      "excerpt": ".unwrap();",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_benchmark_policy.rs|render_samples|unwrap|768ddb73b8a45e55|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_benchmark_policy.rs",
+      "owner": "render_samples",
+      "kind": "unwrap",
+      "excerpt": ".unwrap();",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_benchmark_policy.rs|render_summary|unwrap|768ddb73b8a45e55|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_benchmark_policy.rs",
+      "owner": "render_summary",
+      "kind": "unwrap",
+      "excerpt": ".unwrap();",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_benchmark_policy.rs|render_summary|unwrap|768ddb73b8a45e55|1",
+      "path": "tslc/src/tslc/backend/assets/tsl_benchmark_policy.rs",
+      "owner": "render_summary",
+      "kind": "unwrap",
+      "excerpt": ".unwrap();",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_benchmark_policy.rs|render_summary|unwrap|768ddb73b8a45e55|2",
+      "path": "tslc/src/tslc/backend/assets/tsl_benchmark_policy.rs",
+      "owner": "render_summary",
+      "kind": "unwrap",
+      "excerpt": ".unwrap();",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_benchmark_policy.rs|render_summary|unwrap|768ddb73b8a45e55|3",
+      "path": "tslc/src/tslc/backend/assets/tsl_benchmark_policy.rs",
+      "owner": "render_summary",
+      "kind": "unwrap",
+      "excerpt": ".unwrap();",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_benchmark_policy.rs|render_summary|unwrap|768ddb73b8a45e55|4",
+      "path": "tslc/src/tslc/backend/assets/tsl_benchmark_policy.rs",
+      "owner": "render_summary",
+      "kind": "unwrap",
+      "excerpt": ".unwrap();",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_benchmark_policy.rs|render_summary|unwrap|768ddb73b8a45e55|5",
+      "path": "tslc/src/tslc/backend/assets/tsl_benchmark_policy.rs",
+      "owner": "render_summary",
+      "kind": "unwrap",
+      "excerpt": ".unwrap();",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_benchmark_policy.rs|render_summary|unwrap|768ddb73b8a45e55|6",
+      "path": "tslc/src/tslc/backend/assets/tsl_benchmark_policy.rs",
+      "owner": "render_summary",
+      "kind": "unwrap",
+      "excerpt": ".unwrap();",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_benchmark_policy.rs|render_summary|unwrap|768ddb73b8a45e55|7",
+      "path": "tslc/src/tslc/backend/assets/tsl_benchmark_policy.rs",
+      "owner": "render_summary",
+      "kind": "unwrap",
+      "excerpt": ".unwrap();",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_benchmark_policy.rs|render_tune_context|unwrap|768ddb73b8a45e55|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_benchmark_policy.rs",
+      "owner": "render_tune_context",
+      "kind": "unwrap",
+      "excerpt": ".unwrap();",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_core.hpp|arith_zero_divisor_fail|throw|c9937bbea48530f0|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_core.hpp",
+      "owner": "arith_zero_divisor_fail",
+      "kind": "throw",
+      "excerpt": "throw std::domain_error(\"TSL_ARITH_INTEGER_ZERO_DIVISOR\");",
+      "family": "integer_zero_divisor"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_core.hpp|arith_zero_divisor_fail|trap|b375913dce9106f7|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_core.hpp",
+      "owner": "arith_zero_divisor_fail",
+      "kind": "trap",
+      "excerpt": "__builtin_trap();",
+      "family": "integer_zero_divisor"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_core.hpp|require_same_lanes|throw|8a50669413a63275|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_core.hpp",
+      "owner": "require_same_lanes",
+      "kind": "throw",
+      "excerpt": "throw std::invalid_argument( \"lane-preserving conversion requires equal source and target lane counts\" );",
+      "family": "static_representation_or_lane_shape"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_core.hpp|require_same_lanes|trap|b375913dce9106f7|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_core.hpp",
+      "owner": "require_same_lanes",
+      "kind": "trap",
+      "excerpt": "__builtin_trap();",
+      "family": "static_representation_or_lane_shape"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_core.rs|arith_zero_divisor_fail|panic|8bb4d1bee8cc89af|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_core.rs",
+      "owner": "arith_zero_divisor_fail",
+      "kind": "panic",
+      "excerpt": "panic!(\"TSL_ARITH_INTEGER_ZERO_DIVISOR\")",
+      "family": "integer_zero_divisor"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_core.rs|bit_cast|assert_eq|51144d90f8521bbf|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_core.rs",
+      "owner": "bit_cast",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());",
+      "family": "static_representation_or_lane_shape"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_core.rs|ostream_write|unwrap|cd6918d80f05076c|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_core.rs",
+      "owner": "ostream_write",
+      "kind": "unwrap",
+      "excerpt": ".unwrap()",
+      "family": "implementation_invariant"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_core.rs|reinterpret_unchecked|assert_eq|51144d90f8521bbf|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_core.rs",
+      "owner": "reinterpret_unchecked",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());",
+      "family": "static_representation_or_lane_shape"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_core.rs|require_same_lanes|assert_eq|e6c81f2c22bfe916|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_core.rs",
+      "owner": "require_same_lanes",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( source_lanes, target_lanes, \"lane-preserving conversion requires equal source and target lane counts\" );",
+      "family": "static_representation_or_lane_shape"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_core.rs|saturating_cast_value|panic|31bc5c2ea1c997c3|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_core.rs",
+      "owner": "saturating_cast_value",
+      "kind": "panic",
+      "excerpt": "panic!(\"unsupported saturating cast\")",
+      "family": "implementation_exhaustiveness"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_core.rs|saturating_from_f64|panic|31bc5c2ea1c997c3|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_core.rs",
+      "owner": "saturating_from_f64",
+      "kind": "panic",
+      "excerpt": "panic!(\"unsupported saturating cast\")",
+      "family": "implementation_exhaustiveness"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_core.rs|saturating_from_i128|panic|31bc5c2ea1c997c3|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_core.rs",
+      "owner": "saturating_from_i128",
+      "kind": "panic",
+      "excerpt": "panic!(\"unsupported saturating cast\")",
+      "family": "implementation_exhaustiveness"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_core.rs|saturating_from_u128|panic|31bc5c2ea1c997c3|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_core.rs",
+      "owner": "saturating_from_u128",
+      "kind": "panic",
+      "excerpt": "panic!(\"unsupported saturating cast\")",
+      "family": "implementation_exhaustiveness"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_core.rs|scalar_as_cast_value|panic|39705acd529a5916|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_core.rs",
+      "owner": "scalar_as_cast_value",
+      "kind": "panic",
+      "excerpt": "panic!(\"unsupported scalar-as cast\")",
+      "family": "implementation_exhaustiveness"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_rust_policy_json.rs|Err|expect|f647d570b2ec41dd|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_rust_policy_json.rs",
+      "owner": "Err",
+      "kind": "expect",
+      "excerpt": ".expect(\"JSON number spelling is ASCII\");",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_rust_policy_json.rs|string_segment|expect|340b74a9b3b503f3|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_rust_policy_json.rs",
+      "owner": "string_segment",
+      "kind": "expect",
+      "excerpt": ".expect(\"JSON string segment comes from validated UTF-8 input\")",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_rust_variant_policy_validation.rs|Err|unreachable|5100753e277f03e3|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_rust_variant_policy_validation.rs",
+      "owner": "Err",
+      "kind": "unreachable",
+      "excerpt": "unreachable!(\"descriptor status was validated\")",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/rust_documentation_api.py|documentation_free_function|unimplemented|4ceb0b06904fae95|0",
+      "path": "tslc/src/tslc/backend/rust_documentation_api.py",
+      "owner": "documentation_free_function",
+      "kind": "unimplemented",
+      "excerpt": "\" unimplemented!()\\n\"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/rust_documentation_api.py|documentation_overloaded_wrapper|unimplemented|4ceb0b06904fae95|0",
+      "path": "tslc/src/tslc/backend/rust_documentation_api.py",
+      "owner": "documentation_overloaded_wrapper",
+      "kind": "unimplemented",
+      "excerpt": "\" unimplemented!()\\n\"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/rust_documentation_api.py|documentation_wrapper|unimplemented|4ceb0b06904fae95|0",
+      "path": "tslc/src/tslc/backend/rust_documentation_api.py",
+      "owner": "documentation_wrapper",
+      "kind": "unimplemented",
+      "excerpt": "\" unimplemented!()\\n\"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/rust_signatures.py|_arithmetic_precondition|assert|be0ea5f280ac643f|0",
+      "path": "tslc/src/tslc/backend/rust_signatures.py",
+      "owner": "_arithmetic_precondition",
+      "kind": "assert",
+      "excerpt": "f\"const {{ assert!(({precondition.parameter_name} as \"",
+      "family": "static_immediate_nonzero"
+    },
+    {
+      "id": "tslc/src/tslc/benchmark/render_cpp.py|_render_policy_read|throw|898c346ad524f331|0",
+      "path": "tslc/src/tslc/benchmark/render_cpp.py",
+      "owner": "_render_policy_read",
+      "kind": "throw",
+      "excerpt": "throw std::runtime_error(\"policy has an unterminated decision for \" + std::string({stable_id}));",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/benchmark/render_cpp.py|_render_policy_read|throw|9c791dfed0063956|0",
+      "path": "tslc/src/tslc/benchmark/render_cpp.py",
+      "owner": "_render_policy_read",
+      "kind": "throw",
+      "excerpt": "throw std::runtime_error(\"policy selects an unavailable candidate for \" + std::string({stable_id}));",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/benchmark/render_cpp.py|_render_policy_read|throw|f364fd3ec9eb7931|0",
+      "path": "tslc/src/tslc/benchmark/render_cpp.py",
+      "owner": "_render_policy_read",
+      "kind": "throw",
+      "excerpt": "throw std::runtime_error(\"policy repeats a decision for \" + std::string({stable_id}));",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/benchmark/render_cpp.py|_render_policy_read|throw|f6f6f057e0c9eb04|0",
+      "path": "tslc/src/tslc/benchmark/render_cpp.py",
+      "owner": "_render_policy_read",
+      "kind": "throw",
+      "excerpt": "throw std::runtime_error(\"policy has no decision for \" + std::string({stable_id}));",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/benchmark/render_cpp_scenarios.py|_render_measure_dispatch|throw|e488fbbd8ed088b5|0",
+      "path": "tslc/src/tslc/benchmark/render_cpp_scenarios.py",
+      "owner": "_render_measure_dispatch",
+      "kind": "throw",
+      "excerpt": "default: throw std::runtime_error(\"invalid candidate index\");",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/render/rust_dispatch.py|_unit_tests|assert_eq|223b0cbecacb72ba|0",
+      "path": "tslc/src/tslc/render/rust_dispatch.py",
+      "owner": "_unit_tests",
+      "kind": "assert_eq",
+      "excerpt": "\" assert_eq!(ENTRY_CALLS.load(Ordering::SeqCst), 2);\",",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/render/rust_dispatch.py|_unit_tests|assert_eq|3203ddf3224ecd52|0",
+      "path": "tslc/src/tslc/render/rust_dispatch.py",
+      "owner": "_unit_tests",
+      "kind": "assert_eq",
+      "excerpt": "\" assert_eq!(HARDWARE_ENTRY_CALLS.load(Ordering::SeqCst), 0);\",",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/render/rust_dispatch.py|_unit_tests|assert_eq|600dc33d2da7c0fe|0",
+      "path": "tslc/src/tslc/render/rust_dispatch.py",
+      "owner": "_unit_tests",
+      "kind": "assert_eq",
+      "excerpt": "\" assert_eq!(SELECTION_CALLS.load(Ordering::SeqCst), 1);\",",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/render/rust_dispatch.py|_unit_tests|assert_eq|600dc33d2da7c0fe|1",
+      "path": "tslc/src/tslc/render/rust_dispatch.py",
+      "owner": "_unit_tests",
+      "kind": "assert_eq",
+      "excerpt": "\" assert_eq!(SELECTION_CALLS.load(Ordering::SeqCst), 1);\",",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/render/rust_dispatch.py|_unit_tests|assert_eq|77f2fc2d479b41aa|0",
+      "path": "tslc/src/tslc/render/rust_dispatch.py",
+      "owner": "_unit_tests",
+      "kind": "assert_eq",
+      "excerpt": "\" assert_eq!(output, [9 as TestElement; 8]);\",",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/render/rust_dispatch.py|_unit_tests|assert_eq|77f2fc2d479b41aa|1",
+      "path": "tslc/src/tslc/render/rust_dispatch.py",
+      "owner": "_unit_tests",
+      "kind": "assert_eq",
+      "excerpt": "\" assert_eq!(output, [9 as TestElement; 8]);\",",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/render/rust_dispatch.py|_unit_tests|assert_eq|937257ddf4fd8cc4|0",
+      "path": "tslc/src/tslc/render/rust_dispatch.py",
+      "owner": "_unit_tests",
+      "kind": "assert_eq",
+      "excerpt": "\" assert_eq!(detector.detect_calls, 1);\",",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/render/rust_dispatch.py|_unit_tests|assert_eq|937257ddf4fd8cc4|1",
+      "path": "tslc/src/tslc/render/rust_dispatch.py",
+      "owner": "_unit_tests",
+      "kind": "assert_eq",
+      "excerpt": "\" assert_eq!(detector.detect_calls, 1);\",",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/render/rust_dispatch.py|_unit_tests|assert_eq|e10cf6384927fe53|0",
+      "path": "tslc/src/tslc/render/rust_dispatch.py",
+      "owner": "_unit_tests",
+      "kind": "assert_eq",
+      "excerpt": "f\" assert_eq!(table.{field}, {entry.entry_index});\",",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/render/rust_dispatch.py|_unit_tests|expect|4a74e6ba204c27db|0",
+      "path": "tslc/src/tslc/render/rust_dispatch.py",
+      "owner": "_unit_tests",
+      "kind": "expect",
+      "excerpt": "' let _guard = TEST_LOCK.lock().expect(\"dispatch test lock\");',",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/render/rust_dispatch.py|_unit_tests|expect|4a74e6ba204c27db|1",
+      "path": "tslc/src/tslc/render/rust_dispatch.py",
+      "owner": "_unit_tests",
+      "kind": "expect",
+      "excerpt": "' let _guard = TEST_LOCK.lock().expect(\"dispatch test lock\");',",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/render/rust_dispatch.py|_unit_tests|expect|4a74e6ba204c27db|2",
+      "path": "tslc/src/tslc/render/rust_dispatch.py",
+      "owner": "_unit_tests",
+      "kind": "expect",
+      "excerpt": "' let _guard = TEST_LOCK.lock().expect(\"dispatch test lock\");',",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/render/rust_facade_comprehensive.py|_bounds_checks|assert|ed6f3aa7481369c6|0",
+      "path": "tslc/src/tslc/render/rust_facade_comprehensive.py",
+      "owner": "_bounds_checks",
+      "kind": "assert",
+      "excerpt": "f' assert!({_identifier(name)} < {lanes}, '",
+      "family": "lane_index"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_conversion.py|_convert|assert|0945f54a4ccd7ec7|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_conversion.py",
+      "owner": "_convert",
+      "kind": "assert",
+      "excerpt": "f\" for i in 0..{target_lanes} {{ assert!(result[i].lane_eq(expected[i]), \"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_conversion.py|_differential|assert_eq|93d7c52b276e46ab|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_conversion.py",
+      "owner": "_differential",
+      "kind": "assert_eq",
+      "excerpt": "f\" for i in 0..{case.lanes} {{ assert_eq!(\"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_conversion.py|_differential|assert|3f2312e90b33cfa9|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_conversion.py",
+      "owner": "_differential",
+      "kind": "assert",
+      "excerpt": "\" assert!(hw.lane_eq(reference), \"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_conversion.py|_differential|assert|5fbb52243fbf95d2|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_conversion.py",
+      "owner": "_differential",
+      "kind": "assert",
+      "excerpt": "f\" for i in 0..{case.lanes} {{ assert!(hw[i].{comparison}(reference[i]), \"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_conversion.py|_extension_extract|assert|df5e269c95f1d07f|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_conversion.py",
+      "owner": "_extension_extract",
+      "kind": "assert",
+      "excerpt": "f\" for i in 0..{out_lanes} {{ assert!(out[i].lane_eq(expected[i]), \"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_conversion.py|_extension_insert|assert|df5e269c95f1d07f|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_conversion.py",
+      "owner": "_extension_insert",
+      "kind": "assert",
+      "excerpt": "f\" for i in 0..{out_lanes} {{ assert!(out[i].lane_eq(expected[i]), \"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_conversion.py|_extension_result|assert|4e369e1c0e8f65e0|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_conversion.py",
+      "owner": "_extension_result",
+      "kind": "assert",
+      "excerpt": "f\" for i in 0..{expected_lanes} {{ assert!(out[i].lane_eq(expected[i]), \"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_conversion.py|_fixed_extension_load_convert|assert|5ea4048a04d8e54c|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_conversion.py",
+      "owner": "_fixed_extension_load_convert",
+      "kind": "assert",
+      "excerpt": "f\" for i in 0..{target_lanes} {{ assert!(out[i].lane_eq(expected[i]), \"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_conversion.py|_fixed_extension_repr_cast|assert|5ea4048a04d8e54c|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_conversion.py",
+      "owner": "_fixed_extension_repr_cast",
+      "kind": "assert",
+      "excerpt": "f\" for i in 0..{target_lanes} {{ assert!(out[i].lane_eq(expected[i]), \"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_conversion.py|_lane_convert|assert|526ad4f8e0fbb12b|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_conversion.py",
+      "owner": "_lane_convert",
+      "kind": "assert",
+      "excerpt": "f\" for i in 0..{case.lanes} {{ assert!(result[i].lane_eq(expected[i]), \"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_conversion.py|_load_convert|assert|0945f54a4ccd7ec7|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_conversion.py",
+      "owner": "_load_convert",
+      "kind": "assert",
+      "excerpt": "f\" for i in 0..{target_lanes} {{ assert!(result[i].lane_eq(expected[i]), \"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_conversion.py|_repr_cast|assert|0945f54a4ccd7ec7|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_conversion.py",
+      "owner": "_repr_cast",
+      "kind": "assert",
+      "excerpt": "f\" for i in 0..{target_lanes} {{ assert!(result[i].lane_eq(expected[i]), \"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_conversion.py|_target_imask|assert_eq|e833f45e8857a28c|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_conversion.py",
+      "owner": "_target_imask",
+      "kind": "assert_eq",
+      "excerpt": "f' assert_eq!(result, expected, \"{case.case_name}: expected {{:?}}, got {{:?}}\", expected, result);',",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_core.py|_generic_golden|assert_eq|efe409683456a3f7|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_core.py",
+      "owner": "_generic_golden",
+      "kind": "assert_eq",
+      "excerpt": "f\" for i in 0..{case.lanes} {{ assert_eq!(mask_bit(result as u64, i), \"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_core.py|_lane_assert|assert|84920b165ecd2a08|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_core.py",
+      "owner": "_lane_assert",
+      "kind": "assert",
+      "excerpt": "f\" for i in 0..{lanes} {{ assert!({result_name}[i].{comparison}(expected[i]), \"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_core.py|_mask_logic|assert_eq|928b98313b02418f|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_core.py",
+      "owner": "_mask_logic",
+      "kind": "assert_eq",
+      "excerpt": "f\" assert_eq!(mask_bit(result as u64, {lane}), {bit}, \"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_core.py|_mask_result|assert_eq|928b98313b02418f|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_core.py",
+      "owner": "_mask_result",
+      "kind": "assert_eq",
+      "excerpt": "f\" assert_eq!(mask_bit(result as u64, {lane}), {bit}, \"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_core.py|_mask_store|assert|3273be020477c5be|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_core.py",
+      "owner": "_mask_store",
+      "kind": "assert",
+      "excerpt": "f\" for i in 0..{buflen} {{ assert!(buf[i].lane_eq(expected[i]), \",",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_core.py|_reduction|assert|2bee125ff166d231|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_core.py",
+      "owner": "_reduction",
+      "kind": "assert",
+      "excerpt": "f\" assert!(result.lane_eq(expected), \"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_core.py|_runtime_failure|assert_eq|e3d7292d489ed5d8|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_core.py",
+      "owner": "_runtime_failure",
+      "kind": "assert_eq",
+      "excerpt": "f' assert_eq!(message, Some(\"{marker}\"), \"{case.case_name}: wrong panic payload\");',",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_core.py|_runtime_failure|panic|5d4f1422d56306d4|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_core.py",
+      "owner": "_runtime_failure",
+      "kind": "panic",
+      "excerpt": "f' Ok(_) => panic!(\"{case.case_name}: expected integer-zero-divisor panic\"),',",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_core.py|_scalar_result|assert|2bee125ff166d231|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_core.py",
+      "owner": "_scalar_result",
+      "kind": "assert",
+      "excerpt": "f\" assert!(result.lane_eq(expected), \"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_core.py|_status_pointer|assert_eq|16cd9bccc2c9c4ec|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_core.py",
+      "owner": "_status_pointer",
+      "kind": "assert_eq",
+      "excerpt": "f' assert_eq!(value, before, \"{case.case_name}: failure modified output\");',",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_core.py|_status_pointer|assert|5e69674064c6a804|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_core.py",
+      "owner": "_status_pointer",
+      "kind": "assert",
+      "excerpt": "f' assert!(status <= 1, \"{case.case_name}: invalid status {{status}}\");',",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_memory.py|_indexed_load|assert|40efc1f614896998|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_memory.py",
+      "owner": "_indexed_load",
+      "kind": "assert",
+      "excerpt": "f\" for i in 0..{lanes} {{ assert!(result[i].lane_eq(expected[i]), \"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_memory.py|_indexed_store|assert|fad58c4e0a9dd66e|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_memory.py",
+      "owner": "_indexed_store",
+      "kind": "assert",
+      "excerpt": "f\" for i in 0..{buflen} {{ assert!(data[i].lane_eq(expected[i]), \"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_memory.py|_load|assert|526ad4f8e0fbb12b|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_memory.py",
+      "owner": "_load",
+      "kind": "assert",
+      "excerpt": "f\" for i in 0..{case.lanes} {{ assert!(result[i].lane_eq(expected[i]), \"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_memory.py|_mask_pointer_load|assert_eq|928b98313b02418f|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_memory.py",
+      "owner": "_mask_pointer_load",
+      "kind": "assert_eq",
+      "excerpt": "f\" assert_eq!(mask_bit(result as u64, {lane}), {bit}, \"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_memory.py|_masked_pointer_load|assert|526ad4f8e0fbb12b|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_memory.py",
+      "owner": "_masked_pointer_load",
+      "kind": "assert",
+      "excerpt": "f\" for i in 0..{case.lanes} {{ assert!(result[i].lane_eq(expected[i]), \"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_memory.py|_masked_pointer_store|assert|09ce23a14e548206|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_memory.py",
+      "owner": "_masked_pointer_store",
+      "kind": "assert",
+      "excerpt": "f\" for i in 0..{buflen} {{ assert!(buf[i].lane_eq(expected[i]), \"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_memory.py|_memory_copy|assert|fde664ca2666106c|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_memory.py",
+      "owner": "_memory_copy",
+      "kind": "assert",
+      "excerpt": "f\" for i in 0..{dst_len} {{ assert!(dst[i].lane_eq(expected[i]), \"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_memory.py|_pointer_free|assert|067aa42b1d43e799|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_memory.py",
+      "owner": "_pointer_free",
+      "kind": "assert",
+      "excerpt": "f' assert!(!ptr.is_null(), \"{case.case_name}: setup allocation failed\");',",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_memory.py|_pointer_lifetime|assert_eq|41846f125379623e|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_memory.py",
+      "owner": "_pointer_lifetime",
+      "kind": "assert_eq",
+      "excerpt": "f\" assert_eq!((ptr as usize) % {alignment}usize, 0, \"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_memory.py|_pointer_lifetime|assert|8504760dcc31ab07|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_memory.py",
+      "owner": "_pointer_lifetime",
+      "kind": "assert",
+      "excerpt": "f' assert!(!ptr.is_null(), \"{case.case_name}: null pointer\");',",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_memory.py|_scalar_pointer_load|assert|2bee125ff166d231|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_memory.py",
+      "owner": "_scalar_pointer_load",
+      "kind": "assert",
+      "excerpt": "f\" assert!(result.lane_eq(expected), \"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_memory.py|_store|assert|09ce23a14e548206|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_memory.py",
+      "owner": "_store",
+      "kind": "assert",
+      "excerpt": "f\" for i in 0..{buflen} {{ assert!(buf[i].lane_eq(expected[i]), \"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_memory.py|_stream|assert_eq|a94e610bd5a2f378|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_memory.py",
+      "owner": "_stream",
+      "kind": "assert_eq",
+      "excerpt": "f\" assert_eq!(result.as_str(), {expected}, \\\"{case.case_name}\\\");\",",
+      "family": "tooling_only"
+    }
+  ],
+  "caller_unsafe_paths": [
+    {
+      "id": "{\"attributes\":[[\"aligned\",\"false\"],[\"mask\",\"pass_through\"]],\"name\":\"load\",\"result_target\":[],\"signature\":\"v:=(m,cptr,v)\"}",
+      "name": "load",
+      "signature": "v:=(m,cptr,v)",
+      "attributes": {
+        "aligned": "false",
+        "mask": "pass_through"
+      },
+      "result_target": [],
+      "reasons": [
+        "intrinsic",
+        "raw_pointer"
+      ],
+      "implementation_count": 24,
+      "family": "contiguous_memory_contract"
+    },
+    {
+      "id": "{\"attributes\":[[\"aligned\",\"false\"],[\"mask\",\"pass_through\"]],\"name\":\"store\",\"result_target\":[],\"signature\":\"void:=(m,ptr,v)\"}",
+      "name": "store",
+      "signature": "void:=(m,ptr,v)",
+      "attributes": {
+        "aligned": "false",
+        "mask": "pass_through"
+      },
+      "result_target": [],
+      "reasons": [
+        "intrinsic",
+        "raw_pointer"
+      ],
+      "implementation_count": 24,
+      "family": "contiguous_memory_contract"
+    },
+    {
+      "id": "{\"attributes\":[[\"aligned\",\"false\"],[\"mask\",\"zero\"]],\"name\":\"load\",\"result_target\":[],\"signature\":\"v:=(m,cptr)\"}",
+      "name": "load",
+      "signature": "v:=(m,cptr)",
+      "attributes": {
+        "aligned": "false",
+        "mask": "zero"
+      },
+      "result_target": [],
+      "reasons": [
+        "intrinsic",
+        "raw_pointer"
+      ],
+      "implementation_count": 24,
+      "family": "contiguous_memory_contract"
+    },
+    {
+      "id": "{\"attributes\":[[\"aligned\",\"false\"],[\"packed\",\"false\"]],\"name\":\"load_mask_repr\",\"result_target\":[],\"signature\":\"m:=cptr\"}",
+      "name": "load_mask_repr",
+      "signature": "m:=cptr",
+      "attributes": {
+        "aligned": "false",
+        "packed": "false"
+      },
+      "result_target": [],
+      "reasons": [
+        "raw_pointer"
+      ],
+      "implementation_count": 17,
+      "family": "mask_memory_contract"
+    },
+    {
+      "id": "{\"attributes\":[[\"aligned\",\"false\"],[\"packed\",\"false\"]],\"name\":\"store_mask_repr\",\"result_target\":[],\"signature\":\"void:=(ptr,m)\"}",
+      "name": "store_mask_repr",
+      "signature": "void:=(ptr,m)",
+      "attributes": {
+        "aligned": "false",
+        "packed": "false"
+      },
+      "result_target": [],
+      "reasons": [
+        "compiler_builtin",
+        "raw_memory",
+        "raw_pointer"
+      ],
+      "implementation_count": 17,
+      "family": "mask_memory_contract"
+    },
+    {
+      "id": "{\"attributes\":[[\"aligned\",\"false\"],[\"packed\",\"true\"]],\"name\":\"load_mask_repr\",\"result_target\":[],\"signature\":\"m:=cptr\"}",
+      "name": "load_mask_repr",
+      "signature": "m:=cptr",
+      "attributes": {
+        "aligned": "false",
+        "packed": "true"
+      },
+      "result_target": [],
+      "reasons": [
+        "raw_pointer"
+      ],
+      "implementation_count": 17,
+      "family": "mask_memory_contract"
+    },
+    {
+      "id": "{\"attributes\":[[\"aligned\",\"false\"],[\"packed\",\"true\"]],\"name\":\"store_mask_repr\",\"result_target\":[],\"signature\":\"void:=(ptr,m)\"}",
+      "name": "store_mask_repr",
+      "signature": "void:=(ptr,m)",
+      "attributes": {
+        "aligned": "false",
+        "packed": "true"
+      },
+      "result_target": [],
+      "reasons": [
+        "compiler_builtin",
+        "raw_memory",
+        "raw_pointer"
+      ],
+      "implementation_count": 17,
+      "family": "mask_memory_contract"
+    },
+    {
+      "id": "{\"attributes\":[[\"aligned\",\"false\"]],\"name\":\"load\",\"result_target\":[],\"signature\":\"v:=cptr\"}",
+      "name": "load",
+      "signature": "v:=cptr",
+      "attributes": {
+        "aligned": "false"
+      },
+      "result_target": [],
+      "reasons": [
+        "compiler_builtin",
+        "intrinsic",
+        "raw_memory",
+        "raw_pointer"
+      ],
+      "implementation_count": 22,
+      "family": "contiguous_memory_contract"
+    },
+    {
+      "id": "{\"attributes\":[[\"aligned\",\"false\"]],\"name\":\"load_scalar\",\"result_target\":[],\"signature\":\"s:=cptr\"}",
+      "name": "load_scalar",
+      "signature": "s:=cptr",
+      "attributes": {
+        "aligned": "false"
+      },
+      "result_target": [],
+      "reasons": [
+        "raw_pointer"
+      ],
+      "implementation_count": 15,
+      "family": "contiguous_memory_contract"
+    },
+    {
+      "id": "{\"attributes\":[[\"aligned\",\"false\"]],\"name\":\"store\",\"result_target\":[],\"signature\":\"void:=(ptr,s)\"}",
+      "name": "store",
+      "signature": "void:=(ptr,s)",
+      "attributes": {
+        "aligned": "false"
+      },
+      "result_target": [],
+      "reasons": [
+        "raw_pointer"
+      ],
+      "implementation_count": 14,
+      "family": "contiguous_memory_contract"
+    },
+    {
+      "id": "{\"attributes\":[[\"aligned\",\"false\"]],\"name\":\"store\",\"result_target\":[],\"signature\":\"void:=(ptr,v)\"}",
+      "name": "store",
+      "signature": "void:=(ptr,v)",
+      "attributes": {
+        "aligned": "false"
+      },
+      "result_target": [],
+      "reasons": [
+        "compiler_builtin",
+        "intrinsic",
+        "raw_memory",
+        "raw_pointer"
+      ],
+      "implementation_count": 26,
+      "family": "contiguous_memory_contract"
+    },
+    {
+      "id": "{\"attributes\":[[\"aligned\",\"true\"],[\"mask\",\"pass_through\"]],\"name\":\"load\",\"result_target\":[],\"signature\":\"v:=(m,cptr,v)\"}",
+      "name": "load",
+      "signature": "v:=(m,cptr,v)",
+      "attributes": {
+        "aligned": "true",
+        "mask": "pass_through"
+      },
+      "result_target": [],
+      "reasons": [
+        "intrinsic",
+        "raw_pointer"
+      ],
+      "implementation_count": 24,
+      "family": "contiguous_memory_contract"
+    },
+    {
+      "id": "{\"attributes\":[[\"aligned\",\"true\"],[\"mask\",\"pass_through\"]],\"name\":\"store\",\"result_target\":[],\"signature\":\"void:=(m,ptr,v)\"}",
+      "name": "store",
+      "signature": "void:=(m,ptr,v)",
+      "attributes": {
+        "aligned": "true",
+        "mask": "pass_through"
+      },
+      "result_target": [],
+      "reasons": [
+        "intrinsic",
+        "raw_pointer"
+      ],
+      "implementation_count": 24,
+      "family": "contiguous_memory_contract"
+    },
+    {
+      "id": "{\"attributes\":[[\"aligned\",\"true\"],[\"mask\",\"zero\"]],\"name\":\"load\",\"result_target\":[],\"signature\":\"v:=(m,cptr)\"}",
+      "name": "load",
+      "signature": "v:=(m,cptr)",
+      "attributes": {
+        "aligned": "true",
+        "mask": "zero"
+      },
+      "result_target": [],
+      "reasons": [
+        "intrinsic",
+        "raw_pointer"
+      ],
+      "implementation_count": 24,
+      "family": "contiguous_memory_contract"
+    },
+    {
+      "id": "{\"attributes\":[[\"aligned\",\"true\"],[\"op\",\"expand\"]],\"name\":\"expand_load\",\"result_target\":[],\"signature\":\"v:=(m,cptr)\"}",
+      "name": "expand_load",
+      "signature": "v:=(m,cptr)",
+      "attributes": {
+        "aligned": "true",
+        "op": "expand"
+      },
+      "result_target": [],
+      "reasons": [
+        "intrinsic",
+        "raw_pointer"
+      ],
+      "implementation_count": 20,
+      "family": "selected_memory_contract"
+    },
+    {
+      "id": "{\"attributes\":[[\"aligned\",\"true\"],[\"op\",\"pack\"]],\"name\":\"compress_store\",\"result_target\":[],\"signature\":\"void:=(m,ptr,v)\"}",
+      "name": "compress_store",
+      "signature": "void:=(m,ptr,v)",
+      "attributes": {
+        "aligned": "true",
+        "op": "pack"
+      },
+      "result_target": [],
+      "reasons": [
+        "intrinsic",
+        "raw_pointer"
+      ],
+      "implementation_count": 22,
+      "family": "selected_memory_contract"
+    },
+    {
+      "id": "{\"attributes\":[[\"aligned\",\"true\"],[\"packed\",\"false\"]],\"name\":\"load_mask_repr\",\"result_target\":[],\"signature\":\"m:=cptr\"}",
+      "name": "load_mask_repr",
+      "signature": "m:=cptr",
+      "attributes": {
+        "aligned": "true",
+        "packed": "false"
+      },
+      "result_target": [],
+      "reasons": [
+        "raw_pointer"
+      ],
+      "implementation_count": 17,
+      "family": "mask_memory_contract"
+    },
+    {
+      "id": "{\"attributes\":[[\"aligned\",\"true\"],[\"packed\",\"false\"]],\"name\":\"store_mask_repr\",\"result_target\":[],\"signature\":\"void:=(ptr,m)\"}",
+      "name": "store_mask_repr",
+      "signature": "void:=(ptr,m)",
+      "attributes": {
+        "aligned": "true",
+        "packed": "false"
+      },
+      "result_target": [],
+      "reasons": [
+        "compiler_builtin",
+        "raw_memory",
+        "raw_pointer"
+      ],
+      "implementation_count": 17,
+      "family": "mask_memory_contract"
+    },
+    {
+      "id": "{\"attributes\":[[\"aligned\",\"true\"],[\"packed\",\"true\"]],\"name\":\"load_mask_repr\",\"result_target\":[],\"signature\":\"m:=cptr\"}",
+      "name": "load_mask_repr",
+      "signature": "m:=cptr",
+      "attributes": {
+        "aligned": "true",
+        "packed": "true"
+      },
+      "result_target": [],
+      "reasons": [
+        "raw_pointer"
+      ],
+      "implementation_count": 17,
+      "family": "mask_memory_contract"
+    },
+    {
+      "id": "{\"attributes\":[[\"aligned\",\"true\"],[\"packed\",\"true\"]],\"name\":\"store_mask_repr\",\"result_target\":[],\"signature\":\"void:=(ptr,m)\"}",
+      "name": "store_mask_repr",
+      "signature": "void:=(ptr,m)",
+      "attributes": {
+        "aligned": "true",
+        "packed": "true"
+      },
+      "result_target": [],
+      "reasons": [
+        "compiler_builtin",
+        "raw_memory",
+        "raw_pointer"
+      ],
+      "implementation_count": 17,
+      "family": "mask_memory_contract"
+    },
+    {
+      "id": "{\"attributes\":[[\"aligned\",\"true\"]],\"name\":\"load\",\"result_target\":[],\"signature\":\"v:=cptr\"}",
+      "name": "load",
+      "signature": "v:=cptr",
+      "attributes": {
+        "aligned": "true"
+      },
+      "result_target": [],
+      "reasons": [
+        "compiler_builtin",
+        "intrinsic",
+        "raw_memory",
+        "raw_pointer"
+      ],
+      "implementation_count": 22,
+      "family": "contiguous_memory_contract"
+    },
+    {
+      "id": "{\"attributes\":[[\"aligned\",\"true\"]],\"name\":\"store\",\"result_target\":[],\"signature\":\"void:=(ptr,s)\"}",
+      "name": "store",
+      "signature": "void:=(ptr,s)",
+      "attributes": {
+        "aligned": "true"
+      },
+      "result_target": [],
+      "reasons": [
+        "raw_pointer"
+      ],
+      "implementation_count": 14,
+      "family": "contiguous_memory_contract"
+    },
+    {
+      "id": "{\"attributes\":[[\"aligned\",\"true\"]],\"name\":\"store\",\"result_target\":[],\"signature\":\"void:=(ptr,v)\"}",
+      "name": "store",
+      "signature": "void:=(ptr,v)",
+      "attributes": {
+        "aligned": "true"
+      },
+      "result_target": [],
+      "reasons": [
+        "compiler_builtin",
+        "intrinsic",
+        "raw_memory",
+        "raw_pointer"
+      ],
+      "implementation_count": 26,
+      "family": "contiguous_memory_contract"
+    },
+    {
+      "id": "{\"attributes\":[[\"mask\",\"pass_through\"]],\"name\":\"gather\",\"result_target\":[],\"signature\":\"v:=(m,cptr,vidx,v,sImm)\"}",
+      "name": "gather",
+      "signature": "v:=(m,cptr,vidx,v,sImm)",
+      "attributes": {
+        "mask": "pass_through"
+      },
+      "result_target": [],
+      "reasons": [
+        "intrinsic",
+        "raw_pointer"
+      ],
+      "implementation_count": 21,
+      "family": "indexed_memory_contract"
+    },
+    {
+      "id": "{\"attributes\":[[\"mask\",\"zero\"]],\"name\":\"scatter\",\"result_target\":[],\"signature\":\"void:=(m,ptr,vidx,v,sImm)\"}",
+      "name": "scatter",
+      "signature": "void:=(m,ptr,vidx,v,sImm)",
+      "attributes": {
+        "mask": "zero"
+      },
+      "result_target": [],
+      "reasons": [
+        "intrinsic",
+        "raw_pointer"
+      ],
+      "implementation_count": 29,
+      "family": "indexed_memory_contract"
+    },
+    {
+      "id": "{\"attributes\":[],\"name\":\"deallocate\",\"result_target\":[],\"signature\":\"void:=(ptr)\"}",
+      "name": "deallocate",
+      "signature": "void:=(ptr)",
+      "attributes": {},
+      "result_target": [],
+      "reasons": [
+        "raw_memory",
+        "raw_pointer"
+      ],
+      "implementation_count": 11,
+      "family": "deallocation_provenance"
+    },
+    {
+      "id": "{\"attributes\":[],\"name\":\"gather\",\"result_target\":[],\"signature\":\"v:=(cptr,vidx,sImm)\"}",
+      "name": "gather",
+      "signature": "v:=(cptr,vidx,sImm)",
+      "attributes": {},
+      "result_target": [],
+      "reasons": [
+        "intrinsic",
+        "raw_pointer"
+      ],
+      "implementation_count": 29,
+      "family": "indexed_memory_contract"
+    },
+    {
+      "id": "{\"attributes\":[],\"name\":\"gather_narrow\",\"result_target\":[],\"signature\":\"v:=(cptr,cptr,sImm)\"}",
+      "name": "gather_narrow",
+      "signature": "v:=(cptr,cptr,sImm)",
+      "attributes": {},
+      "result_target": [],
+      "reasons": [
+        "raw_pointer"
+      ],
+      "implementation_count": 17,
+      "family": "indexed_memory_contract"
+    },
+    {
+      "id": "{\"attributes\":[],\"name\":\"gather_narrow_partial\",\"result_target\":[],\"signature\":\"v:=(cptr,vidx,sImm)\"}",
+      "name": "gather_narrow_partial",
+      "signature": "v:=(cptr,vidx,sImm)",
+      "attributes": {},
+      "result_target": [],
+      "reasons": [
+        "intrinsic",
+        "raw_pointer"
+      ],
+      "implementation_count": 18,
+      "family": "indexed_memory_contract"
+    },
+    {
+      "id": "{\"attributes\":[],\"name\":\"load_convert_up\",\"result_target\":[\"base\",\"ToBase\"],\"signature\":\"v:=cptr+\"}",
+      "name": "load_convert_up",
+      "signature": "v:=cptr+",
+      "attributes": {},
+      "result_target": [
+        "base",
+        "ToBase"
+      ],
+      "reasons": [
+        "intrinsic",
+        "raw_memory",
+        "raw_pointer"
+      ],
+      "implementation_count": 74,
+      "family": "conversion_input_contract"
+    },
+    {
+      "id": "{\"attributes\":[],\"name\":\"memory_cp\",\"result_target\":[],\"signature\":\"void:=(ptr,cptr,s,s)\"}",
+      "name": "memory_cp",
+      "signature": "void:=(ptr,cptr,s,s)",
+      "attributes": {},
+      "result_target": [],
+      "reasons": [
+        "raw_memory",
+        "raw_pointer"
+      ],
+      "implementation_count": 34,
+      "family": "raw_copy_contract"
+    },
+    {
+      "id": "{\"attributes\":[],\"name\":\"random_step\",\"result_target\":[],\"signature\":\"usize:=(ptr)\"}",
+      "name": "random_step",
+      "signature": "usize:=(ptr)",
+      "attributes": {},
+      "result_target": [],
+      "reasons": [
+        "intrinsic",
+        "raw_pointer"
+      ],
+      "implementation_count": 3,
+      "family": "random_output_contract"
+    },
+    {
+      "id": "{\"attributes\":[],\"name\":\"scatter\",\"result_target\":[],\"signature\":\"void:=(ptr,vidx,v,sImm)\"}",
+      "name": "scatter",
+      "signature": "void:=(ptr,vidx,v,sImm)",
+      "attributes": {},
+      "result_target": [],
+      "reasons": [
+        "intrinsic",
+        "raw_pointer"
+      ],
+      "implementation_count": 29,
+      "family": "indexed_memory_contract"
+    }
+  ],
+  "metadata_safety_gaps": [
+    {
+      "id": "4c4efc118b79f58a4b38",
+      "path": "tsldata/primitives/arithmetic/complex.tsl",
+      "subject": "mod rvv/f?",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [raw_memory]"
+    },
+    {
+      "id": "49ffa135e90eadc46a3f",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx512/?i8/ToBase/?i16",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "31370003bc3c5939fa68",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx512/?i8/ToBase/?i32",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "0d2b3d4631338d797f61",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx512/?i8/ToBase/?i64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "f32a0c23061287b2901d",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx512/?i16/ToBase/?i32",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "ebe063b5f2dadc58b9bc",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx512/?i16/ToBase/?i64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "0843bac0aee748e7d323",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx512/f32/ToBase/\"==\"",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [value_reinterpretation]"
+    },
+    {
+      "id": "ac8c8d72e0981f78a047",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx512/f32/ToBase/?i32",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "e0d859407135f7886ae5",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx512/f32/ToBase/?i64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "4bd6bef656c5b5e4be28",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx512/f64/ToBase/\"==\"",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [value_reinterpretation]"
+    },
+    {
+      "id": "ffd18eab5cbba0019bb9",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx512/f64/ToBase/?i64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "265f42e3f7e8ddfe0ade",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx512/?i32/ToBase/\"==\"",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [value_reinterpretation]"
+    },
+    {
+      "id": "f52bf9d36ac0acb5f541",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx512/?i32/ToBase/?i64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "2dfd4d121ff73c0e3380",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx512/?i32/ToBase/f32",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "9df98ee00304ef2fa653",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx512/?i32/ToBase/f64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "103d37dd3b53ac4fd111",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx512/?i64/ToBase/\"==\"",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [value_reinterpretation]"
+    },
+    {
+      "id": "193e854015db217b2b6f",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx512/?i64/ToBase/f64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "a5e16c130dcb362b0e5b",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx2/?i8/ToBase/?i16",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "f8d896f869475c26d138",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx2/?i8/ToBase/?i32",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "83a0edc90aaad64574f8",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx2/?i8/ToBase/?i64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "cf6971e4eac6e9f9fce5",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx2/?i16/ToBase/?i32",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "7472441d9b1190d7a6ec",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx2/?i16/ToBase/?i64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "6b06f8db37f20b289713",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx2/f32/ToBase/\"==\"",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [value_reinterpretation]"
+    },
+    {
+      "id": "b64b5901fb2b65046172",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx2/f32/ToBase/ui32",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "c2e4ad5b35f8430c2b13",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx2/f32/ToBase/si32",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "6e33f5bcfbe8dad39e1f",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx2/f64/ToBase/\"==\"",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [value_reinterpretation]"
+    },
+    {
+      "id": "4fd77726888441a05732",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx2/f64/ToBase/?i64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "f367171b17d9bedbc8de",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx2/f64/ToBase/ui32",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "de8979b31ed09f43a61d",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx2/?i32/ToBase/\"==\"",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [value_reinterpretation]"
+    },
+    {
+      "id": "af7756699824850f7997",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx2/?i32/ToBase/?i64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "fa316a1d6d20ff0cd1c3",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx2/?i32/ToBase/f32",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "49e7ffb386d7f0873ae3",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx2/?i32/ToBase/f64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "7cc742ab4b6944792c6c",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx2/?i64/ToBase/\"==\"",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [value_reinterpretation]"
+    },
+    {
+      "id": "2cb401cd6b476e5c4315",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx2/?i64/ToBase/f64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [value_reinterpretation]"
+    },
+    {
+      "id": "c2e4ad5b35f8430c2b13",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast avx2/f32/ToBase/si32",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "5ab9bb4a7458ee6f45ac",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast sse/f32/ToBase/\"==\"",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [value_reinterpretation]"
+    },
+    {
+      "id": "cd9334ac64ff5d19424a",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast sse/f32/ToBase/f64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "defa75b1ac6c6ce1a614",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast sse/f32/ToBase/si32",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "6c870a83c609113a2110",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast sse/f32/ToBase/ui32",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "61b1ff662b26f9038b12",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast sse/f64/ToBase/\"==\"",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [value_reinterpretation]"
+    },
+    {
+      "id": "cbf1bfb34d0937ce50b7",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast sse/f64/ToBase/?i64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "d724fa5f593d69533c7a",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast sse/f64/ToBase/si32",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "b68f6fe5e65898e8913d",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast sse/f64/ToBase/ui32",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "c81811e1f12b028a10ed",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast sse/?i32/ToBase/\"==\"",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [value_reinterpretation]"
+    },
+    {
+      "id": "3a33e2510ce229b60a35",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast sse/?i32/ToBase/?i64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "6678b4a3be27608f9c1c",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast sse/?i32/ToBase/f32",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "274be6c4e21e05bfae73",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast sse/?i32/ToBase/f64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "6df5d010795f28bf46d9",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast sse/?i64/ToBase/\"==\"",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [value_reinterpretation]"
+    },
+    {
+      "id": "55e4e196bf6ff31d1868",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast sse/?i64/ToBase/f64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [value_reinterpretation]"
+    },
+    {
+      "id": "7346a9c48c56f68b63e3",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast sse/?i8/ToBase/?i16",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "15a9b52a7490393d5511",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast sse/?i8/ToBase/?i32",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "d7d60fe9dcb7997fe81f",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast sse/?i8/ToBase/?i64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "5223bdb93ce9dd4fcc39",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast sse/?i16/ToBase/?i32",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "66cdc90740e568fcb79c",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast sse/?i16/ToBase/?i64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "c5133a81a4dda19a7009",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast neon/f32/ToBase/?i32",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "b3991bac55803fdfe44b",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast neon/f64/ToBase/?i64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "75551034a7d150fd9b39",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast neon/?i32/ToBase/f32",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "81acbef52622d9d0f3f2",
+      "path": "tsldata/primitives/conversion/cast.tsl",
+      "subject": "cast neon/?i64/ToBase/f64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "092945b9fbf5ff39c740",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_up avx2/?i8/ToBase/?i16",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "e43072cff0ee1f7dde59",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_up avx2/?i8/ToBase/?i32",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "fa23a7f34e2364ac4013",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_up avx2/?i8/ToBase/?i64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "3e40e8c7b50513707c17",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_up avx2/?i16/ToBase/?i32",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "f15462ca985fd5a7732d",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_up avx2/?i16/ToBase/?i64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "63f0c904043165738b5e",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_up avx2/?i32/ToBase/?i64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "e868f81f0f7324687949",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_up avx2/f32/ToBase/f64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "81db6d9b6150dd69b027",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_up avx512/?i8/ToBase/?i16",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "6bf68dfaed1c7439f381",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_up avx512/?i8/ToBase/?i32",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "a79decb2d0cc961376b4",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_up avx512/?i8/ToBase/?i64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "e2dd3674f19dfd564c5e",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_up avx512/?i16/ToBase/?i32",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "7b8eb2a9e8b41c262c57",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_up avx512/?i16/ToBase/?i64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "9f66299168cd7cc3c81f",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_up avx512/?i32/ToBase/?i64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "9dfb88f01325d3e67055",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_up avx512/f32/ToBase/f64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "ae59836bd169fe347a9c",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_up neon/?i8/ToBase/?i16",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "cd08bd7396c2c94d3ca8",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_up neon/?i16/ToBase/?i32",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "471dbcf54fc98ff739ef",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_up neon/?i32/ToBase/?i64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "2ef498213c14d5a5b7e2",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_up neon/f32/ToBase/f64",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "14c6d451268956caf619",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down [sse, sse_vl]/si16/ToBase/si8",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "8abb50e82d71e69757e2",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down [sse, sse_vl]/si16/ToBase/ui8",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "f3fc065697ebf05dda81",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down [sse, sse_vl]/ui16/ToBase/ui8",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "695add89e26ba8cccd28",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down [sse, sse_vl]/ui16/ToBase/si8",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "3f10e791bf82bb9dd818",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down [sse, sse_vl]/si32/ToBase/si16",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "c0177f7159e8ea223e79",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down [sse, sse_vl]/si32/ToBase/ui16",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "bb74171490ffef782ced",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down [sse, sse_vl]/ui32/ToBase/ui16",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "d82c7957d25d03a43c1b",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down [sse, sse_vl]/ui32/ToBase/si16",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "23f2f43b24ea7b983d03",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down [sse, sse_vl]/?i32/ToBase/ui16",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "ed4e3f355134a37b2067",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down [sse, sse_vl]/?i32/ToBase/si16",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "47182505131ecf1534ed",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down [avx2, avx2_vl]/si16/ToBase/si8",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "1e1e56528ec43485d4ae",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down [avx2, avx2_vl]/si16/ToBase/ui8",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "7733ee08cb327d5c799e",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down [avx2, avx2_vl]/ui16/ToBase/ui8",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "461519d72c6dd9f86524",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down [avx2, avx2_vl]/ui16/ToBase/si8",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "41a1163fabe69f5c61f8",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down [avx2, avx2_vl]/si32/ToBase/si16",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "c5b0233fedbee09b578d",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down [avx2, avx2_vl]/si32/ToBase/ui16",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "f208ae897ed567bd7414",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down [avx2, avx2_vl]/ui32/ToBase/ui16",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "654db83895ce1ae658b6",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down [avx2, avx2_vl]/ui32/ToBase/si16",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "f21669fb102f0f7734df",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down [avx2, avx2_vl]/f64/ToBase/f32",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "ed90cd6bff2023cc5057",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down avx512/si16/ToBase/si8",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "781545e0b7db91c5921c",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down avx512/si32/ToBase/si8",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "51a1addfe847aaf7bf3b",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down avx512/si32/ToBase/si16",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "e19fd893fc261021b5c5",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down avx512/?i16/ToBase/?i8",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "6fdb41ca3df109e93cfa",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down avx512/?i32/ToBase/?i8",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "0f85b5e17ca2b6959a7b",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down avx512/?i32/ToBase/?i16",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "76cc52d9f6d446d73cb5",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down avx512/si64/ToBase/si8",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "434846e947cf12934c47",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down avx512/si64/ToBase/si16",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "35446b68d58c6b2280e7",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down avx512/si64/ToBase/si32",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "3e4970cb3076ff5f8083",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down avx512/?i64/ToBase/?i8",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "fa273d03c32af0c9d230",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down avx512/?i64/ToBase/?i16",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "325268f91f7af49b8de8",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down avx512/?i64/ToBase/?i32",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "f89e9fd5ba8bad93cb4d",
+      "path": "tsldata/primitives/conversion/repr_change.tsl",
+      "subject": "convert_down avx512/f64/ToBase/f32",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [intrinsic, value_reinterpretation]"
+    },
+    {
+      "id": "ce36b517737b20a2d7f4",
+      "path": "tsldata/primitives/io/out.tsl",
+      "subject": "to_ostream sve/arith",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [raw_memory]"
+    },
+    {
+      "id": "65ffea52eb519b0870fa",
+      "path": "tsldata/primitives/load_store/pack_expand.tsl",
+      "subject": "load_convert_up avx512/si8/ToBase/si16",
+      "caller_unsafe_required": true,
+      "after": "safety: internal_unsafe true caller_unsafe true reasons [intrinsic, raw_pointer, value_reinterpretation]"
+    },
+    {
+      "id": "dece45dbdd78f60b0c67",
+      "path": "tsldata/primitives/load_store/pack_expand.tsl",
+      "subject": "load_convert_up avx512/si8/ToBase/si32",
+      "caller_unsafe_required": true,
+      "after": "safety: internal_unsafe true caller_unsafe true reasons [intrinsic, raw_pointer, value_reinterpretation]"
+    },
+    {
+      "id": "19659c2621c701e0299d",
+      "path": "tsldata/primitives/load_store/pack_expand.tsl",
+      "subject": "load_convert_up avx512/si8/ToBase/si64",
+      "caller_unsafe_required": true,
+      "after": "safety: internal_unsafe true caller_unsafe true reasons [intrinsic, raw_memory, raw_pointer, value_reinterpretation]"
+    },
+    {
+      "id": "a38ad82131b6525cf774",
+      "path": "tsldata/primitives/load_store/pack_expand.tsl",
+      "subject": "load_convert_up avx512/ui8/ToBase/ui16",
+      "caller_unsafe_required": true,
+      "after": "safety: internal_unsafe true caller_unsafe true reasons [intrinsic, raw_pointer, value_reinterpretation]"
+    },
+    {
+      "id": "cf456165ad8dfba02928",
+      "path": "tsldata/primitives/load_store/pack_expand.tsl",
+      "subject": "load_convert_up avx512/ui8/ToBase/ui32",
+      "caller_unsafe_required": true,
+      "after": "safety: internal_unsafe true caller_unsafe true reasons [intrinsic, raw_pointer, value_reinterpretation]"
+    },
+    {
+      "id": "e3995d8930811d2eabc5",
+      "path": "tsldata/primitives/load_store/pack_expand.tsl",
+      "subject": "load_convert_up avx512/ui8/ToBase/ui64",
+      "caller_unsafe_required": true,
+      "after": "safety: internal_unsafe true caller_unsafe true reasons [intrinsic, raw_memory, raw_pointer, value_reinterpretation]"
+    },
+    {
+      "id": "a3348a1720dffeaa026b",
+      "path": "tsldata/primitives/load_store/pack_expand.tsl",
+      "subject": "load_convert_up avx512/si16/ToBase/si32",
+      "caller_unsafe_required": true,
+      "after": "safety: internal_unsafe true caller_unsafe true reasons [intrinsic, raw_pointer, value_reinterpretation]"
+    },
+    {
+      "id": "d0dd5a7c44949f22f26f",
+      "path": "tsldata/primitives/load_store/pack_expand.tsl",
+      "subject": "load_convert_up avx512/si16/ToBase/si64",
+      "caller_unsafe_required": true,
+      "after": "safety: internal_unsafe true caller_unsafe true reasons [intrinsic, raw_pointer, value_reinterpretation]"
+    },
+    {
+      "id": "2dd82c0b421e72ae63c8",
+      "path": "tsldata/primitives/load_store/pack_expand.tsl",
+      "subject": "load_convert_up avx512/ui16/ToBase/ui32",
+      "caller_unsafe_required": true,
+      "after": "safety: internal_unsafe true caller_unsafe true reasons [intrinsic, raw_pointer, value_reinterpretation]"
+    },
+    {
+      "id": "384a6a9f70fbd347a379",
+      "path": "tsldata/primitives/load_store/pack_expand.tsl",
+      "subject": "load_convert_up avx512/ui16/ToBase/ui64",
+      "caller_unsafe_required": true,
+      "after": "safety: internal_unsafe true caller_unsafe true reasons [intrinsic, raw_pointer, value_reinterpretation]"
+    },
+    {
+      "id": "ffa4e9dfc4b98f1adb2d",
+      "path": "tsldata/primitives/load_store/pack_expand.tsl",
+      "subject": "load_convert_up avx512/si32/ToBase/si64",
+      "caller_unsafe_required": true,
+      "after": "safety: internal_unsafe true caller_unsafe true reasons [intrinsic, raw_pointer, value_reinterpretation]"
+    },
+    {
+      "id": "6248ec0109d74b6fbe57",
+      "path": "tsldata/primitives/load_store/pack_expand.tsl",
+      "subject": "load_convert_up avx512/ui32/ToBase/ui64",
+      "caller_unsafe_required": true,
+      "after": "safety: internal_unsafe true caller_unsafe true reasons [intrinsic, raw_pointer, value_reinterpretation]"
+    },
+    {
+      "id": "bbd3eeda96c23466b6a2",
+      "path": "tsldata/primitives/load_store/pack_expand.tsl",
+      "subject": "load_convert_up avx512/f32/ToBase/f64",
+      "caller_unsafe_required": true,
+      "after": "safety: internal_unsafe true caller_unsafe true reasons [intrinsic, raw_pointer, value_reinterpretation]"
+    },
+    {
+      "id": "7247566849e963cb5d72",
+      "path": "tsldata/primitives/load_store/pack_expand.tsl",
+      "subject": "load_convert_up [avx2, avx2_vl]/si8/ToBase/si16",
+      "caller_unsafe_required": true,
+      "after": "safety: internal_unsafe true caller_unsafe true reasons [intrinsic, raw_pointer, value_reinterpretation]"
+    },
+    {
+      "id": "0a9fd9186cb14f04ef37",
+      "path": "tsldata/primitives/load_store/pack_expand.tsl",
+      "subject": "load_convert_up [avx2, avx2_vl]/ui8/ToBase/ui16",
+      "caller_unsafe_required": true,
+      "after": "safety: internal_unsafe true caller_unsafe true reasons [intrinsic, raw_pointer, value_reinterpretation]"
+    },
+    {
+      "id": "b583195017f8fedd68dc",
+      "path": "tsldata/primitives/load_store/pack_expand.tsl",
+      "subject": "load_convert_up [avx2, avx2_vl]/si16/ToBase/si32",
+      "caller_unsafe_required": true,
+      "after": "safety: internal_unsafe true caller_unsafe true reasons [intrinsic, raw_pointer, value_reinterpretation]"
+    },
+    {
+      "id": "8734d5eca8ac03f80769",
+      "path": "tsldata/primitives/load_store/pack_expand.tsl",
+      "subject": "load_convert_up [avx2, avx2_vl]/ui16/ToBase/ui32",
+      "caller_unsafe_required": true,
+      "after": "safety: internal_unsafe true caller_unsafe true reasons [intrinsic, raw_pointer, value_reinterpretation]"
+    },
+    {
+      "id": "dbe90ed9893ec32db9d7",
+      "path": "tsldata/primitives/load_store/pack_expand.tsl",
+      "subject": "load_convert_up [avx2, avx2_vl]/si32/ToBase/si64",
+      "caller_unsafe_required": true,
+      "after": "safety: internal_unsafe true caller_unsafe true reasons [intrinsic, raw_pointer, value_reinterpretation]"
+    },
+    {
+      "id": "be38ba121691f3c0ee99",
+      "path": "tsldata/primitives/load_store/pack_expand.tsl",
+      "subject": "load_convert_up [avx2, avx2_vl]/ui32/ToBase/ui64",
+      "caller_unsafe_required": true,
+      "after": "safety: internal_unsafe true caller_unsafe true reasons [intrinsic, raw_pointer, value_reinterpretation]"
+    },
+    {
+      "id": "6d9f70f5675f3a68569b",
+      "path": "tsldata/primitives/load_store/pack_expand.tsl",
+      "subject": "load_convert_up [avx2, avx2_vl]/f32/ToBase/f64",
+      "caller_unsafe_required": true,
+      "after": "safety: internal_unsafe true caller_unsafe true reasons [intrinsic, raw_pointer, value_reinterpretation]"
+    },
+    {
+      "id": "e7b55b48fc214422190f",
+      "path": "tsldata/primitives/load_store/rnd_access.tsl",
+      "subject": "gather sve/arith",
+      "caller_unsafe_required": true,
+      "after": "safety: internal_unsafe true caller_unsafe true reasons [intrinsic, raw_memory, raw_pointer]"
+    },
+    {
+      "id": "586f0c5aece806c7def1",
+      "path": "tsldata/primitives/load_store/rnd_access.tsl",
+      "subject": "gather_narrow_partial sve/[bword, dword]",
+      "caller_unsafe_required": true,
+      "after": "safety: internal_unsafe true caller_unsafe true reasons [raw_memory, raw_pointer]"
+    },
+    {
+      "id": "93c4a824afe957af1c2e",
+      "path": "tsldata/primitives/load_store/rnd_access.tsl",
+      "subject": "gather_narrow sve/[bword, dword]",
+      "caller_unsafe_required": true,
+      "after": "safety: internal_unsafe true caller_unsafe true reasons [raw_memory, raw_pointer]"
+    },
+    {
+      "id": "e7b55b48fc214422190f",
+      "path": "tsldata/primitives/load_store/rnd_access.tsl",
+      "subject": "gather sve/arith",
+      "caller_unsafe_required": true,
+      "after": "safety: internal_unsafe true caller_unsafe true reasons [intrinsic, raw_memory, raw_pointer]"
+    },
+    {
+      "id": "aad830c02e98b1017000",
+      "path": "tsldata/primitives/load_store/rnd_access.tsl",
+      "subject": "scatter sve/arith",
+      "caller_unsafe_required": true,
+      "after": "safety: internal_unsafe true caller_unsafe true reasons [intrinsic, raw_memory, raw_pointer]"
+    },
+    {
+      "id": "aad830c02e98b1017000",
+      "path": "tsldata/primitives/load_store/rnd_access.tsl",
+      "subject": "scatter sve/arith",
+      "caller_unsafe_required": true,
+      "after": "safety: internal_unsafe true caller_unsafe true reasons [intrinsic, raw_memory, raw_pointer]"
+    },
+    {
+      "id": "4e616c43511a18bc0d3e",
+      "path": "tsldata/primitives/misc/swizzle.tsl",
+      "subject": "permute_lanes sve/arith",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [raw_memory]"
+    },
+    {
+      "id": "4e616c43511a18bc0d3e",
+      "path": "tsldata/primitives/misc/swizzle.tsl",
+      "subject": "permute_lanes sve/arith",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [raw_memory]"
+    },
+    {
+      "id": "f361e4a17ea3f8b5aa32",
+      "path": "tsldata/primitives/misc/swizzle.tsl",
+      "subject": "table_lookup sve/arith",
+      "caller_unsafe_required": false,
+      "after": "safety: internal_unsafe true caller_unsafe false reasons [raw_memory]"
+    }
+  ]
+}

@@ -1,0 +1,228 @@
+"""Reviewed policy and semantic-family data for the checked-API census."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Literal
+
+Classification = Literal[
+    "semantic guarantee",
+    "static well-formedness constraint",
+    "dynamic precondition",
+    "implementation hazard",
+    "tooling-only validation",
+]
+
+BASELINE_VERSION = 1
+DECLARATION_ROOT = Path("tslc/tests/fixtures/checked_api")
+CPP_DECLARATIONS = DECLARATION_ROOT / "cpp_declarations.snap"
+RUST_DECLARATIONS = DECLARATION_ROOT / "rust_declarations.snap"
+
+POLICY = {
+    "checked_suffix": "_checked",
+    "eligibility": (
+        "catastrophic dynamic caller precondition; complete pre-side-effect check "
+        "must be expressible from the checked signature"
+    ),
+    "cpp_value_result": "direct value return plus final precondition_error& output",
+    "cpp_void_result": "nodiscard precondition_error return",
+    "rust_value_result": "Result<T, PreconditionError>",
+    "rust_void_result": "Result<(), PreconditionError>",
+    "unchecked_rust": "unsafe fn when violating the caller contract can cause UB",
+    "failure_value": (
+        "initialized backend-owned placeholder with no TSL-defined value; the "
+        "ordinary operation is not invoked"
+    ),
+}
+
+ABI_EVIDENCE = {
+    "environment": "x86-64 System V",
+    "gcc": "GCC 15.2.0",
+    "clang": "Clang 21.1.8",
+    "msvc": "not available in the Slice 0 Linux environment",
+    "raw_return": "value returned in ymm0; no value-result memory output",
+    "chosen_return": "value returned in ymm0; scalar error written through rdi",
+    "aggregate_return": "hidden result pointer in rdi; vector value written to memory",
+    "status_with_value_output": "status returned in eax; vector value written through rdi",
+    "optimized_inline_call": "immediately consumed vector result did not materialize on the stack",
+}
+
+VALIDATION_LIMITS = {
+    "all_profile_rust_render": (
+        "not a valid census input: the current all-profile Rust request reports "
+        "TSL-BACKEND-RUST-AMBIGUOUS-TARGET-PROFILES before artifact rendering"
+    ),
+    "census_strategy": (
+        "scan canonical source bodies, render assets, and emitters; obtain public "
+        "caller-safety identities from the validated typed catalog"
+    ),
+}
+
+
+@dataclass(frozen=True, slots=True)
+class SemanticFamily:
+    family_id: str
+    classification: Classification
+    backend_consequence: str
+    checked_feasibility: str
+    review: str
+
+
+FAMILIES = (
+    SemanticFamily(
+        "tooling_only",
+        "tooling-only validation",
+        "Failure is confined to generated tests, builds, documentation stubs, or benchmarks.",
+        "not applicable",
+        "It is not part of a generated runtime API contract.",
+    ),
+    SemanticFamily(
+        "static_representation_or_lane_shape",
+        "static well-formedness constraint",
+        "C++ or Rust currently diagnoses an impossible compiler-selected representation at runtime.",
+        "no checked twin; validate statically",
+        "Sizes, lane counts, and mask-storage capacity are compiler-owned specialization facts.",
+    ),
+    SemanticFamily(
+        "static_immediate_nonzero",
+        "static well-formedness constraint",
+        "Rust emits a const assertion; invalid authored immediates do not reach a call.",
+        "no checked twin; keep a compile-time diagnostic",
+        "The operand is an immediate rather than caller-controlled runtime data.",
+    ),
+    SemanticFamily(
+        "integer_zero_divisor",
+        "dynamic precondition",
+        "C++ throws or traps and Rust panics in the current generated implementation.",
+        "complete for runtime integer division/remainder; check active divisor lanes",
+        "Floating-point zero remains valid and masked forms inspect active lanes only.",
+    ),
+    SemanticFamily(
+        "lane_index",
+        "dynamic precondition",
+        "Rust facade calls panic today; an unchecked C++ or Rust primitive may access outside its logical lanes.",
+        "complete from the runtime index and typed logical lane count",
+        "Total operations such as test_imask remain excluded when out-of-range has defined semantics.",
+    ),
+    SemanticFamily(
+        "contiguous_extent",
+        "dynamic precondition",
+        "Rust slice facades panic when a contiguous input or output is too short.",
+        "complete with a valid slice/span signature; not honest for a bare pointer",
+        "The checked signature must establish an addressable extent.",
+    ),
+    SemanticFamily(
+        "algorithm_equal_extents",
+        "dynamic precondition",
+        "Rust generated algorithms panic when related slices have different extents.",
+        "complete from the checked algorithm's slice arguments",
+        "All extents can be compared before dispatch or output writes.",
+    ),
+    SemanticFamily(
+        "algorithm_output_capacity",
+        "dynamic precondition",
+        "Rust generated algorithms panic when an output/index buffer is too short.",
+        "complete from the checked algorithm's input and output slices",
+        "Capacity can be checked before the raw kernel performs a write.",
+    ),
+    SemanticFamily(
+        "algorithm_mask_capacity",
+        "dynamic precondition",
+        "Rust generated algorithms panic when mask storage cannot cover the input.",
+        "complete from the input extent, mask layout, lane count, and mask slice",
+        "The finalized algorithm plan already owns these facts.",
+    ),
+    SemanticFamily(
+        "algorithm_selected_index",
+        "dynamic precondition",
+        "Rust generated algorithms panic when a selected row index is outside the input.",
+        "complete by validating every selected index before kernel dispatch",
+        "The check requires a valid index slice and input extent.",
+    ),
+    SemanticFamily(
+        "implementation_exhaustiveness",
+        "implementation hazard",
+        "Rust panics if compiler-selected scalar cast types escape the supported closed set.",
+        "no checked twin; repair typed validation/exhaustiveness",
+        "This is a compiler/backend defect if reachable, not invalid caller data.",
+    ),
+    SemanticFamily(
+        "implementation_invariant",
+        "implementation hazard",
+        "A debug assertion or unwrap fails if an internal compiler-owned invariant is broken.",
+        "no checked twin; retain or replace with compiler validation",
+        "The condition is not part of the public call domain.",
+    ),
+    SemanticFamily(
+        "contiguous_memory_contract",
+        "dynamic precondition",
+        "Raw C++ pointers remain unchecked; Rust public exposure must be unsafe until a safe slice wrapper discharges the contract.",
+        "requires a span/slice carrying readable or writable extent and selected alignment",
+        "A pointer and caller-claimed count cannot establish lifetime or provenance.",
+    ),
+    SemanticFamily(
+        "mask_memory_contract",
+        "dynamic precondition",
+        "Raw mask representation loads/stores have the same pointer hazard plus layout-dependent capacity.",
+        "requires a span/slice and a typed mask-layout capacity plan",
+        "Packed and lane-mask representations require different element counts.",
+    ),
+    SemanticFamily(
+        "selected_memory_contract",
+        "dynamic precondition",
+        "Expand/compress operations may access a mask-dependent number of elements.",
+        "requires a range plus capacity derived from the active mask",
+        "Validation must precede any compress-store output write.",
+    ),
+    SemanticFamily(
+        "indexed_memory_contract",
+        "dynamic precondition",
+        "Gather/scatter paths may access invalid addresses for active indices.",
+        "requires a valid base view, extent, typed scale, and active-index validation",
+        "Bare pointers do not provide enough evidence for an honest checked twin.",
+    ),
+    SemanticFamily(
+        "deallocation_provenance",
+        "dynamic precondition",
+        "Mismatched, dead, or foreign allocation provenance can cause undefined behavior.",
+        "no honest pointer-only checked twin; design an owning allocation API separately",
+        "A runtime pointer inspection cannot prove matching live allocation provenance.",
+    ),
+    SemanticFamily(
+        "random_output_contract",
+        "dynamic precondition",
+        "The random-step intrinsic writes through a raw output pointer on success.",
+        "requires a mutable reference/view, or an owning optional/result value API",
+        "The current status result does not establish output pointer validity.",
+    ),
+    SemanticFamily(
+        "raw_copy_contract",
+        "dynamic precondition",
+        "Invalid ranges or prohibited overlap can cause undefined behavior or corruption.",
+        "requires valid source/destination views plus an explicit overlap contract/check",
+        "Omit the twin unless every range and overlap obligation is represented.",
+    ),
+    SemanticFamily(
+        "conversion_input_contract",
+        "dynamic precondition",
+        "Widening loads read multiple source elements through a raw pointer.",
+        "requires a source span/slice with the lowering-resolved element count",
+        "The result-target relationship determines the exact required source extent.",
+    ),
+)
+FAMILY_BY_ID = {family.family_id: family for family in FAMILIES}
+
+
+__all__ = (
+    "ABI_EVIDENCE",
+    "BASELINE_VERSION",
+    "CPP_DECLARATIONS",
+    "FAMILIES",
+    "FAMILY_BY_ID",
+    "POLICY",
+    "RUST_DECLARATIONS",
+    "VALIDATION_LIMITS",
+    "Classification",
+    "SemanticFamily",
+)
