@@ -4,8 +4,13 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from tslc.backend.primitive_rendering import runtime_parameter_summary
+from tslc.backend.primitive_rendering import (
+    family_runtime_parameter_descriptions,
+    family_runtime_parameter_summary,
+    runtime_parameter_summary,
+)
 from tslc.backend.signature_types import RUST_SIGNATURE_TYPES, rust_free_type
+from tslc.catalog.memory import MemoryAccess
 from tslc.catalog.preconditions import (
     PRECONDITION_DESCRIPTORS,
     PreconditionErrorKind,
@@ -30,9 +35,16 @@ def rust_doc(
     context: str,
     concrete: bool = True,
     checked: bool = False,
+    specializations: tuple[LoweredSpecialization, ...] = (),
 ) -> str:
     rendered = render_rust_doc(
-        _doc_block(spec, context=context, concrete=concrete, checked=checked)
+        _doc_block(
+            spec,
+            context=context,
+            concrete=concrete,
+            checked=checked,
+            specializations=specializations or (spec,),
+        )
     )
     preconditions = _documented_preconditions(spec, concrete=concrete)
     if concrete or not preconditions:
@@ -69,7 +81,42 @@ def _rust_error_name(error: PreconditionErrorKind) -> str:
         return "PreconditionError::IndexOutOfBounds"
     if error is PreconditionErrorKind.ZERO_DIVISOR:
         return "PreconditionError::ZeroDivisor"
+    if error is PreconditionErrorKind.INSUFFICIENT_EXTENT:
+        return "PreconditionError::InsufficientExtent"
+    if error is PreconditionErrorKind.MISALIGNED:
+        return "PreconditionError::Misaligned"
     raise ValueError(f"unsupported Rust precondition error {error.value!r}")
+
+
+def _parameter_summary(
+    specializations: tuple[LoweredSpecialization, ...],
+    *,
+    checked: bool,
+) -> str:
+    spec = specializations[0]
+    memory = spec.primitive_semantics.memory
+    if not checked or memory is None:
+        return family_runtime_parameter_summary(specializations)
+    memory_indexes = {
+        binding.parameter_index
+        for condition in spec.primitive_semantics.preconditions
+        for binding in condition.operand_bindings
+        if binding.parameter_index < len(spec.param_kinds)
+        and spec.param_kinds[binding.parameter_index] in {"cptr", "ptr"}
+    }
+    return "; ".join(
+        f"{name}: "
+        + (
+            "shared contiguous slice"
+            if index in memory_indexes and memory.access is MemoryAccess.READ
+            else "exclusive mutable contiguous slice"
+            if index in memory_indexes
+            else description
+        )
+        for index, name, description in family_runtime_parameter_descriptions(
+            specializations
+        )
+    )
 
 
 def _doc_block(
@@ -78,6 +125,7 @@ def _doc_block(
     context: str,
     concrete: bool,
     checked: bool,
+    specializations: tuple[LoweredSpecialization, ...],
 ) -> DocumentationBlock:
     if not concrete:
         preconditions = precondition_fact(
@@ -94,7 +142,10 @@ def _doc_block(
             facts=(
                 ("Type parameters", _type_parameter_summary(spec)),
                 ("Returns", _result_summary(spec, concrete=False)),
-                ("Parameters", runtime_parameter_summary(spec)),
+                (
+                    "Parameters",
+                    _parameter_summary(specializations, checked=checked),
+                ),
                 *condition_facts,
             ),
             facts_title="API",

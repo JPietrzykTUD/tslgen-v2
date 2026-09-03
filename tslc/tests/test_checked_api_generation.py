@@ -22,6 +22,7 @@ from tslc.backend.cpp_checked_api import plan_cpp_checked_api
 from tslc.backend.rust import RustBackend
 from tslc.backend.registry import create_backend_dialect
 from tslc.catalog.machine_profiles import MachineProfile
+from tslc.catalog.memory import MemoryPayloadExtent
 from tslc.catalog.model import Catalog, PrimitiveMaskMode
 from tslc.catalog.preconditions import (
     PreconditionErrorKind,
@@ -44,10 +45,11 @@ def _lowered(
     type_tag: str = "si32",
     mask_mode: PrimitiveMaskMode | None = None,
     extension_name: str = "avx2",
+    profile_name: str = "avx2",
 ) -> LoweredSpecialization:
     selected = Selector().select_profile(
         catalog,
-        profiles["avx2"],
+        profiles[profile_name],
         primitive_name,
         (type_tag,),
         backend_id=backend,
@@ -64,6 +66,40 @@ def _lowered(
     return result.specialization
 
 
+def _lowered_group(
+    catalog: Catalog,
+    profiles: Mapping[str, MachineProfile],
+    primitive_name: str,
+    backend: str,
+    *,
+    type_tag: str = "si32",
+    mask_mode: PrimitiveMaskMode | None = None,
+    extension_name: str = "avx2",
+) -> tuple[LoweredSpecialization, ...]:
+    selected = Selector().select_profile(
+        catalog,
+        profiles["avx2"],
+        primitive_name,
+        (type_tag,),
+        backend_id=backend,
+    )
+    assert selected.diagnostics == ()
+    lowered = []
+    for slot in selected.selected:
+        if (
+            slot.extension.name != extension_name
+            or slot.primitive.mask_mode is not mask_mode
+        ):
+            continue
+        result = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend)
+        )
+        assert result.specialization is not None, result.diagnostics
+        lowered.append(result.specialization)
+    assert lowered
+    return tuple(lowered)
+
+
 def test_cpp_lane_checked_twin_has_direct_result_and_error_reference(
     catalog: Catalog,
     machine_profiles: Mapping[str, MachineProfile],
@@ -76,7 +112,7 @@ def test_cpp_lane_checked_twin_has_direct_result_and_error_reference(
 
     assert checked_api_plan((spec,)) is not None
     cpp_plan = plan_cpp_checked_api(
-        (spec,), result_type="typename Vec::base_type"
+        (spec,), result_kind=spec.result_kind, result_type="typename Vec::base_type"
     )
     assert cpp_plan is not None
     assert cpp_plan.failure_placeholder_expression == "typename Vec::base_type{}"
@@ -239,7 +275,9 @@ def test_checked_divisor_dependencies_are_typed_and_domain_specific(
     assert applicable_checked_api_plan((integer,)) is not None
     assert applicable_checked_api_plan((floating,)) is None
     assert plan_cpp_checked_api(
-        (floating,), result_type="typename Vec::register_type"
+        (floating,),
+        result_kind=floating.result_kind,
+        result_type="typename Vec::register_type",
     ) is None
 
     floating_rust = _lowered(
@@ -313,6 +351,107 @@ def test_checked_error_assets_are_evolution_safe_and_debug_inline_is_portable(
     assert "zero_divisor," in cpp
     assert "ZeroDivisor," in rust
     assert "pub trait CheckedIntegerLane" in rust
+
+
+def test_cpp_contiguous_memory_checked_twins_use_spans_and_typed_extents(
+    catalog: Catalog,
+    machine_profiles: Mapping[str, MachineProfile],
+) -> None:
+    load = _lowered(catalog, machine_profiles, "load", "cpp")
+    assert load.safety.caller_unsafe
+    load_plan = checked_api_plan((load,))
+    assert load_plan is not None
+    assert {
+        extent
+        for condition in load_plan.conditions
+        for extent in condition.memory_payload_extents
+    } == {MemoryPayloadExtent.VECTOR}
+    rendered_load = CppBackend().render_checked_wrappers("load", (load,))
+    load_docs = CppBackend().render_documentation_api_declaration("load", (load,))
+    assert "::tsl::span<typename Vec::base_type const> ptr" in rendered_load
+    assert "if (ptr.size() < Vec::lane_count())" in rendered_load
+    assert "if constexpr (Aligned)" in rendered_load
+    assert "precondition_error::insufficient_extent" in rendered_load
+    assert "precondition_error::misaligned" in rendered_load
+    assert "return ::tsl::load<Vec, Aligned>(ptr.data());" in rendered_load
+    assert "ptr: read-only contiguous span" in load_docs
+    assert "construction does not validate that C++ object invariant" in load_docs
+
+    stores = _lowered_group(catalog, machine_profiles, "store", "cpp")
+    rendered_store = CppBackend().render_checked_wrappers("store", stores)
+    store_docs = CppBackend().render_documentation_api_declaration("store", stores)
+    assert "::tsl::span<typename Vec::base_type> ptr" in rendered_store
+    assert "std::is_same_v<std::decay_t<Arg1>, typename Vec::base_type>" in rendered_store
+    assert "-> ::tsl::precondition_error" in rendered_store
+    assert "::tsl::store<Vec, Aligned>(ptr.data(), data);" in rendered_store
+    assert "return ::tsl::precondition_error::none;" in rendered_store
+    assert "data: SIMD register or scalar value" in store_docs
+
+
+def test_rust_contiguous_memory_checked_twins_use_slices_and_overload_facts(
+    catalog: Catalog,
+    machine_profiles: Mapping[str, MachineProfile],
+) -> None:
+    load = _lowered(catalog, machine_profiles, "load", "rust")
+    rendered_load = RustBackend().render_primitive_public("load", (load,))
+    load_docs = RustBackend().render_documentation_api("load", (load,))
+    assert "pub fn load_checked<" in rendered_load
+    assert "ptr: &[S::BaseType]" in rendered_load
+    assert "if ptr.len() < S::lane_count()" in rendered_load
+    assert (
+        "if ALIGNED && !(ptr.as_ptr() as usize).is_multiple_of(S::ALIGN)"
+        in rendered_load
+    )
+    assert "Ok(unsafe { load::<S, ALIGNED>(ptr.as_ptr()) })" in rendered_load
+    assert "ptr: shared contiguous slice" in load_docs
+
+    stores = _lowered_group(catalog, machine_profiles, "store", "rust")
+    backend = RustBackend()
+    internal = backend.render_primitive_internal("store", stores)
+    public = backend.render_primitive_public("store", stores)
+    docs = backend.render_documentation_api("store", stores)
+    assert "fn __tsl_checked_memory_extent() -> usize;" in internal
+    assert "fn __tsl_checked_memory_alignment() -> usize;" in internal
+    assert "fn __tsl_checked_memory_extent() -> usize { 1 }" in internal
+    assert "as SimdVector>::lane_count()" in internal
+    assert "pub fn store_checked<" in public
+    assert "ptr: &mut [S::BaseType]" in public
+    assert "-> Result<(), PreconditionError>" in public
+    assert "ptr.as_mut_ptr()" in public
+    assert "Ok(unsafe" not in public
+    assert "Ok(())" in public
+    assert "pub fn store_checked<" in docs
+    assert "ptr: &mut [S::BaseType]" in docs
+    assert "data: SIMD register or scalar value" in docs
+
+
+def test_checked_memory_assets_expose_range_and_error_contracts(render_assets) -> None:
+    cpp = render_assets.text("tsl_core.hpp")
+    rust = render_assets.text("tsl_core.rs")
+
+    assert "class span" in cpp
+    assert "constexpr span(T* data, std::size_t size) noexcept" in cpp
+    assert "Constructing a span does not validate its pointer" in cpp
+    assert "insufficient_extent" in cpp
+    assert "misaligned" in cpp
+    assert "InsufficientExtent" in rust
+    assert "Misaligned" in rust
+
+
+def test_scalable_memory_checked_plan_uses_runtime_lane_count(
+    catalog: Catalog,
+    machine_profiles: Mapping[str, MachineProfile],
+) -> None:
+    cpp = _lowered(
+        catalog,
+        machine_profiles,
+        "load",
+        "cpp",
+        extension_name="rvv",
+        profile_name="rvv",
+    )
+    cpp_checked = CppBackend().render_checked_wrappers("load", (cpp,))
+    assert "ptr.size() < Vec::lane_count()" in cpp_checked
 
 
 @pytest.fixture(scope="module")
@@ -392,6 +531,27 @@ def checked_division_rust_project(
     report = write_artifacts(result.artifacts, output_root)
     assert not has_errors(report.diagnostics), report.diagnostics
     return output_root / "rust"
+
+
+@pytest.fixture(scope="module")
+def checked_memory_project(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Path:
+    output_root = tmp_path_factory.mktemp("checked-memory-project")
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["load", "store", "mask_false"],
+        profiles=["scalar", "avx2"],
+        type_tags=("si32",),
+        backends=["cpp", "rust"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    report = write_artifacts(result.artifacts, output_root)
+    assert not has_errors(report.diagnostics), report.diagnostics
+    return output_root
 
 
 def _cpp_compilers() -> tuple[str, ...]:
@@ -678,3 +838,214 @@ def test_optimized_rust_unchecked_division_has_no_zero_validation_path(
     assert "panic_const_div_by_zero" not in body
     assert "precondition_check" not in body
     assert "panic" not in body
+
+
+@pytest.mark.generated_build
+def test_checked_memory_cpp_consumer_covers_extent_alignment_and_canaries(
+    checked_memory_project: Path,
+    tmp_path: Path,
+) -> None:
+    compilers = _cpp_compilers()
+    if not compilers:
+        pytest.skip("GCC or Clang C++ compiler required")
+    source = _FIXTURES / "memory_consumer.cpp"
+    include = checked_memory_project / "cpp" / "include"
+
+    for compiler in compilers:
+        compiler_id = Path(compiler).name.replace("+", "x")
+        binary = tmp_path / f"memory-{compiler_id}"
+        completed = subprocess.run(
+            (
+                compiler,
+                "-std=c++17",
+                "-O2",
+                "-mavx2",
+                "-mrdrnd",
+                "-msse4.2",
+                "-mssse3",
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "-fno-exceptions",
+                "-I",
+                str(include),
+                str(source),
+                "-o",
+                str(binary),
+            ),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert completed.returncode == 0, completed.stderr
+        subprocess.run((str(binary),), check=True)
+
+    sanitizer = tmp_path / "memory-sanitizer"
+    completed = subprocess.run(
+        (
+            compilers[0],
+            "-std=c++17",
+            "-O1",
+            "-g",
+            "-mavx2",
+            "-mrdrnd",
+            "-msse4.2",
+            "-mssse3",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-fsanitize=address,undefined",
+            "-fno-omit-frame-pointer",
+            "-I",
+            str(include),
+            str(source),
+            "-o",
+            str(sanitizer),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+    environment = os.environ.copy()
+    environment["ASAN_OPTIONS"] = "detect_leaks=0"
+    subprocess.run((str(sanitizer),), check=True, env=environment)
+
+
+@pytest.mark.generated_build
+def test_checked_memory_rust_consumer_covers_extent_alignment_and_canaries(
+    checked_memory_project: Path,
+    tmp_path: Path,
+) -> None:
+    cargo = shutil.which("cargo")
+    if cargo is None:
+        pytest.skip("cargo is not available")
+    if os.uname().machine != "x86_64":
+        pytest.skip("the checked AVX2 alignment consumer requires x86-64")
+    project = checked_memory_project / "rust"
+    source = _FIXTURES / "memory_consumer.rs"
+    binary_source = project / "src" / "bin"
+    binary_source.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source, binary_source / source.name)
+    environment = os.environ.copy()
+    environment["CARGO_TARGET_DIR"] = str(tmp_path / "cargo-target")
+    environment["RUSTFLAGS"] = (
+        "-C target-feature=+avx,+avx2,+rdrand,+sse,+sse2,+sse4.1,+sse4.2,+ssse3"
+    )
+    completed = subprocess.run(
+        (cargo, "run", "--release", "--bin", "memory_consumer"),
+        cwd=project,
+        env=environment,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+@pytest.mark.generated_build
+@pytest.mark.parametrize("compiler_name", ("g++", "clang++"))
+def test_contiguous_memory_codegen_keeps_checks_out_of_the_ordinary_path(
+    checked_memory_project: Path,
+    tmp_path: Path,
+    compiler_name: str,
+) -> None:
+    compiler = shutil.which(compiler_name)
+    if compiler is None:
+        pytest.skip(f"{compiler_name} is not available")
+    source = _FIXTURES / "memory_codegen.cpp"
+    assembly_path = tmp_path / f"memory-{compiler_name.replace('+', 'p')}.s"
+    completed = subprocess.run(
+        (
+            compiler,
+            "-std=c++17",
+            "-O3",
+            "-mavx2",
+            "-mrdrnd",
+            "-msse4.2",
+            "-mssse3",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-fno-exceptions",
+            "-S",
+            "-masm=intel",
+            "-I",
+            str(checked_memory_project / "cpp" / "include"),
+            str(source),
+            "-o",
+            str(assembly_path),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assembly = assembly_path.read_text(encoding="utf-8")
+    unchecked_load = _assembly_function(assembly, "unchecked_load_avx2")
+    checked_load = _assembly_function(assembly, "checked_load_avx2")
+    unchecked_store = _assembly_function(assembly, "unchecked_store_avx2")
+
+    for body in (unchecked_load, unchecked_store):
+        assert re.search(r"\bcmp\b", body) is None
+        assert re.search(r"\bj[a-z]+\b", body) is None
+    assert "ymm0" in unchecked_load
+    assert "ymm0" in checked_load
+    assert re.search(r"\bcmp\b", checked_load) is not None
+    assert re.search(r"\bj[a-z]+\b", checked_load) is not None
+    assert not re.search(r"\[(?:r|e)sp(?:\s*[+\-])?", checked_load)
+
+
+@pytest.mark.generated_build
+def test_unchecked_rust_memory_codegen_has_no_extent_or_alignment_branch(
+    checked_memory_project: Path,
+    tmp_path: Path,
+) -> None:
+    cargo = shutil.which("cargo")
+    if cargo is None:
+        pytest.skip("cargo is not available")
+    if os.uname().machine != "x86_64":
+        pytest.skip("the unchecked AVX2 codegen probe requires x86-64")
+    project = checked_memory_project / "rust"
+    source = _FIXTURES / "memory_rust_codegen.rs"
+    binary_source = project / "src" / "bin"
+    binary_source.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source, binary_source / source.name)
+    target_dir = tmp_path / "cargo-target"
+    environment = os.environ.copy()
+    environment["CARGO_TARGET_DIR"] = str(target_dir)
+    environment["RUSTFLAGS"] = (
+        "-C target-feature=+avx,+avx2,+rdrand,+sse,+sse2,+sse4.1,+sse4.2,+ssse3"
+    )
+    completed = subprocess.run(
+        (
+            cargo,
+            "rustc",
+            "--release",
+            "--bin",
+            "memory_rust_codegen",
+            "--",
+            "--emit=llvm-ir",
+        ),
+        cwd=project,
+        env=environment,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+    ir_files = sorted(
+        (target_dir / "release" / "deps").glob("memory_rust_codegen-*.ll")
+    )
+    assert ir_files
+    ir = ir_files[0].read_text(encoding="utf-8")
+    function = re.search(
+        r"(?ms)^define .*@unchecked_load_rust\(.*?^}",
+        ir,
+    )
+    assert function is not None
+    body = function.group(0)
+    assert "icmp " not in body
+    assert "br i1" not in body
+    assert "panic_bounds_check" not in body
+    assert "ret <4 x i64>" in body

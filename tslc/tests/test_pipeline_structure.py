@@ -43,6 +43,7 @@ from tslc.catalog.semantics import (
 from tslc.catalog.memory import (
     MemoryAccess,
     MemoryAddressing,
+    MemoryPayloadExtent,
     PrimitiveMemoryContract,
 )
 from tslc.catalog.validation import validate_catalog
@@ -325,6 +326,7 @@ def test_backend_closure_seed_primitives_are_capability_owned() -> None:
                     PrimitiveMemoryContract(
                         MemoryAccess.READ,
                         MemoryAddressing.CONTIGUOUS,
+                        MemoryPayloadExtent.VECTOR,
                     ),
                 ),
                 "store": (
@@ -344,6 +346,7 @@ def test_backend_closure_seed_primitives_are_capability_owned() -> None:
                     PrimitiveMemoryContract(
                         MemoryAccess.WRITE,
                         MemoryAddressing.CONTIGUOUS,
+                        MemoryPayloadExtent.VECTOR,
                     ),
                 ),
                 "read_contiguous": (
@@ -362,6 +365,7 @@ def test_backend_closure_seed_primitives_are_capability_owned() -> None:
                     PrimitiveMemoryContract(
                         MemoryAccess.READ,
                         MemoryAddressing.CONTIGUOUS,
+                        MemoryPayloadExtent.VECTOR,
                     ),
                 ),
                 "write_contiguous": (
@@ -381,6 +385,7 @@ def test_backend_closure_seed_primitives_are_capability_owned() -> None:
                     PrimitiveMemoryContract(
                         MemoryAccess.WRITE,
                         MemoryAddressing.CONTIGUOUS,
+                        MemoryPayloadExtent.VECTOR,
                     ),
                 ),
                 "to_array": (

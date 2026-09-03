@@ -6,6 +6,7 @@ prim<void:=(ptr,v)>[aligned=*] store(ptr, data):
   memory:
     access write
     addressing contiguous
+  preconditions [contiguous_memory_extent, selected_memory_alignment]
   overload:
     axis payload_extent
     value vector
@@ -549,6 +550,7 @@ prim<void:=(ptr,s)>[aligned=*] store(ptr, scalar):
   memory:
     access write
     addressing contiguous
+  preconditions [contiguous_memory_extent, selected_memory_alignment]
   overload:
     axis payload_extent
     value scalar
@@ -647,6 +649,7 @@ prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
   memory:
     access write
     addressing contiguous
+  preconditions [contiguous_memory_extent, selected_memory_alignment]
   overload:
     axis payload_extent
     value vector

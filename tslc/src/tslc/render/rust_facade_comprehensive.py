@@ -21,6 +21,7 @@ from tslc.backend.rust_api_model import (
 from tslc.backend.rust_api_types import RUST_FACADE_SIGNATURE_TYPES
 from tslc.backend.rust_names import rust_primitive_tag_name
 from tslc.backend.rust_translation import rust_raw_identifier
+from tslc.catalog.memory import MemoryAccess, MemoryPayloadExtent
 from tslc.catalog.preconditions import (
     PRECONDITION_DESCRIPTORS,
     PreconditionErrorKind,
@@ -102,6 +103,14 @@ def _private_trait(method: RustComprehensiveMethod) -> str:
             f"pub trait {trait_name}<{', '.join(generic_parts)}>: Representation<N>"
             f"{where_clause}",
             "{",
+            *(
+                (
+                    "    #[doc(hidden)]",
+                    "    fn __tsl_checked_memory_alignment() -> usize;",
+                )
+                if _checked_memory_condition(method.checked_conditions) is not None
+                else ()
+            ),
             (
                 f"    {unsafe_prefix}fn call{const_generics}"
                 f"({parameters}){return_suffix};"
@@ -158,6 +167,22 @@ def _private_impl(
         call = f"unsafe {{ {call} }}"
     result = f"{call}{arm.call.result_suffix}"
     unsafe_prefix = "unsafe " if method.caller_unsafe else ""
+    memory_condition = _checked_memory_condition(method.checked_conditions)
+    memory_alignment = (
+        _checked_memory_alignment_expression(memory_condition, arm)
+        if memory_condition is not None
+        else None
+    )
+    memory_members = (
+        (
+            "    #[inline]",
+            "    fn __tsl_checked_memory_alignment() -> usize {",
+            f"        {memory_alignment}",
+            "    }",
+        )
+        if memory_alignment is not None
+        else ()
+    )
     body_lines = []
     if method.caller_unsafe:
         body_lines.append(
@@ -171,6 +196,7 @@ def _private_impl(
                 f"impl private::{trait_name}<{trait_arguments}> "
                 f"for {source_shape.base_spelling} {{"
             ),
+            *memory_members,
             (
                 f"    {unsafe_prefix}fn call{const_generics}"
                 f"({parameters}){return_suffix} {{"
@@ -229,11 +255,11 @@ def _public_inherent_method(
     )
     parameter_declarations = ", ".join(
         f"{_identifier(parameter.public_name)}: "
-        + RUST_FACADE_SIGNATURE_TYPES.public_type(
-            parameter.kind,
+        + _public_parameter_type(
+            parameter,
             element=shape.base_spelling,
             lanes=str(shape.lanes),
-            result_element=shape.base_spelling,
+            checked_conditions=checked_conditions if checked else (),
         )
         for parameter in runtime_parameters
     )
@@ -278,7 +304,12 @@ def _public_inherent_method(
         if needs_private_bound
         else ()
     )
-    call_args = ", ".join(_public_call_arguments(method))
+    call_args = ", ".join(
+        _public_call_arguments(
+            method,
+            checked_conditions=checked_conditions if checked else (),
+        )
+    )
     call = (
         f"<{shape.base_spelling} as private::{trait_name}<{trait_arguments}>>::"
         f"call{_const_generic_arguments(method)}({call_args})"
@@ -294,6 +325,7 @@ def _public_inherent_method(
             _checked_guards(
                 method,
                 checked_conditions,
+                shape.base_spelling,
                 str(shape.lanes),
                 indent="        ",
             )
@@ -311,7 +343,12 @@ def _public_inherent_method(
                 )
             ),
         ) if method.caller_unsafe else ()),
-        f"        {'Ok(' if checked else ''}{result}{')' if checked else ''}",
+        *_public_success_lines(
+            result,
+            result_kind=method.result_kind,
+            checked=checked,
+            indent="        ",
+        ),
     ]
     attributes = _public_attributes(
         method,
@@ -361,11 +398,11 @@ def _public_free_function(
     runtime_parameters = _runtime_parameters(method)
     parameter_declarations = ", ".join(
         f"{_identifier(parameter.public_name)}: "
-        + RUST_FACADE_SIGNATURE_TYPES.public_type(
-            parameter.kind,
+        + _public_parameter_type(
+            parameter,
             element="T",
             lanes="N",
-            result_element="T",
+            checked_conditions=method.checked_conditions if checked else (),
         )
         for parameter in runtime_parameters
     )
@@ -397,10 +434,14 @@ def _public_free_function(
     ]
     if target is not None:
         where_lines.append("    U: SupportedSimd<N>,")
+    call_arguments = _public_call_arguments(
+        method,
+        checked_conditions=method.checked_conditions if checked else (),
+    )
     call = (
         f"<T as private::{trait_name}<{trait_arguments}>>::"
         f"call{_const_generic_arguments(method)}"
-        f"({', '.join(_public_call_arguments(method))})"
+        f"({', '.join(call_arguments)})"
     )
     call = _unsafe_forward(method, call)
     result = RUST_FACADE_SIGNATURE_TYPES.adapt_public_result(
@@ -413,6 +454,7 @@ def _public_free_function(
             _checked_guards(
                 method,
                 method.checked_conditions,
+                "T",
                 "N",
                 indent="    ",
             )
@@ -426,7 +468,12 @@ def _public_free_function(
                 else "    // SAFETY: upheld by this function's caller contract."
             ),
         ) if method.caller_unsafe else ()),
-        f"    {'Ok(' if checked else ''}{result}{')' if checked else ''}",
+        *_public_success_lines(
+            result,
+            result_kind=method.result_kind,
+            checked=checked,
+            indent="    ",
+        ),
     ]
     rendered_return_type = (
         f"Result<{return_type}, crate::PreconditionError>"
@@ -603,6 +650,7 @@ def _public_attributes(
 def _checked_guards(
     method: RustComprehensiveMethod,
     conditions: tuple[RustFacadeCheckedCondition, ...],
+    element: str,
     lanes: str,
     *,
     indent: str,
@@ -648,6 +696,52 @@ def _checked_guards(
                     )
                 )
             continue
+        if condition.kind is PreconditionKind.CONTIGUOUS_MEMORY_EXTENT:
+            memory = _checked_parameter_expression(
+                method, condition.parameter_name
+            )
+            required_extent = _checked_memory_extent(condition, lanes)
+            invalid_extent = (
+                f"{memory}.is_empty()"
+                if required_extent == "1"
+                else f"{memory}.len() < {required_extent}"
+            )
+            guards.append(
+                f"{indent}if {invalid_extent} {{"
+                f" return Err({error}); }}"
+            )
+            continue
+        if condition.kind is PreconditionKind.SELECTED_MEMORY_ALIGNMENT:
+            memory = _checked_parameter_expression(
+                method, condition.parameter_name
+            )
+            alignment_parameter = next(
+                (
+                    parameter.public_name
+                    for parameter in method.const_parameters
+                    if parameter.source_name
+                    == condition.memory_alignment_axis_name
+                ),
+                None,
+            )
+            if alignment_parameter is None:
+                raise ValueError(
+                    "checked Rust facade memory alignment axis is unresolved"
+                )
+            identity_arguments = "".join(
+                f", {parameter.public_name}"
+                for parameter in _identity_const_parameters(method)
+            )
+            guards.append(
+                f"{indent}if {alignment_parameter} && "
+                f"!({memory}.as_ptr() as usize).is_multiple_of("
+                f"<{element} as private::"
+                f"{_private_trait_name(method)}<{lanes}"
+                f"{identity_arguments}"
+                ">>::__tsl_checked_memory_alignment()) {"
+                f" return Err({error}); }}"
+            )
+            continue
         raise ValueError(f"unsupported Rust facade check {condition.kind.value!r}")
     return tuple(guards)
 
@@ -683,6 +777,10 @@ def _facade_precondition_error(error: PreconditionErrorKind) -> str:
         return "crate::PreconditionError::IndexOutOfBounds"
     if error is PreconditionErrorKind.ZERO_DIVISOR:
         return "crate::PreconditionError::ZeroDivisor"
+    if error is PreconditionErrorKind.INSUFFICIENT_EXTENT:
+        return "crate::PreconditionError::InsufficientExtent"
+    if error is PreconditionErrorKind.MISALIGNED:
+        return "crate::PreconditionError::Misaligned"
     raise ValueError(f"unsupported Rust facade precondition error {error.value!r}")
 
 
@@ -758,18 +856,112 @@ def _method_const_parameters(
     )
 
 
-def _public_call_arguments(method: RustComprehensiveMethod) -> tuple[str, ...]:
+def _public_call_arguments(
+    method: RustComprehensiveMethod,
+    *,
+    checked_conditions: tuple[RustFacadeCheckedCondition, ...] = (),
+) -> tuple[str, ...]:
+    memory = _checked_memory_condition(checked_conditions)
     return tuple(
-        RUST_FACADE_SIGNATURE_TYPES.adapt_public_argument(
-            parameter.kind,
-            (
-                "self"
-                if parameter.placement is RustFacadeParameterPlacement.RECEIVER
-                else _identifier(parameter.public_name)
-            ),
+        (
+            f"{_identifier(parameter.public_name)}.as_ptr()"
+            if memory is not None
+            and memory.memory_access is MemoryAccess.READ
+            and parameter.source_name == memory.parameter_name
+            else f"{_identifier(parameter.public_name)}.as_mut_ptr()"
+            if memory is not None
+            and parameter.source_name == memory.parameter_name
+            else RUST_FACADE_SIGNATURE_TYPES.adapt_public_argument(
+                parameter.kind,
+                (
+                    "self"
+                    if parameter.placement is RustFacadeParameterPlacement.RECEIVER
+                    else _identifier(parameter.public_name)
+                ),
+            )
         )
         for parameter in _runtime_parameters(method)
     )
+
+
+def _public_parameter_type(
+    parameter: RustFacadeParameter,
+    *,
+    element: str,
+    lanes: str,
+    checked_conditions: tuple[RustFacadeCheckedCondition, ...],
+) -> str:
+    memory = _checked_memory_condition(checked_conditions)
+    if memory is not None and parameter.source_name == memory.parameter_name:
+        borrow = "&" if memory.memory_access is MemoryAccess.READ else "&mut "
+        return f"{borrow}[{element}]"
+    return RUST_FACADE_SIGNATURE_TYPES.public_type(
+        parameter.kind,
+        element=element,
+        lanes=lanes,
+        result_element=element,
+    )
+
+
+def _checked_memory_condition(
+    conditions: tuple[RustFacadeCheckedCondition, ...],
+) -> RustFacadeCheckedCondition | None:
+    memory_conditions = tuple(
+        condition for condition in conditions if condition.memory_access is not None
+    )
+    if not memory_conditions:
+        return None
+    identities = {
+        (
+            condition.parameter_name,
+            condition.memory_access,
+            condition.memory_payload_extents,
+            condition.memory_alignment_axis_name,
+        )
+        for condition in memory_conditions
+    }
+    if len(identities) != 1:
+        raise ValueError("checked Rust facade memory conditions disagree")
+    return memory_conditions[0]
+
+
+def _checked_memory_extent(
+    condition: RustFacadeCheckedCondition,
+    lanes: str,
+) -> str:
+    if condition.memory_payload_extents == (MemoryPayloadExtent.SCALAR,):
+        return "1"
+    if condition.memory_payload_extents == (MemoryPayloadExtent.VECTOR,):
+        return lanes
+    raise ValueError("checked Rust facade requires one memory payload extent")
+
+
+def _checked_memory_alignment_expression(
+    condition: RustFacadeCheckedCondition,
+    arm: RustComprehensivePrivateImplementationArm,
+) -> str:
+    if condition.memory_payload_extents == (MemoryPayloadExtent.SCALAR,):
+        return f"core::mem::align_of::<{arm.source_shape.base_spelling}>()"
+    if condition.memory_payload_extents == (MemoryPayloadExtent.VECTOR,):
+        return (
+            f"<{arm.source_representation.vector_descriptor} "
+            "as crate::tsl_core::SimdVector>::ALIGN"
+        )
+    raise ValueError("checked Rust facade requires one memory payload extent")
+
+
+def _public_success_lines(
+    result: str,
+    *,
+    result_kind: str,
+    checked: bool,
+    indent: str,
+) -> tuple[str, ...]:
+    if not checked:
+        return (f"{indent}{result}",)
+    if result_kind == "void":
+        return (f"{indent}{result};", f"{indent}Ok(())")
+    return (f"{indent}Ok({result})",)
 
 
 def _private_trait_name(method: RustComprehensiveMethod) -> str:

@@ -17,6 +17,10 @@ from tslc.catalog.preconditions import (
     PreconditionCheckPrimitive,
     precondition_applies_to_type,
 )
+from tslc.catalog.memory import (
+    MemoryAccess,
+    MemoryPayloadExtent,
+)
 from tslc.catalog.semantics import OperandBinding, OperandRole
 from tslc.lower.lowerer import LoweredSpecialization
 
@@ -31,6 +35,41 @@ class CheckedConditionPlan:
     check_primitives: tuple[PreconditionCheckPrimitive, ...] = ()
     mask_parameter_name: str | None = None
     mask_parameter_index: int | None = None
+    memory_access: MemoryAccess | None = None
+    memory_payload_extents: tuple[MemoryPayloadExtent, ...] = ()
+    memory_alignment_axis_name: str | None = None
+
+    def __post_init__(self) -> None:
+        is_memory = self.kind in {
+            PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
+            PreconditionKind.SELECTED_MEMORY_ALIGNMENT,
+        }
+        has_any_memory = (
+            self.memory_access is not None
+            or bool(self.memory_payload_extents)
+            or self.memory_alignment_axis_name is not None
+        )
+        has_complete_memory = (
+            self.memory_access is not None
+            and bool(self.memory_payload_extents)
+            and self.memory_alignment_axis_name is not None
+        )
+        if has_any_memory and not has_complete_memory:
+            raise ValueError(
+                "checked conditions cannot retain partial typed memory facts"
+            )
+        if is_memory != has_complete_memory:
+            raise ValueError(
+                "checked memory conditions require complete typed memory facts"
+            )
+        if len(set(self.memory_payload_extents)) != len(
+            self.memory_payload_extents
+        ):
+            raise ValueError("checked memory payload extents must be unique")
+        if (self.mask_parameter_name is None) != (
+            self.mask_parameter_index is None
+        ):
+            raise ValueError("checked mask bindings must be complete")
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,9 +126,6 @@ def checked_api_plan(
         )
         if candidate != semantic_keys:
             raise ValueError("checked API requires consistent lowered preconditions")
-    if any(spec.safety.caller_unsafe for spec in specializations):
-        return None
-
     conditions: list[CheckedConditionPlan] = []
     for precondition in declared:
         descriptor = PRECONDITION_DESCRIPTORS[precondition.kind]
@@ -116,8 +152,60 @@ def checked_api_plan(
             binding = precondition.arithmetic_binding(ArithmeticOperandRole.DIVISOR)
             if binding is None:
                 raise ValueError("divisor precondition has no resolved divisor binding")
+        elif precondition.kind in {
+            PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
+            PreconditionKind.SELECTED_MEMORY_ALIGNMENT,
+        }:
+            memory = first.primitive_semantics.memory
+            if memory is None:
+                raise ValueError("memory precondition has no resolved memory contract")
+            memory_role = (
+                OperandRole.MEMORY_SOURCE
+                if memory.access is MemoryAccess.READ
+                else OperandRole.MEMORY_DESTINATION
+            )
+            binding = precondition.binding(memory_role)
+            if binding is None:
+                raise ValueError("memory precondition has no resolved memory binding")
         else:
             return None
+        memory_access: MemoryAccess | None = None
+        memory_payload_extents: tuple[MemoryPayloadExtent, ...] = ()
+        memory_alignment_axis_name: str | None = None
+        if precondition.kind in {
+            PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
+            PreconditionKind.SELECTED_MEMORY_ALIGNMENT,
+        }:
+            memories = tuple(
+                spec.primitive_semantics.memory for spec in specializations
+            )
+            if any(memory is None for memory in memories):
+                raise ValueError("checked memory family has an incomplete memory contract")
+            memory_values = tuple(memory for memory in memories if memory is not None)
+            access_values = {memory.access for memory in memory_values}
+            if len(access_values) != 1:
+                raise ValueError("checked memory family disagrees on memory access")
+            memory_access = next(iter(access_values))
+            memory_payload_extents = tuple(
+                sorted(
+                    {memory.payload_extent for memory in memory_values},
+                    key=lambda item: item.value,
+                )
+            )
+            alignments = tuple(
+                spec.primitive_semantics.memory_alignment
+                for spec in specializations
+            )
+            axis_names = {
+                alignment.axis_name
+                for alignment in alignments
+                if alignment is not None
+            }
+            if len(axis_names) != 1:
+                raise ValueError(
+                    "checked memory family requires one resolved alignment axis"
+                )
+            memory_alignment_axis_name = next(iter(axis_names))
         conditions.append(
             CheckedConditionPlan(
                 kind=precondition.kind,
@@ -128,13 +216,49 @@ def checked_api_plan(
                 check_primitives=check_primitives,
                 mask_parameter_name=mask_name,
                 mask_parameter_index=mask_index,
+                memory_access=memory_access,
+                memory_payload_extents=memory_payload_extents,
+                memory_alignment_axis_name=memory_alignment_axis_name,
             )
         )
     if not conditions:
         return None
-    if first.result_kind == "void":
+    if (
+        any(spec.safety.caller_unsafe for spec in specializations)
+        and not _has_complete_memory_check(tuple(conditions))
+    ):
         return None
     return CheckedApiPlan(tuple(conditions), first.result_kind)
+
+
+def _has_complete_memory_check(
+    conditions: tuple[CheckedConditionPlan, ...],
+) -> bool:
+    """Whether a richer range signature discharges raw-memory caller unsafety."""
+
+    memory_kinds = {
+        PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
+        PreconditionKind.SELECTED_MEMORY_ALIGNMENT,
+    }
+    memory_conditions = tuple(
+        condition
+        for condition in conditions
+        if condition.kind in memory_kinds
+    )
+    identities = {
+        (
+            condition.parameter_name,
+            condition.parameter_index,
+            condition.memory_access,
+            condition.memory_payload_extents,
+            condition.memory_alignment_axis_name,
+        )
+        for condition in memory_conditions
+    }
+    return (
+        {condition.kind for condition in memory_conditions} == memory_kinds
+        and len(identities) == 1
+    )
 
 
 def public_call_requires_unsafe(

@@ -511,6 +511,7 @@ def _validate_remaining_inventories(
             item.axis_names,
             item.memory_access,
             item.memory_addressing,
+            item.memory_payload_extent,
             item.memory_alignment_axis_name,
             item.memory_alignment_modes,
             item.mask_policy,

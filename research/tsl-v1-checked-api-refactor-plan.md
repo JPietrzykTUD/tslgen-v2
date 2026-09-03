@@ -2,8 +2,8 @@
 
 Date: 2026-09-02
 
-Status: accepted pre-v1 public-contract plan; Slices 0-3 are implemented and
-committed; Slice 4 is next
+Status: accepted pre-v1 public-contract plan; Slices 0-4 are implemented and
+committed; Slice 5 is next
 
 Related evidence: [TSL v1.0.0 generated API and documentation audit](tsl-v1-generated-api-docs-audit.md)
 
@@ -23,6 +23,25 @@ require replacing the compiler pipeline. The repository already owns typed
 operation, operand-role, arithmetic, memory, conversion, shift, and
 implementation-safety facts. The work should extend those facts with typed
 public preconditions and add focused backend projections.
+
+### Caller agency, not mandatory inspection
+
+The checked API assists an expert caller but does not attempt to impose a
+mandatory control-flow discipline. In C++, a value-producing checked function
+returns the ordinary value type and accepts one explicit final
+`precondition_error&` output. A no-value checked function returns the status.
+This makes the failure channel visible, keeps examples and tooling able to show
+the correct branch, and preserves the ordinary value-return ABI; it does not
+prove that the caller read or acted on the status.
+
+`[[nodiscard]]` remains useful assistance: on a value-producing function it
+warns when the complete computed value is discarded, and on a status-returning
+function it warns when the status is discarded. It is not described as an
+error-inspection guarantee. TSL documentation, hover, examples, and tests teach
+callers to inspect `error` before relying on a returned value, while leaving the
+decision and response policy with the caller. Rust retains its idiomatic
+`Result` surface and `must_use` diagnostic under the same principle: a warning
+helps the programmer but does not claim to force correct handling.
 
 ### Checked-companion eligibility
 
@@ -897,6 +916,55 @@ Validation:
 
 Goal: offer meaningful checked memory entry points without pretending that a
 bare pointer is self-validating.
+
+Design decision after the C++17 compiler probe: use a small trivially copyable
+`tsl::span<T>` with pointer-plus-size and array constructors, `data()`, and
+`size()`. Its constructor does not attempt pointer validation. The public
+contract requires every constructed span to denote an addressable range of its
+declared element type for its complete lifetime; the checked wrapper can then
+honestly validate the facts represented by that object: payload extent and the
+selected alignment. Rust uses `&[T]` for readable memory and `&mut [T]` for
+writable memory, which provide the corresponding language-level validity
+evidence.
+
+This slice adds exactly two source precondition values:
+
+- `contiguous_memory_extent`; and
+- `selected_memory_alignment`.
+
+They bind to the existing typed memory source or destination according to the
+declared `memory.access`, require `memory.addressing=contiguous`, and derive a
+scalar-versus-vector payload extent from the typed signature/operand contract.
+No source field describes C++ spans, Rust slices, error spellings, or checked
+generation policy. Masked contiguous operations deliberately require the full
+scalar/vector payload extent; the checked API does not derive a shorter sparse
+range from mask bits. Mask-representation operations remain a separate family
+for the later irregular/raw-memory slices.
+
+`load_scalar` is not folded into this slice: the current typed `load` operation
+deliberately requires a vector result, and weakening that invariant would hide
+a distinct scalar-memory semantic shape. It remains in the later raw-memory
+classification slice. The existing typed `store` overload family already owns
+both scalar and vector payload extents and is covered here.
+
+The public shapes are:
+
+- C++ value loads replace the raw pointer with
+  `tsl::span<const typename Vec::base_type>` and retain the final
+  `precondition_error&` value-result convention;
+- C++ stores replace the raw pointer with
+  `tsl::span<typename Vec::base_type>` and return `precondition_error` because
+  there is no operation value to return;
+- Rust value loads accept `&[S::BaseType]` and return `Result<Value,
+  PreconditionError>`; and
+- Rust stores accept `&mut [S::BaseType]` and return `Result<(),
+  PreconditionError>`.
+
+The ordered errors are `insufficient_extent` before `misaligned`. An aligned
+scalar payload requires the base element alignment; an aligned vector payload
+requires the selected vector alignment. Unaligned variants perform no address
+alignment test. Neither backend clamps the range, changes the selected
+alignment policy, or invokes the ordinary raw-pointer function after failure.
 
 Deliverables:
 

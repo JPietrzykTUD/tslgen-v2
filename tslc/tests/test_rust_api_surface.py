@@ -38,6 +38,7 @@ from tslc.catalog.memory import (
     MemoryAccess,
     MemoryAddressing,
     MemoryAlignment,
+    MemoryPayloadExtent,
     PrimitiveMemoryContract,
 )
 from tslc.catalog.model import ImplementationSafety
@@ -351,6 +352,7 @@ def test_inconsistent_core_memory_roles_are_rejected_before_rendering() -> None:
         memory=PrimitiveMemoryContract(
             MemoryAccess.WRITE,
             MemoryAddressing.CONTIGUOUS,
+            MemoryPayloadExtent.VECTOR,
         ),
         memory_alignment=LoweredMemoryAlignment(
             "aligned", MemoryAlignment.UNALIGNED

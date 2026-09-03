@@ -15,6 +15,10 @@ from tslc.catalog.arithmetic import (
     matches_numeric_domain,
 )
 from tslc.catalog.scalar_types import scalar_type_info
+from tslc.catalog.memory import (
+    MemoryAccess,
+    MemoryAddressing,
+)
 from tslc.catalog.semantics import OperandBinding, OperandRole, PrimitiveOperation
 from tslc.diagnostics import SourceSpan
 
@@ -24,6 +28,8 @@ class PreconditionKind(StrEnum):
 
     LANE_INDEX_IN_RANGE = "lane_index_in_range"
     ACTIVE_DIVISOR_NONZERO = "active_divisor_nonzero"
+    CONTIGUOUS_MEMORY_EXTENT = "contiguous_memory_extent"
+    SELECTED_MEMORY_ALIGNMENT = "selected_memory_alignment"
 
 
 class PreconditionHazard(StrEnum):
@@ -37,6 +43,8 @@ class PreconditionErrorKind(StrEnum):
 
     INDEX_OUT_OF_BOUNDS = "index_out_of_bounds"
     ZERO_DIVISOR = "zero_divisor"
+    INSUFFICIENT_EXTENT = "insufficient_extent"
+    MISALIGNED = "misaligned"
 
 
 class PreconditionCheckPrimitive(StrEnum):
@@ -66,6 +74,9 @@ class PreconditionDescriptor:
     checkable_arithmetic_binding_kinds: frozenset[str] = frozenset()
     check_primitives: tuple[PreconditionCheckPrimitive, ...] = ()
     masked_check_primitives: tuple[PreconditionCheckPrimitive, ...] = ()
+    compatible_memory_accesses: frozenset[MemoryAccess] = frozenset()
+    compatible_memory_addressings: frozenset[MemoryAddressing] = frozenset()
+    binds_memory_operand: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,6 +159,52 @@ PRECONDITION_DESCRIPTORS: Mapping[
             unchecked_consequence=(
                 "Violating this precondition may cause undefined behavior, a "
                 "hardware trap, or process termination."
+            ),
+        ),
+        PreconditionKind.CONTIGUOUS_MEMORY_EXTENT: PreconditionDescriptor(
+            kind=PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
+            description=(
+                "The contiguous memory operand represents at least the operation's "
+                "complete scalar or vector payload extent."
+            ),
+            compatible_operations=frozenset(
+                {PrimitiveOperation.LOAD, PrimitiveOperation.STORE}
+            ),
+            compatible_memory_accesses=frozenset(
+                {MemoryAccess.READ, MemoryAccess.WRITE}
+            ),
+            compatible_memory_addressings=frozenset(
+                {MemoryAddressing.CONTIGUOUS}
+            ),
+            binds_memory_operand=True,
+            hazard=PreconditionHazard.CATASTROPHIC,
+            error=PreconditionErrorKind.INSUFFICIENT_EXTENT,
+            unchecked_consequence=(
+                "Violating this precondition may read or write outside the live "
+                "memory object, causing undefined behavior or a process-level fault."
+            ),
+        ),
+        PreconditionKind.SELECTED_MEMORY_ALIGNMENT: PreconditionDescriptor(
+            kind=PreconditionKind.SELECTED_MEMORY_ALIGNMENT,
+            description=(
+                "When aligned access is selected, the contiguous memory operand "
+                "satisfies the payload's required alignment."
+            ),
+            compatible_operations=frozenset(
+                {PrimitiveOperation.LOAD, PrimitiveOperation.STORE}
+            ),
+            compatible_memory_accesses=frozenset(
+                {MemoryAccess.READ, MemoryAccess.WRITE}
+            ),
+            compatible_memory_addressings=frozenset(
+                {MemoryAddressing.CONTIGUOUS}
+            ),
+            binds_memory_operand=True,
+            hazard=PreconditionHazard.CATASTROPHIC,
+            error=PreconditionErrorKind.MISALIGNED,
+            unchecked_consequence=(
+                "Violating this precondition may cause undefined behavior, a "
+                "hardware fault, or a process-level trap."
             ),
         ),
     }

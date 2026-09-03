@@ -56,6 +56,43 @@ enum class precondition_error : std::uint8_t {
     none,
     index_out_of_bounds,
     zero_divisor,
+    insufficient_extent,
+    misaligned,
+};
+
+/**
+ * A non-owning contiguous range used by checked memory APIs.
+ *
+ * Constructing a span does not validate its pointer. The caller must ensure
+ * that a non-empty `data` denotes `size` live, addressable `T` objects for every
+ * operation performed through the span and that the range remains valid for
+ * the span's use. An empty span may carry a null pointer. Checked TSL operations
+ * validate their own extent and selected alignment requirements after that
+ * language-level range invariant has been established.
+ */
+template <class T>
+class span {
+ public:
+  using element_type = T;
+
+  constexpr span(T* data, std::size_t size) noexcept
+      : data_(data), size_(size) {}
+
+  template <std::size_t Size>
+  constexpr span(T (&data)[Size]) noexcept : data_(data), size_(Size) {}
+
+  template <
+      class U,
+      std::enable_if_t<std::is_convertible_v<U (*)[], T (*)[]>, int> = 0>
+  constexpr span(span<U> other) noexcept
+      : data_(other.data()), size_(other.size()) {}
+
+  [[nodiscard]] constexpr auto data() const noexcept -> T* { return data_; }
+  [[nodiscard]] constexpr auto size() const noexcept -> std::size_t { return size_; }
+
+ private:
+  T* data_;
+  std::size_t size_;
 };
 
 template <auto Value>

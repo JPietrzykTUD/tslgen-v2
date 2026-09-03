@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from tslc.documentation import parameter_summary
+from tslc.documentation import kind_description, parameter_summary
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 from tslc.target_text import LoweredBody
@@ -51,3 +51,35 @@ def runtime_parameter_summary(spec: LoweredSpecialization) -> str:
         tuple(kind for _name, kind in params),
     )
 
+
+def family_runtime_parameter_descriptions(
+    specializations: Sequence[LoweredSpecialization],
+) -> tuple[tuple[int, str, str], ...]:
+    """Document wrapper parameters whose overload family may vary their kinds."""
+
+    if not specializations:
+        return ()
+    shape = specializations[0]
+    descriptions: list[tuple[int, str, str]] = []
+    for index, (name, kind) in enumerate(zip(shape.param_names, shape.param_kinds)):
+        if kind == DEFAULT_SUPPORT_POLICY.immediate_kind:
+            continue
+        choices = tuple(
+            dict.fromkeys(
+                kind_description(spec.param_kinds[index])
+                for spec in specializations
+            )
+        )
+        descriptions.append((index, name, " or ".join(choices)))
+    return tuple(descriptions)
+
+
+def family_runtime_parameter_summary(
+    specializations: Sequence[LoweredSpecialization],
+) -> str:
+    return "; ".join(
+        f"{name}: {description}"
+        for _index, name, description in family_runtime_parameter_descriptions(
+            specializations
+        )
+    )

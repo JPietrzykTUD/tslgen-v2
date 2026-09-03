@@ -5,13 +5,18 @@ from __future__ import annotations
 from collections import Counter
 
 from tslc.catalog.arithmetic import ArithmeticContract, ArithmeticOperandBinding
+from tslc.catalog.memory import MemoryAccess, PrimitiveMemoryContract
 from tslc.catalog.preconditions import (
     PRECONDITION_DESCRIPTORS,
     PreconditionKind,
     PrimitivePrecondition,
     precondition_values,
 )
-from tslc.catalog.semantics import OperandBinding, PrimitiveSemanticContract
+from tslc.catalog.semantics import (
+    OperandBinding,
+    OperandRole,
+    PrimitiveSemanticContract,
+)
 from tslc.diagnostics import Diagnostic, RelatedLocation, SourceSpan, diagnostic_at
 from tslc.syntax.access import source_span
 from tslc.syntax.ast import (
@@ -25,6 +30,7 @@ def build_preconditions(
     declaration: ParsedPrimitiveDeclaration,
     operation: PrimitiveSemanticContract | None,
     arithmetic: ArithmeticContract | None,
+    memory: PrimitiveMemoryContract | None,
     diagnostics: list[Diagnostic],
 ) -> tuple[PrimitivePrecondition, ...]:
     fields = declaration.fields_by_name("preconditions")
@@ -103,7 +109,7 @@ def build_preconditions(
                 )
             )
 
-    if operation is None and arithmetic is None and kinds:
+    if operation is None and arithmetic is None and memory is None and kinds:
         invalid = True
         diagnostics.append(
             diagnostic_at(
@@ -111,12 +117,12 @@ def build_preconditions(
                 code="TSL-CATALOG-PRECONDITION-MISSING-OPERATION",
                 message=(
                     f"primitive {declaration.name!r} preconditions require an "
-                    "operation or arithmetic contract with operand roles"
+                    "operation, arithmetic, or memory contract with operand roles"
                 ),
                 source=source_span(field.source),
             )
         )
-    if invalid or (operation is None and arithmetic is None):
+    if invalid or (operation is None and arithmetic is None and memory is None):
         return ()
 
     promoted: list[PrimitivePrecondition] = []
@@ -134,7 +140,17 @@ def build_preconditions(
                 )
             )
         )
-        if not semantic_compatible and not arithmetic_compatible:
+        memory_compatible = (
+            memory is not None
+            and memory.access in descriptor.compatible_memory_accesses
+            and memory.addressing in descriptor.compatible_memory_addressings
+        )
+        compatible = (
+            semantic_compatible and memory_compatible
+            if descriptor.binds_memory_operand
+            else semantic_compatible or arithmetic_compatible or memory_compatible
+        )
+        if not compatible:
             actual = (
                 repr(operation.kind.value)
                 if operation is not None
@@ -185,6 +201,21 @@ def build_preconditions(
                 )
                 if role in by_arithmetic_role
             )
+        if memory_compatible and descriptor.binds_memory_operand:
+            assert memory is not None
+            if operation is None:
+                missing_names.append("memory_source_or_destination")
+            else:
+                memory_role = (
+                    OperandRole.MEMORY_SOURCE
+                    if memory.access is MemoryAccess.READ
+                    else OperandRole.MEMORY_DESTINATION
+                )
+                memory_binding = operation.binding(memory_role)
+                if memory_binding is None:
+                    missing_names.append(memory_role.value)
+                else:
+                    bindings.append(memory_binding)
         if missing_names:
             diagnostics.append(
                 diagnostic_at(

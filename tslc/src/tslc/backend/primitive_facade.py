@@ -10,6 +10,7 @@ from tslc.catalog.memory import (
     MemoryAccess,
     MemoryAddressing,
     MemoryAlignment,
+    MemoryPayloadExtent,
     memory_operation,
 )
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
@@ -31,16 +32,24 @@ class DataparallelPrimitiveFacade:
     kind: DataparallelPrimitiveFacadeKind
     memory_access: MemoryAccess | None = None
     memory_addressing: MemoryAddressing | None = None
+    memory_payload_extent: MemoryPayloadExtent | None = None
     alignment_axis_name: str | None = None
     overload_parameter_positions: tuple[int, ...] = ()
 
     def __post_init__(self) -> None:
         is_memory = self.kind is DataparallelPrimitiveFacadeKind.CONTIGUOUS_MEMORY
-        has_memory_facts = (
-            self.memory_access is not None
-            and self.memory_addressing is not None
-            and self.alignment_axis_name is not None
+        memory_facts = (
+            self.memory_access,
+            self.memory_addressing,
+            self.memory_payload_extent,
+            self.alignment_axis_name,
         )
+        has_any_memory_fact = any(item is not None for item in memory_facts)
+        has_memory_facts = all(item is not None for item in memory_facts)
+        if has_any_memory_fact and not has_memory_facts:
+            raise ValueError(
+                "Dataparallel primitive facades cannot retain partial memory facts"
+            )
         if is_memory != has_memory_facts:
             raise ValueError(
                 "Contiguous-memory facades require exactly the typed memory facts"
@@ -287,6 +296,7 @@ def _memory_facade_decision(
             kind=DataparallelPrimitiveFacadeKind.CONTIGUOUS_MEMORY,
             memory_access=memory.access,
             memory_addressing=memory.addressing,
+            memory_payload_extent=memory.payload_extent,
             alignment_axis_name=alignment.axis_name,
             overload_parameter_positions=overload_parameter_positions,
         )
@@ -380,6 +390,7 @@ def _is_contiguous_memory_facade_shape(
     if memory.access is MemoryAccess.READ:
         return (
             operation.kind is PrimitiveOperation.LOAD
+            and memory.payload_extent is MemoryPayloadExtent.VECTOR
             and spec.result_kind == "v"
             and spec.param_kinds == ("cptr",)
             and roles == ((OperandRole.MEMORY_SOURCE, 0, "cptr"),)
@@ -387,6 +398,7 @@ def _is_contiguous_memory_facade_shape(
     overload = semantics.overload
     return (
         operation.kind is PrimitiveOperation.STORE
+        and memory.payload_extent is MemoryPayloadExtent.VECTOR
         and spec.result_kind == "void"
         and spec.param_kinds == ("ptr", "v")
         and roles

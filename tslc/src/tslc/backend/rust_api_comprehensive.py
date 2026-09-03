@@ -330,6 +330,9 @@ def _checked_conditions(candidate: _Candidate) -> tuple[RustFacadeCheckedConditi
                     }
                 )
             ),
+            condition.memory_access,
+            condition.memory_payload_extents,
+            condition.memory_alignment_axis_name,
         )
         for condition in plan.conditions
     )

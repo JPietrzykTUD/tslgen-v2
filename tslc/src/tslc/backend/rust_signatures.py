@@ -10,6 +10,7 @@ from tslc.backend.rust_type_params import (
 from tslc.backend.signature_types import RUST_SIGNATURE_TYPES, rust_free_type
 from tslc.backend.target_capability import rust_extension_tag
 from tslc.catalog.arithmetic import ArithmeticNumericDomain
+from tslc.catalog.memory import MemoryAccess
 from tslc.lower.lowerer import (
     LoweredArithmeticPrecondition,
     LoweredArithmeticPreconditionKind,
@@ -176,10 +177,78 @@ def params(
     return ", ".join(parts)
 
 
+def checked_params(
+    shape: LoweredSpecialization,
+    owner: str,
+    plan: CheckedApiPlan,
+) -> str:
+    """Render a checked signature, replacing typed memory pointers with slices."""
+
+    memory_conditions = tuple(
+        condition for condition in plan.conditions if condition.memory_access is not None
+    )
+    if not memory_conditions:
+        return params(shape, owner)
+    bindings = {
+        (
+            condition.parameter_index,
+            condition.parameter_name,
+            condition.memory_access,
+        )
+        for condition in memory_conditions
+    }
+    if len(bindings) != 1:
+        raise ValueError("Rust checked memory conditions disagree on their binding")
+    memory_index, memory_name, memory_access = next(iter(bindings))
+    parts: list[str] = []
+    for index, (name, kind) in enumerate(zip(shape.param_names, shape.param_kinds)):
+        if kind == DEFAULT_SUPPORT_POLICY.immediate_kind:
+            continue
+        if index == memory_index:
+            if name != memory_name:
+                raise ValueError("Rust checked memory binding has changed parameter name")
+            borrow = "&" if memory_access is MemoryAccess.READ else "&mut "
+            parts.append(f"{name}: {borrow}[{owner}::BaseType]")
+        else:
+            parts.append(f"{name}: {param_kind_type(kind, owner)}")
+    return ", ".join(parts)
+
+
 def runtime_names(shape: LoweredSpecialization) -> str:
     return ", ".join(
         name
         for name, kind in zip(shape.param_names, shape.param_kinds)
+        if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
+    )
+
+
+def checked_runtime_names(
+    shape: LoweredSpecialization,
+    plan: CheckedApiPlan,
+) -> str:
+    """Render arguments forwarded from a checked slice signature to raw kernels."""
+
+    memory_conditions = tuple(
+        condition for condition in plan.conditions if condition.memory_access is not None
+    )
+    if not memory_conditions:
+        return runtime_names(shape)
+    bindings = {
+        (condition.parameter_index, condition.memory_access)
+        for condition in memory_conditions
+    }
+    if len(bindings) != 1:
+        raise ValueError("Rust checked memory conditions disagree on their binding")
+    memory_index, memory_access = next(iter(bindings))
+    return ", ".join(
+        (
+            f"{name}.as_ptr()"
+            if index == memory_index and memory_access is MemoryAccess.READ
+            else f"{name}.as_mut_ptr()"
+            if index == memory_index
+            else name
+        )
+        for index, (name, kind) in enumerate(zip(shape.param_names, shape.param_kinds))
         if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
     )
 
@@ -216,6 +285,8 @@ __all__ = (
     "arithmetic_preconditions",
     "axis_name",
     "checked_type_where",
+    "checked_params",
+    "checked_runtime_names",
     "concrete_array",
     "concrete_param_type",
     "concrete_result_type",

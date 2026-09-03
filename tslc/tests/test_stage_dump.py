@@ -78,12 +78,16 @@ def test_catalog_dumps_language_neutral_operation_and_domain_contracts(
 
     assert errors == []
     assert "operation: load" in text
-    assert "memory: access=read  addressing=contiguous" in text
+    assert (
+        "memory: access=read  addressing=contiguous  payload_extent=vector"
+        in text
+    )
     for primitive in payload["primitives"]:
         assert primitive["operation"]["name"] == "load"
         assert primitive["memory"] == {
             "access": "read",
             "addressing": "contiguous",
+            "payload_extent": "vector",
         }
 
 

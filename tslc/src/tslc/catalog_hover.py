@@ -183,6 +183,26 @@ def hover_text(
                     )
                 )
             )
+        if precondition_descriptor.compatible_memory_accesses:
+            facts.append(
+                "**Compatible memory accesses:** "
+                + _inline_code(
+                    sorted(
+                        access.value
+                        for access in precondition_descriptor.compatible_memory_accesses
+                    )
+                )
+            )
+        if precondition_descriptor.compatible_memory_addressings:
+            facts.append(
+                "**Compatible memory addressing:** "
+                + _inline_code(
+                    sorted(
+                        addressing.value
+                        for addressing in precondition_descriptor.compatible_memory_addressings
+                    )
+                )
+            )
         if precondition_descriptor.numeric_domain is not None:
             facts.append(
                 "**Numeric domain:** "

@@ -9,8 +9,10 @@ import pytest
 from tslc.authoring_completion import authoring_completions
 from tslc.catalog.arithmetic import ArithmeticOperandRole
 from tslc.catalog.builder import CatalogBuilder
+from tslc.catalog.memory import MemoryPayloadExtent
 from tslc.catalog.model import Catalog
 from tslc.catalog.preconditions import PreconditionKind
+from tslc.catalog.semantics import OperandRole
 from tslc.catalog.validation import validate_catalog
 from tslc.catalog_index import build_catalog_index
 from tslc.compiler_assets import load_default_tsl_grammar
@@ -308,3 +310,104 @@ def test_runtime_division_families_declare_nonzero_precondition(
         tuple(condition.kind for condition in primitive.preconditions)
         for primitive in declarations
     } == {(PreconditionKind.ACTIVE_DIVISOR_NONZERO,)}
+
+
+def test_memory_preconditions_bind_the_typed_memory_operand_and_payload() -> None:
+    source = (
+        "prim<v:=cptr>[aligned=*] read(ptr):\n"
+        "  operation load\n"
+        "  operand_roles:\n"
+        "    memory_source ptr\n"
+        "  memory:\n"
+        "    access read\n"
+        "    addressing contiguous\n"
+        "  preconditions [contiguous_memory_extent, selected_memory_alignment]\n"
+    )
+
+    parsed, catalog, diagnostics = _build(source)
+
+    assert diagnostics == ()
+    primitive = catalog.primitives[0]
+    assert primitive.memory is not None
+    assert primitive.memory.payload_extent is MemoryPayloadExtent.VECTOR
+    assert tuple(condition.kind for condition in primitive.preconditions) == (
+        PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
+        PreconditionKind.SELECTED_MEMORY_ALIGNMENT,
+    )
+    assert {
+        (
+            binding.role,
+            binding.parameter_name,
+            binding.parameter_index,
+            binding.parameter_kind,
+        )
+        for condition in primitive.preconditions
+        for binding in condition.operand_bindings
+    } == {(OperandRole.MEMORY_SOURCE, "ptr", 0, "cptr")}
+
+    index = build_catalog_index(catalog, parsed)
+    hover = next(
+        index.hover(occurrence) or ""
+        for occurrence in index.occurrences_by_path[_PATH]
+        if occurrence.kind == "precondition"
+        and occurrence.name == "contiguous_memory_extent"
+    )
+    assert "Compatible memory accesses" in hover
+    assert "`read`" in hover
+    assert "Compatible memory addressing" in hover
+    assert "`contiguous`" in hover
+
+    edited = source.split("contiguous_memory_extent", 1)[0] + "contiguous_memory_"
+    context = authoring_cursor_context(parsed, _PATH, edited, len(edited))
+    assert {item.label for item in authoring_completions(context, catalog)} == {
+        "contiguous_memory_extent"
+    }
+
+
+def test_memory_precondition_requires_a_compatible_memory_contract() -> None:
+    source = (
+        "prim<v:=cptr>[aligned=*] read(ptr):\n"
+        "  operation load\n"
+        "  operand_roles:\n"
+        "    memory_source ptr\n"
+        "  preconditions [contiguous_memory_extent]\n"
+    )
+
+    _parsed, catalog, diagnostics = _build(source)
+
+    assert catalog.primitives[0].preconditions == ()
+    assert {
+        diagnostic.code for diagnostic in diagnostics
+    } >= {
+        "TSL-CATALOG-OPERATION-MISSING-MEMORY",
+        "TSL-CATALOG-INCOMPATIBLE-PRECONDITION-OPERATION",
+    }
+
+
+def test_current_contiguous_load_store_families_declare_memory_preconditions(
+    catalog: Catalog,
+) -> None:
+    load_declarations = catalog.primitives_named("load", unmasked=False)
+    store_declarations = catalog.primitives_named("store", unmasked=False)
+
+    assert len(load_declarations) == 6
+    assert len(store_declarations) == 6
+    assert {
+        tuple(condition.kind for condition in primitive.preconditions)
+        for primitive in (*load_declarations, *store_declarations)
+    } == {
+        (
+            PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
+            PreconditionKind.SELECTED_MEMORY_ALIGNMENT,
+        )
+    }
+    assert {
+        primitive.memory.payload_extent
+        for primitive in load_declarations
+        if primitive.memory is not None
+    } == {MemoryPayloadExtent.VECTOR}
+    assert {
+        primitive.memory.payload_extent
+        for primitive in store_declarations
+        if primitive.memory is not None
+    } == {MemoryPayloadExtent.SCALAR, MemoryPayloadExtent.VECTOR}

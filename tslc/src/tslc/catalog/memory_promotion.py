@@ -10,12 +10,18 @@ from tslc.catalog._semantic_promotion_common import (
 from tslc.catalog.memory import (
     MemoryAccess,
     MemoryAddressing,
+    MemoryPayloadExtent,
     PrimitiveMemoryContract,
     memory_access_values,
     memory_addressing_values,
     memory_operation,
 )
-from tslc.catalog.semantics import PrimitiveOperation, PrimitiveSemanticContract
+from tslc.catalog.semantics import (
+    OperandRole,
+    PrimitiveOperation,
+    PrimitiveSemanticContract,
+)
+from tslc.catalog.signatures import parse_signature
 from tslc.diagnostics import Diagnostic, diagnostic_at
 from tslc.syntax.access import source_span
 from tslc.syntax.ast import ParsedPrimitiveDeclaration
@@ -94,13 +100,56 @@ def build_memory_contract(
             )
         )
         return None
+    payload_extent = _payload_extent(declaration, semantic, access, diagnostics)
+    if payload_extent is None:
+        return None
     return PrimitiveMemoryContract(
         access=access,
         addressing=addressing,
+        payload_extent=payload_extent,
         source=source_span(field.source),
         access_source=member_value_source(members.get("access")),
         addressing_source=member_value_source(members.get("addressing")),
     )
+
+
+def _payload_extent(
+    declaration: ParsedPrimitiveDeclaration,
+    semantic: PrimitiveSemanticContract,
+    access: MemoryAccess,
+    diagnostics: list[Diagnostic],
+) -> MemoryPayloadExtent | None:
+    signature = parse_signature(declaration.signature)
+    kind: str | None
+    if signature is None:
+        kind = None
+    elif access is MemoryAccess.READ:
+        kind = signature.result_kind
+    else:
+        value = semantic.binding(OperandRole.VALUE)
+        kind = None if value is None else value.parameter_kind
+    payload_extent = (
+        None
+        if kind is None
+        else {
+            "s": MemoryPayloadExtent.SCALAR,
+            "v": MemoryPayloadExtent.VECTOR,
+        }.get(kind)
+    )
+    if payload_extent is not None:
+        return payload_extent
+    diagnostics.append(
+        diagnostic_at(
+            severity="error",
+            code="TSL-CATALOG-MEMORY-PAYLOAD-EXTENT",
+            message=(
+                f"memory access {access.value!r} on primitive "
+                f"{declaration.name!r} requires a scalar or vector payload"
+            ),
+            source=source_span(declaration.signature_source),
+        )
+    )
+    return None
 
 
 __all__ = ("KNOWN_MEMORY_FIELDS", "build_memory_contract")

@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
-from tslc.backend.primitive_rendering import runtime_parameter_summary
+from tslc.backend.primitive_rendering import (
+    family_runtime_parameter_descriptions,
+    family_runtime_parameter_summary,
+    runtime_parameter_summary,
+)
 from tslc.backend.signature_types import CPP_SIGNATURE_TYPES
+from tslc.catalog.memory import MemoryAccess
 from tslc.catalog.preconditions import (
     PRECONDITION_DESCRIPTORS,
     PreconditionErrorKind,
@@ -29,9 +34,16 @@ def cpp_doc(
     indent: str = "",
     concrete: bool = True,
     checked: bool = False,
+    specializations: tuple[LoweredSpecialization, ...] = (),
 ) -> str:
     return render_cpp_doc(
-        _doc_block(spec, context=context, concrete=concrete, checked=checked),
+        _doc_block(
+            spec,
+            context=context,
+            concrete=concrete,
+            checked=checked,
+            specializations=specializations or (spec,),
+        ),
         indent=indent,
     )
 
@@ -64,6 +76,7 @@ def _doc_block(
     context: str,
     concrete: bool,
     checked: bool,
+    specializations: tuple[LoweredSpecialization, ...],
 ) -> DocumentationBlock:
     if not concrete:
         preconditions = precondition_fact(
@@ -75,14 +88,25 @@ def _doc_block(
                 ("Checks", preconditions),
                 (
                     "Success",
-                    "sets `precondition_error::none` and returns the operation result",
+                    (
+                        "sets `precondition_error::none` and returns the operation result"
+                        if spec.result_kind != "void"
+                        else "returns `precondition_error::none` after invoking the operation"
+                    ),
                 ),
                 (
                     "Failure",
-                    f"sets {_cpp_checked_errors(spec.primitive_semantics.preconditions)}, "
-                    "returns a fully initialized "
-                    "placeholder with no TSL-defined value, and does not invoke "
-                    "the unchecked operation",
+                    (
+                        f"sets {_cpp_checked_errors(spec.primitive_semantics.preconditions)}, "
+                        "returns a fully initialized placeholder with no TSL-defined "
+                        "value, and does not invoke the unchecked operation"
+                        if spec.result_kind != "void"
+                        else (
+                            "returns "
+                            f"{_cpp_checked_errors(spec.primitive_semantics.preconditions)} "
+                            "and does not invoke the unchecked operation"
+                        )
+                    ),
                 ),
             )
             if checked and preconditions
@@ -95,8 +119,23 @@ def _doc_block(
             facts=(
                 ("Template parameters", _template_summary(spec)),
                 ("Returns", _result_summary(spec, concrete=False)),
-                ("Parameters", runtime_parameter_summary(spec)),
+                (
+                    "Parameters",
+                    _parameter_summary(specializations, checked=checked),
+                ),
                 *condition_facts,
+                *(
+                    (
+                        (
+                            "Range validity",
+                            "The span must denote its declared live, addressable "
+                            "element range for the duration of the call; construction "
+                            "does not validate that C++ object invariant",
+                        ),
+                    )
+                    if checked and spec.primitive_semantics.memory is not None
+                    else ()
+                ),
             ),
             facts_title="API",
         )
@@ -175,7 +214,42 @@ def _cpp_error_name(error: PreconditionErrorKind) -> str:
         return "index_out_of_bounds"
     if error is PreconditionErrorKind.ZERO_DIVISOR:
         return "zero_divisor"
+    if error is PreconditionErrorKind.INSUFFICIENT_EXTENT:
+        return "insufficient_extent"
+    if error is PreconditionErrorKind.MISALIGNED:
+        return "misaligned"
     raise ValueError(f"unsupported C++ precondition error {error.value!r}")
+
+
+def _parameter_summary(
+    specializations: tuple[LoweredSpecialization, ...],
+    *,
+    checked: bool,
+) -> str:
+    spec = specializations[0]
+    memory = spec.primitive_semantics.memory
+    if not checked or memory is None:
+        return family_runtime_parameter_summary(specializations)
+    memory_indexes = {
+        binding.parameter_index
+        for condition in spec.primitive_semantics.preconditions
+        for binding in condition.operand_bindings
+        if binding.parameter_index < len(spec.param_kinds)
+        and spec.param_kinds[binding.parameter_index] in {"cptr", "ptr"}
+    }
+    return "; ".join(
+        f"{name}: "
+        + (
+            "read-only contiguous span"
+            if index in memory_indexes and memory.access is MemoryAccess.READ
+            else "writable contiguous span"
+            if index in memory_indexes
+            else description
+        )
+        for index, name, description in family_runtime_parameter_descriptions(
+            specializations
+        )
+    )
 
 
 def _template_summary(spec: LoweredSpecialization) -> str:

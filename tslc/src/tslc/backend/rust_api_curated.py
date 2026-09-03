@@ -711,6 +711,7 @@ def _operation_bindings(
                 (
                     requirement.memory_access,
                     requirement.memory_addressing,
+                    requirement.memory_payload_extent,
                 )
                 if requirement.memory_access is not None
                 else None
@@ -746,6 +747,9 @@ def _operation_bindings(
                 memory_access=key.memory[0] if key.memory is not None else None,
                 memory_addressing=(
                     key.memory[1] if key.memory is not None else None
+                ),
+                memory_payload_extent=(
+                    key.memory[2] if key.memory is not None else None
                 ),
                 memory_alignment_axis_name=memory_alignment_axis_name,
                 memory_alignment_modes=memory_alignment_modes,

@@ -25,6 +25,7 @@ from tslc.catalog.preconditions import (
     PreconditionErrorKind,
     PreconditionKind,
 )
+from tslc.catalog.memory import MemoryAccess
 from tslc.lower.lowerer import (
     LoweredArithmeticPrecondition,
     LoweredArithmeticPreconditionKind,
@@ -85,6 +86,10 @@ def _cpp_precondition_error(error: PreconditionErrorKind) -> str:
         return "::tsl::precondition_error::index_out_of_bounds"
     if error is PreconditionErrorKind.ZERO_DIVISOR:
         return "::tsl::precondition_error::zero_divisor"
+    if error is PreconditionErrorKind.INSUFFICIENT_EXTENT:
+        return "::tsl::precondition_error::insufficient_extent"
+    if error is PreconditionErrorKind.MISALIGNED:
+        return "::tsl::precondition_error::misaligned"
     raise ValueError(f"unsupported C++ precondition error {error.value!r}")
 
 
@@ -94,9 +99,13 @@ def _cpp_checked_failure(
     *,
     indent: str,
 ) -> str:
+    error = _cpp_precondition_error(condition.error)
+    if not plan.has_value_result:
+        return f"{indent}return {error};"
+    if plan.failure_placeholder_expression is None:
+        raise ValueError("C++ checked value result requires a failure placeholder")
     return (
-        f"{indent}{plan.error_parameter_name} = "
-        f"{_cpp_precondition_error(condition.error)};\n"
+        f"{indent}{plan.error_parameter_name} = {error};\n"
         f"{indent}return {plan.failure_placeholder_expression};"
     )
 
@@ -112,6 +121,34 @@ def _cpp_checked_condition(
             "    }"
         )
     if condition.kind is not PreconditionKind.ACTIVE_DIVISOR_NONZERO:
+        if condition.kind is PreconditionKind.CONTIGUOUS_MEMORY_EXTENT:
+            if (
+                plan.memory_parameter_name is None
+                or plan.required_extent_expression is None
+            ):
+                raise ValueError("C++ checked extent has no finalized range plan")
+            return (
+                f"    if ({plan.memory_parameter_name}.size() < "
+                f"{plan.required_extent_expression}) {{\n"
+                f"{_cpp_checked_failure(condition, plan, indent='        ')}\n"
+                "    }"
+            )
+        if condition.kind is PreconditionKind.SELECTED_MEMORY_ALIGNMENT:
+            if (
+                plan.memory_parameter_name is None
+                or plan.required_alignment_expression is None
+                or plan.alignment_parameter_name is None
+            ):
+                raise ValueError("C++ checked alignment has no finalized range plan")
+            return (
+                f"    if constexpr ({plan.alignment_parameter_name}) {{\n"
+                f"        if ((reinterpret_cast<std::uintptr_t>("
+                f"{plan.memory_parameter_name}.data()) % "
+                f"{plan.required_alignment_expression}) != 0) {{\n"
+                f"{_cpp_checked_failure(condition, plan, indent='            ')}\n"
+                "        }\n"
+                "    }"
+            )
         raise ValueError(f"unsupported C++ checked condition {condition.kind.value!r}")
     required = {
         PreconditionCheckPrimitive.ZERO_VECTOR,
@@ -402,6 +439,7 @@ class CppBackend:
         signature = _wrapper_signature(specializations)
         plan = plan_cpp_checked_api(
             specializations,
+            result_kind=signature.result_kind,
             result_type=signature.result_type,
         )
         if plan is None:
@@ -411,19 +449,16 @@ class CppBackend:
             context="C++ checked wrapper",
             concrete=False,
             checked=True,
+            specializations=specializations,
         )
-        params = (
-            f"{signature.params}, {plan.error_parameter_declaration}"
-            if signature.params
-            else plan.error_parameter_declaration
-        )
+        params = _cpp_checked_parameters(specializations[0], signature, plan)
         template_params = signature.template_params + (
             (plan.template_constraint,) if plan.template_constraint is not None else ()
         )
         head = (
             f"template <{', '.join(template_params)}>\n"
             f"{plan.inline_specifier} auto {primitive_name}_checked({params}) "
-            f"noexcept -> {signature.result_type}"
+            f"noexcept -> {plan.public_result_type}"
         )
         prefix = f"{doc}\n" if doc else ""
         if not define:
@@ -431,12 +466,20 @@ class CppBackend:
         checks = "\n".join(
             _cpp_checked_condition(condition, plan) for condition in plan.conditions
         )
+        call = (
+            f"::tsl::{primitive_name}<{signature.impl_args}>"
+            f"({_cpp_checked_arguments(specializations[0], signature, plan)})"
+        )
+        success = (
+            f"    {plan.error_parameter_name} = {plan.success_error_expression};\n"
+            f"    return {call};"
+            if plan.has_value_result
+            else f"    {call};\n    return {plan.success_error_expression};"
+        )
         return prefix + (
             f"{head} {{\n"
             f"{checks}\n"
-            f"    {plan.error_parameter_name} = {plan.success_error_expression};\n"
-            f"    return ::tsl::{primitive_name}<{signature.impl_args}>"
-            f"({signature.argument_names});\n"
+            f"{success}\n"
             "}"
         )
 
@@ -552,7 +595,12 @@ class CppBackend:
         self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
     ) -> str:
         signature = _wrapper_signature(specializations)
-        doc = _cpp_doc(specializations[0], context="C++ wrapper", concrete=False)
+        doc = _cpp_doc(
+            specializations[0],
+            context="C++ wrapper",
+            concrete=False,
+            specializations=specializations,
+        )
         prefix = f"{doc}\n" if doc else ""
         variants = _cpp_variant_names(specializations)
         selector = (
@@ -591,7 +639,12 @@ class CppBackend:
         self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
     ) -> str:
         signature = _wrapper_signature(specializations)
-        doc = _cpp_doc(specializations[0], context="C++ wrapper", concrete=False)
+        doc = _cpp_doc(
+            specializations[0],
+            context="C++ wrapper",
+            concrete=False,
+            specializations=specializations,
+        )
         prefix = f"{doc}\n" if doc else ""
         vector_declaration = (
             prefix
@@ -611,9 +664,62 @@ class _WrapperSignature:
     template_params: tuple[str, ...]
     params: str
     argument_names: str
+    parameter_declarations: tuple[str, ...]
+    runtime_argument_names: tuple[str, ...]
     impl_args: str
     selector_args: str
     result_type: str
+    result_kind: str
+
+
+def _cpp_checked_parameters(
+    shape: LoweredSpecialization,
+    signature: _WrapperSignature,
+    plan: CppCheckedApiPlan,
+) -> str:
+    runtime_indexes = tuple(
+        index
+        for index, kind in enumerate(shape.param_kinds)
+        if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
+    )
+    declarations: list[str] = []
+    for index, declaration in zip(
+        runtime_indexes, signature.parameter_declarations, strict=True
+    ):
+        if index != plan.memory_parameter_index:
+            declarations.append(declaration)
+            continue
+        if plan.memory_parameter_name is None or plan.memory_access is None:
+            raise ValueError("C++ checked memory parameter is incomplete")
+        element = (
+            "typename Vec::base_type const"
+            if plan.memory_access is MemoryAccess.READ
+            else "typename Vec::base_type"
+        )
+        declarations.append(
+            f"::tsl::span<{element}> {plan.memory_parameter_name}"
+        )
+    if plan.error_parameter_declaration is not None:
+        declarations.append(plan.error_parameter_declaration)
+    return ", ".join(declarations)
+
+
+def _cpp_checked_arguments(
+    shape: LoweredSpecialization,
+    signature: _WrapperSignature,
+    plan: CppCheckedApiPlan,
+) -> str:
+    runtime_indexes = tuple(
+        index
+        for index, kind in enumerate(shape.param_kinds)
+        if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
+    )
+    return ", ".join(
+        f"{name}.data()" if index == plan.memory_parameter_index else name
+        for index, name in zip(
+            runtime_indexes, signature.runtime_argument_names, strict=True
+        )
+    )
 
 
 def _wrapper_signature(
@@ -639,7 +745,7 @@ def _wrapper_signature(
         + [f"{typ} {name} = {default}" for name, typ, default in shape.generic_params]
         + [f"class Arg{i}" for i in varying]
     )
-    params = ", ".join(
+    parameter_declarations = tuple(
         (
             f"Arg{i} {name}"
             if i in varying
@@ -648,11 +754,13 @@ def _wrapper_signature(
         for i, (name, kind) in enumerate(zip(shape.param_names, shape.param_kinds))
         if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
     )
-    names = ", ".join(
+    runtime_argument_names = tuple(
         name
         for name, kind in zip(shape.param_names, shape.param_kinds)
         if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
     )
+    params = ", ".join(parameter_declarations)
+    names = ", ".join(runtime_argument_names)
     impl_args = (
         "Vec"
         + (", ToVec" if has_target else "")
@@ -677,9 +785,12 @@ def _wrapper_signature(
         template_params=tuple(template_params),
         params=params,
         argument_names=names,
+        parameter_declarations=parameter_declarations,
+        runtime_argument_names=runtime_argument_names,
         impl_args=impl_args,
         selector_args=selector_args,
         result_type=result_type,
+        result_kind=shape.result_kind,
     )
 
 

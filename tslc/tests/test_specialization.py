@@ -27,6 +27,7 @@ from tslc.catalog.memory import (
     MemoryAccess,
     MemoryAddressing,
     MemoryAlignment,
+    MemoryPayloadExtent,
     PrimitiveMemoryContract,
 )
 from tslc.catalog.overloads import ResolvedPrimitiveOverload
@@ -135,6 +136,11 @@ def _memory_semantics(
         memory=PrimitiveMemoryContract(
             access,
             MemoryAddressing.CONTIGUOUS,
+            (
+                MemoryPayloadExtent.SCALAR
+                if "s" in parameter_kinds
+                else MemoryPayloadExtent.VECTOR
+            ),
         ),
         memory_alignment=LoweredMemoryAlignment("aligned", alignment),
     )
@@ -246,6 +252,7 @@ def test_dataparallel_primitive_facade_descriptor_classifies_shared_policy_shape
     assert store is not None
     assert store.kind is DataparallelPrimitiveFacadeKind.CONTIGUOUS_MEMORY
     assert store.shape.param_kinds == ("ptr", "v")
+    assert store.memory_payload_extent is MemoryPayloadExtent.VECTOR
 
     cast = classify_dataparallel_primitive_facade(
         "cast",
@@ -345,6 +352,8 @@ def test_semantically_renamed_memory_primitives_retain_shared_facades() -> None:
     )
     assert read_facade is not None
     assert write_facade is not None
+    assert read_facade.memory_payload_extent is MemoryPayloadExtent.VECTOR
+    assert write_facade.memory_payload_extent is MemoryPayloadExtent.VECTOR
     assert contiguous_memory_primitive_facades(
         {
             "read_contiguous": read_specs,
@@ -693,7 +702,7 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     documentation = specialization_artifacts["rust/src/tsl_documentation.rs"]
 
     assert sha256(avx2.encode()).hexdigest() == (
-        "b40e89dacb656b43e42e6ac9c0229eb49c73b81f752cc8ab4f16d502ed79cf0e"
+        "c226afbfce8cfe2edadf0866cf5b27e43f3094a091f080a38531e419fd3f128c"
     )
 
     assert 'name = "tsl"' in cargo
@@ -716,6 +725,20 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     assert "pub use crate::tsl_avx2 as profile;" in lib
     assert "pub fn hadd(self)" in facade
     assert "pub fn hadd_masked(self, mask:" in facade
+    assert (
+        "fn __tsl_checked_memory_alignment() -> usize {\n"
+        "        core::mem::align_of::<i32>()\n"
+        "    }"
+    ) in facade
+    assert (
+        "as crate::tsl_core::SimdVector>::ALIGN\n"
+        "    }"
+    ) in facade
+    store_checked = facade.split("pub fn store_checked", 1)[1].split("\n}", 1)[0]
+    assert "if ptr.is_empty()" in store_checked
+    assert ".is_multiple_of(" in store_checked
+    assert "Ok(())" in store_checked
+    assert "Ok(unsafe" not in store_checked
     assert "pub mod tsl_target_fallback;" in lib
     assert "pub use crate::tsl_target_fallback as profile;" in lib
     documented_functions = re.findall(
@@ -731,7 +754,12 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     assert checked_functions == {
         "extract_value_at_checked",
         "insert_value_at_checked",
+        "load_checked",
+        "load_mask_checked",
+        "load_maskz_checked",
         "set_mask_lane_checked",
+        "store_checked",
+        "store_mask_checked",
     }
     assert len(documented_functions) - len(checked_functions) == lib.count(
         "    pub struct "

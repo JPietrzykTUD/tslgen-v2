@@ -22,6 +22,7 @@ from tslc.catalog.memory import (
     MemoryAccess,
     MemoryAddressing,
     MemoryAlignment,
+    MemoryPayloadExtent,
     PrimitiveMemoryContract,
 )
 from tslc.catalog.model import Extension, ImplementationSafety
@@ -134,6 +135,14 @@ def _aligned_memory_specs(
         memory=PrimitiveMemoryContract(
             access,
             MemoryAddressing.CONTIGUOUS,
+            (
+                MemoryPayloadExtent.SCALAR
+                if result_kind == "s" or any(
+                    role is OperandRole.VALUE and kind == "s"
+                    for role, _index, kind in roles
+                )
+                else MemoryPayloadExtent.VECTOR
+            ),
         ),
         memory_alignment=LoweredMemoryAlignment(
             "aligned",

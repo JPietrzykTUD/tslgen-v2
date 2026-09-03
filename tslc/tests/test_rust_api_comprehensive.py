@@ -13,6 +13,7 @@ from rust_api_test_support import (
     _spec,
 )
 from tslc.backend.rust_api_model import (
+    RustFacadeCheckedCondition,
     RustFacadeConstParameterSource,
     RustFacadeCoverageStatus,
     RustFacadeParameterPlacement,
@@ -26,15 +27,33 @@ from tslc.catalog.memory import (
     MemoryAccess,
     MemoryAddressing,
     MemoryAlignment,
+    MemoryPayloadExtent,
     PrimitiveMemoryContract,
 )
 from tslc.catalog.model import ImplementationSafety
 from tslc.catalog.overloads import ResolvedPrimitiveOverload
-from tslc.catalog.preconditions import PreconditionKind
+from tslc.catalog.preconditions import PreconditionErrorKind, PreconditionKind
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.lower.primitive_semantics import LoweredMemoryAlignment
 from tslc.render.rust_facade_comprehensive import render_comprehensive_facade
+
+
+def test_checked_condition_rejects_memory_facts_on_non_memory_precondition() -> None:
+    with pytest.raises(
+        ValueError,
+        match="checked memory conditions require complete memory facts",
+    ):
+        RustFacadeCheckedCondition(
+            kind=PreconditionKind.LANE_INDEX_IN_RANGE,
+            parameter_name="index",
+            error=PreconditionErrorKind.INDEX_OUT_OF_BOUNDS,
+            mask_parameter_name=None,
+            applicable_type_tags=("si32",),
+            memory_access=MemoryAccess.READ,
+            memory_payload_extents=(MemoryPayloadExtent.VECTOR,),
+            memory_alignment_axis_name="aligned",
+        )
 
 
 @pytest.mark.parametrize(
@@ -342,6 +361,7 @@ def test_vector_value_role_is_a_coherent_receiver() -> None:
                 memory=PrimitiveMemoryContract(
                     MemoryAccess.WRITE,
                     MemoryAddressing.CONTIGUOUS,
+                    MemoryPayloadExtent.VECTOR,
                 ),
                 mask_policy="pass_through",
             )
@@ -367,6 +387,7 @@ def test_curated_unmasked_memory_shapes_are_not_duplicated() -> None:
         memory=PrimitiveMemoryContract(
             MemoryAccess.WRITE,
             MemoryAddressing.CONTIGUOUS,
+            MemoryPayloadExtent.VECTOR,
         ),
     )
     vector_store = replace(
@@ -405,6 +426,11 @@ def test_curated_unmasked_memory_shapes_are_not_duplicated() -> None:
                     (OperandRole.VALUE, 1, "s"),
                 ),
                 ("destination", "value"),
+            ),
+            memory=PrimitiveMemoryContract(
+                MemoryAccess.WRITE,
+                MemoryAddressing.CONTIGUOUS,
+                MemoryPayloadExtent.SCALAR,
             ),
             memory_alignment=LoweredMemoryAlignment(
                 "aligned", MemoryAlignment.UNALIGNED
@@ -482,11 +508,17 @@ def test_semantically_renamed_memory_primitives_feed_the_curated_core() -> None:
     assert memory_bindings[PrimitiveOperation.LOAD].memory_access is (
         MemoryAccess.READ
     )
+    assert memory_bindings[PrimitiveOperation.LOAD].memory_payload_extent is (
+        MemoryPayloadExtent.VECTOR
+    )
     assert memory_bindings[PrimitiveOperation.STORE].source_primitive_name == (
         "write_contiguous"
     )
     assert memory_bindings[PrimitiveOperation.STORE].memory_addressing is (
         MemoryAddressing.CONTIGUOUS
+    )
+    assert memory_bindings[PrimitiveOperation.STORE].memory_payload_extent is (
+        MemoryPayloadExtent.VECTOR
     )
     assert {
         (delegate.role, delegate.source_primitive_name)
@@ -529,6 +561,7 @@ def test_memory_access_must_agree_with_the_typed_operation() -> None:
         memory=PrimitiveMemoryContract(
             MemoryAccess.WRITE,
             MemoryAddressing.CONTIGUOUS,
+            MemoryPayloadExtent.VECTOR,
         ),
     )
 

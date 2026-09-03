@@ -1541,6 +1541,14 @@
       "family": "tooling_only"
     },
     {
+      "id": "tslc/src/tslc/backend/rust_documentation_api.py|documentation_overloaded_checked_wrapper|unimplemented|4ceb0b06904fae95|0",
+      "path": "tslc/src/tslc/backend/rust_documentation_api.py",
+      "owner": "documentation_overloaded_checked_wrapper",
+      "kind": "unimplemented",
+      "excerpt": "\" unimplemented!()\\n\"",
+      "family": "tooling_only"
+    },
+    {
       "id": "tslc/src/tslc/backend/rust_documentation_api.py|documentation_overloaded_wrapper|unimplemented|4ceb0b06904fae95|0",
       "path": "tslc/src/tslc/backend/rust_documentation_api.py",
       "owner": "documentation_overloaded_wrapper",

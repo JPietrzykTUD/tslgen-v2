@@ -27,6 +27,7 @@ from tslc.backend.rust_direct_calls import (
 from tslc.backend.rust_documentation_api import (
     documentation_checked_wrapper as _documentation_checked_wrapper,
     documentation_free_function as _documentation_free_function,
+    documentation_overloaded_checked_wrapper as _documentation_overloaded_checked_wrapper,
     documentation_overloaded_wrapper as _documentation_overloaded_wrapper,
     documentation_wrapper as _documentation_wrapper,
 )
@@ -41,6 +42,8 @@ from tslc.backend.rust_policy_selection import (
 from tslc.backend.rust_signatures import (
     arithmetic_preconditions as _rust_arithmetic_preconditions,
     axis_name as _axis_name,
+    checked_params as _checked_params,
+    checked_runtime_names as _checked_runtime_names,
     checked_type_where as _checked_type_where,
     concrete_param_type as _rust_concrete_param,
     concrete_result_type as _rust_concrete_result,
@@ -75,6 +78,7 @@ from tslc.catalog.preconditions import (
     PreconditionErrorKind,
     PreconditionKind,
 )
+from tslc.catalog.memory import MemoryAccess, MemoryPayloadExtent
 from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS
 from tslc.lower.lowerer import (
     LoweredSpecialization,
@@ -86,6 +90,8 @@ from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 _PRIMITIVE_TRAIT_PREFIX = "detail::primitives::"
 _PRECONDITION_METHOD = "__tsl_precondition_error"
+_CHECKED_MEMORY_EXTENT_METHOD = "__tsl_checked_memory_extent"
+_CHECKED_MEMORY_ALIGNMENT_METHOD = "__tsl_checked_memory_alignment"
 
 
 def _qualified_primitive_trait_prefix(module_prefix: str) -> str:
@@ -100,6 +106,10 @@ def _rust_precondition_error(error: PreconditionErrorKind) -> str:
         return "PreconditionError::IndexOutOfBounds"
     if error is PreconditionErrorKind.ZERO_DIVISOR:
         return "PreconditionError::ZeroDivisor"
+    if error is PreconditionErrorKind.INSUFFICIENT_EXTENT:
+        return "PreconditionError::InsufficientExtent"
+    if error is PreconditionErrorKind.MISALIGNED:
+        return "PreconditionError::Misaligned"
     raise ValueError(f"unsupported Rust precondition error {error.value!r}")
 
 
@@ -223,6 +233,68 @@ def _rust_forwarded_precondition_method(
         f"    fn {_PRECONDITION_METHOD}({params}) -> Option<PreconditionError> {{\n"
         f"        <Self as {selected_trait_name}>::{_PRECONDITION_METHOD}({args})\n"
         "    }\n"
+    )
+
+
+def _rust_checked_memory_requirements(
+    condition: CheckedConditionPlan,
+    owner: str,
+) -> tuple[str, str, str]:
+    payload_extents = condition.memory_payload_extents
+    if payload_extents == (MemoryPayloadExtent.SCALAR,):
+        extent = "1"
+        alignment = f"core::mem::align_of::<{owner}::BaseType>()"
+    elif payload_extents == (MemoryPayloadExtent.VECTOR,):
+        extent = f"{owner}::lane_count()"
+        alignment = f"{owner}::ALIGN"
+    else:
+        raise ValueError(
+            "non-overloaded Rust checked memory API requires one payload extent"
+        )
+    if condition.memory_alignment_axis_name is None:
+        raise ValueError("Rust checked memory API has no alignment axis")
+    return extent, alignment, _axis_name(condition.memory_alignment_axis_name)
+
+
+def _rust_overloaded_memory_trait_members(
+    specializations: tuple[LoweredSpecialization, ...],
+) -> str:
+    plan = applicable_checked_api_plan(specializations)
+    if plan is None or not any(
+        condition.memory_access is not None for condition in plan.conditions
+    ):
+        return ""
+    return (
+        "    #[doc(hidden)]\n"
+        f"    fn {_CHECKED_MEMORY_EXTENT_METHOD}() -> usize;\n"
+        "    #[doc(hidden)]\n"
+        f"    fn {_CHECKED_MEMORY_ALIGNMENT_METHOD}() -> usize;\n"
+    )
+
+
+def _rust_overloaded_memory_impl_members(
+    specialization: LoweredSpecialization,
+    vector_type: str,
+) -> str:
+    plan = applicable_checked_api_plan((specialization,))
+    if plan is None or not any(
+        condition.memory_access is not None for condition in plan.conditions
+    ):
+        return ""
+    memory = specialization.primitive_semantics.memory
+    if memory is None:
+        raise ValueError("checked Rust memory overload has no memory contract")
+    if memory.payload_extent is MemoryPayloadExtent.SCALAR:
+        extent = "1"
+        alignment = "core::mem::align_of::<Self>()"
+    else:
+        extent = f"<{vector_type} as SimdVector>::lane_count()"
+        alignment = f"<{vector_type} as SimdVector>::ALIGN"
+    return (
+        "    #[inline]\n"
+        f"    fn {_CHECKED_MEMORY_EXTENT_METHOD}() -> usize {{ {extent} }}\n"
+        "    #[inline]\n"
+        f"    fn {_CHECKED_MEMORY_ALIGNMENT_METHOD}() -> usize {{ {alignment} }}\n"
     )
 
 
@@ -398,9 +470,13 @@ class RustBackend:
             return _free_function(shape, backend=self)
         caller_unsafe = public_call_requires_unsafe(specializations)
         if varying_positions(specializations):
-            return self._render_overloaded_wrapper(
+            ordinary = self._render_overloaded_wrapper(
                 primitive_name, specializations, caller_unsafe=caller_unsafe
             )
+            checked = self._render_overloaded_checked_wrapper(
+                primitive_name, specializations
+            )
+            return "\n\n".join(part for part in (ordinary, checked) if part)
         ordinary = self._wrapper(primitive_name, shape, caller_unsafe=caller_unsafe)
         checked = self._checked_wrapper(primitive_name, specializations)
         return "\n\n".join(part for part in (ordinary, checked) if part)
@@ -424,11 +500,15 @@ class RustBackend:
             return _documentation_free_function(shape)
         caller_unsafe = public_call_requires_unsafe(specializations)
         if varying_positions(specializations):
-            return _documentation_overloaded_wrapper(
+            ordinary = _documentation_overloaded_wrapper(
                 primitive_name,
                 specializations,
                 caller_unsafe=caller_unsafe,
             )
+            checked = _documentation_overloaded_checked_wrapper(
+                primitive_name, specializations
+            )
+            return "\n\n".join(part for part in (ordinary, checked) if part)
         ordinary = _documentation_wrapper(
             primitive_name,
             shape,
@@ -590,12 +670,16 @@ class RustBackend:
         gp_names = [name for name, _, _ in shape.generic_params]
         fixed_trait = "".join(f", {n}: {_param_kind_type(k, 'S')}" for n, k in fixed)
         doc = _rust_doc(
-            shape, context="Rust overload dispatch trait", concrete=False
+            shape,
+            context="Rust overload dispatch trait",
+            concrete=False,
+            specializations=specs,
         )
         trait = (
             (f"{doc}\n" if doc else "")
             + f"pub trait {arg_trait}<S: StaticSimdVector{axis_decl}{gp_decl}> {{\n"
             "    const IMPLEMENTATION_STATE: ImplementationState;\n"
+            f"{_rust_overloaded_memory_trait_members(specs)}"
             f"    {_unsafe_prefix(caller_unsafe)}fn apply(self{fixed_trait}) -> {ret};\n"
             f"}}"
         )
@@ -694,6 +778,7 @@ class RustBackend:
                 + f"{impl_prefix} {arg_trait}{trait_args} for {self_ty} {{\n"
                 f"    const IMPLEMENTATION_STATE: ImplementationState = "
                 f"{_rust_implementation_state(_spec_implementation_state(spec, variant_name))};\n"
+                f"{_rust_overloaded_memory_impl_members(spec, vec)}"
                 f"{_indent(_implementation_lint_allowance(spec), 4)}\n"
                 f"    {_unsafe_prefix(caller_unsafe)}fn apply(self{fixed_impl}) -> {ret_impl} {{\n"
                 f"{_indent(method_body, 8)}\n"
@@ -763,7 +848,12 @@ class RustBackend:
         call = _unsafe_call(call, caller_unsafe)
         unsafe_prefix = _unsafe_prefix(caller_unsafe)
         ret_type = _kind_type(shape.result_kind, "S")
-        doc = _rust_doc(shape, context="Rust wrapper", concrete=False)
+        doc = _rust_doc(
+            shape,
+            context="Rust wrapper",
+            concrete=False,
+            specializations=specs,
+        )
         return (
             (f"{doc}\n" if doc else "")
             + f"pub {unsafe_prefix}fn {primitive_name}"
@@ -772,6 +862,134 @@ class RustBackend:
             f"({wrap_params}) -> {ret_type} {{\n"
             f"    {call}\n"
             f"}}"
+        )
+
+    def _render_overloaded_checked_wrapper(
+        self,
+        primitive_name: str,
+        specs: tuple[LoweredSpecialization, ...],
+    ) -> str:
+        plan = applicable_checked_api_plan(specs)
+        if plan is None:
+            return ""
+        memory_conditions = tuple(
+            condition
+            for condition in plan.conditions
+            if condition.memory_access is not None
+        )
+        if not memory_conditions:
+            raise ValueError("checked Rust overload has no supported memory plan")
+        shape = specs[0]
+        varying = varying_positions(specs)
+        if len(varying) != 1:
+            raise ValueError("checked Rust overload requires one varying parameter")
+        varying_index = varying[0]
+        identities = {
+            (
+                condition.parameter_index,
+                condition.parameter_name,
+                condition.memory_access,
+                condition.memory_alignment_axis_name,
+            )
+            for condition in memory_conditions
+        }
+        if len(identities) != 1:
+            raise ValueError("checked Rust overload has inconsistent memory conditions")
+        memory_index, memory_name, memory_access, alignment_axis = next(
+            iter(identities)
+        )
+        if memory_access is not MemoryAccess.WRITE:
+            raise ValueError("checked Rust memory overload currently requires writable memory")
+        if alignment_axis is None:
+            raise ValueError("checked Rust memory overload has no alignment axis")
+        arg_trait = (
+            f"{_PRIMITIVE_TRAIT_PREFIX}{rust_primitive_trait_name(primitive_name)}Arg"
+        )
+        axis_wrap = "".join(
+            f"const {_axis_name(key)}: bool, " for key, _ in shape.axis
+        )
+        axis_args = "".join(f", {_axis_name(key)}" for key, _ in shape.axis)
+        generic_wrap = "".join(
+            f"const {name}: {typ}, " for name, typ, _ in shape.generic_params
+        )
+        generic_args = "".join(
+            f", {name}" for name, _typ, _default in shape.generic_params
+        )
+        parameters = ", ".join(
+            (
+                f"{name}: V"
+                if index == varying_index
+                else f"{name}: &mut [S::BaseType]"
+                if index == memory_index
+                else f"{name}: {_param_kind_type(kind, 'S')}"
+            )
+            for index, (name, kind) in enumerate(
+                zip(shape.param_names, shape.param_kinds)
+            )
+        )
+        fixed_arguments = tuple(
+            (
+                f"{name}.as_mut_ptr()" if index == memory_index else name
+            )
+            for index, name in enumerate(shape.param_names)
+            if index != varying_index
+        )
+        trait_application = f"<V as {arg_trait}<S{axis_args}{generic_args}>>"
+        call = (
+            f"unsafe {{ {trait_application}::apply("
+            f"{shape.param_names[varying_index]}"
+            f"{''.join(f', {argument}' for argument in fixed_arguments)}) }}"
+        )
+        checks: list[str] = []
+        for condition in plan.conditions:
+            error = _rust_precondition_error(condition.error)
+            if condition.kind is PreconditionKind.CONTIGUOUS_MEMORY_EXTENT:
+                checks.extend(
+                    (
+                        f"    if {memory_name}.len() < "
+                        f"{trait_application}::{_CHECKED_MEMORY_EXTENT_METHOD}() {{",
+                        f"        return Err({error});",
+                        "    }",
+                    )
+                )
+                continue
+            if condition.kind is PreconditionKind.SELECTED_MEMORY_ALIGNMENT:
+                checks.extend(
+                    (
+                        f"    if {_axis_name(alignment_axis)} && "
+                        f"!({memory_name}.as_ptr() as usize).is_multiple_of("
+                        f"{trait_application}::{_CHECKED_MEMORY_ALIGNMENT_METHOD}()) {{",
+                        f"        return Err({error});",
+                        "    }",
+                    )
+                )
+                continue
+            raise ValueError(
+                f"unsupported checked Rust overload condition {condition.kind.value!r}"
+            )
+        result = _kind_type(shape.result_kind, "S")
+        success = (
+            f"    {call};\n    Ok(())"
+            if shape.result_kind == "void"
+            else f"    Ok({call})"
+        )
+        body = "\n".join((*checks, success))
+        doc = _rust_doc(
+            shape,
+            context="Rust checked wrapper",
+            concrete=False,
+            checked=True,
+            specializations=specs,
+        )
+        return (
+            (f"{doc}\n" if doc else "")
+            + "#[inline]\n"
+            + f"pub fn {rust_raw_identifier(primitive_name + '_checked')}"
+            f"<S: StaticSimdVector, {axis_wrap}{generic_wrap}"
+            f"V: {arg_trait}<S{axis_args}{generic_args}>>"
+            f"({parameters}) -> Result<{result}, PreconditionError> {{\n"
+            f"{body}\n"
+            "}"
         )
 
     def _trait(
@@ -1070,7 +1288,7 @@ class RustBackend:
             f"{rust_primitive_trait_name(primitive_name)}{rendered_trait_args}"
         )
         generics = ", ".join((f"S: {vector_bound}", *declarations))
-        params = _params(shape, "S")
+        params = _checked_params(shape, "S", plan)
         result = _kind_type(shape.result_kind, "S")
         doc = _rust_doc(
             shape, context="Rust checked wrapper", concrete=False, checked=True
@@ -1078,7 +1296,7 @@ class RustBackend:
         call = (
             f"unsafe {{ {rust_raw_identifier(primitive_name)}"
             f"::<{', '.join(('S', *trait_args))}>"
-            f"({_runtime_names(shape)}) }}"
+            f"({_checked_runtime_names(shape, plan)}) }}"
         )
         checks: list[str] = []
         for condition in plan.conditions:
@@ -1104,10 +1322,40 @@ class RustBackend:
                     )
                 )
                 continue
+            if condition.kind is PreconditionKind.CONTIGUOUS_MEMORY_EXTENT:
+                extent, _alignment, _axis = _rust_checked_memory_requirements(
+                    condition, "S"
+                )
+                checks.extend(
+                    (
+                        f"    if {condition.parameter_name}.len() < {extent} {{",
+                        f"        return Err({_rust_precondition_error(condition.error)});",
+                        "    }",
+                    )
+                )
+                continue
+            if condition.kind is PreconditionKind.SELECTED_MEMORY_ALIGNMENT:
+                _extent, alignment, axis = _rust_checked_memory_requirements(
+                    condition, "S"
+                )
+                checks.extend(
+                    (
+                        f"    if {axis} && !({condition.parameter_name}.as_ptr() as usize)"
+                        f".is_multiple_of({alignment}) {{",
+                        f"        return Err({_rust_precondition_error(condition.error)});",
+                        "    }",
+                    )
+                )
+                continue
             raise ValueError(
                 f"unsupported Rust checked condition {condition.kind.value!r}"
             )
-        body = "\n".join((*checks, f"    Ok({call})"))
+        success = (
+            f"    {call};\n    Ok(())"
+            if shape.result_kind == "void"
+            else f"    Ok({call})"
+        )
+        body = "\n".join((*checks, success))
         where_clause = _checked_type_where(plan, "S")
         opening_brace = f"{where_clause}\n{{" if where_clause else " {"
         return (
@@ -1119,7 +1367,6 @@ class RustBackend:
             f"{body}\n"
             "}"
         )
-
     def _target_feature_body(
         self,
         spec: LoweredSpecialization,

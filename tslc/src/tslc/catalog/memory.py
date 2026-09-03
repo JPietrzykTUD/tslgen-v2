@@ -25,6 +25,13 @@ class MemoryAlignment(StrEnum):
     UNALIGNED = "unaligned"
 
 
+class MemoryPayloadExtent(StrEnum):
+    """How many elements one contiguous memory operation consumes."""
+
+    SCALAR = "scalar"
+    VECTOR = "vector"
+
+
 _MEMORY_ALIGNMENT_AXIS = "aligned"
 
 
@@ -64,6 +71,7 @@ MEMORY_ADDRESSING_DESCRIPTIONS: Mapping[MemoryAddressing, str] = MappingProxyTyp
 class PrimitiveMemoryContract:
     access: MemoryAccess
     addressing: MemoryAddressing
+    payload_extent: MemoryPayloadExtent
     source: SourceSpan | None = None
     access_source: SourceSpan | None = None
     addressing_source: SourceSpan | None = None
@@ -83,6 +91,7 @@ __all__ = (
     "MemoryAccess",
     "MemoryAddressing",
     "MemoryAlignment",
+    "MemoryPayloadExtent",
     "PrimitiveMemoryContract",
     "memory_access_values",
     "memory_addressing_values",

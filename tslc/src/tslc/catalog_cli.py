@@ -198,6 +198,7 @@ def _primitive(item: Primitive) -> dict[str, object]:
             else {
                 "access": item.memory.access.value,
                 "addressing": item.memory.addressing.value,
+                "payload_extent": item.memory.payload_extent.value,
             }
         ),
         "conversion": (

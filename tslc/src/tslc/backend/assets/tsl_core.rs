@@ -21,6 +21,8 @@ pub enum ImplementationState {
 pub enum PreconditionError {
     IndexOutOfBounds,
     ZeroDivisor,
+    InsufficientExtent,
+    Misaligned,
 }
 
 mod checked_integer_lane_sealed {

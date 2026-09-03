@@ -844,8 +844,14 @@ def test_store_overload_dispatch(data_root, machine_profiles_path, tmp_path) -> 
     # C++: one impl with two `apply` overloads (vector + scalar) resolved by arg type;
     # a generic-arg wrapper.
     assert hpp.count("struct store_impl<tsl::simd<int32_t, tsl::avx2>, false>") == 1
-    assert "apply(typename Vec::base_type * ptr, typename tsl::reg_param<Vec>::type" in hpp
-    assert "apply(typename Vec::base_type * ptr, typename Vec::base_type" in hpp
+    assert (
+        "apply([[maybe_unused]] typename Vec::base_type * ptr, "
+        "[[maybe_unused]] typename tsl::reg_param<Vec>::type"
+    ) in hpp
+    assert (
+        "apply([[maybe_unused]] typename Vec::base_type * ptr, "
+        "[[maybe_unused]] typename Vec::base_type"
+    ) in hpp
     assert "class Arg1" in hpp
     rs = (tmp_path / "rust" / "src" / "tsl_avx2.rs").read_text()
     # Rust: an arg-dispatch trait implemented for each concrete argument type.

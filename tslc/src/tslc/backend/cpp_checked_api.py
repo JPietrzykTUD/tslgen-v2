@@ -9,7 +9,9 @@ from tslc.backend.checked_api import (
     applicable_checked_api_plan,
 )
 from tslc.catalog.arithmetic import ArithmeticNumericDomain
-from tslc.lower.lowerer import LoweredSpecialization
+from tslc.catalog.memory import MemoryAccess, MemoryPayloadExtent
+from tslc.catalog.semantics import OperandRole
+from tslc.lower.lowerer import LoweredSpecialization, varying_positions
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,11 +20,19 @@ class CppCheckedApiPlan:
 
     conditions: tuple[CheckedConditionPlan, ...]
     error_parameter_name: str
-    error_parameter_declaration: str
+    error_parameter_declaration: str | None
     success_error_expression: str
-    failure_placeholder_expression: str
+    failure_placeholder_expression: str | None
     inline_specifier: str
     template_constraint: str | None
+    public_result_type: str
+    has_value_result: bool
+    memory_parameter_name: str | None
+    memory_parameter_index: int | None
+    memory_access: MemoryAccess | None
+    required_extent_expression: str | None
+    required_alignment_expression: str | None
+    alignment_parameter_name: str | None
 
 
 def _template_constraint(
@@ -56,19 +66,109 @@ def _template_constraint(
 def plan_cpp_checked_api(
     specializations: tuple[LoweredSpecialization, ...],
     *,
+    result_kind: str,
     result_type: str,
 ) -> CppCheckedApiPlan | None:
     plan = applicable_checked_api_plan(specializations)
     if plan is None:
         return None
+    has_value_result = result_kind != "void"
+    memory_conditions = tuple(
+        condition for condition in plan.conditions if condition.memory_access is not None
+    )
+    memory_parameter_name: str | None = None
+    memory_parameter_index: int | None = None
+    memory_access: MemoryAccess | None = None
+    required_extent_expression: str | None = None
+    required_alignment_expression: str | None = None
+    alignment_parameter_name: str | None = None
+    if memory_conditions:
+        memory_identities = {
+            (
+                condition.parameter_name,
+                condition.parameter_index,
+                condition.memory_access,
+                condition.memory_payload_extents,
+                condition.memory_alignment_axis_name,
+            )
+            for condition in memory_conditions
+        }
+        if len(memory_identities) != 1:
+            raise ValueError("C++ checked memory conditions disagree on their binding")
+        (
+            memory_parameter_name,
+            memory_parameter_index,
+            memory_access,
+            payload_extents,
+            alignment_axis_name,
+        ) = next(iter(memory_identities))
+        alignment_parameter_name = (
+            alignment_axis_name[:1].upper() + alignment_axis_name[1:]
+            if alignment_axis_name is not None
+            else None
+        )
+        if payload_extents == (MemoryPayloadExtent.SCALAR,):
+            required_extent_expression = "std::size_t{1}"
+            required_alignment_expression = "alignof(typename Vec::base_type)"
+        elif payload_extents == (MemoryPayloadExtent.VECTOR,):
+            required_extent_expression = "Vec::lane_count()"
+            required_alignment_expression = "Vec::vector_alignment"
+        elif set(payload_extents) == {
+            MemoryPayloadExtent.SCALAR,
+            MemoryPayloadExtent.VECTOR,
+        }:
+            varying = varying_positions(specializations)
+            if len(varying) != 1:
+                raise ValueError(
+                    "mixed scalar/vector checked memory requires one overload parameter"
+                )
+            value_bindings: set[int] = set()
+            for spec in specializations:
+                operation = spec.primitive_semantics.operation
+                binding = (
+                    None if operation is None else operation.binding(OperandRole.VALUE)
+                )
+                if binding is not None:
+                    value_bindings.add(binding.parameter_index)
+            if value_bindings != {varying[0]}:
+                raise ValueError(
+                    "checked memory payload extent disagrees with overload dispatch"
+                )
+            scalar_test = (
+                f"std::is_same_v<std::decay_t<Arg{varying[0]}>, "
+                "typename Vec::base_type>"
+            )
+            required_extent_expression = (
+                f"({scalar_test} ? std::size_t{{1}} : Vec::lane_count())"
+            )
+            required_alignment_expression = (
+                f"({scalar_test} ? alignof(typename Vec::base_type) : "
+                "Vec::vector_alignment)"
+            )
+        else:
+            raise ValueError("unsupported C++ checked memory payload extent")
     return CppCheckedApiPlan(
         conditions=plan.conditions,
         error_parameter_name="error",
-        error_parameter_declaration="::tsl::precondition_error & error",
+        error_parameter_declaration=(
+            "::tsl::precondition_error & error" if has_value_result else None
+        ),
         success_error_expression="::tsl::precondition_error::none",
-        failure_placeholder_expression=f"{result_type}{{}}",
+        failure_placeholder_expression=(
+            f"{result_type}{{}}" if has_value_result else None
+        ),
         inline_specifier="[[nodiscard]] TSL_FORCE_INLINE",
         template_constraint=_template_constraint(plan.conditions),
+        public_result_type=(
+            result_type if has_value_result else "::tsl::precondition_error"
+        ),
+        has_value_result=has_value_result,
+        memory_parameter_name=memory_parameter_name,
+        memory_parameter_index=memory_parameter_index,
+        memory_access=memory_access,
+        required_extent_expression=required_extent_expression,
+        required_alignment_expression=required_alignment_expression,
+        alignment_parameter_name=alignment_parameter_name,
     )
 
 
