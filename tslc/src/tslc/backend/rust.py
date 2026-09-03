@@ -13,6 +13,7 @@ from tslc.backend.checked_api import (
     public_call_requires_unsafe,
 )
 from tslc.backend.primitive_rendering import variant_names as _variant_names
+from tslc.backend.precondition_error_rendering import rust_precondition_error
 from tslc.backend.rust_direct_calls import (
     free_function as _free_function,
     free_variant_functions as _free_variant_functions,
@@ -102,15 +103,7 @@ def _qualified_primitive_trait_prefix(module_prefix: str) -> str:
 
 
 def _rust_precondition_error(error: PreconditionErrorKind) -> str:
-    if error is PreconditionErrorKind.INDEX_OUT_OF_BOUNDS:
-        return "PreconditionError::IndexOutOfBounds"
-    if error is PreconditionErrorKind.ZERO_DIVISOR:
-        return "PreconditionError::ZeroDivisor"
-    if error is PreconditionErrorKind.INSUFFICIENT_EXTENT:
-        return "PreconditionError::InsufficientExtent"
-    if error is PreconditionErrorKind.MISALIGNED:
-        return "PreconditionError::Misaligned"
-    raise ValueError(f"unsupported Rust precondition error {error.value!r}")
+    return rust_precondition_error(error)
 
 
 def _rust_trait_precondition_condition(

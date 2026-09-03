@@ -22,7 +22,11 @@ pub enum PreconditionError {
     IndexOutOfBounds,
     ZeroDivisor,
     InsufficientExtent,
+    InsufficientInput,
+    InsufficientOutput,
     Misaligned,
+    OverlappingRanges,
+    AddressOverflow,
 }
 
 mod checked_integer_lane_sealed {

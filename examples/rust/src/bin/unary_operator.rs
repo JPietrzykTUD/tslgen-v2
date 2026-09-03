@@ -109,21 +109,23 @@ fn main() {
 
     let mut fixed_output = vec![0i32; input.len()];
     let mut fixed = Square;
-    profile::algo::transform_unary(
+    profile::algo::transform_unary_checked(
         tsl::dataparallel::fixed::<1>(),
         &mut fixed,
         &input,
         &mut fixed_output,
-    );
+    )
+    .expect("checked algorithm preconditions");
     verify(&input, &fixed_output);
 
     let mut generic_output = vec![0i32; input.len()];
     let mut generic = Square;
-    profile::algo::transform_unary(
+    profile::algo::transform_unary_checked(
         tsl::dataparallel::generic::<8>(),
         &mut generic,
         &input,
         &mut generic_output,
-    );
+    )
+    .expect("checked algorithm preconditions");
     verify(&input, &generic_output);
 }

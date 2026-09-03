@@ -107,36 +107,45 @@ fn main() {
             let policy = $policy;
 
             let mut unary_aggregate = SumOp { total: 0 };
-            let unary_result = profile::algo::aggregate_selected_unary(
+            let unary_result = profile::algo::aggregate_selected_unary_checked(
                 policy,
                 &mut unary_aggregate,
                 &left,
                 &indices,
-            );
+            )
+            .expect("checked algorithm preconditions");
             assert_eq!(unary_result, expected_unary);
 
             let mut binary_aggregate = PairSumOp { total: 0 };
-            let binary_result = profile::algo::aggregate_selected_binary(
+            let binary_result = profile::algo::aggregate_selected_binary_checked(
                 policy,
                 &mut binary_aggregate,
                 &left,
                 &right,
                 &indices,
-            );
+            )
+            .expect("checked algorithm preconditions");
             assert_eq!(binary_result, expected_binary);
 
             let mut unary_consume = SumOp { total: 0 };
-            profile::algo::consume_selected_unary(policy, &mut unary_consume, &left, &indices);
+            profile::algo::consume_selected_unary_checked(
+                policy,
+                &mut unary_consume,
+                &left,
+                &indices,
+            )
+            .expect("checked algorithm preconditions");
             assert_eq!(unary_consume.total, expected_unary);
 
             let mut binary_consume = PairSumOp { total: 0 };
-            profile::algo::consume_selected_binary(
+            profile::algo::consume_selected_binary_checked(
                 policy,
                 &mut binary_consume,
                 &left,
                 &right,
                 &indices,
-            );
+            )
+            .expect("checked algorithm preconditions");
             assert_eq!(binary_consume.total, expected_binary);
 
             let mut scaled_binary = PairSumOp { total: 0 };

@@ -150,20 +150,26 @@ fn main() {
 
             let mut unary_masks = vec![0u64; mask_count];
             let mut negative = Negative;
-            let produced =
-                profile::algo::predicate_unary(policy, &mut negative, &left, &mut unary_masks);
+            let produced = profile::algo::predicate_unary_checked(
+                policy,
+                &mut negative,
+                &left,
+                &mut unary_masks,
+            )
+            .expect("checked algorithm preconditions");
             assert_eq!(produced, unary_masks.len());
             verify_masks(&unary_masks, $lanes, left.len(), |i| left[i] < 0);
 
             let mut binary_masks = vec![0u64; mask_count];
             let mut less_than = LessThan;
-            let produced = profile::algo::predicate_binary(
+            let produced = profile::algo::predicate_binary_checked(
                 policy,
                 &mut less_than,
                 &left,
                 &right,
                 &mut binary_masks,
-            );
+            )
+            .expect("checked algorithm preconditions");
             assert_eq!(produced, binary_masks.len());
             verify_masks(&binary_masks, $lanes, left.len(), |i| left[i] < right[i]);
         }};

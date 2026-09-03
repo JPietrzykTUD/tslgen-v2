@@ -57,7 +57,11 @@ enum class precondition_error : std::uint8_t {
     index_out_of_bounds,
     zero_divisor,
     insufficient_extent,
+    insufficient_input,
+    insufficient_output,
     misaligned,
+    overlapping_ranges,
+    address_overflow,
 };
 
 /**

@@ -150,7 +150,8 @@ fn main() {
 
             let mut binary = PairSumOp { total: 0 };
             let binary_result =
-                profile::algo::aggregate_binary($policy, &mut binary, &left, &right);
+                profile::algo::aggregate_binary_checked($policy, &mut binary, &left, &right)
+                    .expect("checked algorithm preconditions");
             assert_eq!(binary_result, expected_binary);
         }};
     }

@@ -702,7 +702,7 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     documentation = specialization_artifacts["rust/src/tsl_documentation.rs"]
 
     assert sha256(avx2.encode()).hexdigest() == (
-        "c226afbfce8cfe2edadf0866cf5b27e43f3094a091f080a38531e419fd3f128c"
+        "c13ee1dcead480ce964f8e918ecc21aa67005a912cab9a82af56853a5adc6071"
     )
 
     assert 'name = "tsl"' in cargo
@@ -809,114 +809,114 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     assert "pub trait ChunkKernel<V: StaticSimdVector>" in helper
     assert "pub fn for_each_chunk<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn for_each_chunk_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn transform_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn transform_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn transform_unary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn transform_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn transform_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn transform_binary_raw<Profile, Policy, Op, T>" in helper
     assert "pub fn integral_mask_chunk_count<Profile, Policy, T>" in helper
     assert "pub fn mask_chunk_count<Profile, Policy, Layout, T>" in helper
     assert "pub fn native_mask_chunk_count<Profile, Policy, T>" in helper
     assert "pub fn byte_mask_count<Profile, Policy, T>" in helper
     assert "pub fn bit_mask_count<Profile, Policy, T>" in helper
-    assert "pub fn predicate_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn predicate_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn predicate_unary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn predicate_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn predicate_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn predicate_binary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn predicate_binary_mask_layout<Profile, Policy, Layout, Op, T>" in helper
+    assert "pub fn predicate_binary_mask_layout_checked<Profile, Policy, Layout, Op, T>" in helper
     assert "pub unsafe fn predicate_binary_mask_layout_raw<" in helper
     assert "pub fn count_unary<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn count_unary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn count_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn count_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn count_binary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn count_masked_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn count_masked_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn count_masked_unary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn count_masked_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn count_masked_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn count_masked_binary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn count_masked_unary_mask_layout<Profile, Policy, Layout, Op, T>" in helper
+    assert "pub fn count_masked_unary_mask_layout_checked<Profile, Policy, Layout, Op, T>" in helper
     assert "pub unsafe fn count_masked_unary_mask_layout_raw<" in helper
-    assert "pub fn count_masked_binary_mask_layout<Profile, Policy, Layout, Op, T>" in helper
+    assert "pub fn count_masked_binary_mask_layout_checked<Profile, Policy, Layout, Op, T>" in helper
     assert "pub unsafe fn count_masked_binary_mask_layout_raw<" in helper
-    assert "pub fn count_selected_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn count_selected_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn count_selected_unary_raw<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn count_selected_unary_scaled_raw<" in helper
-    assert "pub fn count_selected_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn count_selected_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn count_selected_binary_raw<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn count_selected_binary_scaled_raw<" in helper
-    assert "pub fn select_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn select_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn select_unary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn select_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn select_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn select_binary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn select_masked_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn select_masked_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn select_masked_unary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn select_masked_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn select_masked_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn select_masked_binary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn select_masked_unary_mask_layout<Profile, Policy, Layout, Op, T>" in helper
+    assert "pub fn select_masked_unary_mask_layout_checked<Profile, Policy, Layout, Op, T>" in helper
     assert "pub unsafe fn select_masked_unary_mask_layout_raw<" in helper
-    assert "pub fn select_masked_binary_mask_layout<Profile, Policy, Layout, Op, T>" in helper
+    assert "pub fn select_masked_binary_mask_layout_checked<Profile, Policy, Layout, Op, T>" in helper
     assert "pub unsafe fn select_masked_binary_mask_layout_raw<" in helper
-    assert "pub fn select_indices_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn select_indices_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn select_indices_unary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn select_indices_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn select_indices_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn select_indices_binary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn select_masked_indices_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn select_masked_indices_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn select_masked_indices_unary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn select_masked_indices_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn select_masked_indices_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn select_masked_indices_binary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn select_masked_indices_unary_mask_layout<Profile, Policy, Layout, Op, T>" in helper
+    assert "pub fn select_masked_indices_unary_mask_layout_checked<Profile, Policy, Layout, Op, T>" in helper
     assert "pub unsafe fn select_masked_indices_unary_mask_layout_raw<" in helper
-    assert "pub fn select_masked_indices_binary_mask_layout<Profile, Policy, Layout, Op, T>" in helper
+    assert "pub fn select_masked_indices_binary_mask_layout_checked<Profile, Policy, Layout, Op, T>" in helper
     assert "pub unsafe fn select_masked_indices_binary_mask_layout_raw<" in helper
-    assert "pub fn select_selected_indices_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn select_selected_indices_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn select_selected_indices_unary_raw<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn select_selected_indices_unary_scaled_raw<" in helper
-    assert "pub fn select_selected_indices_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn select_selected_indices_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn select_selected_indices_binary_raw<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn select_selected_indices_binary_scaled_raw<" in helper
-    assert "pub fn transform_selected_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn transform_selected_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn transform_selected_unary_raw<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn transform_selected_unary_scaled_raw<" in helper
-    assert "pub fn transform_selected_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn transform_selected_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn transform_selected_binary_raw<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn transform_selected_binary_scaled_raw<" in helper
-    assert "pub fn consume_selected_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn consume_selected_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn consume_selected_unary_raw<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn consume_selected_unary_scaled_raw<" in helper
-    assert "pub fn consume_selected_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn consume_selected_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn consume_selected_binary_raw<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn consume_selected_binary_scaled_raw<" in helper
-    assert "pub fn aggregate_selected_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn aggregate_selected_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn aggregate_selected_unary_raw<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn aggregate_selected_unary_scaled_raw<" in helper
-    assert "pub fn aggregate_selected_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn aggregate_selected_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn aggregate_selected_binary_raw<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn aggregate_selected_binary_scaled_raw<" in helper
-    assert "pub fn transform_where_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn transform_where_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn transform_where_unary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn transform_where_unary_mask_layout<Profile, Policy, Layout, Op, T>" in helper
+    assert "pub fn transform_where_unary_mask_layout_checked<Profile, Policy, Layout, Op, T>" in helper
     assert "pub unsafe fn transform_where_unary_mask_layout_raw<" in helper
-    assert "pub fn transform_where_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn transform_where_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn transform_where_binary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn transform_masked_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn transform_masked_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn transform_masked_unary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn transform_masked_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn transform_masked_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn transform_masked_binary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn transform_masked_binary_mask_layout<Profile, Policy, Layout, Op, T>" in helper
+    assert "pub fn transform_masked_binary_mask_layout_checked<Profile, Policy, Layout, Op, T>" in helper
     assert "pub unsafe fn transform_masked_binary_mask_layout_raw<" in helper
     assert "pub fn consume_unary<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn consume_unary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn consume_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn consume_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn consume_binary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn consume_masked_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn consume_masked_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn consume_masked_unary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn consume_masked_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn consume_masked_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn consume_masked_binary_raw<Profile, Policy, Op, T>" in helper
     assert "pub fn aggregate_unary<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn aggregate_unary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn aggregate_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn aggregate_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn aggregate_binary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn aggregate_masked_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn aggregate_masked_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn aggregate_masked_unary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn aggregate_masked_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn aggregate_masked_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn aggregate_masked_binary_raw<Profile, Policy, Op, T>" in helper
 
     assert "pub mod algo" in avx2
@@ -937,56 +937,56 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     assert "MaskLayout" in avx2
     assert "SelectedLoad" in avx2
     assert "pub fn for_each_chunk<Policy, Op, T>" in avx2
-    assert "pub fn transform_binary<Policy, Op, T>" in avx2
+    assert "pub fn transform_binary_checked<Policy, Op, T>" in avx2
     assert "pub fn integral_mask_chunk_count<Policy, T>" in avx2
     assert "pub fn native_mask_chunk_count<Policy, T>" in avx2
     assert "pub fn byte_mask_count<Policy, T>" in avx2
     assert "pub fn bit_mask_count<Policy, T>" in avx2
-    assert "pub fn predicate_unary<Policy, Op, T>" in avx2
-    assert "pub fn predicate_binary<Policy, Op, T>" in avx2
-    assert "pub fn predicate_binary_mask_layout<Policy, Layout, Op, T>" in avx2
+    assert "pub fn predicate_unary_checked<Policy, Op, T>" in avx2
+    assert "pub fn predicate_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn predicate_binary_mask_layout_checked<Policy, Layout, Op, T>" in avx2
     assert "pub fn count_unary<Policy, Op, T>" in avx2
-    assert "pub fn count_binary<Policy, Op, T>" in avx2
-    assert "pub fn count_masked_unary<Policy, Op, T>" in avx2
-    assert "pub fn count_masked_binary<Policy, Op, T>" in avx2
-    assert "pub fn count_masked_unary_mask_layout<Policy, Layout, Op, T>" in avx2
-    assert "pub fn count_masked_binary_mask_layout<Policy, Layout, Op, T>" in avx2
-    assert "pub fn count_selected_unary<Policy, Op, T>" in avx2
-    assert "pub fn count_selected_binary<Policy, Op, T>" in avx2
-    assert "pub fn select_unary<Policy, Op, T>" in avx2
-    assert "pub fn select_binary<Policy, Op, T>" in avx2
-    assert "pub fn select_masked_unary<Policy, Op, T>" in avx2
-    assert "pub fn select_masked_binary<Policy, Op, T>" in avx2
-    assert "pub fn select_masked_unary_mask_layout<Policy, Layout, Op, T>" in avx2
-    assert "pub fn select_masked_binary_mask_layout<Policy, Layout, Op, T>" in avx2
-    assert "pub fn select_indices_unary<Policy, Op, T>" in avx2
-    assert "pub fn select_indices_binary<Policy, Op, T>" in avx2
-    assert "pub fn select_masked_indices_unary<Policy, Op, T>" in avx2
-    assert "pub fn select_masked_indices_binary<Policy, Op, T>" in avx2
-    assert "pub fn select_masked_indices_unary_mask_layout<Policy, Layout, Op, T>" in avx2
-    assert "pub fn select_masked_indices_binary_mask_layout<Policy, Layout, Op, T>" in avx2
-    assert "pub fn select_selected_indices_unary<Policy, Op, T>" in avx2
-    assert "pub fn select_selected_indices_binary<Policy, Op, T>" in avx2
-    assert "pub fn transform_selected_unary<Policy, Op, T>" in avx2
-    assert "pub fn transform_selected_binary<Policy, Op, T>" in avx2
-    assert "pub fn consume_selected_unary<Policy, Op, T>" in avx2
-    assert "pub fn consume_selected_binary<Policy, Op, T>" in avx2
-    assert "pub fn aggregate_selected_unary<Policy, Op, T>" in avx2
-    assert "pub fn aggregate_selected_binary<Policy, Op, T>" in avx2
-    assert "pub fn transform_where_unary<Policy, Op, T>" in avx2
-    assert "pub fn transform_where_unary_mask_layout<Policy, Layout, Op, T>" in avx2
-    assert "pub fn transform_where_binary<Policy, Op, T>" in avx2
-    assert "pub fn transform_masked_unary<Policy, Op, T>" in avx2
-    assert "pub fn transform_masked_binary<Policy, Op, T>" in avx2
-    assert "pub fn transform_masked_binary_mask_layout<Policy, Layout, Op, T>" in avx2
+    assert "pub fn count_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn count_masked_unary_checked<Policy, Op, T>" in avx2
+    assert "pub fn count_masked_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn count_masked_unary_mask_layout_checked<Policy, Layout, Op, T>" in avx2
+    assert "pub fn count_masked_binary_mask_layout_checked<Policy, Layout, Op, T>" in avx2
+    assert "pub fn count_selected_unary_checked<Policy, Op, T>" in avx2
+    assert "pub fn count_selected_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn select_unary_checked<Policy, Op, T>" in avx2
+    assert "pub fn select_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn select_masked_unary_checked<Policy, Op, T>" in avx2
+    assert "pub fn select_masked_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn select_masked_unary_mask_layout_checked<Policy, Layout, Op, T>" in avx2
+    assert "pub fn select_masked_binary_mask_layout_checked<Policy, Layout, Op, T>" in avx2
+    assert "pub fn select_indices_unary_checked<Policy, Op, T>" in avx2
+    assert "pub fn select_indices_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn select_masked_indices_unary_checked<Policy, Op, T>" in avx2
+    assert "pub fn select_masked_indices_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn select_masked_indices_unary_mask_layout_checked<Policy, Layout, Op, T>" in avx2
+    assert "pub fn select_masked_indices_binary_mask_layout_checked<Policy, Layout, Op, T>" in avx2
+    assert "pub fn select_selected_indices_unary_checked<Policy, Op, T>" in avx2
+    assert "pub fn select_selected_indices_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn transform_selected_unary_checked<Policy, Op, T>" in avx2
+    assert "pub fn transform_selected_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn consume_selected_unary_checked<Policy, Op, T>" in avx2
+    assert "pub fn consume_selected_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn aggregate_selected_unary_checked<Policy, Op, T>" in avx2
+    assert "pub fn aggregate_selected_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn transform_where_unary_checked<Policy, Op, T>" in avx2
+    assert "pub fn transform_where_unary_mask_layout_checked<Policy, Layout, Op, T>" in avx2
+    assert "pub fn transform_where_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn transform_masked_unary_checked<Policy, Op, T>" in avx2
+    assert "pub fn transform_masked_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn transform_masked_binary_mask_layout_checked<Policy, Layout, Op, T>" in avx2
     assert "pub fn consume_unary<Policy, Op, T>" in avx2
-    assert "pub fn consume_binary<Policy, Op, T>" in avx2
-    assert "pub fn consume_masked_unary<Policy, Op, T>" in avx2
-    assert "pub fn consume_masked_binary<Policy, Op, T>" in avx2
+    assert "pub fn consume_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn consume_masked_unary_checked<Policy, Op, T>" in avx2
+    assert "pub fn consume_masked_binary_checked<Policy, Op, T>" in avx2
     assert "pub fn aggregate_unary<Policy, Op, T>" in avx2
-    assert "pub fn aggregate_binary<Policy, Op, T>" in avx2
-    assert "pub fn aggregate_masked_unary<Policy, Op, T>" in avx2
-    assert "pub fn aggregate_masked_binary<Policy, Op, T>" in avx2
+    assert "pub fn aggregate_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn aggregate_masked_unary_checked<Policy, Op, T>" in avx2
+    assert "pub fn aggregate_masked_binary_checked<Policy, Op, T>" in avx2
     assert "pub use crate::tsl_algorithm::{" in avx2
     assert "mask_layout, BinaryAggregateKernel" in avx2
     assert "parallelism" not in avx2

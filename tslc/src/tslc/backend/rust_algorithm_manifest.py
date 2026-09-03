@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+from tslc.backend.algorithm_contracts import (
+    ALGORITHM_CONTRACTS,
+    AlgorithmRangeRole,
+)
+
 
 RUST_ALGORITHM_RESERVED_NAMES = frozenset(
     {
         "transform_unary",
+        "transform_unary_checked",
         "transform_unary_raw",
         "transform_binary",
+        "transform_binary_checked",
         "transform_binary_raw",
         "integral_mask_chunk_count",
         "mask_chunk_count",
@@ -18,6 +25,8 @@ RUST_ALGORITHM_RESERVED_NAMES = frozenset(
         "predicate_unary_raw",
         "predicate_binary",
         "predicate_binary_raw",
+        "predicate_unary_mask_layout",
+        "predicate_unary_mask_layout_raw",
         "predicate_binary_mask_layout",
         "predicate_binary_mask_layout_raw",
         "count_unary",
@@ -92,10 +101,14 @@ RUST_ALGORITHM_RESERVED_NAMES = frozenset(
         "transform_where_unary_mask_layout_raw",
         "transform_where_binary",
         "transform_where_binary_raw",
+        "transform_where_binary_mask_layout",
+        "transform_where_binary_mask_layout_raw",
         "transform_masked_unary",
         "transform_masked_unary_raw",
         "transform_masked_binary",
         "transform_masked_binary_raw",
+        "transform_masked_unary_mask_layout",
+        "transform_masked_unary_mask_layout_raw",
         "transform_masked_binary_mask_layout",
         "transform_masked_binary_mask_layout_raw",
         "consume_unary",
@@ -116,6 +129,15 @@ RUST_ALGORITHM_RESERVED_NAMES = frozenset(
         "aggregate_masked_binary_raw",
         "for_each_chunk",
         "for_each_chunk_raw",
+    }
+    | {f"{name}_checked" for name in ALGORITHM_CONTRACTS}
+    | {
+        f"{contract.name}_scaled_checked"
+        for contract in ALGORITHM_CONTRACTS.values()
+        if any(
+            binding.role is AlgorithmRangeRole.DRIVING_INDEX
+            for binding in contract.ranges
+        )
     }
 )
 

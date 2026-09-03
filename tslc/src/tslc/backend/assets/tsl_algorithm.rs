@@ -686,14 +686,32 @@ pub(crate) fn selected_row_pointer<T, const SCALE: u32>(input: *const T, index: 
     (input as *const u8).wrapping_add(byte_offset) as *const T
 }
 
-fn validate_selected_indices<T>(helper_name: &str, input: &[T], indices: &[usize]) {
+fn selected_address_error<T, const SCALE: u32>(
+    input: &[T],
+    indices: &[usize],
+) -> Option<crate::PreconditionError> {
+    let scale = if SCALE == 0 {
+        core::mem::size_of::<T>()
+    } else {
+        SCALE as usize
+    };
+    let Some(input_bytes) = input.len().checked_mul(core::mem::size_of::<T>()) else {
+        return Some(crate::PreconditionError::AddressOverflow);
+    };
     for &index in indices {
-        assert!(
-            index < input.len(),
-            "{} requires selected row ids to be valid element indexes",
-            helper_name,
-        );
+        let Some(offset) = index.checked_mul(scale) else {
+            return Some(crate::PreconditionError::AddressOverflow);
+        };
+        if !offset.is_multiple_of(core::mem::align_of::<T>()) {
+            return Some(crate::PreconditionError::Misaligned);
+        }
+        if offset > input_bytes
+            || core::mem::size_of::<T>() > input_bytes.saturating_sub(offset)
+        {
+            return Some(crate::PreconditionError::IndexOutOfBounds);
+        }
     }
+    None
 }
 
 fn scalar_mask_from_bool<Profile, T>(active: bool) -> <Simd<T, Scalar> as SimdVector>::MaskType
@@ -874,12 +892,15 @@ pub unsafe fn for_each_chunk_raw<Profile, Policy, Op, T>(
     }
 }
 
-pub fn predicate_unary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_predicate_unary}
+pub fn predicate_unary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     input: &[T],
     masks: &mut [<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
-) -> usize
+) -> Result<usize, crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -893,15 +914,8 @@ where
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    let lanes = validate_integral_mask_vector::<<Policy as VectorFor<Profile, T>>::Vec>(
-        "tsl::algo::predicate_unary",
-    );
-    let required = chunk_count_for_lanes(input.len(), lanes);
-    assert!(
-        masks.len() >= required,
-        "tsl::algo::predicate_unary requires enough mask chunks for the input",
-    );
-    unsafe {
+@{check_predicate_unary}
+    Ok(unsafe {
         predicate_unary_raw::<Profile, Policy, Op, T>(
             policy,
             op,
@@ -909,7 +923,7 @@ where
             masks.as_mut_ptr(),
             input.len(),
         )
-    }
+        })
 }
 
 /// # Safety
@@ -987,13 +1001,16 @@ where
     produced
 }
 
-pub fn predicate_binary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_predicate_binary}
+pub fn predicate_binary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     left: &[T],
     right: &[T],
     masks: &mut [<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
-) -> usize
+) -> Result<usize, crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -1007,20 +1024,8 @@ where
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    assert_eq!(
-        left.len(),
-        right.len(),
-        "tsl::algo::predicate_binary requires left and right slices of equal length",
-    );
-    let lanes = validate_integral_mask_vector::<<Policy as VectorFor<Profile, T>>::Vec>(
-        "tsl::algo::predicate_binary",
-    );
-    let required = chunk_count_for_lanes(left.len(), lanes);
-    assert!(
-        masks.len() >= required,
-        "tsl::algo::predicate_binary requires enough mask chunks for the input",
-    );
-    unsafe {
+@{check_predicate_binary}
+    Ok(unsafe {
         predicate_binary_raw::<Profile, Policy, Op, T>(
             policy,
             op,
@@ -1029,7 +1034,7 @@ where
             masks.as_mut_ptr(),
             left.len(),
         )
-    }
+        })
 }
 
 /// # Safety
@@ -1120,12 +1125,15 @@ where
     produced
 }
 
-pub fn predicate_unary_mask_layout<Profile, Policy, Layout, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_predicate_unary_mask_layout}
+pub fn predicate_unary_mask_layout_checked<Profile, Policy, Layout, Op, T>(
     policy: Policy,
     op: &mut Op,
     input: &[T],
     masks: &mut [<Layout as MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>>::Storage],
-) -> usize
+) -> Result<usize, crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -1141,19 +1149,8 @@ where
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    let lanes = validate_mask_layout_vector::<<Policy as VectorFor<Profile, T>>::Vec>(
-        "tsl::algo::predicate_unary_mask_layout",
-    );
-    let required =
-        <Layout as MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>>::storage_count(
-            input.len(),
-            lanes,
-        );
-    assert!(
-        masks.len() >= required,
-        "tsl::algo::predicate_unary_mask_layout requires enough mask storage for the input",
-    );
-    unsafe {
+@{check_predicate_unary_mask_layout}
+    Ok(unsafe {
         predicate_unary_mask_layout_raw::<Profile, Policy, Layout, Op, T>(
             policy,
             op,
@@ -1161,7 +1158,7 @@ where
             masks.as_mut_ptr(),
             input.len(),
         )
-    }
+        })
 }
 
 /// # Safety
@@ -1269,13 +1266,16 @@ where
     )
 }
 
-pub fn predicate_binary_mask_layout<Profile, Policy, Layout, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_predicate_binary_mask_layout}
+pub fn predicate_binary_mask_layout_checked<Profile, Policy, Layout, Op, T>(
     policy: Policy,
     op: &mut Op,
     left: &[T],
     right: &[T],
     masks: &mut [<Layout as MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>>::Storage],
-) -> usize
+) -> Result<usize, crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -1291,24 +1291,8 @@ where
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    assert_eq!(
-        left.len(),
-        right.len(),
-        "tsl::algo::predicate_binary_mask_layout requires left and right slices of equal length",
-    );
-    let lanes = validate_mask_layout_vector::<<Policy as VectorFor<Profile, T>>::Vec>(
-        "tsl::algo::predicate_binary_mask_layout",
-    );
-    let required =
-        <Layout as MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>>::storage_count(
-            left.len(),
-            lanes,
-        );
-    assert!(
-        masks.len() >= required,
-        "tsl::algo::predicate_binary_mask_layout requires enough mask storage for the input",
-    );
-    unsafe {
+@{check_predicate_binary_mask_layout}
+    Ok(unsafe {
         predicate_binary_mask_layout_raw::<Profile, Policy, Layout, Op, T>(
             policy,
             op,
@@ -1317,7 +1301,7 @@ where
             masks.as_mut_ptr(),
             left.len(),
         )
-    }
+        })
 }
 
 /// # Safety
@@ -1523,12 +1507,15 @@ where
     produced
 }
 
-pub fn count_binary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_count_binary}
+pub fn count_binary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     left: &[T],
     right: &[T],
-) -> usize
+) -> Result<usize, crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -1542,12 +1529,8 @@ where
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    assert_eq!(
-        left.len(),
-        right.len(),
-        "tsl::algo::count_binary requires left and right slices of equal length",
-    );
-    unsafe {
+@{check_count_binary}
+    Ok(unsafe {
         count_binary_raw::<Profile, Policy, Op, T>(
             policy,
             op,
@@ -1555,7 +1538,7 @@ where
             right.as_ptr(),
             left.len(),
         )
-    }
+        })
 }
 
 /// # Safety
@@ -1628,12 +1611,15 @@ where
     produced
 }
 
-pub fn count_masked_unary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_count_masked_unary}
+pub fn count_masked_unary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     input: &[T],
     masks: &[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
-) -> usize
+) -> Result<usize, crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -1647,15 +1633,8 @@ where
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    let lanes = validate_integral_mask_vector::<<Policy as VectorFor<Profile, T>>::Vec>(
-        "tsl::algo::count_masked_unary",
-    );
-    let required = chunk_count_for_lanes(input.len(), lanes);
-    assert!(
-        masks.len() >= required,
-        "tsl::algo::count_masked_unary requires enough mask chunks for the input",
-    );
-    unsafe {
+@{check_count_masked_unary}
+    Ok(unsafe {
         count_masked_unary_raw::<Profile, Policy, Op, T>(
             policy,
             op,
@@ -1663,7 +1642,7 @@ where
             masks.as_ptr(),
             input.len(),
         )
-    }
+        })
 }
 
 /// # Safety
@@ -1739,13 +1718,16 @@ where
     produced
 }
 
-pub fn count_masked_binary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_count_masked_binary}
+pub fn count_masked_binary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     left: &[T],
     right: &[T],
     masks: &[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
-) -> usize
+) -> Result<usize, crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -1759,20 +1741,8 @@ where
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    assert_eq!(
-        left.len(),
-        right.len(),
-        "tsl::algo::count_masked_binary requires left and right slices of equal length",
-    );
-    let lanes = validate_integral_mask_vector::<<Policy as VectorFor<Profile, T>>::Vec>(
-        "tsl::algo::count_masked_binary",
-    );
-    let required = chunk_count_for_lanes(left.len(), lanes);
-    assert!(
-        masks.len() >= required,
-        "tsl::algo::count_masked_binary requires enough mask chunks for the input",
-    );
-    unsafe {
+@{check_count_masked_binary}
+    Ok(unsafe {
         count_masked_binary_raw::<Profile, Policy, Op, T>(
             policy,
             op,
@@ -1781,7 +1751,7 @@ where
             masks.as_ptr(),
             left.len(),
         )
-    }
+        })
 }
 
 /// # Safety
@@ -1873,12 +1843,15 @@ where
     produced
 }
 
-pub fn count_masked_unary_mask_layout<Profile, Policy, Layout, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_count_masked_unary_mask_layout}
+pub fn count_masked_unary_mask_layout_checked<Profile, Policy, Layout, Op, T>(
     policy: Policy,
     op: &mut Op,
     input: &[T],
     masks: &[<Layout as MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>>::Storage],
-) -> usize
+) -> Result<usize, crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -1893,19 +1866,8 @@ where
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    let lanes = validate_mask_layout_vector::<<Policy as VectorFor<Profile, T>>::Vec>(
-        "tsl::algo::count_masked_unary_mask_layout",
-    );
-    let required =
-        <Layout as MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>>::storage_count(
-            input.len(),
-            lanes,
-        );
-    assert!(
-        masks.len() >= required,
-        "tsl::algo::count_masked_unary_mask_layout requires enough mask storage for the input",
-    );
-    unsafe {
+@{check_count_masked_unary_mask_layout}
+    Ok(unsafe {
         count_masked_unary_mask_layout_raw::<Profile, Policy, Layout, Op, T>(
             policy,
             op,
@@ -1913,7 +1875,7 @@ where
             masks.as_ptr(),
             input.len(),
         )
-    }
+        })
 }
 
 /// # Safety
@@ -1998,13 +1960,16 @@ where
     produced
 }
 
-pub fn count_masked_binary_mask_layout<Profile, Policy, Layout, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_count_masked_binary_mask_layout}
+pub fn count_masked_binary_mask_layout_checked<Profile, Policy, Layout, Op, T>(
     policy: Policy,
     op: &mut Op,
     left: &[T],
     right: &[T],
     masks: &[<Layout as MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>>::Storage],
-) -> usize
+) -> Result<usize, crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -2019,24 +1984,8 @@ where
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    assert_eq!(
-        left.len(),
-        right.len(),
-        "tsl::algo::count_masked_binary_mask_layout requires left and right slices of equal length",
-    );
-    let lanes = validate_mask_layout_vector::<<Policy as VectorFor<Profile, T>>::Vec>(
-        "tsl::algo::count_masked_binary_mask_layout",
-    );
-    let required =
-        <Layout as MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>>::storage_count(
-            left.len(),
-            lanes,
-        );
-    assert!(
-        masks.len() >= required,
-        "tsl::algo::count_masked_binary_mask_layout requires enough mask storage for the input",
-    );
-    unsafe {
+@{check_count_masked_binary_mask_layout}
+    Ok(unsafe {
         count_masked_binary_mask_layout_raw::<Profile, Policy, Layout, Op, T>(
             policy,
             op,
@@ -2045,7 +1994,7 @@ where
             masks.as_ptr(),
             left.len(),
         )
-    }
+        })
 }
 
 /// # Safety
@@ -2143,12 +2092,15 @@ where
     produced
 }
 
-pub fn count_selected_unary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_count_selected_unary}
+pub fn count_selected_unary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     input: &[T],
     indices: &[usize],
-) -> usize
+) -> Result<usize, crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -2162,8 +2114,8 @@ where
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    validate_selected_indices("tsl::algo::count_selected_unary", input, indices);
-    unsafe {
+@{check_count_selected_unary}
+    Ok(unsafe {
         count_selected_unary_raw::<Profile, Policy, Op, T>(
             policy,
             op,
@@ -2171,7 +2123,7 @@ where
             indices.as_ptr(),
             indices.len(),
         )
-    }
+        })
 }
 
 /// # Safety
@@ -2274,13 +2226,16 @@ where
     produced
 }
 
-pub fn count_selected_binary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_count_selected_binary}
+pub fn count_selected_binary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     left: &[T],
     right: &[T],
     indices: &[usize],
-) -> usize
+) -> Result<usize, crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -2294,13 +2249,8 @@ where
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    assert_eq!(
-        left.len(),
-        right.len(),
-        "tsl::algo::count_selected_binary requires left and right slices of equal length",
-    );
-    validate_selected_indices("tsl::algo::count_selected_binary", left, indices);
-    unsafe {
+@{check_count_selected_binary}
+    Ok(unsafe {
         count_selected_binary_raw::<Profile, Policy, Op, T>(
             policy,
             op,
@@ -2309,7 +2259,7 @@ where
             indices.as_ptr(),
             indices.len(),
         )
-    }
+        })
 }
 
 /// # Safety
@@ -2431,12 +2381,15 @@ where
     produced
 }
 
-pub fn select_unary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_select_unary}
+pub fn select_unary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     input: &[T],
     output: &mut [T],
-) -> usize
+) -> Result<usize, crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -2454,11 +2407,8 @@ where
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    assert!(
-        output.len() >= input.len(),
-        "tsl::algo::select_unary requires enough output slots for the input",
-    );
-    unsafe {
+@{check_select_unary}
+    Ok(unsafe {
         select_unary_raw::<Profile, Policy, Op, T>(
             policy,
             op,
@@ -2466,7 +2416,7 @@ where
             output.as_mut_ptr(),
             input.len(),
         )
-    }
+        })
 }
 
 /// # Safety
@@ -2546,13 +2496,16 @@ where
     produced
 }
 
-pub fn select_binary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_select_binary}
+pub fn select_binary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     left: &[T],
     right: &[T],
     output: &mut [T],
-) -> usize
+) -> Result<usize, crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -2570,16 +2523,8 @@ where
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    assert_eq!(
-        left.len(),
-        right.len(),
-        "tsl::algo::select_binary requires left and right slices of equal length",
-    );
-    assert!(
-        output.len() >= left.len(),
-        "tsl::algo::select_binary requires enough output slots for the input",
-    );
-    unsafe {
+@{check_select_binary}
+    Ok(unsafe {
         select_binary_raw::<Profile, Policy, Op, T>(
             policy,
             op,
@@ -2588,7 +2533,7 @@ where
             output.as_mut_ptr(),
             left.len(),
         )
-    }
+        })
 }
 
 /// # Safety
@@ -2680,13 +2625,16 @@ where
     produced
 }
 
-pub fn select_masked_unary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_select_masked_unary}
+pub fn select_masked_unary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     input: &[T],
     masks: &[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
     output: &mut [T],
-) -> usize
+) -> Result<usize, crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -2706,19 +2654,8 @@ where
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    let lanes = validate_integral_mask_vector::<<Policy as VectorFor<Profile, T>>::Vec>(
-        "tsl::algo::select_masked_unary",
-    );
-    let required = chunk_count_for_lanes(input.len(), lanes);
-    assert!(
-        masks.len() >= required,
-        "tsl::algo::select_masked_unary requires enough mask chunks for the input",
-    );
-    assert!(
-        output.len() >= input.len(),
-        "tsl::algo::select_masked_unary requires enough output slots for the input",
-    );
-    unsafe {
+@{check_select_masked_unary}
+    Ok(unsafe {
         select_masked_unary_raw::<Profile, Policy, Op, T>(
             policy,
             op,
@@ -2727,7 +2664,7 @@ where
             output.as_mut_ptr(),
             input.len(),
         )
-    }
+        })
 }
 
 /// # Safety
@@ -2830,14 +2767,17 @@ where
     produced
 }
 
-pub fn select_masked_binary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_select_masked_binary}
+pub fn select_masked_binary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     left: &[T],
     right: &[T],
     masks: &[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
     output: &mut [T],
-) -> usize
+) -> Result<usize, crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -2857,24 +2797,8 @@ where
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    assert_eq!(
-        left.len(),
-        right.len(),
-        "tsl::algo::select_masked_binary requires left and right slices of equal length",
-    );
-    let lanes = validate_integral_mask_vector::<<Policy as VectorFor<Profile, T>>::Vec>(
-        "tsl::algo::select_masked_binary",
-    );
-    let required = chunk_count_for_lanes(left.len(), lanes);
-    assert!(
-        masks.len() >= required,
-        "tsl::algo::select_masked_binary requires enough mask chunks for the input",
-    );
-    assert!(
-        output.len() >= left.len(),
-        "tsl::algo::select_masked_binary requires enough output slots for the input",
-    );
-    unsafe {
+@{check_select_masked_binary}
+    Ok(unsafe {
         select_masked_binary_raw::<Profile, Policy, Op, T>(
             policy,
             op,
@@ -2884,7 +2808,7 @@ where
             output.as_mut_ptr(),
             left.len(),
         )
-    }
+        })
 }
 
 /// # Safety
@@ -3003,13 +2927,16 @@ where
     produced
 }
 
-pub fn select_masked_unary_mask_layout<Profile, Policy, Layout, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_select_masked_unary_mask_layout}
+pub fn select_masked_unary_mask_layout_checked<Profile, Policy, Layout, Op, T>(
     policy: Policy,
     op: &mut Op,
     input: &[T],
     masks: &[<Layout as MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>>::Storage],
     output: &mut [T],
-) -> usize
+) -> Result<usize, crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -3029,23 +2956,8 @@ where
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    let lanes = validate_mask_layout_vector::<<Policy as VectorFor<Profile, T>>::Vec>(
-        "tsl::algo::select_masked_unary_mask_layout",
-    );
-    let required =
-        <Layout as MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>>::storage_count(
-            input.len(),
-            lanes,
-        );
-    assert!(
-        masks.len() >= required,
-        "tsl::algo::select_masked_unary_mask_layout requires enough mask storage for the input",
-    );
-    assert!(
-        output.len() >= input.len(),
-        "tsl::algo::select_masked_unary_mask_layout requires enough output slots for the input",
-    );
-    unsafe {
+@{check_select_masked_unary_mask_layout}
+    Ok(unsafe {
         select_masked_unary_mask_layout_raw::<Profile, Policy, Layout, Op, T>(
             policy,
             op,
@@ -3054,7 +2966,7 @@ where
             output.as_mut_ptr(),
             input.len(),
         )
-    }
+        })
 }
 
 /// # Safety
@@ -3162,14 +3074,17 @@ where
     produced
 }
 
-pub fn select_masked_binary_mask_layout<Profile, Policy, Layout, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_select_masked_binary_mask_layout}
+pub fn select_masked_binary_mask_layout_checked<Profile, Policy, Layout, Op, T>(
     policy: Policy,
     op: &mut Op,
     left: &[T],
     right: &[T],
     masks: &[<Layout as MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>>::Storage],
     output: &mut [T],
-) -> usize
+) -> Result<usize, crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -3189,28 +3104,8 @@ where
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    assert_eq!(
-        left.len(),
-        right.len(),
-        "tsl::algo::select_masked_binary_mask_layout requires left and right slices of equal length",
-    );
-    let lanes = validate_mask_layout_vector::<<Policy as VectorFor<Profile, T>>::Vec>(
-        "tsl::algo::select_masked_binary_mask_layout",
-    );
-    let required =
-        <Layout as MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>>::storage_count(
-            left.len(),
-            lanes,
-        );
-    assert!(
-        masks.len() >= required,
-        "tsl::algo::select_masked_binary_mask_layout requires enough mask storage for the input",
-    );
-    assert!(
-        output.len() >= left.len(),
-        "tsl::algo::select_masked_binary_mask_layout requires enough output slots for the input",
-    );
-    unsafe {
+@{check_select_masked_binary_mask_layout}
+    Ok(unsafe {
         select_masked_binary_mask_layout_raw::<Profile, Policy, Layout, Op, T>(
             policy,
             op,
@@ -3220,7 +3115,7 @@ where
             output.as_mut_ptr(),
             left.len(),
         )
-    }
+        })
 }
 
 /// # Safety
@@ -3341,12 +3236,15 @@ where
     produced
 }
 
-pub fn select_indices_unary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_select_indices_unary}
+pub fn select_indices_unary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     input: &[T],
     indices: &mut [usize],
-) -> usize
+) -> Result<usize, crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -3360,11 +3258,8 @@ where
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    assert!(
-        indices.len() >= input.len(),
-        "tsl::algo::select_indices_unary requires enough output slots for the input",
-    );
-    unsafe {
+@{check_select_indices_unary}
+    Ok(unsafe {
         select_indices_unary_raw::<Profile, Policy, Op, T>(
             policy,
             op,
@@ -3372,7 +3267,7 @@ where
             indices.as_mut_ptr(),
             input.len(),
         )
-    }
+        })
 }
 
 /// # Safety
@@ -3439,13 +3334,16 @@ where
     produced
 }
 
-pub fn select_indices_binary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_select_indices_binary}
+pub fn select_indices_binary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     left: &[T],
     right: &[T],
     indices: &mut [usize],
-) -> usize
+) -> Result<usize, crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -3459,16 +3357,8 @@ where
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    assert_eq!(
-        left.len(),
-        right.len(),
-        "tsl::algo::select_indices_binary requires left and right slices of equal length",
-    );
-    assert!(
-        indices.len() >= left.len(),
-        "tsl::algo::select_indices_binary requires enough output slots for the input",
-    );
-    unsafe {
+@{check_select_indices_binary}
+    Ok(unsafe {
         select_indices_binary_raw::<Profile, Policy, Op, T>(
             policy,
             op,
@@ -3477,7 +3367,7 @@ where
             indices.as_mut_ptr(),
             left.len(),
         )
-    }
+        })
 }
 
 /// # Safety
@@ -3556,13 +3446,16 @@ where
     produced
 }
 
-pub fn select_masked_indices_unary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_select_masked_indices_unary}
+pub fn select_masked_indices_unary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     input: &[T],
     masks: &[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
     indices: &mut [usize],
-) -> usize
+) -> Result<usize, crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -3576,19 +3469,8 @@ where
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    let lanes = validate_integral_mask_vector::<<Policy as VectorFor<Profile, T>>::Vec>(
-        "tsl::algo::select_masked_indices_unary",
-    );
-    let required = chunk_count_for_lanes(input.len(), lanes);
-    assert!(
-        masks.len() >= required,
-        "tsl::algo::select_masked_indices_unary requires enough mask chunks for the input",
-    );
-    assert!(
-        indices.len() >= input.len(),
-        "tsl::algo::select_masked_indices_unary requires enough output slots for the input",
-    );
-    unsafe {
+@{check_select_masked_indices_unary}
+    Ok(unsafe {
         select_masked_indices_unary_raw::<Profile, Policy, Op, T>(
             policy,
             op,
@@ -3597,7 +3479,7 @@ where
             indices.as_mut_ptr(),
             input.len(),
         )
-    }
+        })
 }
 
 /// # Safety
@@ -3685,14 +3567,17 @@ where
     produced
 }
 
-pub fn select_masked_indices_binary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_select_masked_indices_binary}
+pub fn select_masked_indices_binary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     left: &[T],
     right: &[T],
     masks: &[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
     indices: &mut [usize],
-) -> usize
+) -> Result<usize, crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -3706,24 +3591,8 @@ where
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    assert_eq!(
-        left.len(),
-        right.len(),
-        "tsl::algo::select_masked_indices_binary requires left and right slices of equal length",
-    );
-    let lanes = validate_integral_mask_vector::<<Policy as VectorFor<Profile, T>>::Vec>(
-        "tsl::algo::select_masked_indices_binary",
-    );
-    let required = chunk_count_for_lanes(left.len(), lanes);
-    assert!(
-        masks.len() >= required,
-        "tsl::algo::select_masked_indices_binary requires enough mask chunks for the input",
-    );
-    assert!(
-        indices.len() >= left.len(),
-        "tsl::algo::select_masked_indices_binary requires enough output slots for the input",
-    );
-    unsafe {
+@{check_select_masked_indices_binary}
+    Ok(unsafe {
         select_masked_indices_binary_raw::<Profile, Policy, Op, T>(
             policy,
             op,
@@ -3733,7 +3602,7 @@ where
             indices.as_mut_ptr(),
             left.len(),
         )
-    }
+        })
 }
 
 /// # Safety
@@ -3837,13 +3706,16 @@ where
     produced
 }
 
-pub fn select_masked_indices_unary_mask_layout<Profile, Policy, Layout, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_select_masked_indices_unary_mask_layout}
+pub fn select_masked_indices_unary_mask_layout_checked<Profile, Policy, Layout, Op, T>(
     policy: Policy,
     op: &mut Op,
     input: &[T],
     masks: &[<Layout as MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>>::Storage],
     indices: &mut [usize],
-) -> usize
+) -> Result<usize, crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -3858,23 +3730,8 @@ where
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    let lanes = validate_mask_layout_vector::<<Policy as VectorFor<Profile, T>>::Vec>(
-        "tsl::algo::select_masked_indices_unary_mask_layout",
-    );
-    let required =
-        <Layout as MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>>::storage_count(
-            input.len(),
-            lanes,
-        );
-    assert!(
-        masks.len() >= required,
-        "tsl::algo::select_masked_indices_unary_mask_layout requires enough mask storage for the input",
-    );
-    assert!(
-        indices.len() >= input.len(),
-        "tsl::algo::select_masked_indices_unary_mask_layout requires enough output slots for the input",
-    );
-    unsafe {
+@{check_select_masked_indices_unary_mask_layout}
+    Ok(unsafe {
         select_masked_indices_unary_mask_layout_raw::<Profile, Policy, Layout, Op, T>(
             policy,
             op,
@@ -3883,7 +3740,7 @@ where
             indices.as_mut_ptr(),
             input.len(),
         )
-    }
+        })
 }
 
 /// # Safety
@@ -3980,14 +3837,17 @@ where
     produced
 }
 
-pub fn select_masked_indices_binary_mask_layout<Profile, Policy, Layout, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_select_masked_indices_binary_mask_layout}
+pub fn select_masked_indices_binary_mask_layout_checked<Profile, Policy, Layout, Op, T>(
     policy: Policy,
     op: &mut Op,
     left: &[T],
     right: &[T],
     masks: &[<Layout as MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>>::Storage],
     indices: &mut [usize],
-) -> usize
+) -> Result<usize, crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -4002,28 +3862,8 @@ where
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    assert_eq!(
-        left.len(),
-        right.len(),
-        "tsl::algo::select_masked_indices_binary_mask_layout requires left and right slices of equal length",
-    );
-    let lanes = validate_mask_layout_vector::<<Policy as VectorFor<Profile, T>>::Vec>(
-        "tsl::algo::select_masked_indices_binary_mask_layout",
-    );
-    let required =
-        <Layout as MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>>::storage_count(
-            left.len(),
-            lanes,
-        );
-    assert!(
-        masks.len() >= required,
-        "tsl::algo::select_masked_indices_binary_mask_layout requires enough mask storage for the input",
-    );
-    assert!(
-        indices.len() >= left.len(),
-        "tsl::algo::select_masked_indices_binary_mask_layout requires enough output slots for the input",
-    );
-    unsafe {
+@{check_select_masked_indices_binary_mask_layout}
+    Ok(unsafe {
         select_masked_indices_binary_mask_layout_raw::<Profile, Policy, Layout, Op, T>(
             policy,
             op,
@@ -4033,7 +3873,7 @@ where
             indices.as_mut_ptr(),
             left.len(),
         )
-    }
+        })
 }
 
 /// # Safety
@@ -4143,13 +3983,16 @@ where
     produced
 }
 
-pub fn select_selected_indices_unary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_select_selected_indices_unary}
+pub fn select_selected_indices_unary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     input: &[T],
     input_indices: &[usize],
     output_indices: &mut [usize],
-) -> usize
+) -> Result<usize, crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -4163,16 +4006,8 @@ where
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    validate_selected_indices(
-        "tsl::algo::select_selected_indices_unary",
-        input,
-        input_indices,
-    );
-    assert!(
-        output_indices.len() >= input_indices.len(),
-        "tsl::algo::select_selected_indices_unary requires enough output slots for the selected rows",
-    );
-    unsafe {
+@{check_select_selected_indices_unary}
+    Ok(unsafe {
         select_selected_indices_unary_raw::<Profile, Policy, Op, T>(
             policy,
             op,
@@ -4181,7 +4016,7 @@ where
             output_indices.as_mut_ptr(),
             input_indices.len(),
         )
-    }
+        })
 }
 
 /// # Safety
@@ -4301,14 +4136,17 @@ where
     produced
 }
 
-pub fn select_selected_indices_binary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_select_selected_indices_binary}
+pub fn select_selected_indices_binary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     left: &[T],
     right: &[T],
     input_indices: &[usize],
     output_indices: &mut [usize],
-) -> usize
+) -> Result<usize, crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -4322,21 +4160,8 @@ where
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    assert_eq!(
-        left.len(),
-        right.len(),
-        "tsl::algo::select_selected_indices_binary requires left and right slices of equal length",
-    );
-    validate_selected_indices(
-        "tsl::algo::select_selected_indices_binary",
-        left,
-        input_indices,
-    );
-    assert!(
-        output_indices.len() >= input_indices.len(),
-        "tsl::algo::select_selected_indices_binary requires enough output slots for the selected rows",
-    );
-    unsafe {
+@{check_select_selected_indices_binary}
+    Ok(unsafe {
         select_selected_indices_binary_raw::<Profile, Policy, Op, T>(
             policy,
             op,
@@ -4346,7 +4171,7 @@ where
             output_indices.as_mut_ptr(),
             input_indices.len(),
         )
-    }
+        })
 }
 
 /// # Safety
@@ -4485,13 +4310,17 @@ where
     produced
 }
 
-pub fn transform_selected_unary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_transform_selected_unary}
+pub fn transform_selected_unary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     input: &[T],
     indices: &[usize],
     output: &mut [T],
-) where
+) -> Result<(), crate::PreconditionError>
+where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
     Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
@@ -4501,11 +4330,7 @@ pub fn transform_selected_unary<Profile, Policy, Op, T>(
         + LoadStore<Simd<T, Scalar>>,
     Op: UnaryKernel<<Policy as VectorFor<Profile, T>>::Vec> + UnaryKernel<Simd<T, Scalar>>,
 {
-    validate_selected_indices("tsl::algo::transform_selected_unary", input, indices);
-    assert!(
-        output.len() >= indices.len(),
-        "tsl::algo::transform_selected_unary requires enough output slots for the selected rows",
-    );
+@{check_transform_selected_unary}
     unsafe {
         transform_selected_unary_raw::<Profile, Policy, Op, T>(
             policy,
@@ -4516,6 +4341,7 @@ pub fn transform_selected_unary<Profile, Policy, Op, T>(
             indices.len(),
         );
     }
+    Ok(())
 }
 
 /// # Safety
@@ -4613,14 +4439,18 @@ pub unsafe fn transform_selected_unary_scaled_raw<Profile, const SCALE: u32, Pol
     }
 }
 
-pub fn transform_selected_binary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_transform_selected_binary}
+pub fn transform_selected_binary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     left: &[T],
     right: &[T],
     indices: &[usize],
     output: &mut [T],
-) where
+) -> Result<(), crate::PreconditionError>
+where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
     Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
@@ -4630,16 +4460,7 @@ pub fn transform_selected_binary<Profile, Policy, Op, T>(
         + LoadStore<Simd<T, Scalar>>,
     Op: BinaryKernel<<Policy as VectorFor<Profile, T>>::Vec> + BinaryKernel<Simd<T, Scalar>>,
 {
-    assert_eq!(
-        left.len(),
-        right.len(),
-        "tsl::algo::transform_selected_binary requires left and right slices of equal length",
-    );
-    validate_selected_indices("tsl::algo::transform_selected_binary", left, indices);
-    assert!(
-        output.len() >= indices.len(),
-        "tsl::algo::transform_selected_binary requires enough output slots for the selected rows",
-    );
+@{check_transform_selected_binary}
     unsafe {
         transform_selected_binary_raw::<Profile, Policy, Op, T>(
             policy,
@@ -4651,6 +4472,7 @@ pub fn transform_selected_binary<Profile, Policy, Op, T>(
             indices.len(),
         );
     }
+    Ok(())
 }
 
 /// # Safety
@@ -4767,12 +4589,16 @@ pub unsafe fn transform_selected_binary_scaled_raw<Profile, const SCALE: u32, Po
     }
 }
 
-pub fn consume_selected_unary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_consume_selected_unary}
+pub fn consume_selected_unary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     input: &[T],
     indices: &[usize],
-) where
+) -> Result<(), crate::PreconditionError>
+where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
     Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
@@ -4781,7 +4607,7 @@ pub fn consume_selected_unary<Profile, Policy, Op, T>(
     Op: UnaryConsumeKernel<<Policy as VectorFor<Profile, T>>::Vec>
         + UnaryConsumeKernel<Simd<T, Scalar>>,
 {
-    validate_selected_indices("tsl::algo::consume_selected_unary", input, indices);
+@{check_consume_selected_unary}
     unsafe {
         consume_selected_unary_raw::<Profile, Policy, Op, T>(
             policy,
@@ -4791,6 +4617,7 @@ pub fn consume_selected_unary<Profile, Policy, Op, T>(
             indices.len(),
         );
     }
+    Ok(())
 }
 
 /// # Safety
@@ -4874,13 +4701,17 @@ pub unsafe fn consume_selected_unary_scaled_raw<Profile, const SCALE: u32, Polic
     }
 }
 
-pub fn consume_selected_binary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_consume_selected_binary}
+pub fn consume_selected_binary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     left: &[T],
     right: &[T],
     indices: &[usize],
-) where
+) -> Result<(), crate::PreconditionError>
+where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
     Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
@@ -4889,12 +4720,7 @@ pub fn consume_selected_binary<Profile, Policy, Op, T>(
     Op: BinaryConsumeKernel<<Policy as VectorFor<Profile, T>>::Vec>
         + BinaryConsumeKernel<Simd<T, Scalar>>,
 {
-    assert_eq!(
-        left.len(),
-        right.len(),
-        "tsl::algo::consume_selected_binary requires left and right slices of equal length",
-    );
-    validate_selected_indices("tsl::algo::consume_selected_binary", left, indices);
+@{check_consume_selected_binary}
     unsafe {
         consume_selected_binary_raw::<Profile, Policy, Op, T>(
             policy,
@@ -4905,6 +4731,7 @@ pub fn consume_selected_binary<Profile, Policy, Op, T>(
             indices.len(),
         );
     }
+    Ok(())
 }
 
 /// # Safety
@@ -5007,12 +4834,15 @@ pub unsafe fn consume_selected_binary_scaled_raw<Profile, const SCALE: u32, Poli
     }
 }
 
-pub fn aggregate_selected_unary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_aggregate_selected_unary}
+pub fn aggregate_selected_unary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     input: &[T],
     indices: &[usize],
-) -> <Op as UnaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output
+) -> Result<<Op as UnaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output, crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -5022,8 +4852,8 @@ where
     Op: UnaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>
         + UnaryAggregateKernel<Simd<T, Scalar>>,
 {
-    validate_selected_indices("tsl::algo::aggregate_selected_unary", input, indices);
-    unsafe {
+@{check_aggregate_selected_unary}
+    Ok(unsafe {
         aggregate_selected_unary_raw::<Profile, Policy, Op, T>(
             policy,
             op,
@@ -5031,7 +4861,7 @@ where
             indices.as_ptr(),
             indices.len(),
         )
-    }
+        })
 }
 
 /// # Safety
@@ -5119,13 +4949,16 @@ where
     <Op as UnaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::finalize(op)
 }
 
-pub fn aggregate_selected_binary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_aggregate_selected_binary}
+pub fn aggregate_selected_binary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     left: &[T],
     right: &[T],
     indices: &[usize],
-) -> <Op as BinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output
+) -> Result<<Op as BinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output, crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -5135,13 +4968,8 @@ where
     Op: BinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>
         + BinaryAggregateKernel<Simd<T, Scalar>>,
 {
-    assert_eq!(
-        left.len(),
-        right.len(),
-        "tsl::algo::aggregate_selected_binary requires left and right slices of equal length",
-    );
-    validate_selected_indices("tsl::algo::aggregate_selected_binary", left, indices);
-    unsafe {
+@{check_aggregate_selected_binary}
+    Ok(unsafe {
         aggregate_selected_binary_raw::<Profile, Policy, Op, T>(
             policy,
             op,
@@ -5150,7 +4978,7 @@ where
             indices.as_ptr(),
             indices.len(),
         )
-    }
+        })
 }
 
 /// # Safety
@@ -5257,13 +5085,17 @@ where
     <Op as BinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::finalize(op)
 }
 
-pub fn transform_where_unary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_transform_where_unary}
+pub fn transform_where_unary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     input: &[T],
     masks: &[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
     output: &mut [T],
-) where
+) -> Result<(), crate::PreconditionError>
+where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
     Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
@@ -5278,19 +5110,7 @@ pub fn transform_where_unary<Profile, Policy, Op, T>(
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    assert_eq!(
-        input.len(),
-        output.len(),
-        "tsl::algo::transform_where_unary requires input and output slices of equal length",
-    );
-    let lanes = validate_integral_mask_vector::<<Policy as VectorFor<Profile, T>>::Vec>(
-        "tsl::algo::transform_where_unary",
-    );
-    let required = chunk_count_for_lanes(input.len(), lanes);
-    assert!(
-        masks.len() >= required,
-        "tsl::algo::transform_where_unary requires enough mask chunks for the input",
-    );
+@{check_transform_where_unary}
     unsafe {
         transform_where_unary_raw::<Profile, Policy, Op, T>(
             policy,
@@ -5301,6 +5121,7 @@ pub fn transform_where_unary<Profile, Policy, Op, T>(
             input.len(),
         );
     }
+    Ok(())
 }
 
 /// # Safety
@@ -5382,14 +5203,18 @@ pub unsafe fn transform_where_unary_raw<Profile, Policy, Op, T>(
     }
 }
 
-pub fn transform_where_binary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_transform_where_binary}
+pub fn transform_where_binary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     left: &[T],
     right: &[T],
     masks: &[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
     output: &mut [T],
-) where
+) -> Result<(), crate::PreconditionError>
+where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
     Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
@@ -5404,24 +5229,7 @@ pub fn transform_where_binary<Profile, Policy, Op, T>(
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    assert_eq!(
-        left.len(),
-        right.len(),
-        "tsl::algo::transform_where_binary requires left and right slices of equal length",
-    );
-    assert_eq!(
-        left.len(),
-        output.len(),
-        "tsl::algo::transform_where_binary requires input and output slices of equal length",
-    );
-    let lanes = validate_integral_mask_vector::<<Policy as VectorFor<Profile, T>>::Vec>(
-        "tsl::algo::transform_where_binary",
-    );
-    let required = chunk_count_for_lanes(left.len(), lanes);
-    assert!(
-        masks.len() >= required,
-        "tsl::algo::transform_where_binary requires enough mask chunks for the input",
-    );
+@{check_transform_where_binary}
     unsafe {
         transform_where_binary_raw::<Profile, Policy, Op, T>(
             policy,
@@ -5433,6 +5241,7 @@ pub fn transform_where_binary<Profile, Policy, Op, T>(
             left.len(),
         );
     }
+    Ok(())
 }
 
 /// # Safety
@@ -5531,13 +5340,17 @@ pub unsafe fn transform_where_binary_raw<Profile, Policy, Op, T>(
     }
 }
 
-pub fn transform_masked_unary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_transform_masked_unary}
+pub fn transform_masked_unary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     input: &[T],
     masks: &[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
     output: &mut [T],
-) where
+) -> Result<(), crate::PreconditionError>
+where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
     Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
@@ -5550,19 +5363,7 @@ pub fn transform_masked_unary<Profile, Policy, Op, T>(
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    assert_eq!(
-        input.len(),
-        output.len(),
-        "tsl::algo::transform_masked_unary requires input and output slices of equal length",
-    );
-    let lanes = validate_integral_mask_vector::<<Policy as VectorFor<Profile, T>>::Vec>(
-        "tsl::algo::transform_masked_unary",
-    );
-    let required = chunk_count_for_lanes(input.len(), lanes);
-    assert!(
-        masks.len() >= required,
-        "tsl::algo::transform_masked_unary requires enough mask chunks for the input",
-    );
+@{check_transform_masked_unary}
     unsafe {
         transform_masked_unary_raw::<Profile, Policy, Op, T>(
             policy,
@@ -5573,6 +5374,7 @@ pub fn transform_masked_unary<Profile, Policy, Op, T>(
             input.len(),
         );
     }
+    Ok(())
 }
 
 /// # Safety
@@ -5649,14 +5451,18 @@ pub unsafe fn transform_masked_unary_raw<Profile, Policy, Op, T>(
     }
 }
 
-pub fn transform_masked_binary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_transform_masked_binary}
+pub fn transform_masked_binary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     left: &[T],
     right: &[T],
     masks: &[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
     output: &mut [T],
-) where
+) -> Result<(), crate::PreconditionError>
+where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
     Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
@@ -5669,24 +5475,7 @@ pub fn transform_masked_binary<Profile, Policy, Op, T>(
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    assert_eq!(
-        left.len(),
-        right.len(),
-        "tsl::algo::transform_masked_binary requires left and right slices of equal length",
-    );
-    assert_eq!(
-        left.len(),
-        output.len(),
-        "tsl::algo::transform_masked_binary requires input and output slices of equal length",
-    );
-    let lanes = validate_integral_mask_vector::<<Policy as VectorFor<Profile, T>>::Vec>(
-        "tsl::algo::transform_masked_binary",
-    );
-    let required = chunk_count_for_lanes(left.len(), lanes);
-    assert!(
-        masks.len() >= required,
-        "tsl::algo::transform_masked_binary requires enough mask chunks for the input",
-    );
+@{check_transform_masked_binary}
     unsafe {
         transform_masked_binary_raw::<Profile, Policy, Op, T>(
             policy,
@@ -5698,6 +5487,7 @@ pub fn transform_masked_binary<Profile, Policy, Op, T>(
             left.len(),
         );
     }
+    Ok(())
 }
 
 /// # Safety
@@ -5791,13 +5581,17 @@ pub unsafe fn transform_masked_binary_raw<Profile, Policy, Op, T>(
     }
 }
 
-pub fn transform_where_unary_mask_layout<Profile, Policy, Layout, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_transform_where_unary_mask_layout}
+pub fn transform_where_unary_mask_layout_checked<Profile, Policy, Layout, Op, T>(
     policy: Policy,
     op: &mut Op,
     input: &[T],
     masks: &[<Layout as MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>>::Storage],
     output: &mut [T],
-) where
+) -> Result<(), crate::PreconditionError>
+where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
     Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
@@ -5812,23 +5606,7 @@ pub fn transform_where_unary_mask_layout<Profile, Policy, Layout, Op, T>(
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    assert_eq!(
-        input.len(),
-        output.len(),
-        "tsl::algo::transform_where_unary_mask_layout requires input and output slices of equal length",
-    );
-    let lanes = validate_mask_layout_vector::<<Policy as VectorFor<Profile, T>>::Vec>(
-        "tsl::algo::transform_where_unary_mask_layout",
-    );
-    let required =
-        <Layout as MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>>::storage_count(
-            input.len(),
-            lanes,
-        );
-    assert!(
-        masks.len() >= required,
-        "tsl::algo::transform_where_unary_mask_layout requires enough mask storage for the input",
-    );
+@{check_transform_where_unary_mask_layout}
     unsafe {
         transform_where_unary_mask_layout_raw::<Profile, Policy, Layout, Op, T>(
             policy,
@@ -5839,6 +5617,7 @@ pub fn transform_where_unary_mask_layout<Profile, Policy, Layout, Op, T>(
             input.len(),
         );
     }
+    Ok(())
 }
 
 /// # Safety
@@ -5924,14 +5703,18 @@ pub unsafe fn transform_where_unary_mask_layout_raw<Profile, Policy, Layout, Op,
     }
 }
 
-pub fn transform_where_binary_mask_layout<Profile, Policy, Layout, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_transform_where_binary_mask_layout}
+pub fn transform_where_binary_mask_layout_checked<Profile, Policy, Layout, Op, T>(
     policy: Policy,
     op: &mut Op,
     left: &[T],
     right: &[T],
     masks: &[<Layout as MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>>::Storage],
     output: &mut [T],
-) where
+) -> Result<(), crate::PreconditionError>
+where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
     Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
@@ -5946,28 +5729,7 @@ pub fn transform_where_binary_mask_layout<Profile, Policy, Layout, Op, T>(
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    assert_eq!(
-        left.len(),
-        right.len(),
-        "tsl::algo::transform_where_binary_mask_layout requires left and right slices of equal length",
-    );
-    assert_eq!(
-        left.len(),
-        output.len(),
-        "tsl::algo::transform_where_binary_mask_layout requires input and output slices of equal length",
-    );
-    let lanes = validate_mask_layout_vector::<<Policy as VectorFor<Profile, T>>::Vec>(
-        "tsl::algo::transform_where_binary_mask_layout",
-    );
-    let required =
-        <Layout as MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>>::storage_count(
-            left.len(),
-            lanes,
-        );
-    assert!(
-        masks.len() >= required,
-        "tsl::algo::transform_where_binary_mask_layout requires enough mask storage for the input",
-    );
+@{check_transform_where_binary_mask_layout}
     unsafe {
         transform_where_binary_mask_layout_raw::<Profile, Policy, Layout, Op, T>(
             policy,
@@ -5979,6 +5741,7 @@ pub fn transform_where_binary_mask_layout<Profile, Policy, Layout, Op, T>(
             left.len(),
         );
     }
+    Ok(())
 }
 
 /// # Safety
@@ -6080,13 +5843,17 @@ pub unsafe fn transform_where_binary_mask_layout_raw<Profile, Policy, Layout, Op
     }
 }
 
-pub fn transform_masked_unary_mask_layout<Profile, Policy, Layout, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_transform_masked_unary_mask_layout}
+pub fn transform_masked_unary_mask_layout_checked<Profile, Policy, Layout, Op, T>(
     policy: Policy,
     op: &mut Op,
     input: &[T],
     masks: &[<Layout as MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>>::Storage],
     output: &mut [T],
-) where
+) -> Result<(), crate::PreconditionError>
+where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
     Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
@@ -6099,23 +5866,7 @@ pub fn transform_masked_unary_mask_layout<Profile, Policy, Layout, Op, T>(
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    assert_eq!(
-        input.len(),
-        output.len(),
-        "tsl::algo::transform_masked_unary_mask_layout requires input and output slices of equal length",
-    );
-    let lanes = validate_mask_layout_vector::<<Policy as VectorFor<Profile, T>>::Vec>(
-        "tsl::algo::transform_masked_unary_mask_layout",
-    );
-    let required =
-        <Layout as MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>>::storage_count(
-            input.len(),
-            lanes,
-        );
-    assert!(
-        masks.len() >= required,
-        "tsl::algo::transform_masked_unary_mask_layout requires enough mask storage for the input",
-    );
+@{check_transform_masked_unary_mask_layout}
     unsafe {
         transform_masked_unary_mask_layout_raw::<Profile, Policy, Layout, Op, T>(
             policy,
@@ -6126,6 +5877,7 @@ pub fn transform_masked_unary_mask_layout<Profile, Policy, Layout, Op, T>(
             input.len(),
         );
     }
+    Ok(())
 }
 
 /// # Safety
@@ -6201,14 +5953,18 @@ pub unsafe fn transform_masked_unary_mask_layout_raw<Profile, Policy, Layout, Op
     }
 }
 
-pub fn transform_masked_binary_mask_layout<Profile, Policy, Layout, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_transform_masked_binary_mask_layout}
+pub fn transform_masked_binary_mask_layout_checked<Profile, Policy, Layout, Op, T>(
     policy: Policy,
     op: &mut Op,
     left: &[T],
     right: &[T],
     masks: &[<Layout as MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>>::Storage],
     output: &mut [T],
-) where
+) -> Result<(), crate::PreconditionError>
+where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
     Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
@@ -6221,28 +5977,7 @@ pub fn transform_masked_binary_mask_layout<Profile, Policy, Layout, Op, T>(
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    assert_eq!(
-        left.len(),
-        right.len(),
-        "tsl::algo::transform_masked_binary_mask_layout requires left and right slices of equal length",
-    );
-    assert_eq!(
-        left.len(),
-        output.len(),
-        "tsl::algo::transform_masked_binary_mask_layout requires input and output slices of equal length",
-    );
-    let lanes = validate_mask_layout_vector::<<Policy as VectorFor<Profile, T>>::Vec>(
-        "tsl::algo::transform_masked_binary_mask_layout",
-    );
-    let required =
-        <Layout as MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>>::storage_count(
-            left.len(),
-            lanes,
-        );
-    assert!(
-        masks.len() >= required,
-        "tsl::algo::transform_masked_binary_mask_layout requires enough mask storage for the input",
-    );
+@{check_transform_masked_binary_mask_layout}
     unsafe {
         transform_masked_binary_mask_layout_raw::<Profile, Policy, Layout, Op, T>(
             policy,
@@ -6254,6 +5989,7 @@ pub fn transform_masked_binary_mask_layout<Profile, Policy, Layout, Op, T>(
             left.len(),
         );
     }
+    Ok(())
 }
 
 /// # Safety
@@ -6345,23 +6081,25 @@ pub unsafe fn transform_masked_binary_mask_layout_raw<Profile, Policy, Layout, O
     }
 }
 
-pub fn transform_unary<Profile, Policy, Op, T>(
+/// Applies a unary kernel after validating that `output` covers every input.
+///
+/// A longer output is accepted and elements beyond `input.len()` are untouched.
+/// On failure the operation is not invoked and `output` is unchanged.
+@{docs_transform_unary}
+pub fn transform_unary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     input: &[T],
     output: &mut [T],
-) where
+) -> Result<(), crate::PreconditionError>
+where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
     Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
     Profile: LoadStore<<Policy as VectorFor<Profile, T>>::Vec> + LoadStore<Simd<T, Scalar>>,
     Op: UnaryKernel<<Policy as VectorFor<Profile, T>>::Vec> + UnaryKernel<Simd<T, Scalar>>,
 {
-    assert_eq!(
-        input.len(),
-        output.len(),
-        "tsl::algo::transform_unary requires input and output slices of equal length",
-    );
+@{check_transform_unary}
     unsafe {
         transform_unary_raw::<Profile, Policy, Op, T>(
             policy,
@@ -6371,6 +6109,7 @@ pub fn transform_unary<Profile, Policy, Op, T>(
             input.len(),
         );
     }
+    Ok(())
 }
 
 /// # Safety
@@ -6425,29 +6164,26 @@ pub unsafe fn transform_unary_raw<Profile, Policy, Op, T>(
     }
 }
 
-pub fn transform_binary<Profile, Policy, Op, T>(
+/// Applies a binary kernel after validating every related range extent.
+///
+/// Longer secondary/output ranges are accepted and their suffixes are untouched.
+/// On failure the operation is not invoked and `output` is unchanged.
+@{docs_transform_binary}
+pub fn transform_binary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     left: &[T],
     right: &[T],
     output: &mut [T],
-) where
+) -> Result<(), crate::PreconditionError>
+where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
     Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
     Profile: LoadStore<<Policy as VectorFor<Profile, T>>::Vec> + LoadStore<Simd<T, Scalar>>,
     Op: BinaryKernel<<Policy as VectorFor<Profile, T>>::Vec> + BinaryKernel<Simd<T, Scalar>>,
 {
-    assert_eq!(
-        left.len(),
-        right.len(),
-        "tsl::algo::transform_binary requires left and right slices of equal length",
-    );
-    assert_eq!(
-        left.len(),
-        output.len(),
-        "tsl::algo::transform_binary requires input and output slices of equal length",
-    );
+@{check_transform_binary}
     unsafe {
         transform_binary_raw::<Profile, Policy, Op, T>(
             policy,
@@ -6458,6 +6194,7 @@ pub fn transform_binary<Profile, Policy, Op, T>(
             left.len(),
         );
     }
+    Ok(())
 }
 
 /// # Safety
@@ -6524,6 +6261,10 @@ pub unsafe fn transform_binary_raw<Profile, Policy, Op, T>(
     }
 }
 
+@{scaled_checked_algorithm_definitions}
+
+@{unchecked_algorithm_aliases}
+
 pub fn consume_unary<Profile, Policy, Op, T>(policy: Policy, op: &mut Op, input: &[T])
 where
     Policy: VectorFor<Profile, T>,
@@ -6581,7 +6322,10 @@ pub unsafe fn consume_unary_raw<Profile, Policy, Op, T>(
     }
 }
 
-pub fn consume_binary<Profile, Policy, Op, T>(policy: Policy, op: &mut Op, left: &[T], right: &[T])
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_consume_binary}
+pub fn consume_binary_checked<Profile, Policy, Op, T>(policy: Policy, op: &mut Op, left: &[T], right: &[T]) -> Result<(), crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -6590,11 +6334,7 @@ where
     Op: BinaryConsumeKernel<<Policy as VectorFor<Profile, T>>::Vec>
         + BinaryConsumeKernel<Simd<T, Scalar>>,
 {
-    assert_eq!(
-        left.len(),
-        right.len(),
-        "tsl::algo::consume_binary requires left and right slices of equal length",
-    );
+@{check_consume_binary}
     unsafe {
         consume_binary_raw::<Profile, Policy, Op, T>(
             policy,
@@ -6604,6 +6344,7 @@ where
             left.len(),
         );
     }
+    Ok(())
 }
 
 /// # Safety
@@ -6661,12 +6402,16 @@ pub unsafe fn consume_binary_raw<Profile, Policy, Op, T>(
     }
 }
 
-pub fn consume_masked_unary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_consume_masked_unary}
+pub fn consume_masked_unary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     input: &[T],
     masks: &[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
-) where
+) -> Result<(), crate::PreconditionError>
+where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
     Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
@@ -6679,14 +6424,7 @@ pub fn consume_masked_unary<Profile, Policy, Op, T>(
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    let lanes = validate_integral_mask_vector::<<Policy as VectorFor<Profile, T>>::Vec>(
-        "tsl::algo::consume_masked_unary",
-    );
-    let required = chunk_count_for_lanes(input.len(), lanes);
-    assert!(
-        masks.len() >= required,
-        "tsl::algo::consume_masked_unary requires enough mask chunks for the input",
-    );
+@{check_consume_masked_unary}
     unsafe {
         consume_masked_unary_raw::<Profile, Policy, Op, T>(
             policy,
@@ -6696,6 +6434,7 @@ pub fn consume_masked_unary<Profile, Policy, Op, T>(
             input.len(),
         );
     }
+    Ok(())
 }
 
 /// # Safety
@@ -6759,13 +6498,17 @@ pub unsafe fn consume_masked_unary_raw<Profile, Policy, Op, T>(
     }
 }
 
-pub fn consume_masked_binary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_consume_masked_binary}
+pub fn consume_masked_binary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     left: &[T],
     right: &[T],
     masks: &[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
-) where
+) -> Result<(), crate::PreconditionError>
+where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
     Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
@@ -6778,19 +6521,7 @@ pub fn consume_masked_binary<Profile, Policy, Op, T>(
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    assert_eq!(
-        left.len(),
-        right.len(),
-        "tsl::algo::consume_masked_binary requires left and right slices of equal length",
-    );
-    let lanes = validate_integral_mask_vector::<<Policy as VectorFor<Profile, T>>::Vec>(
-        "tsl::algo::consume_masked_binary",
-    );
-    let required = chunk_count_for_lanes(left.len(), lanes);
-    assert!(
-        masks.len() >= required,
-        "tsl::algo::consume_masked_binary requires enough mask chunks for the input",
-    );
+@{check_consume_masked_binary}
     unsafe {
         consume_masked_binary_raw::<Profile, Policy, Op, T>(
             policy,
@@ -6801,6 +6532,7 @@ pub fn consume_masked_binary<Profile, Policy, Op, T>(
             left.len(),
         );
     }
+    Ok(())
 }
 
 /// # Safety
@@ -6945,12 +6677,15 @@ where
     <Op as UnaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::finalize(op)
 }
 
-pub fn aggregate_binary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_aggregate_binary}
+pub fn aggregate_binary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     left: &[T],
     right: &[T],
-) -> <Op as BinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output
+) -> Result<<Op as BinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output, crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -6959,12 +6694,8 @@ where
     Op: BinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>
         + BinaryAggregateKernel<Simd<T, Scalar>>,
 {
-    assert_eq!(
-        left.len(),
-        right.len(),
-        "tsl::algo::aggregate_binary requires left and right slices of equal length",
-    );
-    unsafe {
+@{check_aggregate_binary}
+    Ok(unsafe {
         aggregate_binary_raw::<Profile, Policy, Op, T>(
             policy,
             op,
@@ -6972,7 +6703,7 @@ where
             right.as_ptr(),
             left.len(),
         )
-    }
+        })
 }
 
 /// # Safety
@@ -7033,12 +6764,15 @@ where
     <Op as BinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::finalize(op)
 }
 
-pub fn aggregate_masked_unary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_aggregate_masked_unary}
+pub fn aggregate_masked_unary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     input: &[T],
     masks: &[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
-) -> <Op as MaskedUnaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output
+) -> Result<<Op as MaskedUnaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output, crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -7052,15 +6786,8 @@ where
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    let lanes = validate_integral_mask_vector::<<Policy as VectorFor<Profile, T>>::Vec>(
-        "tsl::algo::aggregate_masked_unary",
-    );
-    let required = chunk_count_for_lanes(input.len(), lanes);
-    assert!(
-        masks.len() >= required,
-        "tsl::algo::aggregate_masked_unary requires enough mask chunks for the input",
-    );
-    unsafe {
+@{check_aggregate_masked_unary}
+    Ok(unsafe {
         aggregate_masked_unary_raw::<Profile, Policy, Op, T>(
             policy,
             op,
@@ -7068,7 +6795,7 @@ where
             masks.as_ptr(),
             input.len(),
         )
-    }
+        })
 }
 
 /// # Safety
@@ -7135,13 +6862,16 @@ where
     <Op as MaskedUnaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::finalize(op)
 }
 
-pub fn aggregate_masked_binary<Profile, Policy, Op, T>(
+/// Checked slice form. Every cross-range precondition is validated before dispatch.
+/// Longer related ranges are accepted and their suffixes remain untouched.
+@{docs_aggregate_masked_binary}
+pub fn aggregate_masked_binary_checked<Profile, Policy, Op, T>(
     policy: Policy,
     op: &mut Op,
     left: &[T],
     right: &[T],
     masks: &[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
-) -> <Op as MaskedBinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output
+) -> Result<<Op as MaskedBinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output, crate::PreconditionError>
 where
     Policy: VectorFor<Profile, T>,
     <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -7155,20 +6885,8 @@ where
     <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
     <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
 {
-    assert_eq!(
-        left.len(),
-        right.len(),
-        "tsl::algo::aggregate_masked_binary requires left and right slices of equal length",
-    );
-    let lanes = validate_integral_mask_vector::<<Policy as VectorFor<Profile, T>>::Vec>(
-        "tsl::algo::aggregate_masked_binary",
-    );
-    let required = chunk_count_for_lanes(left.len(), lanes);
-    assert!(
-        masks.len() >= required,
-        "tsl::algo::aggregate_masked_binary requires enough mask chunks for the input",
-    );
-    unsafe {
+@{check_aggregate_masked_binary}
+    Ok(unsafe {
         aggregate_masked_binary_raw::<Profile, Policy, Op, T>(
             policy,
             op,
@@ -7177,7 +6895,7 @@ where
             masks.as_ptr(),
             left.len(),
         )
-    }
+        })
 }
 
 /// # Safety

@@ -12,6 +12,7 @@ from tslc.backend.cpp_documentation import (
     cpp_register_doc as _cpp_register_doc,
     cpp_target_register_doc as _cpp_target_register_doc,
 )
+from tslc.backend.precondition_error_rendering import cpp_precondition_error
 from tslc.backend.primitive_facade import (
     DataparallelPrimitiveFacade,
     DataparallelPrimitiveFacadeKind,
@@ -82,15 +83,7 @@ def _cpp_compiler_diagnostic(
 
 
 def _cpp_precondition_error(error: PreconditionErrorKind) -> str:
-    if error is PreconditionErrorKind.INDEX_OUT_OF_BOUNDS:
-        return "::tsl::precondition_error::index_out_of_bounds"
-    if error is PreconditionErrorKind.ZERO_DIVISOR:
-        return "::tsl::precondition_error::zero_divisor"
-    if error is PreconditionErrorKind.INSUFFICIENT_EXTENT:
-        return "::tsl::precondition_error::insufficient_extent"
-    if error is PreconditionErrorKind.MISALIGNED:
-        return "::tsl::precondition_error::misaligned"
-    raise ValueError(f"unsupported C++ precondition error {error.value!r}")
+    return cpp_precondition_error(error)
 
 
 def _cpp_checked_failure(

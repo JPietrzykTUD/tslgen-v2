@@ -54,6 +54,14 @@ tagged releases are the stable URL-shaped dependency intended for
 
 ## Examples
 
+Range overloads with cross-range, mask, selected-index, alias, or output-capacity
+preconditions have a `*_checked` companion. A void algorithm returns
+`[[nodiscard]] tsl::precondition_error`; a value-producing algorithm returns the
+value and accepts one final `tsl::precondition_error&`. Unsuffixed overloads are
+the unchecked expert path and perform no hidden sanitizing. The
+`range_operator.cpp` example demonstrates checked composition and handles the
+status before using each result.
+
 ### `unary_operator.cpp`
 
 Demonstrates `tsl::algo::transform_unary` with a register-level square

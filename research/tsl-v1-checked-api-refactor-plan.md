@@ -2,8 +2,8 @@
 
 Date: 2026-09-02
 
-Status: accepted pre-v1 public-contract plan; Slices 0-4 are implemented and
-committed; Slice 5 is next
+Status: accepted pre-v1 public-contract plan; Slices 0-5 are implemented and
+committed; Slice 6 is next
 
 Related evidence: [TSL v1.0.0 generated API and documentation audit](tsl-v1-generated-api-docs-audit.md)
 
@@ -989,6 +989,59 @@ read-only versus writable ranges, ASan canaries, and no write on failure.
 ### Slice 5 — Algorithm range contracts
 
 Goal: split generated algorithms into explicit unchecked and checked forms.
+
+The unsuffixed C++ pointer and range overloads remain unchecked and take their
+driving count from the explicit count or first driving range. In Rust, an
+unsuffixed algorithm whose slice relations are safety preconditions denotes the
+existing `unsafe` raw-pointer kernel; its `*_checked` companion owns the safe
+slice signature and returns `Result`. The descriptive `_raw` spelling may
+remain as a compatibility alias, but it is not the canonical v1 name. Algorithms
+whose only range is already made valid by a Rust slice and which have no
+cross-range, capacity, selected-index, or scale precondition remain total safe
+functions and receive no checked twin.
+
+One frozen backend-owned algorithm contract registry declares the driving
+range, secondary inputs, masks, indexes, outputs, required extent relations,
+selected-address rules, ordered errors, and result category. C++ and Rust
+renderers project that registry into target-specific guard fragments and API
+documentation; static loop assets retain loop mechanics but do not own or
+infer the check policy. Asset placeholders and registry entries are validated
+for exact coverage so adding an algorithm cannot silently omit one backend.
+
+Extent conditions mean “covers the driving count,” not “has exactly the same
+length.” A longer secondary input, mask store, index output, or value output is
+valid and remains untouched beyond the produced/driving extent. Failures use
+`insufficient_input` for a secondary input or mask store,
+`insufficient_output` for a writable output/index range,
+`index_out_of_bounds` for a selected row outside a represented input, and
+`address_overflow` or `misaligned` when a non-default byte scale cannot form a
+valid aligned in-range element address. Every guard runs before dispatch, so a
+failure performs no output write and does not invoke a stateful operation.
+
+For selected-row algorithms, the default checked spelling validates ordinary
+element indexes. C++ also validates its existing compile-time `Scale` template
+argument's address arithmetic; Rust exposes an explicit
+`*_scaled_checked<const SCALE: u32>` companion alongside the default
+`*_checked` form. A scale that cannot fit the generated immediate remains a
+compile-time diagnostic. Runtime index multiplication overflow, resulting
+misalignment, and an address outside either represented input are distinct
+checked failures.
+
+C++ count results use zero as the failure placeholder. Generic aggregate
+results follow the repository-wide direct-value/error-output convention and
+therefore require a default-constructible result type; the generated wrapper
+states that constraint explicitly. Rust `Result` needs no placeholder.
+
+C++ checked range wrappers do not accept caller alignment promises. They
+dispatch through `alignment::detect`, so an incorrect `assume_*_aligned`
+template argument cannot preserve undefined behavior behind a checked name.
+The unsuffixed expert overloads retain every explicit alignment policy.
+
+Implement `transform_unary` and `transform_binary` as the vertical pilot, run
+the design-review/fix loop, and only then migrate predicate, masked, selected,
+aggregate, and consume families through the same registry. Runtime dispatch
+uses the same binary contract rather than keeping an independent equality
+assertion.
 
 Deliverables:
 

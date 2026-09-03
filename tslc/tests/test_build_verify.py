@@ -916,12 +916,14 @@ def test_rust_path_dependency_consumer_builds(
                 let left = [1_i32, 2, 3, 4];
                 let right = [4_i32, 3, 2, 1];
                 let mut output = [0_i32; 4];
-                Dispatcher::new().transform_binary(
-                    ops::Add,
-                    &left,
-                    &right,
-                    &mut output,
-                );
+                Dispatcher::new()
+                    .transform_binary_checked(
+                        ops::Add,
+                        &left,
+                        &right,
+                        &mut output,
+                    )
+                    .unwrap();
                 assert_eq!(output, [5; 4]);
             }
             """

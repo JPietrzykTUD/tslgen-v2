@@ -15,16 +15,16 @@ This generated maintenance report tracks the reviewed evidence at the current ch
 
 ## Inventory summary
 
-- Exact generated runtime-failure sites: 230
+- Exact generated runtime-failure sites: 154
 - Exact typed public callable identities with at least one `caller_unsafe` implementation: 33
 - Applicable source safety-metadata gaps: 138 (26 require caller unsafety)
 
 Runtime sites by classification:
 
-- dynamic precondition: 88
+- dynamic precondition: 6
 - implementation hazard: 8
 - static well-formedness constraint: 22
-- tooling-only validation: 112
+- tooling-only validation: 118
 
 ## Reviewed semantic families
 
@@ -36,10 +36,10 @@ Runtime sites by classification:
 | `integer_zero_divisor` | dynamic precondition | Unchecked C++ and unsafe Rust assume nonzero active integer divisors; checked companions report a typed zero-divisor error before invocation. | implemented for runtime integer division/remainder; checks active divisor lanes |
 | `lane_index` | dynamic precondition | Rust facade calls panic today; an unchecked C++ or Rust primitive may access outside its logical lanes. | complete from the runtime index and typed logical lane count |
 | `contiguous_extent` | dynamic precondition | Rust slice facades panic when a contiguous input or output is too short. | complete with a valid slice/span signature; not honest for a bare pointer |
-| `algorithm_equal_extents` | dynamic precondition | Rust generated algorithms panic when related slices have different extents. | complete from the checked algorithm's slice arguments |
-| `algorithm_output_capacity` | dynamic precondition | Rust generated algorithms panic when an output/index buffer is too short. | complete from the checked algorithm's input and output slices |
-| `algorithm_mask_capacity` | dynamic precondition | Rust generated algorithms panic when mask storage cannot cover the input. | complete from the input extent, mask layout, lane count, and mask slice |
-| `algorithm_selected_index` | dynamic precondition | Rust generated algorithms panic when a selected row index is outside the input. | complete by validating every selected index before kernel dispatch |
+| `algorithm_equal_extents` | dynamic precondition | Unchecked C++ and unsafe Rust algorithms assume that every secondary range covers the driving extent; checked companions report insufficient input. | implemented from the checked algorithm's range or slice arguments |
+| `algorithm_output_capacity` | dynamic precondition | Unchecked C++ and unsafe Rust algorithms assume sufficient output/index capacity; checked companions report insufficient output. | implemented from the checked algorithm's input and output ranges |
+| `algorithm_mask_capacity` | dynamic precondition | Unchecked C++ and unsafe Rust algorithms assume sufficient mask storage; checked companions report insufficient input or output. | implemented from the input extent, mask layout, lane count, and mask range |
+| `algorithm_selected_index` | dynamic precondition | Unchecked C++ and unsafe Rust selected-row algorithms assume valid scaled addresses; checked companions report overflow, misalignment, or an out-of-bounds index. | implemented by validating every selected address before kernel dispatch |
 | `implementation_exhaustiveness` | implementation hazard | Rust panics if compiler-selected scalar cast types escape the supported closed set. | no checked twin; repair typed validation/exhaustiveness |
 | `implementation_invariant` | implementation hazard | A debug assertion or unwrap fails if an internal compiler-owned invariant is broken. | no checked twin; retain or replace with compiler validation |
 | `contiguous_memory_contract` | dynamic precondition | Raw C++ pointers remain unchecked; Rust public exposure must be unsafe until a safe slice wrapper discharges the contract. | requires a span/slice carrying readable or writable extent and selected alignment |
@@ -53,7 +53,7 @@ Runtime sites by classification:
 
 ## Exact generated runtime sites
 
-### `tooling_only` (112)
+### `tooling_only` (118)
 
 It is not part of a generated runtime API contract.
 
@@ -78,10 +78,13 @@ It is not part of a generated runtime API contract.
 - `tslc/src/tslc/backend/assets/rust_build.rs:167` — owner `main` — `panic` — `panic!("Rust variant policy validation failed: {error}")`
 - `tslc/src/tslc/backend/assets/rust_build.rs:88` — owner `main` — `panic` — `panic!("Rust authored-default mapping failed: {error}")`
 - `tslc/src/tslc/backend/assets/rust_build.rs:199` — owner `required` — `panic` — `panic!("Cargo did not provide {}", name)`
-- `tslc/src/tslc/backend/assets/rust_dispatch_external_test.rs.tmpl:40` — owner `explicit_and_convenience_dispatch_match` — `assert_eq` — `assert_eq!(convenient, explicit);`
-- `tslc/src/tslc/backend/assets/rust_dispatch_external_test.rs.tmpl:39` — owner `explicit_and_convenience_dispatch_match` — `assert_eq` — `assert_eq!(explicit, [9_i32; 8]);`
+- `tslc/src/tslc/backend/assets/rust_dispatch_external_test.rs.tmpl:43` — owner `explicit_and_convenience_dispatch_match` — `assert_eq` — `assert_eq!(convenient, explicit);`
+- `tslc/src/tslc/backend/assets/rust_dispatch_external_test.rs.tmpl:42` — owner `explicit_and_convenience_dispatch_match` — `assert_eq` — `assert_eq!(explicit, [9_i32; 8]);`
+- `tslc/src/tslc/backend/assets/rust_dispatch_external_test.rs.tmpl:38` — owner `explicit_and_convenience_dispatch_match` — `unwrap` — `.unwrap();`
+- `tslc/src/tslc/backend/assets/rust_dispatch_external_test.rs.tmpl:40` — owner `explicit_and_convenience_dispatch_match` — `unwrap` — `.unwrap();`
 - `tslc/src/tslc/backend/assets/rust_dispatch_external_test.rs.tmpl:57` — owner `mutable_user_operation_state_is_preserved` — `assert_eq` — `assert_eq!(output, [9_i32; 8]);`
 - `tslc/src/tslc/backend/assets/rust_dispatch_external_test.rs.tmpl:58` — owner `mutable_user_operation_state_is_preserved` — `assert` — `assert!(operation.applications > 0);`
+- `tslc/src/tslc/backend/assets/rust_dispatch_external_test.rs.tmpl:55` — owner `mutable_user_operation_state_is_preserved` — `unwrap` — `.unwrap();`
 - `tslc/src/tslc/backend/assets/rust_smoke.rs:3` — owner `smoke` — `assert` — `assert!(true);`
 - `tslc/src/tslc/backend/assets/tsl_benchmark_core.hpp:101` — owner `calibrate` — `throw` — `throw std::runtime_error("benchmark calibration exceeded iteration limit");`
 - `tslc/src/tslc/backend/assets/tsl_benchmark_core.hpp:139` — owner `input` — `throw` — `throw std::runtime_error("cannot open policy file: " + path);`
@@ -119,18 +122,21 @@ It is not part of a generated runtime API contract.
 - `tslc/src/tslc/benchmark/render_cpp.py:226` — owner `_render_policy_read` — `throw` — `throw std::runtime_error("policy repeats a decision for " + std::string({stable_id}));`
 - `tslc/src/tslc/benchmark/render_cpp.py:224` — owner `_render_policy_read` — `throw` — `throw std::runtime_error("policy has no decision for " + std::string({stable_id}));`
 - `tslc/src/tslc/benchmark/render_cpp_scenarios.py:469` — owner `_render_measure_dispatch` — `throw` — `default: throw std::runtime_error("invalid candidate index");`
-- `tslc/src/tslc/render/rust_dispatch.py:571` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(ENTRY_CALLS.load(Ordering::SeqCst), 2);",`
-- `tslc/src/tslc/render/rust_dispatch.py:591` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(HARDWARE_ENTRY_CALLS.load(Ordering::SeqCst), 0);",`
-- `tslc/src/tslc/render/rust_dispatch.py:558` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(SELECTION_CALLS.load(Ordering::SeqCst), 1);",`
-- `tslc/src/tslc/render/rust_dispatch.py:570` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(SELECTION_CALLS.load(Ordering::SeqCst), 1);",`
-- `tslc/src/tslc/render/rust_dispatch.py:572` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(output, [9 as TestElement; 8]);",`
-- `tslc/src/tslc/render/rust_dispatch.py:590` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(output, [9 as TestElement; 8]);",`
-- `tslc/src/tslc/render/rust_dispatch.py:557` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(detector.detect_calls, 1);",`
-- `tslc/src/tslc/render/rust_dispatch.py:569` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(detector.detect_calls, 1);",`
-- `tslc/src/tslc/render/rust_dispatch.py:521` — owner `_unit_tests` — `assert_eq` — `f" assert_eq!(table.{field}, {entry.entry_index});",`
-- `tslc/src/tslc/render/rust_dispatch.py:513` — owner `_unit_tests` — `expect` — `' let _guard = TEST_LOCK.lock().expect("dispatch test lock");',`
-- `tslc/src/tslc/render/rust_dispatch.py:550` — owner `_unit_tests` — `expect` — `' let _guard = TEST_LOCK.lock().expect("dispatch test lock");',`
-- `tslc/src/tslc/render/rust_dispatch.py:577` — owner `_unit_tests` — `expect` — `' let _guard = TEST_LOCK.lock().expect("dispatch test lock");',`
+- `tslc/src/tslc/render/rust_dispatch.py:579` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(ENTRY_CALLS.load(Ordering::SeqCst), 2);",`
+- `tslc/src/tslc/render/rust_dispatch.py:599` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(HARDWARE_ENTRY_CALLS.load(Ordering::SeqCst), 0);",`
+- `tslc/src/tslc/render/rust_dispatch.py:566` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(SELECTION_CALLS.load(Ordering::SeqCst), 1);",`
+- `tslc/src/tslc/render/rust_dispatch.py:578` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(SELECTION_CALLS.load(Ordering::SeqCst), 1);",`
+- `tslc/src/tslc/render/rust_dispatch.py:580` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(output, [9 as TestElement; 8]);",`
+- `tslc/src/tslc/render/rust_dispatch.py:598` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(output, [9 as TestElement; 8]);",`
+- `tslc/src/tslc/render/rust_dispatch.py:565` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(detector.detect_calls, 1);",`
+- `tslc/src/tslc/render/rust_dispatch.py:577` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(detector.detect_calls, 1);",`
+- `tslc/src/tslc/render/rust_dispatch.py:529` — owner `_unit_tests` — `assert_eq` — `f" assert_eq!(table.{field}, {entry.entry_index});",`
+- `tslc/src/tslc/render/rust_dispatch.py:521` — owner `_unit_tests` — `expect` — `' let _guard = TEST_LOCK.lock().expect("dispatch test lock");',`
+- `tslc/src/tslc/render/rust_dispatch.py:558` — owner `_unit_tests` — `expect` — `' let _guard = TEST_LOCK.lock().expect("dispatch test lock");',`
+- `tslc/src/tslc/render/rust_dispatch.py:585` — owner `_unit_tests` — `expect` — `' let _guard = TEST_LOCK.lock().expect("dispatch test lock");',`
+- `tslc/src/tslc/render/rust_dispatch.py:571` — owner `_unit_tests` — `unwrap` — `"ops::Add, &left, &right, &mut output).unwrap();"`
+- `tslc/src/tslc/render/rust_dispatch.py:575` — owner `_unit_tests` — `unwrap` — `"ops::Add, &left, &right, &mut output).unwrap();"`
+- `tslc/src/tslc/render/rust_dispatch.py:596` — owner `_unit_tests` — `unwrap` — `"ops::Add, &left, &right, &mut output).unwrap();"`
 - `tslc/src/tslc/value_tests/_render_rust_conversion.py:35` — owner `_convert` — `assert` — `f" for i in 0..{target_lanes} {{ assert!(result[i].lane_eq(expected[i]), "`
 - `tslc/src/tslc/value_tests/_render_rust_conversion.py:473` — owner `_differential` — `assert_eq` — `f" for i in 0..{case.lanes} {{ assert_eq!("`
 - `tslc/src/tslc/value_tests/_render_rust_conversion.py:481` — owner `_differential` — `assert` — `" assert!(hw.lane_eq(reference), "`
@@ -174,26 +180,26 @@ It is not part of a generated runtime API contract.
 
 Sizes, lane counts, and mask-storage capacity are compiler-owned specialization facts.
 
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6999` — owner `aggregate_binary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::aggregate_binary requires a vector with at least one lane", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:5213` — owner `aggregate_selected_binary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::aggregate_selected_binary requires a vector with at least one lane", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:5091` — owner `aggregate_selected_unary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::aggregate_selected_unary requires a vector with at least one lane", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6922` — owner `aggregate_unary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::aggregate_unary requires a vector with at least one lane", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6629` — owner `consume_binary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::consume_binary requires a vector with at least one lane", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:4965` — owner `consume_selected_binary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::consume_selected_binary requires a vector with at least one lane", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:4848` — owner `consume_selected_unary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::consume_selected_unary requires a vector with at least one lane", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6560` — owner `consume_unary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::consume_unary requires a vector with at least one lane", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:851` — owner `for_each_chunk_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::for_each_chunk requires a vector with at least one lane", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6483` — owner `transform_binary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_binary requires a vector with at least one lane", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:4716` — owner `transform_selected_binary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_selected_binary requires a vector with at least one lane", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:4578` — owner `transform_selected_unary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_selected_unary requires a vector with at least one lane", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6395` — owner `transform_unary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_unary requires a vector with at least one lane", );`
+- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6730` — owner `aggregate_binary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::aggregate_binary requires a vector with at least one lane", );`
+- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:5041` — owner `aggregate_selected_binary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::aggregate_selected_binary requires a vector with at least one lane", );`
+- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:4921` — owner `aggregate_selected_unary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::aggregate_selected_unary requires a vector with at least one lane", );`
+- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6654` — owner `aggregate_unary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::aggregate_unary requires a vector with at least one lane", );`
+- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6370` — owner `consume_binary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::consume_binary requires a vector with at least one lane", );`
+- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:4792` — owner `consume_selected_binary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::consume_selected_binary requires a vector with at least one lane", );`
+- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:4675` — owner `consume_selected_unary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::consume_selected_unary requires a vector with at least one lane", );`
+- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6301` — owner `consume_unary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::consume_unary requires a vector with at least one lane", );`
+- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:869` — owner `for_each_chunk_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::for_each_chunk requires a vector with at least one lane", );`
+- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6220` — owner `transform_binary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_binary requires a vector with at least one lane", );`
+- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:4538` — owner `transform_selected_binary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_selected_binary requires a vector with at least one lane", );`
+- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:4404` — owner `transform_selected_unary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_selected_unary requires a vector with at least one lane", );`
+- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6134` — owner `transform_unary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_unary requires a vector with at least one lane", );`
 - `tslc/src/tslc/backend/assets/tsl_algorithm.rs:662` — owner `validate_integral_mask_vector` — `assert` — `assert!( lanes <= <V::ImaskType as IntegralMaskWord>::BITS, "{} requires an integral mask storage type with at least one bit per lane", helper_name, );`
 - `tslc/src/tslc/backend/assets/tsl_algorithm.rs:657` — owner `validate_integral_mask_vector` — `assert` — `assert!( lanes > 0, "{} requires a vector with at least one lane", helper_name, );`
-- `tslc/src/tslc/backend/assets/tsl_core.hpp:459` — owner `require_same_lanes` — `throw` — `throw std::invalid_argument( "lane-preserving conversion requires equal source and target lane counts" );`
-- `tslc/src/tslc/backend/assets/tsl_core.hpp:457` — owner `require_same_lanes` — `trap` — `__builtin_trap();`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:277` — owner `bit_cast` — `assert_eq` — `assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:291` — owner `reinterpret_unchecked` — `assert_eq` — `assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:686` — owner `require_same_lanes` — `assert_eq` — `assert_eq!( source_lanes, target_lanes, "lane-preserving conversion requires equal source and target lane counts" );`
+- `tslc/src/tslc/backend/assets/tsl_core.hpp:463` — owner `require_same_lanes` — `throw` — `throw std::invalid_argument( "lane-preserving conversion requires equal source and target lane counts" );`
+- `tslc/src/tslc/backend/assets/tsl_core.hpp:461` — owner `require_same_lanes` — `trap` — `__builtin_trap();`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:281` — owner `bit_cast` — `assert_eq` — `assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:295` — owner `reinterpret_unchecked` — `assert_eq` — `assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:690` — owner `require_same_lanes` — `assert_eq` — `assert_eq!( source_lanes, target_lanes, "lane-preserving conversion requires equal source and target lane counts" );`
 
 ### `static_immediate_nonzero` (2)
 
@@ -218,117 +224,15 @@ The checked signature must establish an addressable extent.
 - `tslc/src/tslc/backend/assets/rust_facade.rs.tmpl:219` — owner `copy_to_slice` — `assert` — `assert!( destination.len() >= N, "destination slice has {} elements but {N} are required", destination.len() );`
 - `tslc/src/tslc/backend/assets/rust_facade.rs.tmpl:186` — owner `from_slice` — `assert` — `assert!( source.len() >= N, "source slice has {} elements but {N} are required", source.len() );`
 
-### `algorithm_equal_extents` (37)
-
-All extents can be compared before dispatch or output writes.
-
-- `tslc/src/tslc/backend/assets/rust_dispatch.rs.tmpl:88` — owner `transform_binary` — `assert_eq` — `assert_eq!( left.len(), right.len(), "runtime transform_binary requires equally sized inputs", );`
-- `tslc/src/tslc/backend/assets/rust_dispatch.rs.tmpl:93` — owner `transform_binary` — `assert_eq` — `assert_eq!( left.len(), output.len(), "runtime transform_binary requires equally sized input and output", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6962` — owner `aggregate_binary` — `assert_eq` — `assert_eq!( left.len(), right.len(), "tsl::algo::aggregate_binary requires left and right slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:7158` — owner `aggregate_masked_binary` — `assert_eq` — `assert_eq!( left.len(), right.len(), "tsl::algo::aggregate_masked_binary requires left and right slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:5138` — owner `aggregate_selected_binary` — `assert_eq` — `assert_eq!( left.len(), right.len(), "tsl::algo::aggregate_selected_binary requires left and right slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6593` — owner `consume_binary` — `assert_eq` — `assert_eq!( left.len(), right.len(), "tsl::algo::consume_binary requires left and right slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6781` — owner `consume_masked_binary` — `assert_eq` — `assert_eq!( left.len(), right.len(), "tsl::algo::consume_masked_binary requires left and right slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:4892` — owner `consume_selected_binary` — `assert_eq` — `assert_eq!( left.len(), right.len(), "tsl::algo::consume_selected_binary requires left and right slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:1545` — owner `count_binary` — `assert_eq` — `assert_eq!( left.len(), right.len(), "tsl::algo::count_binary requires left and right slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:2022` — owner `count_masked_binary_mask_layout` — `assert_eq` — `assert_eq!( left.len(), right.len(), "tsl::algo::count_masked_binary_mask_layout requires left and right slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:1762` — owner `count_masked_binary` — `assert_eq` — `assert_eq!( left.len(), right.len(), "tsl::algo::count_masked_binary requires left and right slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:2297` — owner `count_selected_binary` — `assert_eq` — `assert_eq!( left.len(), right.len(), "tsl::algo::count_selected_binary requires left and right slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:1294` — owner `predicate_binary_mask_layout` — `assert_eq` — `assert_eq!( left.len(), right.len(), "tsl::algo::predicate_binary_mask_layout requires left and right slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:1010` — owner `predicate_binary` — `assert_eq` — `assert_eq!( left.len(), right.len(), "tsl::algo::predicate_binary requires left and right slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:2573` — owner `select_binary` — `assert_eq` — `assert_eq!( left.len(), right.len(), "tsl::algo::select_binary requires left and right slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:3462` — owner `select_indices_binary` — `assert_eq` — `assert_eq!( left.len(), right.len(), "tsl::algo::select_indices_binary requires left and right slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:3192` — owner `select_masked_binary_mask_layout` — `assert_eq` — `assert_eq!( left.len(), right.len(), "tsl::algo::select_masked_binary_mask_layout requires left and right slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:2860` — owner `select_masked_binary` — `assert_eq` — `assert_eq!( left.len(), right.len(), "tsl::algo::select_masked_binary requires left and right slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:4005` — owner `select_masked_indices_binary_mask_layout` — `assert_eq` — `assert_eq!( left.len(), right.len(), "tsl::algo::select_masked_indices_binary_mask_layout requires left and right slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:3709` — owner `select_masked_indices_binary` — `assert_eq` — `assert_eq!( left.len(), right.len(), "tsl::algo::select_masked_indices_binary requires left and right slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:4325` — owner `select_selected_indices_binary` — `assert_eq` — `assert_eq!( left.len(), right.len(), "tsl::algo::select_selected_indices_binary requires left and right slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6441` — owner `transform_binary` — `assert_eq` — `assert_eq!( left.len(), right.len(), "tsl::algo::transform_binary requires left and right slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6446` — owner `transform_binary` — `assert_eq` — `assert_eq!( left.len(), output.len(), "tsl::algo::transform_binary requires input and output slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6224` — owner `transform_masked_binary_mask_layout` — `assert_eq` — `assert_eq!( left.len(), right.len(), "tsl::algo::transform_masked_binary_mask_layout requires left and right slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6229` — owner `transform_masked_binary_mask_layout` — `assert_eq` — `assert_eq!( left.len(), output.len(), "tsl::algo::transform_masked_binary_mask_layout requires input and output slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:5672` — owner `transform_masked_binary` — `assert_eq` — `assert_eq!( left.len(), right.len(), "tsl::algo::transform_masked_binary requires left and right slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:5677` — owner `transform_masked_binary` — `assert_eq` — `assert_eq!( left.len(), output.len(), "tsl::algo::transform_masked_binary requires input and output slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6102` — owner `transform_masked_unary_mask_layout` — `assert_eq` — `assert_eq!( input.len(), output.len(), "tsl::algo::transform_masked_unary_mask_layout requires input and output slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:5553` — owner `transform_masked_unary` — `assert_eq` — `assert_eq!( input.len(), output.len(), "tsl::algo::transform_masked_unary requires input and output slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:4633` — owner `transform_selected_binary` — `assert_eq` — `assert_eq!( left.len(), right.len(), "tsl::algo::transform_selected_binary requires left and right slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6360` — owner `transform_unary` — `assert_eq` — `assert_eq!( input.len(), output.len(), "tsl::algo::transform_unary requires input and output slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:5949` — owner `transform_where_binary_mask_layout` — `assert_eq` — `assert_eq!( left.len(), right.len(), "tsl::algo::transform_where_binary_mask_layout requires left and right slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:5954` — owner `transform_where_binary_mask_layout` — `assert_eq` — `assert_eq!( left.len(), output.len(), "tsl::algo::transform_where_binary_mask_layout requires input and output slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:5407` — owner `transform_where_binary` — `assert_eq` — `assert_eq!( left.len(), right.len(), "tsl::algo::transform_where_binary requires left and right slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:5412` — owner `transform_where_binary` — `assert_eq` — `assert_eq!( left.len(), output.len(), "tsl::algo::transform_where_binary requires input and output slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:5815` — owner `transform_where_unary_mask_layout` — `assert_eq` — `assert_eq!( input.len(), output.len(), "tsl::algo::transform_where_unary_mask_layout requires input and output slices of equal length", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:5281` — owner `transform_where_unary` — `assert_eq` — `assert_eq!( input.len(), output.len(), "tsl::algo::transform_where_unary requires input and output slices of equal length", );`
-
-### `algorithm_output_capacity` (16)
-
-Capacity can be checked before the raw kernel performs a write.
-
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:2578` — owner `select_binary` — `assert` — `assert!( output.len() >= left.len(), "tsl::algo::select_binary requires enough output slots for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:3467` — owner `select_indices_binary` — `assert` — `assert!( indices.len() >= left.len(), "tsl::algo::select_indices_binary requires enough output slots for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:3363` — owner `select_indices_unary` — `assert` — `assert!( indices.len() >= input.len(), "tsl::algo::select_indices_unary requires enough output slots for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:3209` — owner `select_masked_binary_mask_layout` — `assert` — `assert!( output.len() >= left.len(), "tsl::algo::select_masked_binary_mask_layout requires enough output slots for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:2873` — owner `select_masked_binary` — `assert` — `assert!( output.len() >= left.len(), "tsl::algo::select_masked_binary requires enough output slots for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:4022` — owner `select_masked_indices_binary_mask_layout` — `assert` — `assert!( indices.len() >= left.len(), "tsl::algo::select_masked_indices_binary_mask_layout requires enough output slots for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:3722` — owner `select_masked_indices_binary` — `assert` — `assert!( indices.len() >= left.len(), "tsl::algo::select_masked_indices_binary requires enough output slots for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:3873` — owner `select_masked_indices_unary_mask_layout` — `assert` — `assert!( indices.len() >= input.len(), "tsl::algo::select_masked_indices_unary_mask_layout requires enough output slots for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:3587` — owner `select_masked_indices_unary` — `assert` — `assert!( indices.len() >= input.len(), "tsl::algo::select_masked_indices_unary requires enough output slots for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:3044` — owner `select_masked_unary_mask_layout` — `assert` — `assert!( output.len() >= input.len(), "tsl::algo::select_masked_unary_mask_layout requires enough output slots for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:2717` — owner `select_masked_unary` — `assert` — `assert!( output.len() >= input.len(), "tsl::algo::select_masked_unary requires enough output slots for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:4335` — owner `select_selected_indices_binary` — `assert` — `assert!( output_indices.len() >= input_indices.len(), "tsl::algo::select_selected_indices_binary requires enough output slots for the selected rows", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:4171` — owner `select_selected_indices_unary` — `assert` — `assert!( output_indices.len() >= input_indices.len(), "tsl::algo::select_selected_indices_unary requires enough output slots for the selected rows", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:2457` — owner `select_unary` — `assert` — `assert!( output.len() >= input.len(), "tsl::algo::select_unary requires enough output slots for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:4639` — owner `transform_selected_binary` — `assert` — `assert!( output.len() >= indices.len(), "tsl::algo::transform_selected_binary requires enough output slots for the selected rows", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:4505` — owner `transform_selected_unary` — `assert` — `assert!( output.len() >= indices.len(), "tsl::algo::transform_selected_unary requires enough output slots for the selected rows", );`
-
-### `algorithm_mask_capacity` (28)
-
-The finalized algorithm plan already owns these facts.
-
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:7167` — owner `aggregate_masked_binary` — `assert` — `assert!( masks.len() >= required, "tsl::algo::aggregate_masked_binary requires enough mask chunks for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:7059` — owner `aggregate_masked_unary` — `assert` — `assert!( masks.len() >= required, "tsl::algo::aggregate_masked_unary requires enough mask chunks for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6790` — owner `consume_masked_binary` — `assert` — `assert!( masks.len() >= required, "tsl::algo::consume_masked_binary requires enough mask chunks for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6686` — owner `consume_masked_unary` — `assert` — `assert!( masks.len() >= required, "tsl::algo::consume_masked_unary requires enough mask chunks for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:2035` — owner `count_masked_binary_mask_layout` — `assert` — `assert!( masks.len() >= required, "tsl::algo::count_masked_binary_mask_layout requires enough mask storage for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:1771` — owner `count_masked_binary` — `assert` — `assert!( masks.len() >= required, "tsl::algo::count_masked_binary requires enough mask chunks for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:1904` — owner `count_masked_unary_mask_layout` — `assert` — `assert!( masks.len() >= required, "tsl::algo::count_masked_unary_mask_layout requires enough mask storage for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:1654` — owner `count_masked_unary` — `assert` — `assert!( masks.len() >= required, "tsl::algo::count_masked_unary requires enough mask chunks for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:1307` — owner `predicate_binary_mask_layout` — `assert` — `assert!( masks.len() >= required, "tsl::algo::predicate_binary_mask_layout requires enough mask storage for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:1019` — owner `predicate_binary` — `assert` — `assert!( masks.len() >= required, "tsl::algo::predicate_binary requires enough mask chunks for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:1152` — owner `predicate_unary_mask_layout` — `assert` — `assert!( masks.len() >= required, "tsl::algo::predicate_unary_mask_layout requires enough mask storage for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:900` — owner `predicate_unary` — `assert` — `assert!( masks.len() >= required, "tsl::algo::predicate_unary requires enough mask chunks for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:3205` — owner `select_masked_binary_mask_layout` — `assert` — `assert!( masks.len() >= required, "tsl::algo::select_masked_binary_mask_layout requires enough mask storage for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:2869` — owner `select_masked_binary` — `assert` — `assert!( masks.len() >= required, "tsl::algo::select_masked_binary requires enough mask chunks for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:4018` — owner `select_masked_indices_binary_mask_layout` — `assert` — `assert!( masks.len() >= required, "tsl::algo::select_masked_indices_binary_mask_layout requires enough mask storage for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:3718` — owner `select_masked_indices_binary` — `assert` — `assert!( masks.len() >= required, "tsl::algo::select_masked_indices_binary requires enough mask chunks for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:3869` — owner `select_masked_indices_unary_mask_layout` — `assert` — `assert!( masks.len() >= required, "tsl::algo::select_masked_indices_unary_mask_layout requires enough mask storage for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:3583` — owner `select_masked_indices_unary` — `assert` — `assert!( masks.len() >= required, "tsl::algo::select_masked_indices_unary requires enough mask chunks for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:3040` — owner `select_masked_unary_mask_layout` — `assert` — `assert!( masks.len() >= required, "tsl::algo::select_masked_unary_mask_layout requires enough mask storage for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:2713` — owner `select_masked_unary` — `assert` — `assert!( masks.len() >= required, "tsl::algo::select_masked_unary requires enough mask chunks for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6242` — owner `transform_masked_binary_mask_layout` — `assert` — `assert!( masks.len() >= required, "tsl::algo::transform_masked_binary_mask_layout requires enough mask storage for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:5686` — owner `transform_masked_binary` — `assert` — `assert!( masks.len() >= required, "tsl::algo::transform_masked_binary requires enough mask chunks for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6115` — owner `transform_masked_unary_mask_layout` — `assert` — `assert!( masks.len() >= required, "tsl::algo::transform_masked_unary_mask_layout requires enough mask storage for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:5562` — owner `transform_masked_unary` — `assert` — `assert!( masks.len() >= required, "tsl::algo::transform_masked_unary requires enough mask chunks for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:5967` — owner `transform_where_binary_mask_layout` — `assert` — `assert!( masks.len() >= required, "tsl::algo::transform_where_binary_mask_layout requires enough mask storage for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:5421` — owner `transform_where_binary` — `assert` — `assert!( masks.len() >= required, "tsl::algo::transform_where_binary requires enough mask chunks for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:5828` — owner `transform_where_unary_mask_layout` — `assert` — `assert!( masks.len() >= required, "tsl::algo::transform_where_unary_mask_layout requires enough mask storage for the input", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:5290` — owner `transform_where_unary` — `assert` — `assert!( masks.len() >= required, "tsl::algo::transform_where_unary requires enough mask chunks for the input", );`
-
-### `algorithm_selected_index` (1)
-
-The check requires a valid index slice and input extent.
-
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:691` — owner `validate_selected_indices` — `assert` — `assert!( index < input.len(), "{} requires selected row ids to be valid element indexes", helper_name, );`
-
 ### `implementation_exhaustiveness` (5)
 
 This is a compiler/backend defect if reachable, not invalid caller data.
 
-- `tslc/src/tslc/backend/assets/tsl_core.rs:1070` — owner `saturating_cast_value` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:1027` — owner `saturating_from_f64` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:942` — owner `saturating_from_i128` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:985` — owner `saturating_from_u128` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:899` — owner `scalar_as_cast_value` — `panic` — `panic!("unsupported scalar-as cast")`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:1074` — owner `saturating_cast_value` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:1031` — owner `saturating_from_f64` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:946` — owner `saturating_from_i128` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:989` — owner `saturating_from_u128` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:903` — owner `scalar_as_cast_value` — `panic` — `panic!("unsupported scalar-as cast")`
 
 ### `implementation_invariant` (3)
 
@@ -336,7 +240,7 @@ The condition is not part of the public call domain.
 
 - `tslc/src/tslc/backend/assets/tsl_algorithm.rs:146` — owner `lane_is_set` — `debug_assert` — `debug_assert!(lane < <Self as IntegralMaskWord>::BITS);`
 - `tslc/src/tslc/backend/assets/tsl_algorithm.rs:133` — owner `one_at` — `debug_assert` — `debug_assert!(lane < <Self as IntegralMaskWord>::BITS);`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:667` — owner `ostream_write` — `unwrap` — `.unwrap()`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:671` — owner `ostream_write` — `unwrap` — `.unwrap()`
 
 ## Typed `caller_unsafe` public paths
 

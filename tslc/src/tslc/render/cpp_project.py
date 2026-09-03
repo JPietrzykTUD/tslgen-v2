@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from tslc.backend.cpp import CppBackend
+from tslc.backend.cpp_algorithm_contracts import cpp_algorithm_contract_holes
 from tslc.backend.cpp_profile_model import (
     CppProfileHeader,
     CppProjectRenderModel,
@@ -26,6 +27,7 @@ _CPP_STATIC_HEADERS = (
     "tsl_algorithm_detail_mask.hpp",
     "tsl_algorithm_detail_loops.hpp",
     "tsl_algorithm.hpp",
+    "tsl_algorithm_checked.hpp",
     "tsl_x86_traits.hpp",
 )
 
@@ -40,7 +42,15 @@ def cpp_artifacts(
     backend = CppBackend()
     model = cpp_project_render_model(profiles)
     artifacts = [
-        text(f"cpp/include/{header}", assets.text(header), media_type=media_type)
+        text(
+            f"cpp/include/{header}",
+            (
+                assets.fill(header, **cpp_algorithm_contract_holes())
+                if header == "tsl_algorithm_checked.hpp"
+                else assets.text(header)
+            ),
+            media_type=media_type,
+        )
         for header in _CPP_STATIC_HEADERS
     ] + [
         text(

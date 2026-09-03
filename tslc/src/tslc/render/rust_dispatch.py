@@ -10,6 +10,7 @@ from tslc.backend.rust_dispatch import (
     RustDispatchPlan,
     RustDispatchSlot,
 )
+from tslc.backend.rust_algorithm_contracts import rust_algorithm_contract_holes
 from tslc.backend.rust_static_selection import RustTargetRequirement
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.compiler_assets import RenderAssets
@@ -28,6 +29,7 @@ def rust_dispatch_module(
     requirement_names = _requirement_names(slots)
     return assets.fill(
         "rust_dispatch.rs.tmpl",
+        **rust_algorithm_contract_holes(),
         operation_values=_operation_values(slots),
         cpu_fact_fields=_cpu_fact_fields(requirement_names),
         production_detection=_production_detection(requirement_names),
@@ -327,7 +329,8 @@ def _entry_points(slots: tuple[RustDispatchSlot, ...]) -> str:
                         "    ENTRY_CALLS.fetch_add("
                         "1, std::sync::atomic::Ordering::SeqCst);"
                     ),
-                    "    crate::tsl_algorithm::transform_binary::<",
+                    "    unsafe {",
+                    "        crate::tsl_algorithm::transform_binary_raw::<",
                     "        crate::tsl_target_fallback::algo::Profile,",
                     (
                         f"        crate::dataparallel::Generic<"
@@ -335,13 +338,15 @@ def _entry_points(slots: tuple[RustDispatchSlot, ...]) -> str:
                     ),
                     "        Operation,",
                     f"        {slot.base_spelling},",
-                    "    >(",
-                    "        crate::dataparallel::Generic,",
-                    "        &mut operation,",
-                    "        left,",
-                    "        right,",
-                    "        output,",
-                    "    );",
+                    "        >(",
+                    "            crate::dataparallel::Generic,",
+                    "            &mut operation,",
+                    "            left.as_ptr(),",
+                    "            right.as_ptr(),",
+                    "            output.as_mut_ptr(),",
+                    "            left.len(),",
+                    "        );",
+                    "    }",
                     "}",
                 )
             )
@@ -391,18 +396,21 @@ def _hardware_entry(
                 "1, std::sync::atomic::Ordering::SeqCst);"
             ),
             "    }",
-            "    crate::tsl_algorithm::transform_binary::<",
+            "    unsafe {",
+            "        crate::tsl_algorithm::transform_binary_raw::<",
             f"        {profile_module}::algo::Profile,",
             f"        crate::dataparallel::Fixed<{entry.mapping.lanes}>,",
             "        Operation,",
             f"        {slot.base_spelling},",
-            "    >(",
-            "        crate::dataparallel::Fixed,",
-            "        &mut operation,",
-            "        left,",
-            "        right,",
-            "        output,",
-            "    );",
+            "        >(",
+            "            crate::dataparallel::Fixed,",
+            "            &mut operation,",
+            "            left.as_ptr(),",
+            "            right.as_ptr(),",
+            "            output.as_mut_ptr(),",
+            "            left.len(),",
+            "        );",
+            "    }",
             "}",
         )
     )
@@ -559,12 +567,12 @@ def _unit_tests(
             "        let (left, right) = inputs();",
             "        let mut output = [0 as TestElement; 8];",
             (
-                "        dispatcher.transform_binary("
-                "ops::Add, &left, &right, &mut output);"
+                "        dispatcher.transform_binary_checked("
+                "ops::Add, &left, &right, &mut output).unwrap();"
             ),
             (
-                "        dispatcher.transform_binary("
-                "ops::Add, &left, &right, &mut output);"
+                "        dispatcher.transform_binary_checked("
+                "ops::Add, &left, &right, &mut output).unwrap();"
             ),
             "        assert_eq!(detector.detect_calls, 1);",
             "        assert_eq!(SELECTION_CALLS.load(Ordering::SeqCst), 1);",
@@ -584,8 +592,8 @@ def _unit_tests(
             "        let (left, right) = inputs();",
             "        let mut output = [0 as TestElement; 8];",
             (
-                "        dispatcher.transform_binary("
-                "ops::Add, &left, &right, &mut output);"
+                "        dispatcher.transform_binary_checked("
+                "ops::Add, &left, &right, &mut output).unwrap();"
             ),
             "        assert_eq!(output, [9 as TestElement; 8]);",
             "        assert_eq!(HARDWARE_ENTRY_CALLS.load(Ordering::SeqCst), 0);",

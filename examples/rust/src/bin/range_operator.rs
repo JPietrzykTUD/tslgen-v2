@@ -159,13 +159,15 @@ fn main() {
     let policy = tsl::dataparallel::generic::<4>();
 
     let mut square = Square;
-    profile::algo::transform_unary(policy, &mut square, &left, &mut output);
+    profile::algo::transform_unary_checked(policy, &mut square, &left, &mut output)
+        .expect("checked algorithm preconditions");
     for (actual, input) in output.iter().zip(left.iter()) {
         assert_eq!(*actual, *input * *input);
     }
 
     let mut add = Add;
-    profile::algo::transform_binary(policy, &mut add, &left, &right, &mut output);
+    profile::algo::transform_binary_checked(policy, &mut add, &left, &right, &mut output)
+        .expect("checked algorithm preconditions");
     for ((actual, left_value), right_value) in output.iter().zip(left.iter()).zip(right.iter()) {
         assert_eq!(*actual, *left_value + *right_value);
     }
@@ -174,12 +176,19 @@ fn main() {
     let mut masks = vec![0u64; mask_count];
     let mut less_than = LessThan;
     let produced_masks =
-        profile::algo::predicate_binary(policy, &mut less_than, &left, &right, &mut masks);
+        profile::algo::predicate_binary_checked(policy, &mut less_than, &left, &right, &mut masks)
+            .expect("checked algorithm preconditions");
     assert_eq!(produced_masks, masks.len());
 
     let mut negative = Negative;
-    let produced =
-        profile::algo::select_masked_unary(policy, &mut negative, &left, &masks, &mut selected);
+    let produced = profile::algo::select_masked_unary_checked(
+        policy,
+        &mut negative,
+        &left,
+        &masks,
+        &mut selected,
+    )
+    .expect("checked algorithm preconditions");
     let mut expected_selected = 0usize;
     for i in 0..count {
         if left[i] < right[i] && left[i] < 0 {
@@ -193,12 +202,19 @@ fn main() {
     }
 
     let mut aggregate = MaskedPairSum { total: 0 };
-    let aggregate_result =
-        profile::algo::aggregate_masked_binary(policy, &mut aggregate, &left, &right, &masks);
+    let aggregate_result = profile::algo::aggregate_masked_binary_checked(
+        policy,
+        &mut aggregate,
+        &left,
+        &right,
+        &masks,
+    )
+    .expect("checked algorithm preconditions");
     assert_eq!(aggregate_result, expected_masked_pair_sum(&left, &right));
 
     let mut sink = MaskedSumSink { total: 0 };
-    profile::algo::consume_masked_unary(policy, &mut sink, &left, &masks);
+    profile::algo::consume_masked_unary_checked(policy, &mut sink, &left, &masks)
+        .expect("checked algorithm preconditions");
     let expected_sink: i64 = left
         .iter()
         .zip(right.iter())

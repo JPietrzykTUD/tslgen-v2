@@ -19,6 +19,7 @@ from tslc.backend.rust_api_model import (
     RustFacadeShape,
 )
 from tslc.backend.rust_api_types import RUST_FACADE_SIGNATURE_TYPES
+from tslc.backend.precondition_error_rendering import rust_precondition_error
 from tslc.backend.rust_names import rust_primitive_tag_name
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.catalog.memory import MemoryAccess, MemoryPayloadExtent
@@ -773,15 +774,7 @@ def _checked_parameter_expression(
 
 
 def _facade_precondition_error(error: PreconditionErrorKind) -> str:
-    if error is PreconditionErrorKind.INDEX_OUT_OF_BOUNDS:
-        return "crate::PreconditionError::IndexOutOfBounds"
-    if error is PreconditionErrorKind.ZERO_DIVISOR:
-        return "crate::PreconditionError::ZeroDivisor"
-    if error is PreconditionErrorKind.INSUFFICIENT_EXTENT:
-        return "crate::PreconditionError::InsufficientExtent"
-    if error is PreconditionErrorKind.MISALIGNED:
-        return "crate::PreconditionError::Misaligned"
-    raise ValueError(f"unsupported Rust facade precondition error {error.value!r}")
+    return rust_precondition_error(error, prefix="crate::PreconditionError::")
 
 
 def _unsafe_forward(method: RustComprehensiveMethod, call: str) -> str:

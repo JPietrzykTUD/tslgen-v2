@@ -13,6 +13,7 @@ from tslc.backend.rust_policy_manifest import load_rust_policy_manifest
 from tslc.backend.rust_policy_selection import plan_rust_policy_selection
 from tslc.backend.rust_static_selection import plan_rust_static_selection
 from tslc.backend.rust_algorithm_manifest import RUST_ALGORITHM_RESERVED_NAMES
+from tslc.backend.rust_algorithm_contracts import rust_algorithm_contract_holes
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.compiler_assets import (
     RenderAssets,
@@ -297,18 +298,34 @@ def test_rust_algorithm_facade_wrappers_are_static_render_asset() -> None:
 
     wrappers = assets.text("rust_algo_wrappers.rs")
 
-    assert "pub fn transform_unary<Policy, Op, T>" in wrappers
-    assert "crate::tsl_algorithm::transform_unary::<Profile, Policy, Op, T>" in wrappers
+    assert "pub fn transform_unary_checked<Policy, Op, T>" in wrappers
+    assert (
+        "crate::tsl_algorithm::transform_unary_checked::<Profile, Policy, Op, T>"
+        in wrappers
+    )
 
 def test_rust_algorithm_reserved_name_manifest_matches_static_asset() -> None:
-    wrappers = load_default_render_assets().text("rust_algo_wrappers.rs")
-    public_names = frozenset(
+    assets = load_default_render_assets()
+    wrappers = assets.fill(
+        "rust_algo_wrappers.rs",
+        **rust_algorithm_contract_holes(),
+    )
+    function_names = set(
         re.findall(
             r"^\s+pub (?:unsafe )?fn ([A-Za-z_][A-Za-z0-9_]*)",
             wrappers,
             flags=re.MULTILINE,
         )
     )
+    alias_names = set(
+        re.findall(
+            r"^\s*pub use self::[A-Za-z_][A-Za-z0-9_]* as "
+            r"([A-Za-z_][A-Za-z0-9_]*);",
+            wrappers,
+            flags=re.MULTILINE,
+        )
+    )
+    public_names = frozenset(function_names | alias_names)
 
     assert public_names == RUST_ALGORITHM_RESERVED_NAMES
 

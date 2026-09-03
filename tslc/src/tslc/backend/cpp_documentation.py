@@ -7,6 +7,7 @@ from tslc.backend.primitive_rendering import (
     family_runtime_parameter_summary,
     runtime_parameter_summary,
 )
+from tslc.backend.precondition_error_rendering import cpp_precondition_error
 from tslc.backend.signature_types import CPP_SIGNATURE_TYPES
 from tslc.catalog.memory import MemoryAccess
 from tslc.catalog.preconditions import (
@@ -210,15 +211,7 @@ def _cpp_checked_errors(
 
 
 def _cpp_error_name(error: PreconditionErrorKind) -> str:
-    if error is PreconditionErrorKind.INDEX_OUT_OF_BOUNDS:
-        return "index_out_of_bounds"
-    if error is PreconditionErrorKind.ZERO_DIVISOR:
-        return "zero_divisor"
-    if error is PreconditionErrorKind.INSUFFICIENT_EXTENT:
-        return "insufficient_extent"
-    if error is PreconditionErrorKind.MISALIGNED:
-        return "misaligned"
-    raise ValueError(f"unsupported C++ precondition error {error.value!r}")
+    return cpp_precondition_error(error, qualified=False)
 
 
 def _parameter_summary(

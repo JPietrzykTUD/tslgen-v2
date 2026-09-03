@@ -71,30 +71,30 @@
     {
       "id": "algorithm_equal_extents",
       "classification": "dynamic precondition",
-      "backend_consequence": "Rust generated algorithms panic when related slices have different extents.",
-      "checked_feasibility": "complete from the checked algorithm's slice arguments",
-      "review": "All extents can be compared before dispatch or output writes."
+      "backend_consequence": "Unchecked C++ and unsafe Rust algorithms assume that every secondary range covers the driving extent; checked companions report insufficient input.",
+      "checked_feasibility": "implemented from the checked algorithm's range or slice arguments",
+      "review": "Every secondary extent is compared before dispatch or output writes."
     },
     {
       "id": "algorithm_output_capacity",
       "classification": "dynamic precondition",
-      "backend_consequence": "Rust generated algorithms panic when an output/index buffer is too short.",
-      "checked_feasibility": "complete from the checked algorithm's input and output slices",
-      "review": "Capacity can be checked before the raw kernel performs a write."
+      "backend_consequence": "Unchecked C++ and unsafe Rust algorithms assume sufficient output/index capacity; checked companions report insufficient output.",
+      "checked_feasibility": "implemented from the checked algorithm's input and output ranges",
+      "review": "Capacity is checked before the raw kernel performs a write."
     },
     {
       "id": "algorithm_mask_capacity",
       "classification": "dynamic precondition",
-      "backend_consequence": "Rust generated algorithms panic when mask storage cannot cover the input.",
-      "checked_feasibility": "complete from the input extent, mask layout, lane count, and mask slice",
-      "review": "The finalized algorithm plan already owns these facts."
+      "backend_consequence": "Unchecked C++ and unsafe Rust algorithms assume sufficient mask storage; checked companions report insufficient input or output.",
+      "checked_feasibility": "implemented from the input extent, mask layout, lane count, and mask range",
+      "review": "The typed algorithm contract owns the storage relation."
     },
     {
       "id": "algorithm_selected_index",
       "classification": "dynamic precondition",
-      "backend_consequence": "Rust generated algorithms panic when a selected row index is outside the input.",
-      "checked_feasibility": "complete by validating every selected index before kernel dispatch",
-      "review": "The check requires a valid index slice and input extent."
+      "backend_consequence": "Unchecked C++ and unsafe Rust selected-row algorithms assume valid scaled addresses; checked companions report overflow, misalignment, or an out-of-bounds index.",
+      "checked_feasibility": "implemented by validating every selected address before kernel dispatch",
+      "review": "The check uses a valid index range, input extent, and compile-time byte scale."
     },
     {
       "id": "implementation_exhaustiveness",
@@ -341,22 +341,6 @@
       "family": "tooling_only"
     },
     {
-      "id": "tslc/src/tslc/backend/assets/rust_dispatch.rs.tmpl|transform_binary|assert_eq|2cedc026812f47e9|0",
-      "path": "tslc/src/tslc/backend/assets/rust_dispatch.rs.tmpl",
-      "owner": "transform_binary",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), right.len(), \"runtime transform_binary requires equally sized inputs\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/rust_dispatch.rs.tmpl|transform_binary|assert_eq|5a7a71d6277567d5|0",
-      "path": "tslc/src/tslc/backend/assets/rust_dispatch.rs.tmpl",
-      "owner": "transform_binary",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), output.len(), \"runtime transform_binary requires equally sized input and output\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
       "id": "tslc/src/tslc/backend/assets/rust_dispatch_external_test.rs.tmpl|explicit_and_convenience_dispatch_match|assert_eq|566c0e3442245b08|0",
       "path": "tslc/src/tslc/backend/assets/rust_dispatch_external_test.rs.tmpl",
       "owner": "explicit_and_convenience_dispatch_match",
@@ -373,6 +357,22 @@
       "family": "tooling_only"
     },
     {
+      "id": "tslc/src/tslc/backend/assets/rust_dispatch_external_test.rs.tmpl|explicit_and_convenience_dispatch_match|unwrap|768ddb73b8a45e55|0",
+      "path": "tslc/src/tslc/backend/assets/rust_dispatch_external_test.rs.tmpl",
+      "owner": "explicit_and_convenience_dispatch_match",
+      "kind": "unwrap",
+      "excerpt": ".unwrap();",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/rust_dispatch_external_test.rs.tmpl|explicit_and_convenience_dispatch_match|unwrap|768ddb73b8a45e55|1",
+      "path": "tslc/src/tslc/backend/assets/rust_dispatch_external_test.rs.tmpl",
+      "owner": "explicit_and_convenience_dispatch_match",
+      "kind": "unwrap",
+      "excerpt": ".unwrap();",
+      "family": "tooling_only"
+    },
+    {
       "id": "tslc/src/tslc/backend/assets/rust_dispatch_external_test.rs.tmpl|mutable_user_operation_state_is_preserved|assert_eq|e635686ea7bfbc93|0",
       "path": "tslc/src/tslc/backend/assets/rust_dispatch_external_test.rs.tmpl",
       "owner": "mutable_user_operation_state_is_preserved",
@@ -386,6 +386,14 @@
       "owner": "mutable_user_operation_state_is_preserved",
       "kind": "assert",
       "excerpt": "assert!(operation.applications > 0);",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/rust_dispatch_external_test.rs.tmpl|mutable_user_operation_state_is_preserved|unwrap|768ddb73b8a45e55|0",
+      "path": "tslc/src/tslc/backend/assets/rust_dispatch_external_test.rs.tmpl",
+      "owner": "mutable_user_operation_state_is_preserved",
+      "kind": "unwrap",
+      "excerpt": ".unwrap();",
       "family": "tooling_only"
     },
     {
@@ -453,52 +461,12 @@
       "family": "static_representation_or_lane_shape"
     },
     {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|aggregate_binary|assert_eq|d7cf095cf7505d26|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "aggregate_binary",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::aggregate_binary requires left and right slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|aggregate_masked_binary|assert_eq|5452dad1d3bcb7de|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "aggregate_masked_binary",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::aggregate_masked_binary requires left and right slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|aggregate_masked_binary|assert|e571460fe5afc003|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "aggregate_masked_binary",
-      "kind": "assert",
-      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::aggregate_masked_binary requires enough mask chunks for the input\", );",
-      "family": "algorithm_mask_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|aggregate_masked_unary|assert|85514a649cfcbd5d|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "aggregate_masked_unary",
-      "kind": "assert",
-      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::aggregate_masked_unary requires enough mask chunks for the input\", );",
-      "family": "algorithm_mask_capacity"
-    },
-    {
       "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|aggregate_selected_binary_scaled_raw|assert|a59ffd90bc9f7f41|0",
       "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
       "owner": "aggregate_selected_binary_scaled_raw",
       "kind": "assert",
       "excerpt": "assert!( lanes > 0, \"tsl::algo::aggregate_selected_binary requires a vector with at least one lane\", );",
       "family": "static_representation_or_lane_shape"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|aggregate_selected_binary|assert_eq|991b6f4ff51e34d8|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "aggregate_selected_binary",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::aggregate_selected_binary requires left and right slices of equal length\", );",
-      "family": "algorithm_equal_extents"
     },
     {
       "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|aggregate_selected_unary_scaled_raw|assert|f12921fac0b7b310|0",
@@ -525,52 +493,12 @@
       "family": "static_representation_or_lane_shape"
     },
     {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|consume_binary|assert_eq|536b9aabe950f85c|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "consume_binary",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::consume_binary requires left and right slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|consume_masked_binary|assert_eq|4463e6823d2f75e3|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "consume_masked_binary",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::consume_masked_binary requires left and right slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|consume_masked_binary|assert|c4d18c43e7b05c1c|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "consume_masked_binary",
-      "kind": "assert",
-      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::consume_masked_binary requires enough mask chunks for the input\", );",
-      "family": "algorithm_mask_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|consume_masked_unary|assert|40ff1b1eb2c3fc3e|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "consume_masked_unary",
-      "kind": "assert",
-      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::consume_masked_unary requires enough mask chunks for the input\", );",
-      "family": "algorithm_mask_capacity"
-    },
-    {
       "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|consume_selected_binary_scaled_raw|assert|23afa8db4db42dc9|0",
       "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
       "owner": "consume_selected_binary_scaled_raw",
       "kind": "assert",
       "excerpt": "assert!( lanes > 0, \"tsl::algo::consume_selected_binary requires a vector with at least one lane\", );",
       "family": "static_representation_or_lane_shape"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|consume_selected_binary|assert_eq|ae7f0b44e7bdff46|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "consume_selected_binary",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::consume_selected_binary requires left and right slices of equal length\", );",
-      "family": "algorithm_equal_extents"
     },
     {
       "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|consume_selected_unary_scaled_raw|assert|1ebe8ea50fb992af|0",
@@ -587,70 +515,6 @@
       "kind": "assert",
       "excerpt": "assert!( lanes > 0, \"tsl::algo::consume_unary requires a vector with at least one lane\", );",
       "family": "static_representation_or_lane_shape"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|count_binary|assert_eq|15fb2308716b0ad8|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "count_binary",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::count_binary requires left and right slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|count_masked_binary_mask_layout|assert_eq|806a2c9b99cdd323|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "count_masked_binary_mask_layout",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::count_masked_binary_mask_layout requires left and right slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|count_masked_binary_mask_layout|assert|5371df005e2a8bf1|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "count_masked_binary_mask_layout",
-      "kind": "assert",
-      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::count_masked_binary_mask_layout requires enough mask storage for the input\", );",
-      "family": "algorithm_mask_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|count_masked_binary|assert_eq|346c8f3d868e5e46|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "count_masked_binary",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::count_masked_binary requires left and right slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|count_masked_binary|assert|f30d2ac58a81c295|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "count_masked_binary",
-      "kind": "assert",
-      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::count_masked_binary requires enough mask chunks for the input\", );",
-      "family": "algorithm_mask_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|count_masked_unary_mask_layout|assert|f834503f621595f8|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "count_masked_unary_mask_layout",
-      "kind": "assert",
-      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::count_masked_unary_mask_layout requires enough mask storage for the input\", );",
-      "family": "algorithm_mask_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|count_masked_unary|assert|2627bd15309bff85|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "count_masked_unary",
-      "kind": "assert",
-      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::count_masked_unary requires enough mask chunks for the input\", );",
-      "family": "algorithm_mask_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|count_selected_binary|assert_eq|cecf9c07e77cc48d|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "count_selected_binary",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::count_selected_binary requires left and right slices of equal length\", );",
-      "family": "algorithm_equal_extents"
     },
     {
       "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|for_each_chunk_raw|assert|d23a82219d4650bc|0",
@@ -677,286 +541,6 @@
       "family": "implementation_invariant"
     },
     {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|predicate_binary_mask_layout|assert_eq|6050aecfe234c70e|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "predicate_binary_mask_layout",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::predicate_binary_mask_layout requires left and right slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|predicate_binary_mask_layout|assert|cbce3b8590163076|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "predicate_binary_mask_layout",
-      "kind": "assert",
-      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::predicate_binary_mask_layout requires enough mask storage for the input\", );",
-      "family": "algorithm_mask_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|predicate_binary|assert_eq|04406e982ab291f5|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "predicate_binary",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::predicate_binary requires left and right slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|predicate_binary|assert|099a528b05b062b0|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "predicate_binary",
-      "kind": "assert",
-      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::predicate_binary requires enough mask chunks for the input\", );",
-      "family": "algorithm_mask_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|predicate_unary_mask_layout|assert|a3ad901432be22b1|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "predicate_unary_mask_layout",
-      "kind": "assert",
-      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::predicate_unary_mask_layout requires enough mask storage for the input\", );",
-      "family": "algorithm_mask_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|predicate_unary|assert|45c1f62e231a113f|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "predicate_unary",
-      "kind": "assert",
-      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::predicate_unary requires enough mask chunks for the input\", );",
-      "family": "algorithm_mask_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_binary|assert_eq|d03ba37d30700c81|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "select_binary",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::select_binary requires left and right slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_binary|assert|107bcd7b2442a793|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "select_binary",
-      "kind": "assert",
-      "excerpt": "assert!( output.len() >= left.len(), \"tsl::algo::select_binary requires enough output slots for the input\", );",
-      "family": "algorithm_output_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_indices_binary|assert_eq|29ae892b717c7c3f|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "select_indices_binary",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::select_indices_binary requires left and right slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_indices_binary|assert|c84dcba75053d0df|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "select_indices_binary",
-      "kind": "assert",
-      "excerpt": "assert!( indices.len() >= left.len(), \"tsl::algo::select_indices_binary requires enough output slots for the input\", );",
-      "family": "algorithm_output_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_indices_unary|assert|7a783df0417e64c5|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "select_indices_unary",
-      "kind": "assert",
-      "excerpt": "assert!( indices.len() >= input.len(), \"tsl::algo::select_indices_unary requires enough output slots for the input\", );",
-      "family": "algorithm_output_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_binary_mask_layout|assert_eq|ed1c60dc0476e3db|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "select_masked_binary_mask_layout",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::select_masked_binary_mask_layout requires left and right slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_binary_mask_layout|assert|9b22e10c3bf52e77|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "select_masked_binary_mask_layout",
-      "kind": "assert",
-      "excerpt": "assert!( output.len() >= left.len(), \"tsl::algo::select_masked_binary_mask_layout requires enough output slots for the input\", );",
-      "family": "algorithm_output_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_binary_mask_layout|assert|d8fd1a65e8211833|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "select_masked_binary_mask_layout",
-      "kind": "assert",
-      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::select_masked_binary_mask_layout requires enough mask storage for the input\", );",
-      "family": "algorithm_mask_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_binary|assert_eq|13dcabdac7305287|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "select_masked_binary",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::select_masked_binary requires left and right slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_binary|assert|4ec9774b5016d864|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "select_masked_binary",
-      "kind": "assert",
-      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::select_masked_binary requires enough mask chunks for the input\", );",
-      "family": "algorithm_mask_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_binary|assert|e22b7ff07fe7abde|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "select_masked_binary",
-      "kind": "assert",
-      "excerpt": "assert!( output.len() >= left.len(), \"tsl::algo::select_masked_binary requires enough output slots for the input\", );",
-      "family": "algorithm_output_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_indices_binary_mask_layout|assert_eq|e4c032692ca0bff9|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "select_masked_indices_binary_mask_layout",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::select_masked_indices_binary_mask_layout requires left and right slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_indices_binary_mask_layout|assert|0f7ddc01f95678a9|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "select_masked_indices_binary_mask_layout",
-      "kind": "assert",
-      "excerpt": "assert!( indices.len() >= left.len(), \"tsl::algo::select_masked_indices_binary_mask_layout requires enough output slots for the input\", );",
-      "family": "algorithm_output_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_indices_binary_mask_layout|assert|75cb1b075809f807|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "select_masked_indices_binary_mask_layout",
-      "kind": "assert",
-      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::select_masked_indices_binary_mask_layout requires enough mask storage for the input\", );",
-      "family": "algorithm_mask_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_indices_binary|assert_eq|925e8f99c64d8ebc|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "select_masked_indices_binary",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::select_masked_indices_binary requires left and right slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_indices_binary|assert|5deb43f6445786a2|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "select_masked_indices_binary",
-      "kind": "assert",
-      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::select_masked_indices_binary requires enough mask chunks for the input\", );",
-      "family": "algorithm_mask_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_indices_binary|assert|ffe382c24e32ab0f|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "select_masked_indices_binary",
-      "kind": "assert",
-      "excerpt": "assert!( indices.len() >= left.len(), \"tsl::algo::select_masked_indices_binary requires enough output slots for the input\", );",
-      "family": "algorithm_output_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_indices_unary_mask_layout|assert|2cdf1a46fdffa9ff|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "select_masked_indices_unary_mask_layout",
-      "kind": "assert",
-      "excerpt": "assert!( indices.len() >= input.len(), \"tsl::algo::select_masked_indices_unary_mask_layout requires enough output slots for the input\", );",
-      "family": "algorithm_output_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_indices_unary_mask_layout|assert|89f2d89a18c3a15a|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "select_masked_indices_unary_mask_layout",
-      "kind": "assert",
-      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::select_masked_indices_unary_mask_layout requires enough mask storage for the input\", );",
-      "family": "algorithm_mask_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_indices_unary|assert|98fcf4c9d1ce3f94|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "select_masked_indices_unary",
-      "kind": "assert",
-      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::select_masked_indices_unary requires enough mask chunks for the input\", );",
-      "family": "algorithm_mask_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_indices_unary|assert|dbd736d7baee55ee|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "select_masked_indices_unary",
-      "kind": "assert",
-      "excerpt": "assert!( indices.len() >= input.len(), \"tsl::algo::select_masked_indices_unary requires enough output slots for the input\", );",
-      "family": "algorithm_output_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_unary_mask_layout|assert|78435670e98e622d|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "select_masked_unary_mask_layout",
-      "kind": "assert",
-      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::select_masked_unary_mask_layout requires enough mask storage for the input\", );",
-      "family": "algorithm_mask_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_unary_mask_layout|assert|bea01cf913eb6bdd|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "select_masked_unary_mask_layout",
-      "kind": "assert",
-      "excerpt": "assert!( output.len() >= input.len(), \"tsl::algo::select_masked_unary_mask_layout requires enough output slots for the input\", );",
-      "family": "algorithm_output_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_unary|assert|cfdd99145ab60e7f|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "select_masked_unary",
-      "kind": "assert",
-      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::select_masked_unary requires enough mask chunks for the input\", );",
-      "family": "algorithm_mask_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_masked_unary|assert|d08860b168eb17bc|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "select_masked_unary",
-      "kind": "assert",
-      "excerpt": "assert!( output.len() >= input.len(), \"tsl::algo::select_masked_unary requires enough output slots for the input\", );",
-      "family": "algorithm_output_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_selected_indices_binary|assert_eq|7de94bf18bd27ddf|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "select_selected_indices_binary",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::select_selected_indices_binary requires left and right slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_selected_indices_binary|assert|7cdbaf75b16b1869|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "select_selected_indices_binary",
-      "kind": "assert",
-      "excerpt": "assert!( output_indices.len() >= input_indices.len(), \"tsl::algo::select_selected_indices_binary requires enough output slots for the selected rows\", );",
-      "family": "algorithm_output_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_selected_indices_unary|assert|98d2a7ed75b57e5c|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "select_selected_indices_unary",
-      "kind": "assert",
-      "excerpt": "assert!( output_indices.len() >= input_indices.len(), \"tsl::algo::select_selected_indices_unary requires enough output slots for the selected rows\", );",
-      "family": "algorithm_output_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|select_unary|assert|a8d74f82467ec4f5|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "select_unary",
-      "kind": "assert",
-      "excerpt": "assert!( output.len() >= input.len(), \"tsl::algo::select_unary requires enough output slots for the input\", );",
-      "family": "algorithm_output_capacity"
-    },
-    {
       "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|selected_row_scale|assert|25facbb8a5372fa0|0",
       "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
       "owner": "selected_row_scale",
@@ -973,124 +557,12 @@
       "family": "static_representation_or_lane_shape"
     },
     {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_binary|assert_eq|1714df738866b817|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "transform_binary",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::transform_binary requires left and right slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_binary|assert_eq|72905fda8e60364c|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "transform_binary",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), output.len(), \"tsl::algo::transform_binary requires input and output slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_masked_binary_mask_layout|assert_eq|7c11b8723850398c|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "transform_masked_binary_mask_layout",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::transform_masked_binary_mask_layout requires left and right slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_masked_binary_mask_layout|assert_eq|b4360ea7f1aab97e|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "transform_masked_binary_mask_layout",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), output.len(), \"tsl::algo::transform_masked_binary_mask_layout requires input and output slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_masked_binary_mask_layout|assert|a79297786be220a9|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "transform_masked_binary_mask_layout",
-      "kind": "assert",
-      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::transform_masked_binary_mask_layout requires enough mask storage for the input\", );",
-      "family": "algorithm_mask_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_masked_binary|assert_eq|308790796fcc3f63|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "transform_masked_binary",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::transform_masked_binary requires left and right slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_masked_binary|assert_eq|c81c3390b6a1c928|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "transform_masked_binary",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), output.len(), \"tsl::algo::transform_masked_binary requires input and output slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_masked_binary|assert|613d8f26e0d556cc|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "transform_masked_binary",
-      "kind": "assert",
-      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::transform_masked_binary requires enough mask chunks for the input\", );",
-      "family": "algorithm_mask_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_masked_unary_mask_layout|assert_eq|59d8991db6e33c45|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "transform_masked_unary_mask_layout",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( input.len(), output.len(), \"tsl::algo::transform_masked_unary_mask_layout requires input and output slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_masked_unary_mask_layout|assert|58d18d68bbb5ec23|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "transform_masked_unary_mask_layout",
-      "kind": "assert",
-      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::transform_masked_unary_mask_layout requires enough mask storage for the input\", );",
-      "family": "algorithm_mask_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_masked_unary|assert_eq|fb641a0ffb78622b|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "transform_masked_unary",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( input.len(), output.len(), \"tsl::algo::transform_masked_unary requires input and output slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_masked_unary|assert|6fb4b02fe479a0dd|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "transform_masked_unary",
-      "kind": "assert",
-      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::transform_masked_unary requires enough mask chunks for the input\", );",
-      "family": "algorithm_mask_capacity"
-    },
-    {
       "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_selected_binary_scaled_raw|assert|595dae8e3efbb61e|0",
       "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
       "owner": "transform_selected_binary_scaled_raw",
       "kind": "assert",
       "excerpt": "assert!( lanes > 0, \"tsl::algo::transform_selected_binary requires a vector with at least one lane\", );",
       "family": "static_representation_or_lane_shape"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_selected_binary|assert_eq|0ea82a3459e582c4|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "transform_selected_binary",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::transform_selected_binary requires left and right slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_selected_binary|assert|a1445353e88b3069|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "transform_selected_binary",
-      "kind": "assert",
-      "excerpt": "assert!( output.len() >= indices.len(), \"tsl::algo::transform_selected_binary requires enough output slots for the selected rows\", );",
-      "family": "algorithm_output_capacity"
     },
     {
       "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_selected_unary_scaled_raw|assert|ff68601aea5a705f|0",
@@ -1101,108 +573,12 @@
       "family": "static_representation_or_lane_shape"
     },
     {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_selected_unary|assert|86322c5fcfed9b5c|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "transform_selected_unary",
-      "kind": "assert",
-      "excerpt": "assert!( output.len() >= indices.len(), \"tsl::algo::transform_selected_unary requires enough output slots for the selected rows\", );",
-      "family": "algorithm_output_capacity"
-    },
-    {
       "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_unary_raw|assert|fe9af0de1aa58a7b|0",
       "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
       "owner": "transform_unary_raw",
       "kind": "assert",
       "excerpt": "assert!( lanes > 0, \"tsl::algo::transform_unary requires a vector with at least one lane\", );",
       "family": "static_representation_or_lane_shape"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_unary|assert_eq|da785403fb9b03ed|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "transform_unary",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( input.len(), output.len(), \"tsl::algo::transform_unary requires input and output slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_where_binary_mask_layout|assert_eq|109b785d35bff84b|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "transform_where_binary_mask_layout",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::transform_where_binary_mask_layout requires left and right slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_where_binary_mask_layout|assert_eq|a462ac4aa98da498|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "transform_where_binary_mask_layout",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), output.len(), \"tsl::algo::transform_where_binary_mask_layout requires input and output slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_where_binary_mask_layout|assert|aa26406deae0bdbd|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "transform_where_binary_mask_layout",
-      "kind": "assert",
-      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::transform_where_binary_mask_layout requires enough mask storage for the input\", );",
-      "family": "algorithm_mask_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_where_binary|assert_eq|05ff8e2b748bf634|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "transform_where_binary",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), right.len(), \"tsl::algo::transform_where_binary requires left and right slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_where_binary|assert_eq|11ff5b1d932b7913|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "transform_where_binary",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( left.len(), output.len(), \"tsl::algo::transform_where_binary requires input and output slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_where_binary|assert|6b98cfded8ca62b2|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "transform_where_binary",
-      "kind": "assert",
-      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::transform_where_binary requires enough mask chunks for the input\", );",
-      "family": "algorithm_mask_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_where_unary_mask_layout|assert_eq|6cc17f1f4f988d05|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "transform_where_unary_mask_layout",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( input.len(), output.len(), \"tsl::algo::transform_where_unary_mask_layout requires input and output slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_where_unary_mask_layout|assert|d342c37cfaaf8800|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "transform_where_unary_mask_layout",
-      "kind": "assert",
-      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::transform_where_unary_mask_layout requires enough mask storage for the input\", );",
-      "family": "algorithm_mask_capacity"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_where_unary|assert_eq|8d89e78def008211|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "transform_where_unary",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( input.len(), output.len(), \"tsl::algo::transform_where_unary requires input and output slices of equal length\", );",
-      "family": "algorithm_equal_extents"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|transform_where_unary|assert|f4d578cde89654c7|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "transform_where_unary",
-      "kind": "assert",
-      "excerpt": "assert!( masks.len() >= required, \"tsl::algo::transform_where_unary requires enough mask chunks for the input\", );",
-      "family": "algorithm_mask_capacity"
     },
     {
       "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|validate_integral_mask_vector|assert|abb4d8f31cd6eb0b|0",
@@ -1219,14 +595,6 @@
       "kind": "assert",
       "excerpt": "assert!( lanes > 0, \"{} requires a vector with at least one lane\", helper_name, );",
       "family": "static_representation_or_lane_shape"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm.rs|validate_selected_indices|assert|d9aff6a73bee937e|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
-      "owner": "validate_selected_indices",
-      "kind": "assert",
-      "excerpt": "assert!( index < input.len(), \"{} requires selected row ids to be valid element indexes\", helper_name, );",
-      "family": "algorithm_selected_index"
     },
     {
       "id": "tslc/src/tslc/backend/assets/tsl_benchmark_core.hpp|calibrate|throw|5c3bdb7ae5d482ca|0",
@@ -1706,6 +1074,30 @@
       "owner": "_unit_tests",
       "kind": "expect",
       "excerpt": "' let _guard = TEST_LOCK.lock().expect(\"dispatch test lock\");',",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/render/rust_dispatch.py|_unit_tests|unwrap|b15b4f35918b994b|0",
+      "path": "tslc/src/tslc/render/rust_dispatch.py",
+      "owner": "_unit_tests",
+      "kind": "unwrap",
+      "excerpt": "\"ops::Add, &left, &right, &mut output).unwrap();\"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/render/rust_dispatch.py|_unit_tests|unwrap|b15b4f35918b994b|1",
+      "path": "tslc/src/tslc/render/rust_dispatch.py",
+      "owner": "_unit_tests",
+      "kind": "unwrap",
+      "excerpt": "\"ops::Add, &left, &right, &mut output).unwrap();\"",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/render/rust_dispatch.py|_unit_tests|unwrap|b15b4f35918b994b|2",
+      "path": "tslc/src/tslc/render/rust_dispatch.py",
+      "owner": "_unit_tests",
+      "kind": "unwrap",
+      "excerpt": "\"ops::Add, &left, &right, &mut output).unwrap();\"",
       "family": "tooling_only"
     },
     {

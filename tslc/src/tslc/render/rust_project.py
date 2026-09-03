@@ -56,6 +56,7 @@ from tslc.render.rust_static_selection import (
     rust_static_profile_cfg,
 )
 from tslc.backend.rust_algorithm import rust_algorithm_module
+from tslc.backend.rust_algorithm_contracts import rust_algorithm_contract_holes
 from tslc.backend.rust_vectors import rust_registrations, rust_vector_registrations
 
 
@@ -116,7 +117,10 @@ def _rust_artifacts(
         ),
         text(
             "rust/src/tsl_algorithm.rs",
-            assets.text("tsl_algorithm.rs"),
+            assets.fill(
+                "tsl_algorithm.rs",
+                **rust_algorithm_contract_holes(),
+            ),
             media_type=media_type,
         ),
         text(

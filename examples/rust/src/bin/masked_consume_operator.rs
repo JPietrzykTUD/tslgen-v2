@@ -86,16 +86,30 @@ fn main() {
             let mask_count = profile::algo::integral_mask_chunk_count::<_, i32>(policy, left.len());
             let mut masks = vec![0u64; mask_count];
             let mut less_than = LessThan;
-            let produced =
-                profile::algo::predicate_binary(policy, &mut less_than, &left, &right, &mut masks);
+            let produced = profile::algo::predicate_binary_checked(
+                policy,
+                &mut less_than,
+                &left,
+                &right,
+                &mut masks,
+            )
+            .expect("checked algorithm preconditions");
             assert_eq!(produced, masks.len());
 
             let mut unary = MaskedSumSink { total: 0 };
-            profile::algo::consume_masked_unary(policy, &mut unary, &left, &masks);
+            profile::algo::consume_masked_unary_checked(policy, &mut unary, &left, &masks)
+                .expect("checked algorithm preconditions");
             assert_eq!(unary.total, expected_masked_sum(&left, &right));
 
             let mut binary = MaskedPairSumSink { total: 0 };
-            profile::algo::consume_masked_binary(policy, &mut binary, &left, &right, &masks);
+            profile::algo::consume_masked_binary_checked(
+                policy,
+                &mut binary,
+                &left,
+                &right,
+                &masks,
+            )
+            .expect("checked algorithm preconditions");
             assert_eq!(binary.total, expected_masked_pair_sum(&left, &right));
         }};
     }

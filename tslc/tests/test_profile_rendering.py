@@ -274,14 +274,14 @@ def test_representative_project_shape_is_byte_stable(
     expected = {
         "cpp/CMakeLists.txt": "604faf64cad28a98bf597e66bea58661a544ab13f0ffe8815aae360018a3ba6c",
         "cpp/docs/input/tsl_api_docs.hpp": "20edbaad92f8a60b867d38edc52d6306c58ca55d3bc947761ee19b535d35cca4",
-        "cpp/include/tsl.hpp": "298cd47b4e1509cd59eb4100f7a0d82bcdbc6e5d9f4eedccb0a68ba0bf667e03",
+        "cpp/include/tsl.hpp": "fdebd390b5777e6806b13f994ec33e3289bbf163cd91f9a3a6b183bbbc5ae5cb",
         "cpp/include/tsl_primitives.hpp": "11bd34e5b49a236979c11f696478ff627fae56fe113f95ef988b17f74e933d8b",
         "cpp/include/tsl_scalar.hpp": "c7a0ee1c3cfaea44bc02cb118684f0122422a8ca6335a68a75b6e7c2d4c6d309",
         "cpp/tests/smoke_scalar.cpp": "43046adfe06468b6eb75f351dc8883cb1e35635e66f40fc3f033d41651554a1e",
         "rust/Cargo.toml": "ec632691434d5f98f5bb2035539e9df258ec7fb252f84e5b4cb21a0aa2a144cc",
         "rust/src/lib.rs": "62a0f75a3abc17e447aab02802ee31511504c4810e40cf52a083c3357ee7d3af",
         "rust/src/tsl_documentation.rs": "c5e9329fd73d139a8c322b8c3f88215f3005336cbf206f3734db00cf92407443",
-        "rust/src/tsl_scalar.rs": "c6b15acdc13199d1ecdb4aa3a64e71704fcac822d816c80639e017b733d63fe6",
+        "rust/src/tsl_scalar.rs": "356dd3c1f66a86f19c3d1f164e97f1470e5a4f6a2a73f8de8e6f4f4d20b69690",
         "rust/tests/smoke.rs": "a4d108f502689e7f29ba5259e22779e8ef0afa36ab83c239022e2772d68d6b44",
     }
     actual = {

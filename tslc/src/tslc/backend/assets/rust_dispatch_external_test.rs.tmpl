@@ -33,8 +33,11 @@ fn explicit_and_convenience_dispatch_match() {
     let mut explicit = [0_i32; 8];
     let mut convenient = [0_i32; 8];
 
-    Dispatcher::new().transform_binary(ops::Add, &left, &right, &mut explicit);
-    algorithms::transform_binary(ops::Add, &left, &right, &mut convenient);
+    Dispatcher::new()
+        .transform_binary_checked(ops::Add, &left, &right, &mut explicit)
+        .unwrap();
+    algorithms::transform_binary_checked(ops::Add, &left, &right, &mut convenient)
+        .unwrap();
 
     assert_eq!(explicit, [9_i32; 8]);
     assert_eq!(convenient, explicit);
@@ -47,12 +50,9 @@ fn mutable_user_operation_state_is_preserved() {
     let mut output = [0_i32; 8];
     let mut operation = StatefulAdd::default();
 
-    Dispatcher::new().transform_binary(
-        &mut operation,
-        &left,
-        &right,
-        &mut output,
-    );
+    Dispatcher::new()
+        .transform_binary_checked(&mut operation, &left, &right, &mut output)
+        .unwrap();
 
     assert_eq!(output, [9_i32; 8]);
     assert!(operation.applications > 0);

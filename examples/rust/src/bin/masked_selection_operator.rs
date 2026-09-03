@@ -82,24 +82,26 @@ fn main() {
             let mut masks = vec![$init; mask_count];
 
             let mut less_than_for_mask = LessThan;
-            let masks_produced = profile::algo::predicate_binary_mask_layout::<_, $layout, _, i32>(
-                policy,
-                &mut less_than_for_mask,
-                &input,
-                &threshold,
-                &mut masks,
-            );
+            let masks_produced =
+                profile::algo::predicate_binary_mask_layout_checked::<_, $layout, _, i32>(
+                    policy,
+                    &mut less_than_for_mask,
+                    &input,
+                    &threshold,
+                    &mut masks,
+                )
+                .expect("checked algorithm preconditions");
             assert_eq!(masks_produced, masks.len());
 
             let mut output = vec![i32::MAX; input.len()];
             let mut negative = Negative;
-            let produced = profile::algo::select_masked_unary_mask_layout::<_, $layout, _, i32>(
-                policy,
-                &mut negative,
-                &input,
-                &masks,
-                &mut output,
-            );
+            let produced = profile::algo::select_masked_unary_mask_layout_checked::<
+                _,
+                $layout,
+                _,
+                i32,
+            >(policy, &mut negative, &input, &masks, &mut output)
+            .expect("checked algorithm preconditions");
             verify_selected(
                 &output,
                 produced,
@@ -109,25 +111,29 @@ fn main() {
             );
 
             let mut left_negative_for_mask = LeftNegative;
-            let masks_produced = profile::algo::predicate_binary_mask_layout::<_, $layout, _, i32>(
-                policy,
-                &mut left_negative_for_mask,
-                &input,
-                &threshold,
-                &mut masks,
-            );
+            let masks_produced =
+                profile::algo::predicate_binary_mask_layout_checked::<_, $layout, _, i32>(
+                    policy,
+                    &mut left_negative_for_mask,
+                    &input,
+                    &threshold,
+                    &mut masks,
+                )
+                .expect("checked algorithm preconditions");
             assert_eq!(masks_produced, masks.len());
 
             output.fill(i32::MAX);
             let mut less_than = LessThan;
-            let produced = profile::algo::select_masked_binary_mask_layout::<_, $layout, _, i32>(
-                policy,
-                &mut less_than,
-                &input,
-                &threshold,
-                &masks,
-                &mut output,
-            );
+            let produced =
+                profile::algo::select_masked_binary_mask_layout_checked::<_, $layout, _, i32>(
+                    policy,
+                    &mut less_than,
+                    &input,
+                    &threshold,
+                    &masks,
+                    &mut output,
+                )
+                .expect("checked algorithm preconditions");
             verify_selected(
                 &output,
                 produced,

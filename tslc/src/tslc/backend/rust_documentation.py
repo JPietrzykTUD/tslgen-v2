@@ -9,6 +9,7 @@ from tslc.backend.primitive_rendering import (
     family_runtime_parameter_summary,
     runtime_parameter_summary,
 )
+from tslc.backend.precondition_error_rendering import rust_precondition_error
 from tslc.backend.signature_types import RUST_SIGNATURE_TYPES, rust_free_type
 from tslc.catalog.memory import MemoryAccess
 from tslc.catalog.preconditions import (
@@ -77,15 +78,7 @@ def _rust_checked_error_facts(
 
 
 def _rust_error_name(error: PreconditionErrorKind) -> str:
-    if error is PreconditionErrorKind.INDEX_OUT_OF_BOUNDS:
-        return "PreconditionError::IndexOutOfBounds"
-    if error is PreconditionErrorKind.ZERO_DIVISOR:
-        return "PreconditionError::ZeroDivisor"
-    if error is PreconditionErrorKind.INSUFFICIENT_EXTENT:
-        return "PreconditionError::InsufficientExtent"
-    if error is PreconditionErrorKind.MISALIGNED:
-        return "PreconditionError::Misaligned"
-    raise ValueError(f"unsupported Rust precondition error {error.value!r}")
+    return rust_precondition_error(error)
 
 
 def _parameter_summary(

@@ -1,9 +1,11 @@
-    pub fn transform_unary<Policy, Op, T>(
+@{profile_docs_transform_unary}
+    pub fn transform_unary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         input: &[T],
         output: &mut [T],
-    ) where
+    ) -> Result<(), crate::PreconditionError>
+    where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
         Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
@@ -12,9 +14,9 @@
         Op: UnaryKernel<<Policy as VectorFor<Profile, T>>::Vec>
             + UnaryKernel<Simd<T, Scalar>>,
     {
-        crate::tsl_algorithm::transform_unary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::transform_unary_checked::<Profile, Policy, Op, T>(
             policy, op, input, output,
-        );
+        )
     }
 
     pub unsafe fn transform_unary_raw<Policy, Op, T>(
@@ -39,13 +41,15 @@
         }
     }
 
-    pub fn transform_binary<Policy, Op, T>(
+@{profile_docs_transform_binary}
+    pub fn transform_binary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         left: &[T],
         right: &[T],
         output: &mut [T],
-    ) where
+    ) -> Result<(), crate::PreconditionError>
+    where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
         Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
@@ -54,9 +58,9 @@
         Op: BinaryKernel<<Policy as VectorFor<Profile, T>>::Vec>
             + BinaryKernel<Simd<T, Scalar>>,
     {
-        crate::tsl_algorithm::transform_binary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::transform_binary_checked::<Profile, Policy, Op, T>(
             policy, op, left, right, output,
-        );
+        )
     }
 
     pub unsafe fn transform_binary_raw<Policy, Op, T>(
@@ -81,6 +85,10 @@
             );
         }
     }
+
+@{profile_scaled_checked_algorithm_definitions}
+
+@{profile_unchecked_algorithm_aliases}
 
     pub fn integral_mask_chunk_count<Policy, T>(
         policy: Policy,
@@ -161,12 +169,13 @@
         )
     }
 
-    pub fn predicate_unary<Policy, Op, T>(
+@{profile_docs_predicate_unary}
+    pub fn predicate_unary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         input: &[T],
         masks: &mut [<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
-    ) -> usize
+    ) -> Result<usize, crate::PreconditionError>
     where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -181,7 +190,7 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::predicate_unary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::predicate_unary_checked::<Profile, Policy, Op, T>(
             policy, op, input, masks,
         )
     }
@@ -214,13 +223,14 @@
         }
     }
 
-    pub fn predicate_binary<Policy, Op, T>(
+@{profile_docs_predicate_binary}
+    pub fn predicate_binary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         left: &[T],
         right: &[T],
         masks: &mut [<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
-    ) -> usize
+    ) -> Result<usize, crate::PreconditionError>
     where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -235,7 +245,7 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::predicate_binary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::predicate_binary_checked::<Profile, Policy, Op, T>(
             policy, op, left, right, masks,
         )
     }
@@ -269,7 +279,82 @@
         }
     }
 
-    pub fn predicate_binary_mask_layout<Policy, Layout, Op, T>(
+@{profile_docs_predicate_unary_mask_layout}
+    pub fn predicate_unary_mask_layout_checked<Policy, Layout, Op, T>(
+        policy: Policy,
+        op: &mut Op,
+        input: &[T],
+        masks: &mut [
+            <Layout as MaskLayout<
+                Profile,
+                <Policy as VectorFor<Profile, T>>::Vec,
+            >>::Storage
+        ],
+    ) -> Result<usize, crate::PreconditionError>
+    where
+        Policy: VectorFor<Profile, T>,
+        <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
+        Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
+        Layout: MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>,
+        Profile: LoadStore<<Policy as VectorFor<Profile, T>>::Vec>
+            + LoadStore<Simd<T, Scalar>>
+            + IntegralMask<<Policy as VectorFor<Profile, T>>::Vec>
+            + IntegralMask<Simd<T, Scalar>>
+            + MaskFromIntegral<<Policy as VectorFor<Profile, T>>::Vec>,
+        Op: UnaryPredicateKernel<<Policy as VectorFor<Profile, T>>::Vec>
+            + UnaryPredicateKernel<Simd<T, Scalar>>,
+        <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType:
+            IntegralMaskWord,
+        <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
+    {
+        crate::tsl_algorithm::predicate_unary_mask_layout_checked::<
+            Profile,
+            Policy,
+            Layout,
+            Op,
+            T,
+        >(policy, op, input, masks)
+    }
+
+    pub unsafe fn predicate_unary_mask_layout_raw<Policy, Layout, Op, T>(
+        policy: Policy,
+        op: &mut Op,
+        input: *const T,
+        masks: *mut <Layout as MaskLayout<
+            Profile,
+            <Policy as VectorFor<Profile, T>>::Vec,
+        >>::Storage,
+        count: usize,
+    ) -> usize
+    where
+        Policy: VectorFor<Profile, T>,
+        <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
+        Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
+        Layout: MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>,
+        Profile: LoadStore<<Policy as VectorFor<Profile, T>>::Vec>
+            + LoadStore<Simd<T, Scalar>>
+            + IntegralMask<<Policy as VectorFor<Profile, T>>::Vec>
+            + IntegralMask<Simd<T, Scalar>>
+            + MaskFromIntegral<<Policy as VectorFor<Profile, T>>::Vec>,
+        Op: UnaryPredicateKernel<<Policy as VectorFor<Profile, T>>::Vec>
+            + UnaryPredicateKernel<Simd<T, Scalar>>,
+        <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType:
+            IntegralMaskWord,
+        <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
+    {
+        unsafe {
+            crate::tsl_algorithm::predicate_unary_mask_layout_raw::<
+                Profile,
+                Policy,
+                Layout,
+                Op,
+                T,
+            >(policy, op, input, masks, count)
+        }
+    }
+
+@{profile_docs_predicate_binary_mask_layout}
+    pub fn predicate_binary_mask_layout_checked<Policy, Layout, Op, T>(
         policy: Policy,
         op: &mut Op,
         left: &[T],
@@ -280,7 +365,7 @@
                 <Policy as VectorFor<Profile, T>>::Vec,
             >>::Storage
         ],
-    ) -> usize
+    ) -> Result<usize, crate::PreconditionError>
     where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -297,7 +382,7 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::predicate_binary_mask_layout::<
+        crate::tsl_algorithm::predicate_binary_mask_layout_checked::<
             Profile,
             Policy,
             Layout,
@@ -395,12 +480,13 @@
         }
     }
 
-    pub fn count_binary<Policy, Op, T>(
+@{profile_docs_count_binary}
+    pub fn count_binary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         left: &[T],
         right: &[T],
-    ) -> usize
+    ) -> Result<usize, crate::PreconditionError>
     where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -415,7 +501,7 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::count_binary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::count_binary_checked::<Profile, Policy, Op, T>(
             policy, op, left, right,
         )
     }
@@ -448,12 +534,13 @@
         }
     }
 
-    pub fn count_masked_unary<Policy, Op, T>(
+@{profile_docs_count_masked_unary}
+    pub fn count_masked_unary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         input: &[T],
         masks: &[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
-    ) -> usize
+    ) -> Result<usize, crate::PreconditionError>
     where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -468,7 +555,7 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::count_masked_unary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::count_masked_unary_checked::<Profile, Policy, Op, T>(
             policy, op, input, masks,
         )
     }
@@ -501,13 +588,14 @@
         }
     }
 
-    pub fn count_masked_binary<Policy, Op, T>(
+@{profile_docs_count_masked_binary}
+    pub fn count_masked_binary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         left: &[T],
         right: &[T],
         masks: &[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
-    ) -> usize
+    ) -> Result<usize, crate::PreconditionError>
     where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -522,7 +610,7 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::count_masked_binary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::count_masked_binary_checked::<Profile, Policy, Op, T>(
             policy, op, left, right, masks,
         )
     }
@@ -556,12 +644,13 @@
         }
     }
 
-    pub fn count_masked_unary_mask_layout<Policy, Layout, Op, T>(
+@{profile_docs_count_masked_unary_mask_layout}
+    pub fn count_masked_unary_mask_layout_checked<Policy, Layout, Op, T>(
         policy: Policy,
         op: &mut Op,
         input: &[T],
         masks: &[<Layout as MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>>::Storage],
-    ) -> usize
+    ) -> Result<usize, crate::PreconditionError>
     where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -577,7 +666,7 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::count_masked_unary_mask_layout::<
+        crate::tsl_algorithm::count_masked_unary_mask_layout_checked::<
             Profile,
             Policy,
             Layout,
@@ -619,13 +708,14 @@
         }
     }
 
-    pub fn count_masked_binary_mask_layout<Policy, Layout, Op, T>(
+@{profile_docs_count_masked_binary_mask_layout}
+    pub fn count_masked_binary_mask_layout_checked<Policy, Layout, Op, T>(
         policy: Policy,
         op: &mut Op,
         left: &[T],
         right: &[T],
         masks: &[<Layout as MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>>::Storage],
-    ) -> usize
+    ) -> Result<usize, crate::PreconditionError>
     where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -641,7 +731,7 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::count_masked_binary_mask_layout::<
+        crate::tsl_algorithm::count_masked_binary_mask_layout_checked::<
             Profile,
             Policy,
             Layout,
@@ -684,12 +774,13 @@
         }
     }
 
-    pub fn count_selected_unary<Policy, Op, T>(
+@{profile_docs_count_selected_unary}
+    pub fn count_selected_unary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         input: &[T],
         indices: &[usize],
-    ) -> usize
+    ) -> Result<usize, crate::PreconditionError>
     where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -704,7 +795,7 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::count_selected_unary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::count_selected_unary_checked::<Profile, Policy, Op, T>(
             policy, op, input, indices,
         )
     }
@@ -774,13 +865,14 @@
         }
     }
 
-    pub fn count_selected_binary<Policy, Op, T>(
+@{profile_docs_count_selected_binary}
+    pub fn count_selected_binary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         left: &[T],
         right: &[T],
         indices: &[usize],
-    ) -> usize
+    ) -> Result<usize, crate::PreconditionError>
     where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -795,7 +887,7 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::count_selected_binary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::count_selected_binary_checked::<Profile, Policy, Op, T>(
             policy, op, left, right, indices,
         )
     }
@@ -867,12 +959,13 @@
         }
     }
 
-    pub fn select_unary<Policy, Op, T>(
+@{profile_docs_select_unary}
+    pub fn select_unary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         input: &[T],
         output: &mut [T],
-    ) -> usize
+    ) -> Result<usize, crate::PreconditionError>
     where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -892,7 +985,7 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::select_unary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::select_unary_checked::<Profile, Policy, Op, T>(
             policy, op, input, output,
         )
     }
@@ -930,13 +1023,14 @@
         }
     }
 
-    pub fn select_binary<Policy, Op, T>(
+@{profile_docs_select_binary}
+    pub fn select_binary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         left: &[T],
         right: &[T],
         output: &mut [T],
-    ) -> usize
+    ) -> Result<usize, crate::PreconditionError>
     where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -956,7 +1050,7 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::select_binary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::select_binary_checked::<Profile, Policy, Op, T>(
             policy, op, left, right, output,
         )
     }
@@ -995,13 +1089,14 @@
         }
     }
 
-    pub fn select_masked_unary<Policy, Op, T>(
+@{profile_docs_select_masked_unary}
+    pub fn select_masked_unary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         input: &[T],
         masks: &[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
         output: &mut [T],
-    ) -> usize
+    ) -> Result<usize, crate::PreconditionError>
     where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -1023,7 +1118,7 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::select_masked_unary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::select_masked_unary_checked::<Profile, Policy, Op, T>(
             policy, op, input, masks, output,
         )
     }
@@ -1064,14 +1159,15 @@
         }
     }
 
-    pub fn select_masked_binary<Policy, Op, T>(
+@{profile_docs_select_masked_binary}
+    pub fn select_masked_binary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         left: &[T],
         right: &[T],
         masks: &[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
         output: &mut [T],
-    ) -> usize
+    ) -> Result<usize, crate::PreconditionError>
     where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -1093,7 +1189,7 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::select_masked_binary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::select_masked_binary_checked::<Profile, Policy, Op, T>(
             policy, op, left, right, masks, output,
         )
     }
@@ -1135,13 +1231,14 @@
         }
     }
 
-    pub fn select_masked_unary_mask_layout<Policy, Layout, Op, T>(
+@{profile_docs_select_masked_unary_mask_layout}
+    pub fn select_masked_unary_mask_layout_checked<Policy, Layout, Op, T>(
         policy: Policy,
         op: &mut Op,
         input: &[T],
         masks: &[<Layout as MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>>::Storage],
         output: &mut [T],
-    ) -> usize
+    ) -> Result<usize, crate::PreconditionError>
     where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -1163,7 +1260,7 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::select_masked_unary_mask_layout::<
+        crate::tsl_algorithm::select_masked_unary_mask_layout_checked::<
             Profile,
             Policy,
             Layout,
@@ -1212,14 +1309,15 @@
         }
     }
 
-    pub fn select_masked_binary_mask_layout<Policy, Layout, Op, T>(
+@{profile_docs_select_masked_binary_mask_layout}
+    pub fn select_masked_binary_mask_layout_checked<Policy, Layout, Op, T>(
         policy: Policy,
         op: &mut Op,
         left: &[T],
         right: &[T],
         masks: &[<Layout as MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>>::Storage],
         output: &mut [T],
-    ) -> usize
+    ) -> Result<usize, crate::PreconditionError>
     where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -1241,7 +1339,7 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::select_masked_binary_mask_layout::<
+        crate::tsl_algorithm::select_masked_binary_mask_layout_checked::<
             Profile,
             Policy,
             Layout,
@@ -1291,12 +1389,13 @@
         }
     }
 
-    pub fn select_indices_unary<Policy, Op, T>(
+@{profile_docs_select_indices_unary}
+    pub fn select_indices_unary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         input: &[T],
         indices: &mut [usize],
-    ) -> usize
+    ) -> Result<usize, crate::PreconditionError>
     where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -1311,7 +1410,7 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::select_indices_unary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::select_indices_unary_checked::<Profile, Policy, Op, T>(
             policy, op, input, indices,
         )
     }
@@ -1344,13 +1443,14 @@
         }
     }
 
-    pub fn select_indices_binary<Policy, Op, T>(
+@{profile_docs_select_indices_binary}
+    pub fn select_indices_binary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         left: &[T],
         right: &[T],
         indices: &mut [usize],
-    ) -> usize
+    ) -> Result<usize, crate::PreconditionError>
     where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -1365,7 +1465,7 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::select_indices_binary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::select_indices_binary_checked::<Profile, Policy, Op, T>(
             policy, op, left, right, indices,
         )
     }
@@ -1399,13 +1499,14 @@
         }
     }
 
-    pub fn select_masked_indices_unary<Policy, Op, T>(
+@{profile_docs_select_masked_indices_unary}
+    pub fn select_masked_indices_unary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         input: &[T],
         masks: &[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
         indices: &mut [usize],
-    ) -> usize
+    ) -> Result<usize, crate::PreconditionError>
     where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -1420,7 +1521,7 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::select_masked_indices_unary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::select_masked_indices_unary_checked::<Profile, Policy, Op, T>(
             policy, op, input, masks, indices,
         )
     }
@@ -1454,14 +1555,15 @@
         }
     }
 
-    pub fn select_masked_indices_binary<Policy, Op, T>(
+@{profile_docs_select_masked_indices_binary}
+    pub fn select_masked_indices_binary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         left: &[T],
         right: &[T],
         masks: &[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
         indices: &mut [usize],
-    ) -> usize
+    ) -> Result<usize, crate::PreconditionError>
     where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -1476,7 +1578,7 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::select_masked_indices_binary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::select_masked_indices_binary_checked::<Profile, Policy, Op, T>(
             policy, op, left, right, masks, indices,
         )
     }
@@ -1511,13 +1613,14 @@
         }
     }
 
-    pub fn select_masked_indices_unary_mask_layout<Policy, Layout, Op, T>(
+@{profile_docs_select_masked_indices_unary_mask_layout}
+    pub fn select_masked_indices_unary_mask_layout_checked<Policy, Layout, Op, T>(
         policy: Policy,
         op: &mut Op,
         input: &[T],
         masks: &[<Layout as MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>>::Storage],
         indices: &mut [usize],
-    ) -> usize
+    ) -> Result<usize, crate::PreconditionError>
     where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -1533,7 +1636,7 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::select_masked_indices_unary_mask_layout::<
+        crate::tsl_algorithm::select_masked_indices_unary_mask_layout_checked::<
             Profile,
             Policy,
             Layout,
@@ -1576,14 +1679,15 @@
         }
     }
 
-    pub fn select_masked_indices_binary_mask_layout<Policy, Layout, Op, T>(
+@{profile_docs_select_masked_indices_binary_mask_layout}
+    pub fn select_masked_indices_binary_mask_layout_checked<Policy, Layout, Op, T>(
         policy: Policy,
         op: &mut Op,
         left: &[T],
         right: &[T],
         masks: &[<Layout as MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>>::Storage],
         indices: &mut [usize],
-    ) -> usize
+    ) -> Result<usize, crate::PreconditionError>
     where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -1599,7 +1703,7 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::select_masked_indices_binary_mask_layout::<
+        crate::tsl_algorithm::select_masked_indices_binary_mask_layout_checked::<
             Profile,
             Policy,
             Layout,
@@ -1643,13 +1747,14 @@
         }
     }
 
-    pub fn select_selected_indices_unary<Policy, Op, T>(
+@{profile_docs_select_selected_indices_unary}
+    pub fn select_selected_indices_unary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         input: &[T],
         input_indices: &[usize],
         output_indices: &mut [usize],
-    ) -> usize
+    ) -> Result<usize, crate::PreconditionError>
     where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -1664,7 +1769,7 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::select_selected_indices_unary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::select_selected_indices_unary_checked::<Profile, Policy, Op, T>(
             policy, op, input, input_indices, output_indices,
         )
     }
@@ -1736,14 +1841,15 @@
         }
     }
 
-    pub fn select_selected_indices_binary<Policy, Op, T>(
+@{profile_docs_select_selected_indices_binary}
+    pub fn select_selected_indices_binary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         left: &[T],
         right: &[T],
         input_indices: &[usize],
         output_indices: &mut [usize],
-    ) -> usize
+    ) -> Result<usize, crate::PreconditionError>
     where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -1758,7 +1864,7 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::select_selected_indices_binary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::select_selected_indices_binary_checked::<Profile, Policy, Op, T>(
             policy, op, left, right, input_indices, output_indices,
         )
     }
@@ -1840,13 +1946,15 @@
         }
     }
 
-    pub fn transform_selected_unary<Policy, Op, T>(
+@{profile_docs_transform_selected_unary}
+    pub fn transform_selected_unary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         input: &[T],
         indices: &[usize],
         output: &mut [T],
-    ) where
+    ) -> Result<(), crate::PreconditionError>
+    where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
         Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
@@ -1857,9 +1965,9 @@
         Op: UnaryKernel<<Policy as VectorFor<Profile, T>>::Vec>
             + UnaryKernel<Simd<T, Scalar>>,
     {
-        crate::tsl_algorithm::transform_selected_unary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::transform_selected_unary_checked::<Profile, Policy, Op, T>(
             policy, op, input, indices, output,
-        );
+        )
     }
 
     pub unsafe fn transform_selected_unary_raw<Policy, Op, T>(
@@ -1921,14 +2029,16 @@
         }
     }
 
-    pub fn transform_selected_binary<Policy, Op, T>(
+@{profile_docs_transform_selected_binary}
+    pub fn transform_selected_binary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         left: &[T],
         right: &[T],
         indices: &[usize],
         output: &mut [T],
-    ) where
+    ) -> Result<(), crate::PreconditionError>
+    where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
         Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
@@ -1939,9 +2049,9 @@
         Op: BinaryKernel<<Policy as VectorFor<Profile, T>>::Vec>
             + BinaryKernel<Simd<T, Scalar>>,
     {
-        crate::tsl_algorithm::transform_selected_binary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::transform_selected_binary_checked::<Profile, Policy, Op, T>(
             policy, op, left, right, indices, output,
-        );
+        )
     }
 
     pub unsafe fn transform_selected_binary_raw<Policy, Op, T>(
@@ -2005,12 +2115,14 @@
         }
     }
 
-    pub fn consume_selected_unary<Policy, Op, T>(
+@{profile_docs_consume_selected_unary}
+    pub fn consume_selected_unary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         input: &[T],
         indices: &[usize],
-    ) where
+    ) -> Result<(), crate::PreconditionError>
+    where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
         Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
@@ -2019,9 +2131,9 @@
         Op: UnaryConsumeKernel<<Policy as VectorFor<Profile, T>>::Vec>
             + UnaryConsumeKernel<Simd<T, Scalar>>,
     {
-        crate::tsl_algorithm::consume_selected_unary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::consume_selected_unary_checked::<Profile, Policy, Op, T>(
             policy, op, input, indices,
-        );
+        )
     }
 
     pub unsafe fn consume_selected_unary_raw<Policy, Op, T>(
@@ -2077,13 +2189,15 @@
         }
     }
 
-    pub fn consume_selected_binary<Policy, Op, T>(
+@{profile_docs_consume_selected_binary}
+    pub fn consume_selected_binary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         left: &[T],
         right: &[T],
         indices: &[usize],
-    ) where
+    ) -> Result<(), crate::PreconditionError>
+    where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
         Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
@@ -2092,9 +2206,9 @@
         Op: BinaryConsumeKernel<<Policy as VectorFor<Profile, T>>::Vec>
             + BinaryConsumeKernel<Simd<T, Scalar>>,
     {
-        crate::tsl_algorithm::consume_selected_binary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::consume_selected_binary_checked::<Profile, Policy, Op, T>(
             policy, op, left, right, indices,
-        );
+        )
     }
 
     pub unsafe fn consume_selected_binary_raw<Policy, Op, T>(
@@ -2152,12 +2266,13 @@
         }
     }
 
-    pub fn aggregate_selected_unary<Policy, Op, T>(
+@{profile_docs_aggregate_selected_unary}
+    pub fn aggregate_selected_unary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         input: &[T],
         indices: &[usize],
-    ) -> <Op as UnaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output
+    ) -> Result<<Op as UnaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output, crate::PreconditionError>
     where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -2167,7 +2282,7 @@
         Op: UnaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>
             + UnaryAggregateKernel<Simd<T, Scalar>>,
     {
-        crate::tsl_algorithm::aggregate_selected_unary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::aggregate_selected_unary_checked::<Profile, Policy, Op, T>(
             policy, op, input, indices,
         )
     }
@@ -2227,13 +2342,14 @@
         }
     }
 
-    pub fn aggregate_selected_binary<Policy, Op, T>(
+@{profile_docs_aggregate_selected_binary}
+    pub fn aggregate_selected_binary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         left: &[T],
         right: &[T],
         indices: &[usize],
-    ) -> <Op as BinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output
+    ) -> Result<<Op as BinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output, crate::PreconditionError>
     where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -2243,7 +2359,7 @@
         Op: BinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>
             + BinaryAggregateKernel<Simd<T, Scalar>>,
     {
-        crate::tsl_algorithm::aggregate_selected_binary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::aggregate_selected_binary_checked::<Profile, Policy, Op, T>(
             policy, op, left, right, indices,
         )
     }
@@ -2305,13 +2421,15 @@
         }
     }
 
-    pub fn transform_where_unary<Policy, Op, T>(
+@{profile_docs_transform_where_unary}
+    pub fn transform_where_unary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         input: &[T],
         masks: &[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
         output: &mut [T],
-    ) where
+    ) -> Result<(), crate::PreconditionError>
+    where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
         Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
@@ -2327,9 +2445,9 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::transform_where_unary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::transform_where_unary_checked::<Profile, Policy, Op, T>(
             policy, op, input, masks, output,
-        );
+        )
     }
 
     pub unsafe fn transform_where_unary_raw<Policy, Op, T>(
@@ -2362,7 +2480,8 @@
         }
     }
 
-    pub fn transform_where_unary_mask_layout<Policy, Layout, Op, T>(
+@{profile_docs_transform_where_unary_mask_layout}
+    pub fn transform_where_unary_mask_layout_checked<Policy, Layout, Op, T>(
         policy: Policy,
         op: &mut Op,
         input: &[T],
@@ -2373,7 +2492,8 @@
             >>::Storage
         ],
         output: &mut [T],
-    ) where
+    ) -> Result<(), crate::PreconditionError>
+    where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
         Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
@@ -2389,13 +2509,13 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::transform_where_unary_mask_layout::<
+        crate::tsl_algorithm::transform_where_unary_mask_layout_checked::<
             Profile,
             Policy,
             Layout,
             Op,
             T,
-        >(policy, op, input, masks, output);
+        >(policy, op, input, masks, output)
     }
 
     pub unsafe fn transform_where_unary_mask_layout_raw<Policy, Layout, Op, T>(
@@ -2435,14 +2555,16 @@
         }
     }
 
-    pub fn transform_where_binary<Policy, Op, T>(
+@{profile_docs_transform_where_binary}
+    pub fn transform_where_binary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         left: &[T],
         right: &[T],
         masks: &[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
         output: &mut [T],
-    ) where
+    ) -> Result<(), crate::PreconditionError>
+    where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
         Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
@@ -2458,9 +2580,9 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::transform_where_binary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::transform_where_binary_checked::<Profile, Policy, Op, T>(
             policy, op, left, right, masks, output,
-        );
+        )
     }
 
     pub unsafe fn transform_where_binary_raw<Policy, Op, T>(
@@ -2494,13 +2616,92 @@
         }
     }
 
-    pub fn transform_masked_unary<Policy, Op, T>(
+@{profile_docs_transform_where_binary_mask_layout}
+    pub fn transform_where_binary_mask_layout_checked<Policy, Layout, Op, T>(
+        policy: Policy,
+        op: &mut Op,
+        left: &[T],
+        right: &[T],
+        masks: &[
+            <Layout as MaskLayout<
+                Profile,
+                <Policy as VectorFor<Profile, T>>::Vec,
+            >>::Storage
+        ],
+        output: &mut [T],
+    ) -> Result<(), crate::PreconditionError>
+    where
+        Policy: VectorFor<Profile, T>,
+        <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
+        Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
+        Layout: MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>,
+        Profile: LoadStore<<Policy as VectorFor<Profile, T>>::Vec>
+            + LoadStore<Simd<T, Scalar>>
+            + MaskFromIntegral<Simd<T, Scalar>>
+            + MaskedStore<<Policy as VectorFor<Profile, T>>::Vec>,
+        Op: MaskedBinaryKernel<<Policy as VectorFor<Profile, T>>::Vec>
+            + MaskedBinaryKernel<Simd<T, Scalar>>,
+        <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::MaskType: Copy,
+        <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType:
+            IntegralMaskWord,
+        <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
+    {
+        crate::tsl_algorithm::transform_where_binary_mask_layout_checked::<
+            Profile,
+            Policy,
+            Layout,
+            Op,
+            T,
+        >(policy, op, left, right, masks, output)
+    }
+
+    pub unsafe fn transform_where_binary_mask_layout_raw<Policy, Layout, Op, T>(
+        policy: Policy,
+        op: &mut Op,
+        left: *const T,
+        right: *const T,
+        masks: *const <Layout as MaskLayout<
+            Profile,
+            <Policy as VectorFor<Profile, T>>::Vec,
+        >>::Storage,
+        output: *mut T,
+        count: usize,
+    ) where
+        Policy: VectorFor<Profile, T>,
+        <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
+        Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
+        Layout: MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>,
+        Profile: LoadStore<<Policy as VectorFor<Profile, T>>::Vec>
+            + LoadStore<Simd<T, Scalar>>
+            + MaskFromIntegral<Simd<T, Scalar>>
+            + MaskedStore<<Policy as VectorFor<Profile, T>>::Vec>,
+        Op: MaskedBinaryKernel<<Policy as VectorFor<Profile, T>>::Vec>
+            + MaskedBinaryKernel<Simd<T, Scalar>>,
+        <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::MaskType: Copy,
+        <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType:
+            IntegralMaskWord,
+        <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
+    {
+        unsafe {
+            crate::tsl_algorithm::transform_where_binary_mask_layout_raw::<
+                Profile,
+                Policy,
+                Layout,
+                Op,
+                T,
+            >(policy, op, left, right, masks, output, count);
+        }
+    }
+
+@{profile_docs_transform_masked_unary}
+    pub fn transform_masked_unary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         input: &[T],
         masks: &[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
         output: &mut [T],
-    ) where
+    ) -> Result<(), crate::PreconditionError>
+    where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
         Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
@@ -2514,9 +2715,9 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::transform_masked_unary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::transform_masked_unary_checked::<Profile, Policy, Op, T>(
             policy, op, input, masks, output,
-        );
+        )
     }
 
     pub unsafe fn transform_masked_unary_raw<Policy, Op, T>(
@@ -2547,14 +2748,16 @@
         }
     }
 
-    pub fn transform_masked_binary<Policy, Op, T>(
+@{profile_docs_transform_masked_binary}
+    pub fn transform_masked_binary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         left: &[T],
         right: &[T],
         masks: &[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
         output: &mut [T],
-    ) where
+    ) -> Result<(), crate::PreconditionError>
+    where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
         Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
@@ -2568,9 +2771,9 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::transform_masked_binary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::transform_masked_binary_checked::<Profile, Policy, Op, T>(
             policy, op, left, right, masks, output,
-        );
+        )
     }
 
     pub unsafe fn transform_masked_binary_raw<Policy, Op, T>(
@@ -2602,7 +2805,79 @@
         }
     }
 
-    pub fn transform_masked_binary_mask_layout<Policy, Layout, Op, T>(
+@{profile_docs_transform_masked_unary_mask_layout}
+    pub fn transform_masked_unary_mask_layout_checked<Policy, Layout, Op, T>(
+        policy: Policy,
+        op: &mut Op,
+        input: &[T],
+        masks: &[
+            <Layout as MaskLayout<
+                Profile,
+                <Policy as VectorFor<Profile, T>>::Vec,
+            >>::Storage
+        ],
+        output: &mut [T],
+    ) -> Result<(), crate::PreconditionError>
+    where
+        Policy: VectorFor<Profile, T>,
+        <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
+        Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
+        Layout: MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>,
+        Profile: LoadStore<<Policy as VectorFor<Profile, T>>::Vec>
+            + LoadStore<Simd<T, Scalar>>
+            + MaskFromIntegral<Simd<T, Scalar>>,
+        Op: MaskedUnaryKernel<<Policy as VectorFor<Profile, T>>::Vec>
+            + MaskedUnaryKernel<Simd<T, Scalar>>,
+        <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType:
+            IntegralMaskWord,
+        <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
+    {
+        crate::tsl_algorithm::transform_masked_unary_mask_layout_checked::<
+            Profile,
+            Policy,
+            Layout,
+            Op,
+            T,
+        >(policy, op, input, masks, output)
+    }
+
+    pub unsafe fn transform_masked_unary_mask_layout_raw<Policy, Layout, Op, T>(
+        policy: Policy,
+        op: &mut Op,
+        input: *const T,
+        masks: *const <Layout as MaskLayout<
+            Profile,
+            <Policy as VectorFor<Profile, T>>::Vec,
+        >>::Storage,
+        output: *mut T,
+        count: usize,
+    ) where
+        Policy: VectorFor<Profile, T>,
+        <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
+        Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
+        Layout: MaskLayout<Profile, <Policy as VectorFor<Profile, T>>::Vec>,
+        Profile: LoadStore<<Policy as VectorFor<Profile, T>>::Vec>
+            + LoadStore<Simd<T, Scalar>>
+            + MaskFromIntegral<Simd<T, Scalar>>,
+        Op: MaskedUnaryKernel<<Policy as VectorFor<Profile, T>>::Vec>
+            + MaskedUnaryKernel<Simd<T, Scalar>>,
+        <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType:
+            IntegralMaskWord,
+        <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
+    {
+        unsafe {
+            crate::tsl_algorithm::transform_masked_unary_mask_layout_raw::<
+                Profile,
+                Policy,
+                Layout,
+                Op,
+                T,
+            >(policy, op, input, masks, output, count);
+        }
+    }
+
+@{profile_docs_transform_masked_binary_mask_layout}
+    pub fn transform_masked_binary_mask_layout_checked<Policy, Layout, Op, T>(
         policy: Policy,
         op: &mut Op,
         left: &[T],
@@ -2614,7 +2889,8 @@
             >>::Storage
         ],
         output: &mut [T],
-    ) where
+    ) -> Result<(), crate::PreconditionError>
+    where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
         Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
@@ -2628,13 +2904,13 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::transform_masked_binary_mask_layout::<
+        crate::tsl_algorithm::transform_masked_binary_mask_layout_checked::<
             Profile,
             Policy,
             Layout,
             Op,
             T,
-        >(policy, op, left, right, masks, output);
+        >(policy, op, left, right, masks, output)
     }
 
     pub unsafe fn transform_masked_binary_mask_layout_raw<Policy, Layout, Op, T>(
@@ -2712,12 +2988,14 @@
         }
     }
 
-    pub fn consume_binary<Policy, Op, T>(
+@{profile_docs_consume_binary}
+    pub fn consume_binary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         left: &[T],
         right: &[T],
-    ) where
+    ) -> Result<(), crate::PreconditionError>
+    where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
         Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
@@ -2726,9 +3004,9 @@
         Op: BinaryConsumeKernel<<Policy as VectorFor<Profile, T>>::Vec>
             + BinaryConsumeKernel<Simd<T, Scalar>>,
     {
-        crate::tsl_algorithm::consume_binary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::consume_binary_checked::<Profile, Policy, Op, T>(
             policy, op, left, right,
-        );
+        )
     }
 
     pub unsafe fn consume_binary_raw<Policy, Op, T>(
@@ -2753,12 +3031,14 @@
         }
     }
 
-    pub fn consume_masked_unary<Policy, Op, T>(
+@{profile_docs_consume_masked_unary}
+    pub fn consume_masked_unary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         input: &[T],
         masks: &[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
-    ) where
+    ) -> Result<(), crate::PreconditionError>
+    where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
         Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
@@ -2772,9 +3052,9 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::consume_masked_unary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::consume_masked_unary_checked::<Profile, Policy, Op, T>(
             policy, op, input, masks,
-        );
+        )
     }
 
     pub unsafe fn consume_masked_unary_raw<Policy, Op, T>(
@@ -2804,13 +3084,15 @@
         }
     }
 
-    pub fn consume_masked_binary<Policy, Op, T>(
+@{profile_docs_consume_masked_binary}
+    pub fn consume_masked_binary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         left: &[T],
         right: &[T],
         masks: &[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
-    ) where
+    ) -> Result<(), crate::PreconditionError>
+    where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
         Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
@@ -2824,9 +3106,9 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::consume_masked_binary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::consume_masked_binary_checked::<Profile, Policy, Op, T>(
             policy, op, left, right, masks,
-        );
+        )
     }
 
     pub unsafe fn consume_masked_binary_raw<Policy, Op, T>(
@@ -2898,12 +3180,13 @@
         }
     }
 
-    pub fn aggregate_binary<Policy, Op, T>(
+@{profile_docs_aggregate_binary}
+    pub fn aggregate_binary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         left: &[T],
         right: &[T],
-    ) -> <Op as BinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output
+    ) -> Result<<Op as BinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output, crate::PreconditionError>
     where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -2913,7 +3196,7 @@
         Op: BinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>
             + BinaryAggregateKernel<Simd<T, Scalar>>,
     {
-        crate::tsl_algorithm::aggregate_binary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::aggregate_binary_checked::<Profile, Policy, Op, T>(
             policy, op, left, right,
         )
     }
@@ -2941,12 +3224,13 @@
         }
     }
 
-    pub fn aggregate_masked_unary<Policy, Op, T>(
+@{profile_docs_aggregate_masked_unary}
+    pub fn aggregate_masked_unary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         input: &[T],
         masks: &[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
-    ) -> <Op as MaskedUnaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output
+    ) -> Result<<Op as MaskedUnaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output, crate::PreconditionError>
     where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -2961,7 +3245,7 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::aggregate_masked_unary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::aggregate_masked_unary_checked::<Profile, Policy, Op, T>(
             policy, op, input, masks,
         )
     }
@@ -2994,13 +3278,14 @@
         }
     }
 
-    pub fn aggregate_masked_binary<Policy, Op, T>(
+@{profile_docs_aggregate_masked_binary}
+    pub fn aggregate_masked_binary_checked<Policy, Op, T>(
         policy: Policy,
         op: &mut Op,
         left: &[T],
         right: &[T],
         masks: &[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType],
-    ) -> <Op as MaskedBinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output
+    ) -> Result<<Op as MaskedBinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output, crate::PreconditionError>
     where
         Policy: VectorFor<Profile, T>,
         <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
@@ -3015,7 +3300,7 @@
             IntegralMaskWord,
         <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,
     {
-        crate::tsl_algorithm::aggregate_masked_binary::<Profile, Policy, Op, T>(
+        crate::tsl_algorithm::aggregate_masked_binary_checked::<Profile, Policy, Op, T>(
             policy, op, left, right, masks,
         )
     }

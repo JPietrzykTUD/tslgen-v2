@@ -13,6 +13,7 @@ from tslc.backend.primitive_facade import (
     contiguous_memory_primitive_facades,
 )
 from tslc.backend.rust_algorithm_manifest import RUST_ALGORITHM_RESERVED_NAMES
+from tslc.backend.rust_algorithm_contracts import rust_algorithm_contract_holes
 from tslc.backend.rust_facades import (
     rust_algorithm_primitive_facades,
     rust_algorithm_primitive_facades_require_rebind,
@@ -109,7 +110,10 @@ def rust_algorithm_module(
         parts.append(mask_from_integral_impls)
     if mappings:
         parts.append(mappings)
-    algorithm_wrappers = assets.text(_RUST_ALGORITHM_WRAPPER_ASSET).rstrip()
+    algorithm_wrappers = assets.fill(
+        _RUST_ALGORITHM_WRAPPER_ASSET,
+        **rust_algorithm_contract_holes(),
+    ).rstrip()
     primitive_facades = rust_algorithm_primitive_facades(
         by_primitive,
         reserved_names=RUST_ALGORITHM_RESERVED_NAMES,

@@ -44,7 +44,11 @@ class PreconditionErrorKind(StrEnum):
     INDEX_OUT_OF_BOUNDS = "index_out_of_bounds"
     ZERO_DIVISOR = "zero_divisor"
     INSUFFICIENT_EXTENT = "insufficient_extent"
+    INSUFFICIENT_INPUT = "insufficient_input"
+    INSUFFICIENT_OUTPUT = "insufficient_output"
     MISALIGNED = "misaligned"
+    OVERLAPPING_RANGES = "overlapping_ranges"
+    ADDRESS_OVERFLOW = "address_overflow"
 
 
 class PreconditionCheckPrimitive(StrEnum):
