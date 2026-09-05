@@ -413,6 +413,96 @@ prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
               );
             }
           """
+    avx2:
+      [si32, ui32]:
+        requires [avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+            let<type>(SignedBase, base::signed_of(base::in));
+            complete(
+              intrin<maskload, build[suffix=base::signed_of(base::in)]>(
+                cast<reinterpret, type=const_ptr>(SignedBase, ptr),
+                mask
+              )
+            );
+          """
+      [si64, ui64]:
+        requires [avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+            complete(
+              intrin<maskload, build[suffix=base::signed_of(base::in)]>(
+                reinterpret_cast<long long const *>(ptr),
+                mask
+              )
+            );
+          """
+      [f32, f64]:
+        requires [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+            complete(
+              intrin<maskload, build>(
+                ptr,
+                cast<reinterpret>(register::generic(base::signed_of(base::in)), mask)
+              )
+            );
+          """
+    [clang_v128, clang_v256, clang_v512]:
+      arith:
+        requires:
+          target_features []
+          compiler:
+            cpp:
+              capabilities [masked_memory]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [compiler_builtin, raw_pointer]
+        implementation:
+          tsil """
+            using BoolMaskT = bool __attribute__((ext_vector_type(Vec::vector_element_count)));
+            complete(
+              __builtin_masked_load(
+                __builtin_convertvector(mask, type(BoolMaskT)),
+                ptr,
+                call<primitive=set_zero[Vec]>()
+              )
+            );
+          """
+    [clang_v128_bool, clang_v256_bool, clang_v512_bool]:
+      arith:
+        requires:
+          target_features []
+          compiler:
+            cpp:
+              capabilities [masked_memory]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [compiler_builtin, raw_pointer]
+        implementation:
+          tsil """
+            complete(
+              __builtin_masked_load(
+                mask,
+                ptr,
+                call<primitive=set_zero[Vec]>()
+              )
+            );
+          """
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx2, sse, neon, wasm128]:
       arith:
         prefer_fixed_native true
@@ -708,6 +798,82 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
                 )
               );
             }
+          """
+    avx2:
+      [si32, ui32, si64, ui64]:
+        requires [avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+            complete(
+              call<primitive=select, attrs[mask=pass_through]>(
+                mask,
+                call<primitive=load, attrs[mask=zero]>(mask, ptr),
+                data
+              )
+            );
+          """
+      [f32, f64]:
+        requires [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+            complete(
+              call<primitive=select, attrs[mask=pass_through]>(
+                mask,
+                call<primitive=load, attrs[mask=zero]>(mask, ptr),
+                data
+              )
+            );
+          """
+    [clang_v128, clang_v256, clang_v512]:
+      arith:
+        requires:
+          target_features []
+          compiler:
+            cpp:
+              capabilities [masked_memory]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [compiler_builtin, raw_pointer]
+        implementation:
+          tsil """
+            using BoolMaskT = bool __attribute__((ext_vector_type(Vec::vector_element_count)));
+            complete(
+              __builtin_masked_load(
+                __builtin_convertvector(mask, type(BoolMaskT)),
+                ptr,
+                data
+              )
+            );
+          """
+    [clang_v128_bool, clang_v256_bool, clang_v512_bool]:
+      arith:
+        requires:
+          target_features []
+          compiler:
+            cpp:
+              capabilities [masked_memory]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [compiler_builtin, raw_pointer]
+        implementation:
+          tsil """
+            complete(
+              __builtin_masked_load(
+                mask,
+                ptr,
+                data
+              )
+            );
           """
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx2, sse, neon, wasm128]:
       arith:

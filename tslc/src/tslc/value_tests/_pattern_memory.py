@@ -301,7 +301,7 @@ class _IndexedMemoryPattern(_BasePattern):
             for primitive in catalog.primitives_named(source_name, unmasked=False):
                 if primitive.mask_mode == spec.mask_policy:
                     return primitive
-        return super().source_primitive(catalog, source_name, spec)
+        return _BasePattern.source_primitive(self, catalog, source_name, spec)
 
     def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
         build = indexed_load_case if self.result_kind == "v" else indexed_store_case

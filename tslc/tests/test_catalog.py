@@ -529,10 +529,10 @@ def test_overload_registry_promoted_from_source(catalog: Catalog) -> None:
 
 
 def test_overload_annotations_preserve_corpus_inventory(catalog: Catalog) -> None:
-    assert len(catalog.primitives) == 181
+    assert len(catalog.primitives) == 185
     authored_sources = {primitive.source for primitive in catalog.primitives}
     assert None not in authored_sources
-    assert len(authored_sources) == 169
+    assert len(authored_sources) == 173
 
     annotated = tuple(
         primitive for primitive in catalog.primitives if primitive.overload is not None
