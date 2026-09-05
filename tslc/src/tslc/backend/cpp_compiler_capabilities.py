@@ -172,6 +172,30 @@ int main() { return 0; }
         ),
     ),
     CppCompilerCapability(
+        capability_id="masked_memory",
+        condition_macro="TSL_COMPILER_HAS_MASKED_MEMORY",
+        preprocessor_probe=(
+            "__has_builtin(__builtin_masked_load) && "
+            "__has_builtin(__builtin_masked_store)"
+        ),
+        compile_probe_source="""\
+using tsl_probe_data = int __attribute__((ext_vector_type(4)));
+using tsl_probe_mask = bool __attribute__((ext_vector_type(4)));
+
+tsl_probe_data tsl_probe_load(tsl_probe_mask mask, int const *ptr) {
+    tsl_probe_data zero{};
+    return __builtin_masked_load(mask, ptr, zero);
+}
+
+void tsl_probe_store(tsl_probe_mask mask, int *ptr, tsl_probe_data value) {
+    __builtin_masked_store(mask, value, ptr);
+}
+
+int main() { return 0; }
+""",
+        diagnostic="compiler capability masked_memory is unavailable",
+    ),
+    CppCompilerCapability(
         capability_id="elementwise_clzg",
         condition_macro="TSL_COMPILER_HAS_ELEMENTWISE_CLZG",
         preprocessor_probe="__has_builtin(__builtin_elementwise_clzg)",

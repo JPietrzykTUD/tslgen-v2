@@ -548,3 +548,160 @@ prim<im:=(im,usize)> extract_imask(data, position):
                     value(vector::length), value(generic::length(OutVec))
                   ));
                 """
+
+prim<m:=(m,m)> mask_interleave_lo(mask_a, mask_b):
+  brief_description "Interleaves the low halves of two masks lane by lane."
+  detailed_description """
+    Takes the lower half of the lanes of `mask_a` and `mask_b` and interleaves
+    them, emitting one lane from `mask_a` followed by the matching lane from
+    `mask_b`. This is a full-width interleave across the whole register, matching
+    SVE `svzip1` on predicates at every vector width; it is not a per-128-bit-lane
+    unpack.
+    """
+  semantics """
+    input: mask mask_a, mask mask_b
+    lanes = lane_count(result)
+    half = lanes / 2
+    for each index i in 0 .. half - 1:
+      result[2 * i]     = mask_a[i]
+      result[2 * i + 1] = mask_b[i]
+    return result
+    """
+  tests:
+    - {tags [interleave, both], extension "generic", type "ui32", lane_count 8, case {inputs [15, 15], expected 255}}
+    - {tags [interleave, a_only], extension "generic", type "ui32", lane_count 8, case {inputs [15, 0], expected 85}}
+    - {tags [interleave, b_only], extension "generic", type "ui32", lane_count 8, case {inputs [0, 15], expected 170}}
+    - {tags [interleave, none], extension "generic", type "ui32", lane_count 8, case {inputs [0, 0], expected 0}}
+    - {tags [interleave, wide, both], extension "generic", type "ui32", lane_count 16, case {inputs [255, 255], expected 65535}}
+    - {tags [interleave, wide, a_only], extension "generic", type "ui32", lane_count 16, case {inputs [255, 0], expected 21845}}
+    - {tags [interleave, wide, b_only], extension "generic", type "ui32", lane_count 16, case {inputs [0, 255], expected 43690}}
+  impls:
+    [scalar, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, avx512, avx2, sse, neon, sve]:
+      arith:
+        requires:
+          scalar []
+          generic []
+          clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
+          oneapi_fpga []
+          avx512 [avx512f]
+          avx2 [avx2]
+          sse [sse2]
+          neon [neon]
+          sve [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(call<primitive=unequal_zero[Vec]>(
+              call<primitive=interleave_lo[Vec]>(
+                call<primitive=to_vector[Vec]>(mask_a),
+                call<primitive=to_vector[Vec]>(mask_b)
+              )
+            ));
+          """
+
+prim<m:=(m,m)> mask_deinterleave_odd(mask_a, mask_b):
+  brief_description "Gathers the odd lanes of two masks into one mask."
+  detailed_description """
+    Selects the odd-indexed lanes (the second of every adjacent pair) of
+    `mask_a` and `mask_b` and concatenates them, the odd lanes of `mask_a` in the
+    low half of the result followed by the odd lanes of `mask_b` in the high
+    half. This is a full-width deinterleave across the whole register, matching
+    SVE `svuzp2` on predicates at every vector width.
+    """
+  semantics """
+    input: mask mask_a, mask mask_b
+    lanes = lane_count(result)
+    half = lanes / 2
+    for each index j in 0 .. half - 1:
+      result[j]        = mask_a[2 * j + 1]
+      result[half + j] = mask_b[2 * j + 1]
+    return result
+    """
+  tests:
+    - {tags [deinterleave, a_odds], extension "generic", type "ui32", lane_count 8, case {inputs [170, 0], expected 15}}
+    - {tags [deinterleave, b_odds], extension "generic", type "ui32", lane_count 8, case {inputs [0, 170], expected 240}}
+    - {tags [deinterleave, both], extension "generic", type "ui32", lane_count 8, case {inputs [170, 170], expected 255}}
+    - {tags [deinterleave, even_ignored], extension "generic", type "ui32", lane_count 8, case {inputs [85, 0], expected 0}}
+    - {tags [deinterleave, wide, a_odds], extension "generic", type "ui32", lane_count 16, case {inputs [43690, 0], expected 255}}
+    - {tags [deinterleave, wide, b_odds], extension "generic", type "ui32", lane_count 16, case {inputs [0, 43690], expected 65280}}
+    - {tags [deinterleave, wide, even_ignored], extension "generic", type "ui32", lane_count 16, case {inputs [21845, 0], expected 0}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(call<primitive=mask_false[Vec]>());"
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, avx512, avx2, sse, neon]:
+      arith:
+        requires:
+          generic []
+          clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
+          oneapi_fpga []
+          avx512 [avx512f]
+          avx2 [avx2]
+          sse [sse2]
+          neon [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(a_lanes, call<primitive=to_array[Vec]>(call<primitive=to_vector[Vec]>(mask_a)));
+            var<const_infer>(b_lanes, call<primitive=to_array[Vec]>(call<primitive=to_vector[Vec]>(mask_b)));
+            var<infer>(result, a_lanes);
+            loop<backend>(i, 0, value(vector::length), 1) {
+              if ((2 * i) < value(vector::length)) {
+                result[i] = a_lanes[2 * i + 1];
+              } else {
+                result[i] = b_lanes[2 * i - value(vector::length) + 1];
+              }
+            }
+            complete(call<primitive=unequal_zero[Vec]>(call<primitive=from_array[Vec]>(result)));
+          """
+    sve:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(Base, base::in);
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<const_infer>(a_vec, call<primitive=to_vector[Vec]>(mask_a));
+            var<const_infer>(b_vec, call<primitive=to_vector[Vec]>(mask_b));
+            var<runtime_array>(Base, a_lanes, lanes);
+            var<runtime_array>(Base, b_lanes, lanes);
+            var<runtime_array>(Base, result, lanes);
+            call<primitive=store[Vec], attrs[aligned=false]>(a_lanes, a_vec);
+            call<primitive=store[Vec], attrs[aligned=false]>(b_lanes, b_vec);
+            loop<backend>(i, 0, lanes, 1) {
+              if ((2 * i) < lanes) {
+                result[i] = a_lanes[2 * i + 1];
+              } else {
+                result[i] = b_lanes[2 * i - lanes + 1];
+              }
+            }
+            complete(call<primitive=unequal_zero[Vec]>(
+              call<primitive=load[Vec], attrs[aligned=false]>(result)
+            ));
+          """
