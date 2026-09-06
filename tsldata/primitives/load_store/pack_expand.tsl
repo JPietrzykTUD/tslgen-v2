@@ -533,6 +533,13 @@ prim<v:=(m,cptr)>[aligned=true, op=expand] expand_load(m, ptr):
                }
             """
 prim<v:=cptr+> load_convert_up(ptr):
+  operation load
+  operand_roles:
+    memory_source ptr
+  memory:
+    access read
+    addressing contiguous
+  preconditions [contiguous_memory_extent]
   brief_description "Loads narrower memory elements and widens them into vector lanes."
   detailed_description """
     Loads a narrower source vector from memory and widens its lanes into the

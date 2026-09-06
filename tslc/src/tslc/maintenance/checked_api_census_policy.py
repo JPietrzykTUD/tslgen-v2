@@ -14,7 +14,7 @@ Classification = Literal[
     "tooling-only validation",
 ]
 
-BASELINE_VERSION = 2
+BASELINE_VERSION = 3
 DECLARATION_ROOT = Path("tslc/tests/fixtures/checked_api")
 CPP_DECLARATIONS = DECLARATION_ROOT / "cpp_declarations.snap"
 RUST_DECLARATIONS = DECLARATION_ROOT / "rust_declarations.snap"
@@ -158,15 +158,15 @@ FAMILIES = (
         "contiguous_memory_contract",
         "dynamic precondition",
         "Raw C++ pointers remain unchecked; Rust public exposure must be unsafe until a safe slice wrapper discharges the contract.",
-        "requires a span/slice carrying readable or writable extent and selected alignment",
-        "A pointer and caller-claimed count cannot establish lifetime or provenance.",
+        "implemented for scalar/vector loads and stores from a span/slice carrying the exact readable or writable extent and selected alignment",
+        "The checked view establishes the represented range; constructing an invalid C++ span still violates its documented object invariant.",
     ),
     SemanticFamily(
         "mask_memory_contract",
         "dynamic precondition",
         "Raw mask representation loads/stores have the same pointer hazard plus layout-dependent capacity.",
-        "requires a span/slice and a typed mask-layout capacity plan",
-        "Packed and lane-mask representations require different element counts.",
+        "no honest twin until a new typed mask-storage layout contract projects exact capacity into span/slice signatures",
+        "Packed, register-lane, axis-selected, and scalable mask representations do not share one existing element-count rule.",
     ),
     SemanticFamily(
         "selected_memory_contract",
@@ -193,22 +193,22 @@ FAMILIES = (
         "random_output_contract",
         "dynamic precondition",
         "The random-step intrinsic writes through a raw output pointer on success.",
-        "requires a mutable reference/view, or an owning optional/result value API",
-        "The current status result does not establish output pointer validity.",
+        "implemented with a mutable one-element-or-larger span/slice and an insufficient-extent result",
+        "The checked range establishes writable storage before the hardware-random operation is invoked.",
     ),
     SemanticFamily(
         "raw_copy_contract",
         "dynamic precondition",
         "Invalid ranges or prohibited overlap can cause undefined behavior or corruption.",
-        "requires valid source/destination views plus an explicit overlap contract/check",
-        "Omit the twin unless every range and overlap obligation is represented.",
+        "no honest twin for the current vector-base count ABI; first add byte-capacity source/destination views, a size-domain contract, and an explicit overlap contract",
+        "The byte unit is declared, but count and copy kind currently use signed, unsigned, or floating vector-base scalars; pointer-only inputs cannot discharge capacity or overlap obligations.",
     ),
     SemanticFamily(
         "conversion_input_contract",
         "dynamic precondition",
         "Widening loads read multiple source elements through a raw pointer.",
-        "requires a source span/slice with the lowering-resolved element count",
-        "The result-target relationship determines the exact required source extent.",
+        "implemented with a source span/slice whose minimum element count is the target vector's logical lane count",
+        "The typed result-target relationship owns the exact required source extent.",
     ),
 )
 FAMILY_BY_ID = {family.family_id: family for family in FAMILIES}

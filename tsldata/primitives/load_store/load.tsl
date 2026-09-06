@@ -1247,6 +1247,13 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
           """
 
 prim<s:=cptr>[aligned=false] load_scalar(ptr):
+  operation load_scalar
+  operand_roles:
+    memory_source ptr
+  memory:
+    access read
+    addressing contiguous
+  preconditions [contiguous_memory_extent]
   brief_description "Loads one scalar value from memory."
   detailed_description """
     Loads one scalar value from memory. This primitive always uses the unaligned

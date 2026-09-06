@@ -20,6 +20,7 @@ from tslc.catalog.preconditions import (
 from tslc.catalog.memory import (
     MemoryAccess,
     MemoryAddressing,
+    MemoryAlignment,
     MemoryPayloadExtent,
 )
 from tslc.catalog.semantics import OperandBinding, OperandRole
@@ -316,7 +317,7 @@ def checked_api_plan(
         return None
     if (
         any(spec.safety.caller_unsafe for spec in specializations)
-        and not _has_complete_memory_check(tuple(conditions))
+        and not _has_complete_memory_check(tuple(conditions), specializations)
     ):
         return None
     return CheckedApiPlan(tuple(conditions), first.result_kind)
@@ -324,6 +325,7 @@ def checked_api_plan(
 
 def _has_complete_memory_check(
     conditions: tuple[CheckedConditionPlan, ...],
+    specializations: tuple[LoweredSpecialization, ...],
 ) -> bool:
     """Whether a richer range signature discharges raw-memory caller unsafety."""
 
@@ -354,11 +356,15 @@ def _has_complete_memory_check(
     addressing = memory_conditions[0].memory_addressing
     if addressing is None:
         return False
+    contiguous = {PreconditionKind.CONTIGUOUS_MEMORY_EXTENT}
+    if any(
+        alignment is not None and alignment.mode is MemoryAlignment.ALIGNED
+        for spec in specializations
+        for alignment in (spec.primitive_semantics.memory_alignment,)
+    ):
+        contiguous.add(PreconditionKind.SELECTED_MEMORY_ALIGNMENT)
     required = {
-        MemoryAddressing.CONTIGUOUS: {
-            PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
-            PreconditionKind.SELECTED_MEMORY_ALIGNMENT,
-        },
+        MemoryAddressing.CONTIGUOUS: contiguous,
         MemoryAddressing.INDEXED: {
             PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID,
         },
@@ -366,8 +372,9 @@ def _has_complete_memory_check(
             PreconditionKind.COMPACTED_MEMORY_EXTENT,
         },
     }
-    return {condition.kind for condition in memory_conditions} == required.get(
-        addressing, set()
+    required_kinds = required.get(addressing)
+    return required_kinds is not None and required_kinds.issubset(
+        {condition.kind for condition in memory_conditions}
     )
 
 

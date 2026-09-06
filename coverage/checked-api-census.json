@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "policy": {
     "checked_suffix": "_checked",
     "eligibility": "catastrophic dynamic caller precondition; complete pre-side-effect check must be expressible from the checked signature",
@@ -114,15 +114,15 @@
       "id": "contiguous_memory_contract",
       "classification": "dynamic precondition",
       "backend_consequence": "Raw C++ pointers remain unchecked; Rust public exposure must be unsafe until a safe slice wrapper discharges the contract.",
-      "checked_feasibility": "requires a span/slice carrying readable or writable extent and selected alignment",
-      "review": "A pointer and caller-claimed count cannot establish lifetime or provenance."
+      "checked_feasibility": "implemented for scalar/vector loads and stores from a span/slice carrying the exact readable or writable extent and selected alignment",
+      "review": "The checked view establishes the represented range; constructing an invalid C++ span still violates its documented object invariant."
     },
     {
       "id": "mask_memory_contract",
       "classification": "dynamic precondition",
       "backend_consequence": "Raw mask representation loads/stores have the same pointer hazard plus layout-dependent capacity.",
-      "checked_feasibility": "requires a span/slice and a typed mask-layout capacity plan",
-      "review": "Packed and lane-mask representations require different element counts."
+      "checked_feasibility": "no honest twin until a new typed mask-storage layout contract projects exact capacity into span/slice signatures",
+      "review": "Packed, register-lane, axis-selected, and scalable mask representations do not share one existing element-count rule."
     },
     {
       "id": "selected_memory_contract",
@@ -149,22 +149,22 @@
       "id": "random_output_contract",
       "classification": "dynamic precondition",
       "backend_consequence": "The random-step intrinsic writes through a raw output pointer on success.",
-      "checked_feasibility": "requires a mutable reference/view, or an owning optional/result value API",
-      "review": "The current status result does not establish output pointer validity."
+      "checked_feasibility": "implemented with a mutable one-element-or-larger span/slice and an insufficient-extent result",
+      "review": "The checked range establishes writable storage before the hardware-random operation is invoked."
     },
     {
       "id": "raw_copy_contract",
       "classification": "dynamic precondition",
       "backend_consequence": "Invalid ranges or prohibited overlap can cause undefined behavior or corruption.",
-      "checked_feasibility": "requires valid source/destination views plus an explicit overlap contract/check",
-      "review": "Omit the twin unless every range and overlap obligation is represented."
+      "checked_feasibility": "no honest twin for the current vector-base count ABI; first add byte-capacity source/destination views, a size-domain contract, and an explicit overlap contract",
+      "review": "The byte unit is declared, but count and copy kind currently use signed, unsigned, or floating vector-base scalars; pointer-only inputs cannot discharge capacity or overlap obligations."
     },
     {
       "id": "conversion_input_contract",
       "classification": "dynamic precondition",
       "backend_consequence": "Widening loads read multiple source elements through a raw pointer.",
-      "checked_feasibility": "requires a source span/slice with the lowering-resolved element count",
-      "review": "The result-target relationship determines the exact required source extent."
+      "checked_feasibility": "implemented with a source span/slice whose minimum element count is the target vector's logical lane count",
+      "review": "The typed result-target relationship owns the exact required source extent."
     }
   ],
   "declaration_digests": {
@@ -1488,7 +1488,7 @@
       "family": "mask_memory_contract",
       "checked_source_status": "coverage_gap",
       "preconditions": [],
-      "checked_coverage_reason": "requires a span/slice and a typed mask-layout capacity plan"
+      "checked_coverage_reason": "no honest twin until a new typed mask-storage layout contract projects exact capacity into span/slice signatures"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"false\"],[\"packed\",\"false\"]],\"name\":\"store_mask_repr\",\"result_target\":[],\"signature\":\"void:=(ptr,m)\"}",
@@ -1508,7 +1508,7 @@
       "family": "mask_memory_contract",
       "checked_source_status": "coverage_gap",
       "preconditions": [],
-      "checked_coverage_reason": "requires a span/slice and a typed mask-layout capacity plan"
+      "checked_coverage_reason": "no honest twin until a new typed mask-storage layout contract projects exact capacity into span/slice signatures"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"false\"],[\"packed\",\"true\"]],\"name\":\"load_mask_repr\",\"result_target\":[],\"signature\":\"m:=cptr\"}",
@@ -1526,7 +1526,7 @@
       "family": "mask_memory_contract",
       "checked_source_status": "coverage_gap",
       "preconditions": [],
-      "checked_coverage_reason": "requires a span/slice and a typed mask-layout capacity plan"
+      "checked_coverage_reason": "no honest twin until a new typed mask-storage layout contract projects exact capacity into span/slice signatures"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"false\"],[\"packed\",\"true\"]],\"name\":\"store_mask_repr\",\"result_target\":[],\"signature\":\"void:=(ptr,m)\"}",
@@ -1546,7 +1546,7 @@
       "family": "mask_memory_contract",
       "checked_source_status": "coverage_gap",
       "preconditions": [],
-      "checked_coverage_reason": "requires a span/slice and a typed mask-layout capacity plan"
+      "checked_coverage_reason": "no honest twin until a new typed mask-storage layout contract projects exact capacity into span/slice signatures"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"false\"]],\"name\":\"load\",\"result_target\":[],\"signature\":\"v:=cptr\"}",
@@ -1584,9 +1584,11 @@
       ],
       "implementation_count": 15,
       "family": "contiguous_memory_contract",
-      "checked_source_status": "coverage_gap",
-      "preconditions": [],
-      "checked_coverage_reason": "requires a span/slice carrying readable or writable extent and selected alignment"
+      "checked_source_status": "declared",
+      "preconditions": [
+        "contiguous_memory_extent"
+      ],
+      "checked_coverage_reason": "source preconditions are available for backend check planning"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"false\"]],\"name\":\"store\",\"result_target\":[],\"signature\":\"void:=(ptr,s)\"}",
@@ -1755,7 +1757,7 @@
       "family": "mask_memory_contract",
       "checked_source_status": "coverage_gap",
       "preconditions": [],
-      "checked_coverage_reason": "requires a span/slice and a typed mask-layout capacity plan"
+      "checked_coverage_reason": "no honest twin until a new typed mask-storage layout contract projects exact capacity into span/slice signatures"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"true\"],[\"packed\",\"false\"]],\"name\":\"store_mask_repr\",\"result_target\":[],\"signature\":\"void:=(ptr,m)\"}",
@@ -1775,7 +1777,7 @@
       "family": "mask_memory_contract",
       "checked_source_status": "coverage_gap",
       "preconditions": [],
-      "checked_coverage_reason": "requires a span/slice and a typed mask-layout capacity plan"
+      "checked_coverage_reason": "no honest twin until a new typed mask-storage layout contract projects exact capacity into span/slice signatures"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"true\"],[\"packed\",\"true\"]],\"name\":\"load_mask_repr\",\"result_target\":[],\"signature\":\"m:=cptr\"}",
@@ -1793,7 +1795,7 @@
       "family": "mask_memory_contract",
       "checked_source_status": "coverage_gap",
       "preconditions": [],
-      "checked_coverage_reason": "requires a span/slice and a typed mask-layout capacity plan"
+      "checked_coverage_reason": "no honest twin until a new typed mask-storage layout contract projects exact capacity into span/slice signatures"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"true\"],[\"packed\",\"true\"]],\"name\":\"store_mask_repr\",\"result_target\":[],\"signature\":\"void:=(ptr,m)\"}",
@@ -1813,7 +1815,7 @@
       "family": "mask_memory_contract",
       "checked_source_status": "coverage_gap",
       "preconditions": [],
-      "checked_coverage_reason": "requires a span/slice and a typed mask-layout capacity plan"
+      "checked_coverage_reason": "no honest twin until a new typed mask-storage layout contract projects exact capacity into span/slice signatures"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"true\"]],\"name\":\"load\",\"result_target\":[],\"signature\":\"v:=cptr\"}",
@@ -2004,9 +2006,11 @@
       ],
       "implementation_count": 74,
       "family": "conversion_input_contract",
-      "checked_source_status": "coverage_gap",
-      "preconditions": [],
-      "checked_coverage_reason": "requires a source span/slice with the lowering-resolved element count"
+      "checked_source_status": "declared",
+      "preconditions": [
+        "contiguous_memory_extent"
+      ],
+      "checked_coverage_reason": "source preconditions are available for backend check planning"
     },
     {
       "id": "{\"attributes\":[],\"name\":\"memory_cp\",\"result_target\":[],\"signature\":\"void:=(ptr,cptr,s,s)\"}",
@@ -2022,7 +2026,7 @@
       "family": "raw_copy_contract",
       "checked_source_status": "coverage_gap",
       "preconditions": [],
-      "checked_coverage_reason": "requires valid source/destination views plus an explicit overlap contract/check"
+      "checked_coverage_reason": "no honest twin for the current vector-base count ABI; first add byte-capacity source/destination views, a size-domain contract, and an explicit overlap contract"
     },
     {
       "id": "{\"attributes\":[],\"name\":\"random_step\",\"result_target\":[],\"signature\":\"usize:=(ptr)\"}",
@@ -2036,9 +2040,11 @@
       ],
       "implementation_count": 3,
       "family": "random_output_contract",
-      "checked_source_status": "coverage_gap",
-      "preconditions": [],
-      "checked_coverage_reason": "requires a mutable reference/view, or an owning optional/result value API"
+      "checked_source_status": "declared",
+      "preconditions": [
+        "contiguous_memory_extent"
+      ],
+      "checked_coverage_reason": "source preconditions are available for backend check planning"
     },
     {
       "id": "{\"attributes\":[],\"name\":\"scatter\",\"result_target\":[],\"signature\":\"void:=(ptr,vidx,v,sImm)\"}",

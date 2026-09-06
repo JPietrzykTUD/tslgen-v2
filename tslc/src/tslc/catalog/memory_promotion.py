@@ -14,7 +14,7 @@ from tslc.catalog.memory import (
     PrimitiveMemoryContract,
     memory_access_values,
     memory_addressing_values,
-    memory_operation,
+    memory_operations,
 )
 from tslc.catalog.semantics import (
     OperandRole,
@@ -33,6 +33,7 @@ KNOWN_MEMORY_FIELDS = frozenset({"access", "addressing"})
 def build_memory_contract(
     declaration: ParsedPrimitiveDeclaration,
     semantic: PrimitiveSemanticContract | None,
+    result_target: tuple[str, str] | None,
     diagnostics: list[Diagnostic],
 ) -> PrimitiveMemoryContract | None:
     fields = declaration.fields_by_name("memory")
@@ -83,15 +84,19 @@ def build_memory_contract(
     )
     if access is None or addressing is None:
         return None
-    expected_operation = memory_operation(access)
-    if semantic is None or semantic.kind is not expected_operation:
+    expected_operations = memory_operations(access)
+    if semantic is None or semantic.kind not in expected_operations:
+        expected = ", ".join(
+            repr(operation.value)
+            for operation in sorted(expected_operations, key=lambda item: item.value)
+        )
         diagnostics.append(
             diagnostic_at(
                 severity="error",
                 code="TSL-CATALOG-MEMORY-OPERATION",
                 message=(
                     f"memory access {access.value!r} on primitive {declaration.name!r} "
-                    f"requires operation {expected_operation.value!r}"
+                    f"requires one of the operations {expected}"
                 ),
                 source=(
                     member_value_source(members.get("access"))
@@ -105,7 +110,12 @@ def build_memory_contract(
     ):
         return None
     payload_extent = _payload_extent(
-        declaration, semantic, access, addressing, diagnostics
+        declaration,
+        semantic,
+        access,
+        addressing,
+        result_target,
+        diagnostics,
     )
     if payload_extent is None:
         return None
@@ -124,10 +134,18 @@ def _payload_extent(
     semantic: PrimitiveSemanticContract,
     access: MemoryAccess,
     addressing: MemoryAddressing,
+    result_target: tuple[str, str] | None,
     diagnostics: list[Diagnostic],
 ) -> MemoryPayloadExtent | None:
     if addressing is MemoryAddressing.COMPACTED:
         return MemoryPayloadExtent.ACTIVE_LANES
+    if semantic.kind in {
+        PrimitiveOperation.LOAD_SCALAR,
+        PrimitiveOperation.RANDOM_STEP,
+    }:
+        return MemoryPayloadExtent.SCALAR
+    if access is MemoryAccess.READ and result_target is not None:
+        return MemoryPayloadExtent.TARGET_VECTOR
     signature = parse_signature(declaration.signature)
     kind: str | None
     if signature is None:

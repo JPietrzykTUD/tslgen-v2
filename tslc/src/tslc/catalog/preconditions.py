@@ -182,7 +182,12 @@ PRECONDITION_DESCRIPTORS: Mapping[
                 "complete scalar or vector payload extent."
             ),
             compatible_operations=frozenset(
-                {PrimitiveOperation.LOAD, PrimitiveOperation.STORE}
+                {
+                    PrimitiveOperation.LOAD,
+                    PrimitiveOperation.LOAD_SCALAR,
+                    PrimitiveOperation.RANDOM_STEP,
+                    PrimitiveOperation.STORE,
+                }
             ),
             compatible_memory_accesses=frozenset(
                 {MemoryAccess.READ, MemoryAccess.WRITE}

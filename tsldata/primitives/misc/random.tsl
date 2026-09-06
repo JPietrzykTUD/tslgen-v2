@@ -1,6 +1,13 @@
 description "Hardware entropy operations"
 
 prim<usize:=(ptr)> random_step(out):
+  operation random_step
+  operand_roles:
+    memory_destination out
+  memory:
+    access write
+    addressing contiguous
+  preconditions [contiguous_memory_extent]
   brief_description "Attempts one x86 hardware-random step into a 64-bit output."
   detailed_description """
     Executes one RDRAND step on supported x86 profiles. Returns one when the

@@ -123,6 +123,10 @@ _OPERATION_ROLES: dict[
             }
         ),
     ),
+    PrimitiveOperation.LOAD_SCALAR: (
+        frozenset({OperandRole.MEMORY_SOURCE}),
+        frozenset(),
+    ),
     PrimitiveOperation.MASK_ALL_FALSE: (frozenset(), frozenset()),
     PrimitiveOperation.MASK_ALL_TRUE: (frozenset(), frozenset()),
     PrimitiveOperation.MASK_AND: (_BINARY_VALUE_ROLES, frozenset()),
@@ -145,6 +149,10 @@ _OPERATION_ROLES: dict[
         frozenset(),
     ),
     PrimitiveOperation.MASK_XOR: (_BINARY_VALUE_ROLES, frozenset()),
+    PrimitiveOperation.RANDOM_STEP: (
+        frozenset({OperandRole.MEMORY_DESTINATION}),
+        frozenset(),
+    ),
     PrimitiveOperation.REINTERPRET: (
         frozenset({OperandRole.PRIMARY}),
         frozenset(),
@@ -218,6 +226,7 @@ _OPERATION_RESULT_KINDS: dict[PrimitiveOperation, frozenset[str]] = {
     PrimitiveOperation.INTEGRAL_MASK_TEST: frozenset({"im"}),
     PrimitiveOperation.INSERT_LANE: frozenset({"v"}),
     PrimitiveOperation.LOAD: frozenset({"v"}),
+    PrimitiveOperation.LOAD_SCALAR: frozenset({"s"}),
     PrimitiveOperation.MASK_ALL_FALSE: frozenset({"m"}),
     PrimitiveOperation.MASK_ALL_TRUE: frozenset({"m"}),
     PrimitiveOperation.MASK_AND: frozenset({"m"}),
@@ -228,6 +237,7 @@ _OPERATION_RESULT_KINDS: dict[PrimitiveOperation, frozenset[str]] = {
     PrimitiveOperation.MASK_SET_LANE: frozenset({"m"}),
     PrimitiveOperation.MASK_TO_INTEGRAL: frozenset({"im"}),
     PrimitiveOperation.MASK_XOR: frozenset({"m"}),
+    PrimitiveOperation.RANDOM_STEP: frozenset({"usize"}),
     PrimitiveOperation.REINTERPRET: frozenset({"v"}),
     PrimitiveOperation.SELECT: frozenset({"v"}),
     PrimitiveOperation.SHIFT_LEFT: frozenset({"v"}),

@@ -119,6 +119,9 @@ def plan_cpp_checked_api(
         elif payload_extents == (MemoryPayloadExtent.VECTOR,):
             required_extent_expression = "Vec::lane_count()"
             required_alignment_expression = "Vec::vector_alignment"
+        elif payload_extents == (MemoryPayloadExtent.TARGET_VECTOR,):
+            required_extent_expression = "ToVec::lane_count()"
+            required_alignment_expression = "alignof(typename Vec::base_type)"
         elif set(payload_extents) == {
             MemoryPayloadExtent.SCALAR,
             MemoryPayloadExtent.VECTOR,

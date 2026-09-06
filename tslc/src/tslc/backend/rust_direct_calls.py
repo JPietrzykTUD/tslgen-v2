@@ -4,11 +4,18 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from tslc.backend.checked_api import (
+    applicable_checked_api_plan,
+    public_call_requires_unsafe,
+)
+from tslc.backend.precondition_error_rendering import rust_precondition_error
 from tslc.backend.primitive_rendering import body_for
 from tslc.backend.rust_documentation import rust_doc
 from tslc.backend.rust_names import rust_primitive_trait_name
 from tslc.backend.rust_signatures import free_kind_type, runtime_names, unsafe_prefix
 from tslc.backend.rust_translation import rust_raw_identifier
+from tslc.catalog.memory import MemoryAccess, MemoryPayloadExtent
+from tslc.catalog.preconditions import PreconditionKind
 from tslc.lower.implementation_state import ImplementationState
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.target_text import LoweredBody
@@ -56,6 +63,76 @@ def free_function(
         f"{function_name}({rendered_params}){result_clause} {{\n"
         f"{indent(rendered_body, 4)}\n"
         "}"
+    )
+
+
+def checked_free_function(spec: LoweredSpecialization) -> str:
+    """Render a checked companion for a concrete non-vector free function."""
+
+    plan = applicable_checked_api_plan((spec,))
+    if plan is None:
+        return ""
+    if len(plan.conditions) != 1:
+        raise ValueError("checked free functions require one complete condition")
+    condition = plan.conditions[0]
+    if (
+        condition.kind is not PreconditionKind.CONTIGUOUS_MEMORY_EXTENT
+        or condition.memory_access is None
+        or condition.memory_payload_extents != (MemoryPayloadExtent.SCALAR,)
+    ):
+        raise ValueError(
+            "checked free functions currently require one scalar memory extent"
+        )
+    parameters: list[str] = []
+    arguments: list[str] = []
+    for index, (name, kind) in enumerate(
+        zip(spec.param_names, spec.param_kinds)
+    ):
+        if index == condition.parameter_index:
+            borrow = (
+                "&" if condition.memory_access is MemoryAccess.READ else "&mut "
+            )
+            parameters.append(f"{name}: {borrow}[{spec.base_type_spelling}]")
+            pointer = (
+                "as_ptr"
+                if condition.memory_access is MemoryAccess.READ
+                else "as_mut_ptr"
+            )
+            arguments.append(f"{name}.{pointer}()")
+        else:
+            parameters.append(f"{name}: {free_kind_type(kind, spec)}")
+            arguments.append(name)
+    result_type = (
+        "()"
+        if spec.result_kind == "void"
+        else free_kind_type(spec.result_kind, spec)
+    )
+    call = (
+        f"{rust_raw_identifier(spec.primitive_name)}({', '.join(arguments)})"
+    )
+    if public_call_requires_unsafe((spec,)):
+        call = f"unsafe {{ {call} }}"
+    success = (
+        f"{call};\n    Ok(())" if result_type == "()" else f"Ok({call})"
+    )
+    doc = rust_doc(
+        spec,
+        context="Rust checked free function",
+        concrete=False,
+        checked=True,
+    )
+    return (
+        (f"{doc}\n" if doc else "")
+        + "#[inline]\n"
+        + f"pub fn {rust_raw_identifier(spec.primitive_name + '_checked')}("
+        + f"{', '.join(parameters)}) -> Result<{result_type}, PreconditionError> {{\n"
+        + f"    if {condition.parameter_name}.is_empty() {{\n"
+        + "        return Err("
+        + rust_precondition_error(condition.error)
+        + ");\n"
+        + "    }\n"
+        + f"    {success}\n"
+        + "}"
     )
 
 
@@ -198,6 +275,7 @@ def implementation_lint_allowance(spec: LoweredSpecialization) -> str:
 
 __all__ = (
     "any_caller_unsafe",
+    "checked_free_function",
     "free_function",
     "free_variant_functions",
     "implementation_lint_allowance",

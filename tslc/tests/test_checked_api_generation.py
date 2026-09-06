@@ -545,6 +545,133 @@ def test_compacted_memory_checked_twins_use_active_lane_capacity(
     assert "S::mask_lane_test(m, __tsl_lane)" in rust
 
 
+def test_remaining_scalar_target_and_random_memory_twins_use_exact_extents(
+    catalog: Catalog,
+    machine_profiles: Mapping[str, MachineProfile],
+) -> None:
+    scalar = _lowered(
+        catalog,
+        machine_profiles,
+        "load_scalar",
+        "cpp",
+        type_tag="ui32",
+    )
+    scalar_plan = checked_api_plan((scalar,))
+    assert scalar_plan is not None
+    assert scalar_plan.conditions[0].memory_payload_extents == (
+        MemoryPayloadExtent.SCALAR,
+    )
+    scalar_cpp = CppBackend().render_checked_wrappers(
+        "load_scalar", (scalar,)
+    )
+    assert "ptr.size() < std::size_t{1}" in scalar_cpp
+    assert "precondition_error::misaligned" not in scalar_cpp
+
+    converted = _lowered(
+        catalog,
+        machine_profiles,
+        "load_convert_up",
+        "cpp",
+        type_tag="si8",
+    )
+    converted_plan = checked_api_plan((converted,))
+    assert converted_plan is not None
+    assert converted_plan.conditions[0].memory_payload_extents == (
+        MemoryPayloadExtent.TARGET_VECTOR,
+    )
+    converted_cpp = CppBackend().render_checked_wrappers(
+        "load_convert_up", (converted,)
+    )
+    assert "ptr.size() < ToVec::lane_count()" in converted_cpp
+    converted_rust = RustBackend().render_primitive_public(
+        "load_convert_up",
+        (
+            _lowered(
+                catalog,
+                machine_profiles,
+                "load_convert_up",
+                "rust",
+                type_tag="si8",
+            ),
+        ),
+    )
+    assert "if ptr.len() < T::lane_count()" in converted_rust
+
+    random_cpp_spec = _lowered(
+        catalog,
+        machine_profiles,
+        "random_step",
+        "cpp",
+        type_tag="ui64",
+    )
+    random_cpp = CppBackend().render_primitive(
+        "random_step", (random_cpp_spec,)
+    )
+    assert "random_step_checked(::tsl::span<uint64_t> out" in random_cpp
+    assert "if (out.size() < std::size_t{1})" in random_cpp
+    assert random_cpp.count("auto random_step_checked(") == 2
+    assert random_cpp.count(
+        "noexcept -> std::size_t {"
+    ) == 1
+    random_cpp_docs = CppBackend().render_documentation_api_declaration(
+        "random_step", (random_cpp_spec,)
+    )
+    assert "Template parameters: none" in random_cpp_docs
+    assert "precondition_error::insufficient_extent" in random_cpp_docs
+    random_rust_spec = _lowered(
+        catalog,
+        machine_profiles,
+        "random_step",
+        "rust",
+        type_tag="ui64",
+    )
+    random_rust = RustBackend().render_primitive_public(
+        "random_step", (random_rust_spec,)
+    )
+    assert "pub fn random_step_checked(out: &mut [u64])" in random_rust
+    assert "if out.is_empty()" in random_rust
+    random_rust_docs = RustBackend().render_documentation_api(
+        "random_step", (random_rust_spec,)
+    )
+    assert "Type parameters: none" in random_rust_docs
+    assert "# Errors" in random_rust_docs
+    assert "PreconditionError::InsufficientExtent" in random_rust_docs
+
+
+@pytest.mark.parametrize(
+    ("primitive_name", "type_tag"),
+    (
+        ("allocate", "ptr"),
+        ("allocate_aligned", "ptr"),
+        ("deallocate", "ptr"),
+        ("memory_cp", "ui8"),
+        ("load_mask_repr", "ui32"),
+        ("gather_narrow", "si32"),
+    ),
+)
+def test_unrepresentable_or_already_reported_raw_memory_has_no_checked_twin(
+    catalog: Catalog,
+    machine_profiles: Mapping[str, MachineProfile],
+    primitive_name: str,
+    type_tag: str,
+) -> None:
+    for backend in ("cpp", "rust"):
+        spec = _lowered(
+            catalog,
+            machine_profiles,
+            primitive_name,
+            backend,
+            type_tag=type_tag,
+        )
+        assert checked_api_plan((spec,)) is None
+        rendered = (
+            CppBackend().render_primitive(primitive_name, (spec,))
+            if backend == "cpp"
+            else RustBackend().render_primitive_public(primitive_name, (spec,))
+        )
+        assert f"{primitive_name}_checked" not in rendered
+
+
 @pytest.fixture(scope="module")
 def checked_lane_cpp_project(
     data_root: Path,
@@ -668,6 +795,32 @@ def checked_irregular_memory_project(
         ],
         profiles=["avx2"],
         type_tags=("si32", "si64"),
+        backends=["cpp", "rust"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    report = write_artifacts(result.artifacts, output_root)
+    assert not has_errors(report.diagnostics), report.diagnostics
+    return output_root
+
+
+@pytest.fixture(scope="module")
+def checked_remaining_memory_project(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Path:
+    output_root = tmp_path_factory.mktemp("checked-remaining-memory-project")
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=[
+            "load_convert_up",
+            "load_scalar",
+            "random_step",
+            "to_array",
+        ],
+        profiles=["avx2"],
+        type_tags=("si8", "si32", "ui32", "ui64"),
         backends=["cpp", "rust"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -1159,6 +1312,78 @@ def test_checked_irregular_memory_rust_consumer_covers_address_and_capacity_edge
     )
     completed = subprocess.run(
         (cargo, "run", "--release", "--bin", "irregular_memory_consumer"),
+        cwd=project,
+        env=environment,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+@pytest.mark.generated_build
+def test_checked_remaining_memory_cpp_consumer_covers_exact_target_extents(
+    checked_remaining_memory_project: Path,
+    tmp_path: Path,
+) -> None:
+    compilers = _cpp_compilers()
+    if not compilers:
+        pytest.skip("GCC or Clang C++ compiler required")
+    source = _FIXTURES / "remaining_memory_consumer.cpp"
+    include = checked_remaining_memory_project / "cpp" / "include"
+
+    for compiler in compilers:
+        compiler_id = Path(compiler).name.replace("+", "x")
+        binary = tmp_path / f"remaining-memory-{compiler_id}"
+        completed = subprocess.run(
+            (
+                compiler,
+                "-std=c++17",
+                "-O2",
+                "-mavx2",
+                "-mrdrnd",
+                "-msse4.2",
+                "-mssse3",
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "-fno-exceptions",
+                "-I",
+                str(include),
+                str(source),
+                "-o",
+                str(binary),
+            ),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert completed.returncode == 0, completed.stderr
+        subprocess.run((str(binary),), check=True)
+
+
+@pytest.mark.generated_build
+def test_checked_remaining_memory_rust_consumer_covers_exact_target_extents(
+    checked_remaining_memory_project: Path,
+    tmp_path: Path,
+) -> None:
+    cargo = shutil.which("cargo")
+    if cargo is None:
+        pytest.skip("cargo is not available")
+    if os.uname().machine != "x86_64":
+        pytest.skip("the checked AVX2 remaining-memory consumer requires x86-64")
+    project = checked_remaining_memory_project / "rust"
+    source = _FIXTURES / "remaining_memory_consumer.rs"
+    binary_source = project / "src" / "bin"
+    binary_source.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source, binary_source / source.name)
+    environment = os.environ.copy()
+    environment["CARGO_TARGET_DIR"] = str(tmp_path / "cargo-target")
+    environment["RUSTFLAGS"] = (
+        "-C target-feature=+avx,+avx2,+rdrand,+sse,+sse2,+sse4.1,+sse4.2,+ssse3"
+    )
+    completed = subprocess.run(
+        (cargo, "run", "--release", "--bin", "remaining_memory_consumer"),
         cwd=project,
         env=environment,
         check=False,

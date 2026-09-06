@@ -2,8 +2,8 @@
 
 Date: 2026-09-02
 
-Status: accepted pre-v1 public-contract plan; Slices 0-6 are implemented and
-committed; Slice 7 is next
+Status: accepted pre-v1 public-contract plan; Slices 0-7 are implemented and
+committed; Slice 8 is next
 
 Related evidence: [TSL v1.0.0 generated API and documentation audit](tsl-v1-generated-api-docs-audit.md)
 
@@ -1117,14 +1117,18 @@ Observed Slice 6 evidence:
 Goal: classify allocation, deallocation, copy, random-output, and other raw
 memory operations without overclaiming.
 
-Likely outcomes:
+Outcomes:
 
 - ordinary allocation failure does not create a checked twin because the base
   return already represents it;
-- an invalid alignment request qualifies only on a backend where violating it
-  is catastrophic and every validity condition can be checked before allocation;
-- copy receives a checked twin only if valid range arguments establish extent
-  and the overlap rule can be checked or encoded by the signature;
+- `allocate_aligned` likewise has no checked twin: its current implementations
+  are caller-safe and return the ordinary null failure representation rather
+  than declaring a catastrophic caller precondition;
+- `memory_cp` has no honest checked twin for its current signature. Although
+  the count is semantically bytes, count and copy kind are vector-base scalars
+  (including signed and floating domains), and bare pointers establish neither
+  capacity nor non-overlap. A future byte-view API must first define those
+  contracts;
 - a raw-pointer deallocator cannot validate allocation provenance and should
   not receive a misleading checked twin; and
 - an owning allocation/RAII API, if desired, is a separate v1 feature decision
@@ -1132,6 +1136,49 @@ Likely outcomes:
 
 Validation: exact checked-coverage report plus focused allocator/copy tests. Do
 not broaden this slice into a general memory-management library.
+
+Observed Slice 7 evidence:
+
+- Source data now declares typed scalar-load, widening-load, and random-output
+  contracts. `load_scalar` and `random_step` have dedicated operation kinds;
+  widening load reuses the load operation and projects a typed `target_vector`
+  payload extent from its result-target relationship.
+- C++ emits direct-value/error-output checked companions over spans, and Rust
+  emits safe `Result` companions over slices. Scalar load and random output
+  require one element; widening load requires exactly the target vector's
+  logical lane count. Empty/one-short failure paths do not invoke the ordinary
+  operation, while valid generated consumers verify the loaded values and the
+  hardware-random status.
+- Allocation, aligned allocation, deallocation, `memory_cp`, mask
+  representation storage, and pointer-indexed `gather_narrow` receive no
+  misleading checked twin. The census records the exact reason for each
+  omission. It now contains 33 caller-unsafe callable identities, of which 11
+  remain checked-source coverage gaps, plus 138 applicable safety-metadata
+  gaps (26 caller-visible).
+- The design-review/fix loop found and corrected three integration defects:
+  widening loads were initially admitted into the ordinary load/store policy
+  facade, the C++ checked free function was emitted in two definition stages,
+  and Rust unaligned store specializations initially lost required overload
+  helper methods. It also corrected the raw-copy census rationale to preserve
+  the declared byte unit while identifying its actual size-domain, capacity,
+  and overlap gaps.
+- Compiler-owned operation completion exposes `load_scalar` and `random_step`
+  without client-side vocabulary. Focused Doxygen, rustdoc, Sphinx, generated
+  GCC/Clang consumers, Rust consumers, allocator/copy builds, and the VS Code
+  unit/grammar suite pass. The ordinary compiler suite passes with 2,682 tests
+  and 121 expected skips; the complete generated build/value matrix passes all
+  84 gates.
+- For the focused `load_scalar`, `load_convert_up`, `random_step`, and
+  `to_array` AVX2 C++/Rust roots, the specialization/artifact counts remain
+  4,206/54. Output increases from 15,155,944 bytes (369,249 lines) to
+  15,230,370 bytes (370,361 lines), a 74,426-byte/1,112-line increase.
+  Generation measured 12.11 s before and 11.02 s after; build verification
+  measured 21.52 s before and 20.87 s after. The timing differences are noise,
+  not a claimed speedup; no focused compile-time regression was observed.
+- Focused execution used native x86-64 AVX2. The valid RDRAND branch was gated
+  by runtime feature detection; the empty checked failure path is executable
+  without invoking RDRAND. Cross-family runtime behavior remains limited to
+  the supported toolchains/runners exercised by the complete generated matrix.
 
 ### Slice 8 — Documentation, coverage, and release gates
 

@@ -32,6 +32,7 @@ class MemoryPayloadExtent(StrEnum):
 
     SCALAR = "scalar"
     VECTOR = "vector"
+    TARGET_VECTOR = "target_vector"
     ACTIVE_LANES = "active_lanes"
 
 
@@ -50,12 +51,16 @@ def resolve_memory_alignment(
     return None if mode is None else (_MEMORY_ALIGNMENT_AXIS, mode)
 
 
-def memory_operation(access: MemoryAccess) -> PrimitiveOperation:
-    """Return the semantic operation required by one memory access."""
+def memory_operations(access: MemoryAccess) -> frozenset[PrimitiveOperation]:
+    """Return the semantic operations admitted by one memory access."""
 
     return {
-        MemoryAccess.READ: PrimitiveOperation.LOAD,
-        MemoryAccess.WRITE: PrimitiveOperation.STORE,
+        MemoryAccess.READ: frozenset(
+            {PrimitiveOperation.LOAD, PrimitiveOperation.LOAD_SCALAR}
+        ),
+        MemoryAccess.WRITE: frozenset(
+            {PrimitiveOperation.RANDOM_STEP, PrimitiveOperation.STORE}
+        ),
     }[access]
 
 
@@ -106,6 +111,6 @@ __all__ = (
     "PrimitiveMemoryContract",
     "memory_access_values",
     "memory_addressing_values",
-    "memory_operation",
+    "memory_operations",
     "resolve_memory_alignment",
 )

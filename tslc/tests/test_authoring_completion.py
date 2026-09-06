@@ -433,6 +433,34 @@ def test_operation_completion_projects_horizontal_add_from_typed_vocabulary(
     }
 
 
+def test_operation_completion_projects_remaining_memory_semantics(
+    catalog: Catalog,
+) -> None:
+    scalar_load = (
+        "prim<s:=cptr> probe(ptr):\n"
+        "  operation load_scalar\n"
+        "  operand_roles:\n"
+        "    memory_source ptr\n"
+    )
+    random_step = (
+        "prim<usize:=ptr> probe(out):\n"
+        "  operation random_step\n"
+        "  operand_roles:\n"
+        "    memory_destination out\n"
+    )
+
+    assert _labels(
+        catalog,
+        scalar_load,
+        scalar_load.split("load_scalar", 1)[0] + "load_s",
+    ) == {"load_scalar"}
+    assert _labels(
+        catalog,
+        random_step,
+        random_step.split("random_step", 1)[0] + "random_",
+    ) == {"random_step"}
+
+
 def test_representation_target_axis_and_where_are_contextual(
     catalog: Catalog,
 ) -> None:

@@ -227,7 +227,13 @@ def _documented_preconditions(
 
 
 def _type_parameter_summary(spec: LoweredSpecialization) -> str:
-    params = ["S selects the SIMD vector type"]
+    params = (
+        []
+        if DEFAULT_SUPPORT_POLICY.is_free_function_signature(
+            spec.result_kind, spec.param_kinds
+        )
+        else ["S selects the SIMD vector type"]
+    )
     if spec.target is not None:
         params.append("T selects the target SIMD vector type")
     params.extend(
@@ -240,7 +246,7 @@ def _type_parameter_summary(spec: LoweredSpecialization) -> str:
     params.extend(
         f"{name} selects `{name}`" for name, _typ, _default in spec.generic_params
     )
-    return "; ".join(params)
+    return "; ".join(params) if params else "none"
 
 
 def _result_summary(spec: LoweredSpecialization, *, concrete: bool) -> str:

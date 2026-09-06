@@ -11,7 +11,6 @@ from tslc.catalog.memory import (
     MemoryAddressing,
     MemoryAlignment,
     MemoryPayloadExtent,
-    memory_operation,
 )
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
 from tslc.lower.lowerer import LoweredSpecialization, varying_positions
@@ -211,12 +210,14 @@ def _memory_facade_decision(
     specializations: tuple[LoweredSpecialization, ...],
 ) -> DataparallelPrimitiveFacadeDecision | None:
     if not any(
-        spec.primitive_semantics.memory is not None
-        or (
-            spec.primitive_semantics.operation is not None
-            and spec.primitive_semantics.operation.kind
-            in {PrimitiveOperation.LOAD, PrimitiveOperation.STORE}
-        )
+        spec.primitive_semantics.operation is not None
+        and spec.primitive_semantics.operation.kind
+        in {PrimitiveOperation.LOAD, PrimitiveOperation.STORE}
+        and spec.target is None
+        and not spec.type_params
+        and spec.immediate is None
+        and not spec.generic_params
+        and spec.mask_policy is None
         for spec in specializations
     ):
         return None
@@ -311,7 +312,10 @@ def _memory_specialization_issue(
     memory = semantics.memory
     if memory is None:
         return "memory operation is missing its typed memory contract"
-    expected_operation = memory_operation(memory.access)
+    expected_operation = {
+        MemoryAccess.READ: PrimitiveOperation.LOAD,
+        MemoryAccess.WRITE: PrimitiveOperation.STORE,
+    }[memory.access]
     if operation is None or operation.kind is not expected_operation:
         return (
             f"memory access {memory.access.value!r} disagrees with its "

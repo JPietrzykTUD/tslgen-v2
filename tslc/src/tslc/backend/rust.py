@@ -15,6 +15,7 @@ from tslc.backend.checked_api import (
 from tslc.backend.primitive_rendering import variant_names as _variant_names
 from tslc.backend.precondition_error_rendering import rust_precondition_error
 from tslc.backend.rust_direct_calls import (
+    checked_free_function as _checked_free_function,
     free_function as _free_function,
     free_variant_functions as _free_variant_functions,
     implementation_lint_allowance as _implementation_lint_allowance,
@@ -232,7 +233,9 @@ def _rust_forwarded_precondition_method(
 def _rust_checked_memory_requirements(
     condition: CheckedConditionPlan,
     owner: str,
-) -> tuple[str, str, str]:
+    *,
+    target_owner: str | None = None,
+) -> tuple[str, str | None, str | None]:
     payload_extents = condition.memory_payload_extents
     if payload_extents == (MemoryPayloadExtent.SCALAR,):
         extent = "1"
@@ -240,13 +243,23 @@ def _rust_checked_memory_requirements(
     elif payload_extents == (MemoryPayloadExtent.VECTOR,):
         extent = f"{owner}::lane_count()"
         alignment = f"{owner}::ALIGN"
+    elif payload_extents == (MemoryPayloadExtent.TARGET_VECTOR,):
+        if target_owner is None:
+            raise ValueError(
+                "target-vector checked memory requires a target owner"
+            )
+        extent = f"{target_owner}::lane_count()"
+        alignment = f"core::mem::align_of::<{owner}::BaseType>()"
     else:
         raise ValueError(
             "non-overloaded Rust checked memory API requires one payload extent"
         )
-    if condition.memory_alignment_axis_name is None:
-        raise ValueError("Rust checked memory API has no alignment axis")
-    return extent, alignment, _axis_name(condition.memory_alignment_axis_name)
+    axis = (
+        None
+        if condition.memory_alignment_axis_name is None
+        else _axis_name(condition.memory_alignment_axis_name)
+    )
+    return extent, alignment, axis
 
 
 def _rust_overloaded_memory_trait_members(
@@ -460,7 +473,14 @@ class RustBackend:
         ):
             # A non-vector primitive (`allocate`/`deallocate`): a plain `pub fn` in the module,
             # not a `SimdVector`-bound trait/impl/wrapper.
-            return _free_function(shape, backend=self)
+            return "\n\n".join(
+                part
+                for part in (
+                    _free_function(shape, backend=self),
+                    _checked_free_function(shape),
+                )
+                if part
+            )
         caller_unsafe = public_call_requires_unsafe(specializations)
         if varying_positions(specializations):
             ordinary = self._render_overloaded_wrapper(
@@ -490,7 +510,14 @@ class RustBackend:
             shape.result_kind,
             shape.param_kinds,
         ):
-            return _documentation_free_function(shape)
+            return "\n\n".join(
+                part
+                for part in (
+                    _documentation_free_function(shape),
+                    _checked_free_function(shape),
+                )
+                if part
+            )
         caller_unsafe = public_call_requires_unsafe(specializations)
         if varying_positions(specializations):
             ordinary = _documentation_overloaded_wrapper(
@@ -1349,7 +1376,7 @@ class RustBackend:
                 continue
             if condition.kind is PreconditionKind.CONTIGUOUS_MEMORY_EXTENT:
                 extent, _alignment, _axis = _rust_checked_memory_requirements(
-                    condition, "S"
+                    condition, "S", target_owner=target_owner
                 )
                 checks.extend(
                     (
@@ -1361,8 +1388,12 @@ class RustBackend:
                 continue
             if condition.kind is PreconditionKind.SELECTED_MEMORY_ALIGNMENT:
                 _extent, alignment, axis = _rust_checked_memory_requirements(
-                    condition, "S"
+                    condition, "S", target_owner=target_owner
                 )
+                if alignment is None or axis is None:
+                    raise ValueError(
+                        "Rust checked alignment condition has no alignment axis"
+                    )
                 checks.extend(
                     (
                         f"    if {axis} && !({condition.parameter_name}.as_ptr() as usize)"

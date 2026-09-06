@@ -86,7 +86,9 @@ def _build_primitives(
     semantics = _primitive_field_text(declaration, "semantics")
     arithmetic = build_arithmetic_contract(declaration, diagnostics)
     operation = build_semantic_contract(declaration, diagnostics)
-    memory = build_memory_contract(declaration, operation, diagnostics)
+    memory = build_memory_contract(
+        declaration, operation, result_target, diagnostics
+    )
     preconditions = build_preconditions(
         declaration, operation, arithmetic, memory, diagnostics
     )

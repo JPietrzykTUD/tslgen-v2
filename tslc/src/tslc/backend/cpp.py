@@ -5,7 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from tslc.backend.cpp_compiler_capabilities import cpp_compiler_capability
-from tslc.backend.checked_api import CheckedConditionPlan
+from tslc.backend.checked_api import (
+    CheckedConditionPlan,
+    applicable_checked_api_plan,
+)
 from tslc.backend.cpp_checked_api import CppCheckedApiPlan, plan_cpp_checked_api
 from tslc.backend.cpp_documentation import (
     cpp_doc as _cpp_doc,
@@ -26,7 +29,7 @@ from tslc.catalog.preconditions import (
     PreconditionErrorKind,
     PreconditionKind,
 )
-from tslc.catalog.memory import MemoryAccess
+from tslc.catalog.memory import MemoryAccess, MemoryPayloadExtent
 from tslc.lower.lowerer import (
     LoweredArithmeticPrecondition,
     LoweredArithmeticPreconditionKind,
@@ -380,7 +383,14 @@ class CppBackend:
         ):
             # A non-vector primitive: a plain prototype (the definition follows in
             # render_definitions), so a free function can still call any wrapper.
-            return _free_function(shape, define=False)
+            return "\n\n".join(
+                part
+                for part in (
+                    _free_function(shape, define=False),
+                    _checked_free_function(shape, define=False),
+                )
+                if part
+            )
         # A representation-change primitive carries a SECOND vector type (the target).
         # Its result kind projects through `ToVec`, which the caller binds.
         decl_params = "class Vec" + (
@@ -459,7 +469,14 @@ class CppBackend:
             shape.result_kind,
             shape.param_kinds,
         ):
-            return _free_function(shape, define=True)
+            return "\n\n".join(
+                part
+                for part in (
+                    _free_function(shape, define=True),
+                    _checked_free_function(shape, define=True),
+                )
+                if part
+            )
         groups: dict[tuple, list[LoweredSpecialization]] = {}
         order: list[tuple] = []
         for spec in specializations:
@@ -504,7 +521,14 @@ class CppBackend:
             shape.result_kind,
             shape.param_kinds,
         ):
-            return _free_function(shape, define=False)
+            return "\n\n".join(
+                part
+                for part in (
+                    _free_function(shape, define=False),
+                    _checked_free_function(shape, define=False),
+                )
+                if part
+            )
         ordinary = self._wrapper_declaration(primitive_name, specializations)
         checked = self._checked_wrapper(primitive_name, specializations, define=False)
         return "\n\n".join(part for part in (ordinary, checked) if part)
@@ -1018,6 +1042,90 @@ def _free_function(spec: LoweredSpecialization, *, define: bool) -> str:
         prefix = f"{doc}\n" if doc else ""
         return f"{prefix}{signature};"
     return f"{signature} {{\n    {_cpp_body_text(spec, None) or ''}\n}}"
+
+
+def _checked_free_function(
+    spec: LoweredSpecialization,
+    *,
+    define: bool,
+) -> str:
+    """Render a checked companion for a concrete non-vector free function."""
+
+    plan = applicable_checked_api_plan((spec,))
+    if plan is None:
+        return ""
+    if len(plan.conditions) != 1:
+        raise ValueError("checked free functions require one complete condition")
+    condition = plan.conditions[0]
+    if (
+        condition.kind is not PreconditionKind.CONTIGUOUS_MEMORY_EXTENT
+        or condition.memory_access is None
+        or condition.memory_payload_extents != (MemoryPayloadExtent.SCALAR,)
+    ):
+        raise ValueError(
+            "checked free functions currently require one scalar memory extent"
+        )
+    memory_index = condition.parameter_index
+    parameters: list[str] = []
+    arguments: list[str] = []
+    for index, (name, kind) in enumerate(
+        zip(spec.param_names, spec.param_kinds)
+    ):
+        if index == memory_index:
+            element = spec.base_type_spelling
+            if condition.memory_access is MemoryAccess.READ:
+                element += " const"
+                arguments.append(f"{name}.data()")
+            else:
+                arguments.append(f"{name}.data()")
+            parameters.append(f"::tsl::span<{element}> {name}")
+        else:
+            parameters.append(f"{_free_kind_type(kind, spec)} {name}")
+            arguments.append(name)
+    has_value_result = spec.result_kind != "void"
+    if has_value_result:
+        parameters.append("::tsl::precondition_error & error")
+    result_type = (
+        _free_kind_type(spec.result_kind, spec)
+        if has_value_result
+        else "::tsl::precondition_error"
+    )
+    head = (
+        f"[[nodiscard]] TSL_FORCE_INLINE auto {spec.primitive_name}_checked("
+        f"{', '.join(parameters)}) noexcept -> {result_type}"
+    )
+    doc = _cpp_doc(
+        spec,
+        context="C++ checked free function",
+        concrete=False,
+        checked=True,
+    )
+    prefix = f"{doc}\n" if doc and not define else ""
+    if not define:
+        return prefix + head + ";"
+    rendered_error = cpp_precondition_error(condition.error)
+    failure = (
+        f"        error = {rendered_error};\n"
+        f"        return {result_type}{{}};"
+        if has_value_result
+        else f"        return {rendered_error};"
+    )
+    call = f"::tsl::{spec.primitive_name}({', '.join(arguments)})"
+    success = (
+        "    error = ::tsl::precondition_error::none;\n"
+        f"    return {call};"
+        if has_value_result
+        else f"    {call};\n    return ::tsl::precondition_error::none;"
+    )
+    return (
+        prefix
+        + f"{head} {{\n"
+        + f"    if ({condition.parameter_name}.size() < std::size_t{{1}}) {{\n"
+        + f"{failure}\n"
+        + "    }\n"
+        + f"{success}\n"
+        + "}"
+    )
 
 
 def _implementation_state_query(

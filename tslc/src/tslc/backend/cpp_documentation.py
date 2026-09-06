@@ -261,7 +261,13 @@ def _memory_parameter_description(
 
 
 def _template_summary(spec: LoweredSpecialization) -> str:
-    params = ["Vec selects the SIMD vector type"]
+    params = (
+        []
+        if DEFAULT_SUPPORT_POLICY.is_free_function_signature(
+            spec.result_kind, spec.param_kinds
+        )
+        else ["Vec selects the SIMD vector type"]
+    )
     if spec.target is not None:
         params.append("ToVec selects the target SIMD vector type")
     params.extend(
@@ -276,7 +282,7 @@ def _template_summary(spec: LoweredSpecialization) -> str:
     params.extend(
         f"{name} selects `{name}`" for name, _typ, _default in spec.generic_params
     )
-    return "; ".join(params)
+    return "; ".join(params) if params else "none"
 
 
 def _result_summary(spec: LoweredSpecialization, *, concrete: bool) -> str:

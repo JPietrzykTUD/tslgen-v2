@@ -17,7 +17,7 @@ This generated maintenance report tracks the reviewed evidence at the current ch
 
 - Exact generated runtime-failure sites: 154
 - Exact typed public callable identities with at least one `caller_unsafe` implementation: 33
-- Checked source-contract coverage gaps among those identities: 14
+- Checked source-contract coverage gaps among those identities: 11
 - Applicable source safety-metadata gaps: 138 (26 require caller unsafety)
 
 Runtime sites by classification:
@@ -43,14 +43,14 @@ Runtime sites by classification:
 | `algorithm_selected_index` | dynamic precondition | Unchecked C++ and unsafe Rust selected-row algorithms assume valid scaled addresses; checked companions report overflow, misalignment, or an out-of-bounds index. | implemented by validating every selected address before kernel dispatch |
 | `implementation_exhaustiveness` | implementation hazard | Rust panics if compiler-selected scalar cast types escape the supported closed set. | no checked twin; repair typed validation/exhaustiveness |
 | `implementation_invariant` | implementation hazard | A debug assertion or unwrap fails if an internal compiler-owned invariant is broken. | no checked twin; retain or replace with compiler validation |
-| `contiguous_memory_contract` | dynamic precondition | Raw C++ pointers remain unchecked; Rust public exposure must be unsafe until a safe slice wrapper discharges the contract. | requires a span/slice carrying readable or writable extent and selected alignment |
-| `mask_memory_contract` | dynamic precondition | Raw mask representation loads/stores have the same pointer hazard plus layout-dependent capacity. | requires a span/slice and a typed mask-layout capacity plan |
+| `contiguous_memory_contract` | dynamic precondition | Raw C++ pointers remain unchecked; Rust public exposure must be unsafe until a safe slice wrapper discharges the contract. | implemented for scalar/vector loads and stores from a span/slice carrying the exact readable or writable extent and selected alignment |
+| `mask_memory_contract` | dynamic precondition | Raw mask representation loads/stores have the same pointer hazard plus layout-dependent capacity. | no honest twin until a new typed mask-storage layout contract projects exact capacity into span/slice signatures |
 | `selected_memory_contract` | dynamic precondition | Expand/compress operations may access a mask-dependent number of elements. | implemented for compress-store and expand-load from a range plus capacity derived from the active mask |
 | `indexed_memory_contract` | dynamic precondition | Gather/scatter paths may access invalid addresses for active indices. | implemented for vector-index gather/scatter, including partial narrow gather, from a valid base view, typed scale, and active-index validation; pointer-indexed narrow gather remains omitted |
 | `deallocation_provenance` | dynamic precondition | Mismatched, dead, or foreign allocation provenance can cause undefined behavior. | no honest pointer-only checked twin; design an owning allocation API separately |
-| `random_output_contract` | dynamic precondition | The random-step intrinsic writes through a raw output pointer on success. | requires a mutable reference/view, or an owning optional/result value API |
-| `raw_copy_contract` | dynamic precondition | Invalid ranges or prohibited overlap can cause undefined behavior or corruption. | requires valid source/destination views plus an explicit overlap contract/check |
-| `conversion_input_contract` | dynamic precondition | Widening loads read multiple source elements through a raw pointer. | requires a source span/slice with the lowering-resolved element count |
+| `random_output_contract` | dynamic precondition | The random-step intrinsic writes through a raw output pointer on success. | implemented with a mutable one-element-or-larger span/slice and an insufficient-extent result |
+| `raw_copy_contract` | dynamic precondition | Invalid ranges or prohibited overlap can cause undefined behavior or corruption. | no honest twin for the current vector-base count ABI; first add byte-capacity source/destination views, a size-domain contract, and an explicit overlap contract |
+| `conversion_input_contract` | dynamic precondition | Widening loads read multiple source elements through a raw pointer. | implemented with a source span/slice whose minimum element count is the target vector's logical lane count |
 
 ## Exact generated runtime sites
 
@@ -253,7 +253,7 @@ These identities come from `Catalog` and `ImplementationSafety`, not target-text
 - `store void:=(m,ptr,v)`; attributes `aligned=false, mask=pass_through`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 24; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
 - `load v:=(m,cptr)`; attributes `aligned=false, mask=zero`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 24; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
 - `load v:=cptr`; attributes `aligned=false`; result target `none`; reasons `compiler_builtin, intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 22; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
-- `load_scalar s:=cptr`; attributes `aligned=false`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 15; checked source status `coverage_gap`; preconditions `none`; coverage: requires a span/slice carrying readable or writable extent and selected alignment
+- `load_scalar s:=cptr`; attributes `aligned=false`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 15; checked source status `declared`; preconditions `contiguous_memory_extent`; coverage: source preconditions are available for backend check planning
 - `store void:=(ptr,s)`; attributes `aligned=false`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 14; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
 - `store void:=(ptr,v)`; attributes `aligned=false`; result target `none`; reasons `compiler_builtin, intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 26; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
 - `load v:=(m,cptr,v)`; attributes `aligned=true, mask=pass_through`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 24; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
@@ -263,20 +263,20 @@ These identities come from `Catalog` and `ImplementationSafety`, not target-text
 - `store void:=(ptr,s)`; attributes `aligned=true`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 14; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
 - `store void:=(ptr,v)`; attributes `aligned=true`; result target `none`; reasons `compiler_builtin, intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 26; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
 
-Review: A pointer and caller-claimed count cannot establish lifetime or provenance.
+Review: The checked view establishes the represented range; constructing an invalid C++ span still violates its documented object invariant.
 
 ### `mask_memory_contract` (8)
 
-- `load_mask_repr m:=cptr`; attributes `aligned=false, packed=false`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 17; checked source status `coverage_gap`; preconditions `none`; coverage: requires a span/slice and a typed mask-layout capacity plan
-- `store_mask_repr void:=(ptr,m)`; attributes `aligned=false, packed=false`; result target `none`; reasons `compiler_builtin, raw_memory, raw_pointer`; caller-unsafe implementations 17; checked source status `coverage_gap`; preconditions `none`; coverage: requires a span/slice and a typed mask-layout capacity plan
-- `load_mask_repr m:=cptr`; attributes `aligned=false, packed=true`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 17; checked source status `coverage_gap`; preconditions `none`; coverage: requires a span/slice and a typed mask-layout capacity plan
-- `store_mask_repr void:=(ptr,m)`; attributes `aligned=false, packed=true`; result target `none`; reasons `compiler_builtin, raw_memory, raw_pointer`; caller-unsafe implementations 17; checked source status `coverage_gap`; preconditions `none`; coverage: requires a span/slice and a typed mask-layout capacity plan
-- `load_mask_repr m:=cptr`; attributes `aligned=true, packed=false`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 17; checked source status `coverage_gap`; preconditions `none`; coverage: requires a span/slice and a typed mask-layout capacity plan
-- `store_mask_repr void:=(ptr,m)`; attributes `aligned=true, packed=false`; result target `none`; reasons `compiler_builtin, raw_memory, raw_pointer`; caller-unsafe implementations 17; checked source status `coverage_gap`; preconditions `none`; coverage: requires a span/slice and a typed mask-layout capacity plan
-- `load_mask_repr m:=cptr`; attributes `aligned=true, packed=true`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 17; checked source status `coverage_gap`; preconditions `none`; coverage: requires a span/slice and a typed mask-layout capacity plan
-- `store_mask_repr void:=(ptr,m)`; attributes `aligned=true, packed=true`; result target `none`; reasons `compiler_builtin, raw_memory, raw_pointer`; caller-unsafe implementations 17; checked source status `coverage_gap`; preconditions `none`; coverage: requires a span/slice and a typed mask-layout capacity plan
+- `load_mask_repr m:=cptr`; attributes `aligned=false, packed=false`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 17; checked source status `coverage_gap`; preconditions `none`; coverage: no honest twin until a new typed mask-storage layout contract projects exact capacity into span/slice signatures
+- `store_mask_repr void:=(ptr,m)`; attributes `aligned=false, packed=false`; result target `none`; reasons `compiler_builtin, raw_memory, raw_pointer`; caller-unsafe implementations 17; checked source status `coverage_gap`; preconditions `none`; coverage: no honest twin until a new typed mask-storage layout contract projects exact capacity into span/slice signatures
+- `load_mask_repr m:=cptr`; attributes `aligned=false, packed=true`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 17; checked source status `coverage_gap`; preconditions `none`; coverage: no honest twin until a new typed mask-storage layout contract projects exact capacity into span/slice signatures
+- `store_mask_repr void:=(ptr,m)`; attributes `aligned=false, packed=true`; result target `none`; reasons `compiler_builtin, raw_memory, raw_pointer`; caller-unsafe implementations 17; checked source status `coverage_gap`; preconditions `none`; coverage: no honest twin until a new typed mask-storage layout contract projects exact capacity into span/slice signatures
+- `load_mask_repr m:=cptr`; attributes `aligned=true, packed=false`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 17; checked source status `coverage_gap`; preconditions `none`; coverage: no honest twin until a new typed mask-storage layout contract projects exact capacity into span/slice signatures
+- `store_mask_repr void:=(ptr,m)`; attributes `aligned=true, packed=false`; result target `none`; reasons `compiler_builtin, raw_memory, raw_pointer`; caller-unsafe implementations 17; checked source status `coverage_gap`; preconditions `none`; coverage: no honest twin until a new typed mask-storage layout contract projects exact capacity into span/slice signatures
+- `load_mask_repr m:=cptr`; attributes `aligned=true, packed=true`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 17; checked source status `coverage_gap`; preconditions `none`; coverage: no honest twin until a new typed mask-storage layout contract projects exact capacity into span/slice signatures
+- `store_mask_repr void:=(ptr,m)`; attributes `aligned=true, packed=true`; result target `none`; reasons `compiler_builtin, raw_memory, raw_pointer`; caller-unsafe implementations 17; checked source status `coverage_gap`; preconditions `none`; coverage: no honest twin until a new typed mask-storage layout contract projects exact capacity into span/slice signatures
 
-Review: Packed and lane-mask representations require different element counts.
+Review: Packed, register-lane, axis-selected, and scalable mask representations do not share one existing element-count rule.
 
 ### `selected_memory_contract` (2)
 
@@ -304,21 +304,21 @@ Review: A runtime pointer inspection cannot prove matching live allocation prove
 
 ### `random_output_contract` (1)
 
-- `random_step usize:=(ptr)`; attributes `none`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 3; checked source status `coverage_gap`; preconditions `none`; coverage: requires a mutable reference/view, or an owning optional/result value API
+- `random_step usize:=(ptr)`; attributes `none`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 3; checked source status `declared`; preconditions `contiguous_memory_extent`; coverage: source preconditions are available for backend check planning
 
-Review: The current status result does not establish output pointer validity.
+Review: The checked range establishes writable storage before the hardware-random operation is invoked.
 
 ### `raw_copy_contract` (1)
 
-- `memory_cp void:=(ptr,cptr,s,s)`; attributes `none`; result target `none`; reasons `raw_memory, raw_pointer`; caller-unsafe implementations 34; checked source status `coverage_gap`; preconditions `none`; coverage: requires valid source/destination views plus an explicit overlap contract/check
+- `memory_cp void:=(ptr,cptr,s,s)`; attributes `none`; result target `none`; reasons `raw_memory, raw_pointer`; caller-unsafe implementations 34; checked source status `coverage_gap`; preconditions `none`; coverage: no honest twin for the current vector-base count ABI; first add byte-capacity source/destination views, a size-domain contract, and an explicit overlap contract
 
-Review: Omit the twin unless every range and overlap obligation is represented.
+Review: The byte unit is declared, but count and copy kind currently use signed, unsigned, or floating vector-base scalars; pointer-only inputs cannot discharge capacity or overlap obligations.
 
 ### `conversion_input_contract` (1)
 
-- `load_convert_up v:=cptr+`; attributes `none`; result target `base,ToBase`; reasons `intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 74; checked source status `coverage_gap`; preconditions `none`; coverage: requires a source span/slice with the lowering-resolved element count
+- `load_convert_up v:=cptr+`; attributes `none`; result target `base,ToBase`; reasons `intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 74; checked source status `declared`; preconditions `contiguous_memory_extent`; coverage: source preconditions are available for backend check planning
 
-Review: The result-target relationship determines the exact required source extent.
+Review: The typed result-target relationship owns the exact required source extent.
 
 ## Source safety-metadata completeness caveat
 
@@ -326,26 +326,26 @@ The existing typed metadata audit finds additional direct body/signature facts w
 
 The 26 caller-visible gaps are:
 
-- `tsldata/primitives/load_store/pack_expand.tsl:594` — load_convert_up avx512/si8/ToBase/si16
-- `tsldata/primitives/load_store/pack_expand.tsl:607` — load_convert_up avx512/si8/ToBase/si32
-- `tsldata/primitives/load_store/pack_expand.tsl:619` — load_convert_up avx512/si8/ToBase/si64
-- `tsldata/primitives/load_store/pack_expand.tsl:639` — load_convert_up avx512/ui8/ToBase/ui16
-- `tsldata/primitives/load_store/pack_expand.tsl:652` — load_convert_up avx512/ui8/ToBase/ui32
-- `tsldata/primitives/load_store/pack_expand.tsl:664` — load_convert_up avx512/ui8/ToBase/ui64
-- `tsldata/primitives/load_store/pack_expand.tsl:684` — load_convert_up avx512/si16/ToBase/si32
-- `tsldata/primitives/load_store/pack_expand.tsl:696` — load_convert_up avx512/si16/ToBase/si64
-- `tsldata/primitives/load_store/pack_expand.tsl:711` — load_convert_up avx512/ui16/ToBase/ui32
-- `tsldata/primitives/load_store/pack_expand.tsl:723` — load_convert_up avx512/ui16/ToBase/ui64
-- `tsldata/primitives/load_store/pack_expand.tsl:738` — load_convert_up avx512/si32/ToBase/si64
-- `tsldata/primitives/load_store/pack_expand.tsl:753` — load_convert_up avx512/ui32/ToBase/ui64
-- `tsldata/primitives/load_store/pack_expand.tsl:768` — load_convert_up avx512/f32/ToBase/f64
-- `tsldata/primitives/load_store/pack_expand.tsl:832` — load_convert_up [avx2, avx2_vl]/si8/ToBase/si16
-- `tsldata/primitives/load_store/pack_expand.tsl:865` — load_convert_up [avx2, avx2_vl]/ui8/ToBase/ui16
-- `tsldata/primitives/load_store/pack_expand.tsl:898` — load_convert_up [avx2, avx2_vl]/si16/ToBase/si32
-- `tsldata/primitives/load_store/pack_expand.tsl:931` — load_convert_up [avx2, avx2_vl]/ui16/ToBase/ui32
-- `tsldata/primitives/load_store/pack_expand.tsl:964` — load_convert_up [avx2, avx2_vl]/si32/ToBase/si64
-- `tsldata/primitives/load_store/pack_expand.tsl:981` — load_convert_up [avx2, avx2_vl]/ui32/ToBase/ui64
-- `tsldata/primitives/load_store/pack_expand.tsl:998` — load_convert_up [avx2, avx2_vl]/f32/ToBase/f64
+- `tsldata/primitives/load_store/pack_expand.tsl:601` — load_convert_up avx512/si8/ToBase/si16
+- `tsldata/primitives/load_store/pack_expand.tsl:614` — load_convert_up avx512/si8/ToBase/si32
+- `tsldata/primitives/load_store/pack_expand.tsl:626` — load_convert_up avx512/si8/ToBase/si64
+- `tsldata/primitives/load_store/pack_expand.tsl:646` — load_convert_up avx512/ui8/ToBase/ui16
+- `tsldata/primitives/load_store/pack_expand.tsl:659` — load_convert_up avx512/ui8/ToBase/ui32
+- `tsldata/primitives/load_store/pack_expand.tsl:671` — load_convert_up avx512/ui8/ToBase/ui64
+- `tsldata/primitives/load_store/pack_expand.tsl:691` — load_convert_up avx512/si16/ToBase/si32
+- `tsldata/primitives/load_store/pack_expand.tsl:703` — load_convert_up avx512/si16/ToBase/si64
+- `tsldata/primitives/load_store/pack_expand.tsl:718` — load_convert_up avx512/ui16/ToBase/ui32
+- `tsldata/primitives/load_store/pack_expand.tsl:730` — load_convert_up avx512/ui16/ToBase/ui64
+- `tsldata/primitives/load_store/pack_expand.tsl:745` — load_convert_up avx512/si32/ToBase/si64
+- `tsldata/primitives/load_store/pack_expand.tsl:760` — load_convert_up avx512/ui32/ToBase/ui64
+- `tsldata/primitives/load_store/pack_expand.tsl:775` — load_convert_up avx512/f32/ToBase/f64
+- `tsldata/primitives/load_store/pack_expand.tsl:839` — load_convert_up [avx2, avx2_vl]/si8/ToBase/si16
+- `tsldata/primitives/load_store/pack_expand.tsl:872` — load_convert_up [avx2, avx2_vl]/ui8/ToBase/ui16
+- `tsldata/primitives/load_store/pack_expand.tsl:905` — load_convert_up [avx2, avx2_vl]/si16/ToBase/si32
+- `tsldata/primitives/load_store/pack_expand.tsl:938` — load_convert_up [avx2, avx2_vl]/ui16/ToBase/ui32
+- `tsldata/primitives/load_store/pack_expand.tsl:971` — load_convert_up [avx2, avx2_vl]/si32/ToBase/si64
+- `tsldata/primitives/load_store/pack_expand.tsl:988` — load_convert_up [avx2, avx2_vl]/ui32/ToBase/ui64
+- `tsldata/primitives/load_store/pack_expand.tsl:1005` — load_convert_up [avx2, avx2_vl]/f32/ToBase/f64
 - `tsldata/primitives/load_store/rnd_access.tsl:437` — gather sve/arith
 - `tsldata/primitives/load_store/rnd_access.tsl:805` — gather_narrow_partial sve/[bword, dword]
 - `tsldata/primitives/load_store/rnd_access.tsl:996` — gather_narrow sve/[bword, dword]

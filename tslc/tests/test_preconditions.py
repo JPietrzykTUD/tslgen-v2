@@ -12,7 +12,7 @@ from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.memory import MemoryAddressing, MemoryPayloadExtent
 from tslc.catalog.model import Catalog
 from tslc.catalog.preconditions import PreconditionKind
-from tslc.catalog.semantics import OperandRole
+from tslc.catalog.semantics import OperandRole, PrimitiveOperation
 from tslc.catalog.validation import validate_catalog
 from tslc.catalog_index import build_catalog_index
 from tslc.compiler_assets import load_default_tsl_grammar
@@ -486,3 +486,38 @@ def test_irregular_memory_families_declare_only_honest_checked_contracts(
     assert len(pointer_indexed) == 1
     assert pointer_indexed[0].memory is None
     assert pointer_indexed[0].preconditions == ()
+
+
+def test_remaining_checked_memory_sources_distinguish_payload_owners(
+    catalog: Catalog,
+) -> None:
+    scalar = catalog.primitives_named("load_scalar", unmasked=False)
+    assert len(scalar) == 1
+    assert scalar[0].operation is not None
+    assert scalar[0].operation.kind is PrimitiveOperation.LOAD_SCALAR
+    assert scalar[0].memory is not None
+    assert scalar[0].memory.payload_extent is MemoryPayloadExtent.SCALAR
+    assert tuple(item.kind for item in scalar[0].preconditions) == (
+        PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
+    )
+
+    converted = catalog.primitives_named("load_convert_up", unmasked=False)
+    assert len(converted) == 1
+    assert converted[0].memory is not None
+    assert (
+        converted[0].memory.payload_extent
+        is MemoryPayloadExtent.TARGET_VECTOR
+    )
+    assert tuple(item.kind for item in converted[0].preconditions) == (
+        PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
+    )
+
+    random = catalog.primitives_named("random_step", unmasked=False)
+    assert len(random) == 1
+    assert random[0].operation is not None
+    assert random[0].operation.kind is PrimitiveOperation.RANDOM_STEP
+    assert random[0].memory is not None
+    assert random[0].memory.payload_extent is MemoryPayloadExtent.SCALAR
+    assert tuple(item.kind for item in random[0].preconditions) == (
+        PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
+    )
