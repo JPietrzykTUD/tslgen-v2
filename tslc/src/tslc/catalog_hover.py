@@ -210,7 +210,10 @@ def hover_text(
             )
         facts.extend(
             (
-                f"**Checked error:** `{precondition_descriptor.error.value}`",
+                "**Checked errors:** "
+                + _inline_code(
+                    error.value for error in precondition_descriptor.errors
+                ),
                 "**Unchecked consequence:** "
                 f"{precondition_descriptor.unchecked_consequence}",
             )

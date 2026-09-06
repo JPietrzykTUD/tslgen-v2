@@ -109,7 +109,10 @@ def _private_trait(method: RustComprehensiveMethod) -> str:
                     "    #[doc(hidden)]",
                     "    fn __tsl_checked_memory_alignment() -> usize;",
                 )
-                if _checked_memory_condition(method.checked_conditions) is not None
+                if _checked_memory_alignment_condition(
+                    method.checked_conditions
+                )
+                is not None
                 else ()
             ),
             (
@@ -168,7 +171,9 @@ def _private_impl(
         call = f"unsafe {{ {call} }}"
     result = f"{call}{arm.call.result_suffix}"
     unsafe_prefix = "unsafe " if method.caller_unsafe else ""
-    memory_condition = _checked_memory_condition(method.checked_conditions)
+    memory_condition = _checked_memory_alignment_condition(
+        method.checked_conditions
+    )
     memory_alignment = (
         _checked_memory_alignment_expression(memory_condition, arm)
         if memory_condition is not None
@@ -566,7 +571,7 @@ def _method_docs(
         lines.extend(("///", "/// # Errors", "///"))
         lines.extend(
             "/// Returns "
-            f"`{_facade_precondition_error(condition.error).removeprefix('crate::')}` "
+            f"{_facade_error_names(condition.errors)} "
             "when this precondition is violated: "
             f"{PRECONDITION_DESCRIPTORS[condition.kind].description}"
             for condition in checked_conditions
@@ -581,6 +586,13 @@ def _method_docs(
             for condition in checked_conditions
         )
     return "\n".join(lines)
+
+
+def _facade_error_names(errors: tuple[PreconditionErrorKind, ...]) -> str:
+    return ", ".join(
+        f"`{_facade_precondition_error(error).removeprefix('crate::')}`"
+        for error in errors
+    )
 
 
 def _example_call(
@@ -743,6 +755,32 @@ def _checked_guards(
                 f" return Err({error}); }}"
             )
             continue
+        if condition.kind is PreconditionKind.COMPACTED_MEMORY_EXTENT:
+            if condition.mask_parameter_name is None:
+                raise ValueError("checked Rust facade compacted memory has no mask")
+            memory = _checked_parameter_expression(
+                method, condition.parameter_name
+            )
+            mask = _checked_parameter_expression(
+                method, condition.mask_parameter_name
+            )
+            active_lanes = f"__tsl_checked_active_{condition_index}"
+            required = f"__tsl_checked_required_{condition_index}"
+            guards.extend(
+                (
+                    f"{indent}let {active_lanes} = {mask}.to_array();",
+                    f"{indent}let {required} = "
+                    f"{active_lanes}.into_iter().filter(|active| *active).count();",
+                    f"{indent}if {memory}.len() < {required} {{"
+                    f" return Err({error}); }}",
+                )
+            )
+            continue
+        if condition.kind is PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID:
+            raise ValueError(
+                "indexed-memory checked facades require an admitted index-vector "
+                "public type"
+            )
         raise ValueError(f"unsupported Rust facade check {condition.kind.value!r}")
     return tuple(guards)
 
@@ -908,6 +946,7 @@ def _checked_memory_condition(
         (
             condition.parameter_name,
             condition.memory_access,
+            condition.memory_addressing,
             condition.memory_payload_extents,
             condition.memory_alignment_axis_name,
         )
@@ -916,6 +955,19 @@ def _checked_memory_condition(
     if len(identities) != 1:
         raise ValueError("checked Rust facade memory conditions disagree")
     return memory_conditions[0]
+
+
+def _checked_memory_alignment_condition(
+    conditions: tuple[RustFacadeCheckedCondition, ...],
+) -> RustFacadeCheckedCondition | None:
+    return next(
+        (
+            condition
+            for condition in conditions
+            if condition.kind is PreconditionKind.SELECTED_MEMORY_ALIGNMENT
+        ),
+        None,
+    )
 
 
 def _checked_memory_extent(

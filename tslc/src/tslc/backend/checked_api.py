@@ -19,6 +19,7 @@ from tslc.catalog.preconditions import (
 )
 from tslc.catalog.memory import (
     MemoryAccess,
+    MemoryAddressing,
     MemoryPayloadExtent,
 )
 from tslc.catalog.semantics import OperandBinding, OperandRole
@@ -29,6 +30,7 @@ from tslc.lower.lowerer import LoweredSpecialization
 class CheckedConditionPlan:
     kind: PreconditionKind
     error: PreconditionErrorKind
+    additional_errors: tuple[PreconditionErrorKind, ...]
     parameter_name: str
     parameter_index: int
     numeric_domain: ArithmeticNumericDomain | None = None
@@ -36,23 +38,35 @@ class CheckedConditionPlan:
     mask_parameter_name: str | None = None
     mask_parameter_index: int | None = None
     memory_access: MemoryAccess | None = None
+    memory_addressing: MemoryAddressing | None = None
     memory_payload_extents: tuple[MemoryPayloadExtent, ...] = ()
     memory_alignment_axis_name: str | None = None
+    index_parameter_name: str | None = None
+    index_parameter_index: int | None = None
+    scale_parameter_name: str | None = None
+    scale_parameter_index: int | None = None
+
+    @property
+    def errors(self) -> tuple[PreconditionErrorKind, ...]:
+        return (self.error, *self.additional_errors)
 
     def __post_init__(self) -> None:
         is_memory = self.kind in {
             PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
             PreconditionKind.SELECTED_MEMORY_ALIGNMENT,
+            PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID,
+            PreconditionKind.COMPACTED_MEMORY_EXTENT,
         }
         has_any_memory = (
             self.memory_access is not None
+            or self.memory_addressing is not None
             or bool(self.memory_payload_extents)
             or self.memory_alignment_axis_name is not None
         )
         has_complete_memory = (
             self.memory_access is not None
+            and self.memory_addressing is not None
             and bool(self.memory_payload_extents)
-            and self.memory_alignment_axis_name is not None
         )
         if has_any_memory and not has_complete_memory:
             raise ValueError(
@@ -66,10 +80,33 @@ class CheckedConditionPlan:
             self.memory_payload_extents
         ):
             raise ValueError("checked memory payload extents must be unique")
+        if (
+            self.kind is PreconditionKind.SELECTED_MEMORY_ALIGNMENT
+            and self.memory_alignment_axis_name is None
+        ):
+            raise ValueError("checked alignment conditions require an alignment axis")
         if (self.mask_parameter_name is None) != (
             self.mask_parameter_index is None
         ):
             raise ValueError("checked mask bindings must be complete")
+        if (self.index_parameter_name is None) != (
+            self.index_parameter_index is None
+        ):
+            raise ValueError("checked index bindings must be complete")
+        if (self.scale_parameter_name is None) != (
+            self.scale_parameter_index is None
+        ):
+            raise ValueError("checked scale bindings must be complete")
+        has_indexed_bindings = (
+            self.index_parameter_name is not None
+            and self.scale_parameter_name is not None
+        )
+        if (
+            self.kind is PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID
+        ) != has_indexed_bindings:
+            raise ValueError(
+                "checked indexed-address conditions require index and scale bindings"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,6 +192,8 @@ def checked_api_plan(
         elif precondition.kind in {
             PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
             PreconditionKind.SELECTED_MEMORY_ALIGNMENT,
+            PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID,
+            PreconditionKind.COMPACTED_MEMORY_EXTENT,
         }:
             memory = first.primitive_semantics.memory
             if memory is None:
@@ -170,11 +209,18 @@ def checked_api_plan(
         else:
             return None
         memory_access: MemoryAccess | None = None
+        memory_addressing: MemoryAddressing | None = None
         memory_payload_extents: tuple[MemoryPayloadExtent, ...] = ()
         memory_alignment_axis_name: str | None = None
+        index_parameter_name: str | None = None
+        index_parameter_index: int | None = None
+        scale_parameter_name: str | None = None
+        scale_parameter_index: int | None = None
         if precondition.kind in {
             PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
             PreconditionKind.SELECTED_MEMORY_ALIGNMENT,
+            PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID,
+            PreconditionKind.COMPACTED_MEMORY_EXTENT,
         }:
             memories = tuple(
                 spec.primitive_semantics.memory for spec in specializations
@@ -186,6 +232,10 @@ def checked_api_plan(
             if len(access_values) != 1:
                 raise ValueError("checked memory family disagrees on memory access")
             memory_access = next(iter(access_values))
+            addressing_values = {memory.addressing for memory in memory_values}
+            if len(addressing_values) != 1:
+                raise ValueError("checked memory family disagrees on memory addressing")
+            memory_addressing = next(iter(addressing_values))
             memory_payload_extents = tuple(
                 sorted(
                     {memory.payload_extent for memory in memory_values},
@@ -201,15 +251,51 @@ def checked_api_plan(
                 for alignment in alignments
                 if alignment is not None
             }
-            if len(axis_names) != 1:
+            if (
+                precondition.kind is PreconditionKind.SELECTED_MEMORY_ALIGNMENT
+                and len(axis_names) != 1
+            ):
                 raise ValueError(
                     "checked memory family requires one resolved alignment axis"
                 )
-            memory_alignment_axis_name = next(iter(axis_names))
+            if len(axis_names) > 1:
+                raise ValueError(
+                    "checked memory family disagrees on its alignment axis"
+                )
+            memory_alignment_axis_name = next(iter(axis_names), None)
+        if precondition.kind is PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID:
+            index_binding = precondition.binding(OperandRole.INDEX)
+            scale_binding = precondition.binding(OperandRole.SCALE)
+            if index_binding is None or scale_binding is None:
+                raise ValueError(
+                    "indexed-address precondition has incomplete index/scale bindings"
+                )
+            index_parameter_name = index_binding.parameter_name
+            index_parameter_index = index_binding.parameter_index
+            scale_parameter_name = scale_binding.parameter_name
+            scale_parameter_index = scale_binding.parameter_index
+            operation = first.primitive_semantics.operation
+            mask_binding = (
+                None
+                if operation is None
+                else operation.binding(OperandRole.CONTROL_MASK)
+            )
+            if mask_binding is not None:
+                mask_name = mask_binding.parameter_name
+                mask_index = mask_binding.parameter_index
+        if precondition.kind is PreconditionKind.COMPACTED_MEMORY_EXTENT:
+            mask_binding = precondition.binding(OperandRole.CONTROL_MASK)
+            if mask_binding is None:
+                raise ValueError(
+                    "compacted-memory precondition has no resolved mask binding"
+                )
+            mask_name = mask_binding.parameter_name
+            mask_index = mask_binding.parameter_index
         conditions.append(
             CheckedConditionPlan(
                 kind=precondition.kind,
                 error=descriptor.error,
+                additional_errors=descriptor.additional_errors,
                 parameter_name=binding.parameter_name,
                 parameter_index=binding.parameter_index,
                 numeric_domain=descriptor.numeric_domain,
@@ -217,8 +303,13 @@ def checked_api_plan(
                 mask_parameter_name=mask_name,
                 mask_parameter_index=mask_index,
                 memory_access=memory_access,
+                memory_addressing=memory_addressing,
                 memory_payload_extents=memory_payload_extents,
                 memory_alignment_axis_name=memory_alignment_axis_name,
+                index_parameter_name=index_parameter_name,
+                index_parameter_index=index_parameter_index,
+                scale_parameter_name=scale_parameter_name,
+                scale_parameter_index=scale_parameter_index,
             )
         )
     if not conditions:
@@ -239,6 +330,8 @@ def _has_complete_memory_check(
     memory_kinds = {
         PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
         PreconditionKind.SELECTED_MEMORY_ALIGNMENT,
+        PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID,
+        PreconditionKind.COMPACTED_MEMORY_EXTENT,
     }
     memory_conditions = tuple(
         condition
@@ -250,14 +343,31 @@ def _has_complete_memory_check(
             condition.parameter_name,
             condition.parameter_index,
             condition.memory_access,
+            condition.memory_addressing,
             condition.memory_payload_extents,
             condition.memory_alignment_axis_name,
         )
         for condition in memory_conditions
     }
-    return (
-        {condition.kind for condition in memory_conditions} == memory_kinds
-        and len(identities) == 1
+    if len(identities) != 1:
+        return False
+    addressing = memory_conditions[0].memory_addressing
+    if addressing is None:
+        return False
+    required = {
+        MemoryAddressing.CONTIGUOUS: {
+            PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
+            PreconditionKind.SELECTED_MEMORY_ALIGNMENT,
+        },
+        MemoryAddressing.INDEXED: {
+            PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID,
+        },
+        MemoryAddressing.COMPACTED: {
+            PreconditionKind.COMPACTED_MEMORY_EXTENT,
+        },
+    }
+    return {condition.kind for condition in memory_conditions} == required.get(
+        addressing, set()
     )
 
 

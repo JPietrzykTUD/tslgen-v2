@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "policy": {
     "checked_suffix": "_checked",
     "eligibility": "catastrophic dynamic caller precondition; complete pre-side-effect check must be expressible from the checked signature",
@@ -128,15 +128,15 @@
       "id": "selected_memory_contract",
       "classification": "dynamic precondition",
       "backend_consequence": "Expand/compress operations may access a mask-dependent number of elements.",
-      "checked_feasibility": "requires a range plus capacity derived from the active mask",
+      "checked_feasibility": "implemented for compress-store and expand-load from a range plus capacity derived from the active mask",
       "review": "Validation must precede any compress-store output write."
     },
     {
       "id": "indexed_memory_contract",
       "classification": "dynamic precondition",
       "backend_consequence": "Gather/scatter paths may access invalid addresses for active indices.",
-      "checked_feasibility": "requires a valid base view, extent, typed scale, and active-index validation",
-      "review": "Bare pointers do not provide enough evidence for an honest checked twin."
+      "checked_feasibility": "implemented for vector-index gather/scatter, including partial narrow gather, from a valid base view, typed scale, and active-index validation; pointer-indexed narrow gather remains omitted",
+      "review": "Pointer-indexed narrow gather requires a second extent-carrying index view before an honest checked twin can be emitted."
     },
     {
       "id": "deallocation_provenance",
@@ -1420,7 +1420,13 @@
         "raw_pointer"
       ],
       "implementation_count": 24,
-      "family": "contiguous_memory_contract"
+      "family": "contiguous_memory_contract",
+      "checked_source_status": "declared",
+      "preconditions": [
+        "contiguous_memory_extent",
+        "selected_memory_alignment"
+      ],
+      "checked_coverage_reason": "source preconditions are available for backend check planning"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"false\"],[\"mask\",\"pass_through\"]],\"name\":\"store\",\"result_target\":[],\"signature\":\"void:=(m,ptr,v)\"}",
@@ -1436,7 +1442,13 @@
         "raw_pointer"
       ],
       "implementation_count": 24,
-      "family": "contiguous_memory_contract"
+      "family": "contiguous_memory_contract",
+      "checked_source_status": "declared",
+      "preconditions": [
+        "contiguous_memory_extent",
+        "selected_memory_alignment"
+      ],
+      "checked_coverage_reason": "source preconditions are available for backend check planning"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"false\"],[\"mask\",\"zero\"]],\"name\":\"load\",\"result_target\":[],\"signature\":\"v:=(m,cptr)\"}",
@@ -1452,7 +1464,13 @@
         "raw_pointer"
       ],
       "implementation_count": 24,
-      "family": "contiguous_memory_contract"
+      "family": "contiguous_memory_contract",
+      "checked_source_status": "declared",
+      "preconditions": [
+        "contiguous_memory_extent",
+        "selected_memory_alignment"
+      ],
+      "checked_coverage_reason": "source preconditions are available for backend check planning"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"false\"],[\"packed\",\"false\"]],\"name\":\"load_mask_repr\",\"result_target\":[],\"signature\":\"m:=cptr\"}",
@@ -1467,7 +1485,10 @@
         "raw_pointer"
       ],
       "implementation_count": 17,
-      "family": "mask_memory_contract"
+      "family": "mask_memory_contract",
+      "checked_source_status": "coverage_gap",
+      "preconditions": [],
+      "checked_coverage_reason": "requires a span/slice and a typed mask-layout capacity plan"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"false\"],[\"packed\",\"false\"]],\"name\":\"store_mask_repr\",\"result_target\":[],\"signature\":\"void:=(ptr,m)\"}",
@@ -1484,7 +1505,10 @@
         "raw_pointer"
       ],
       "implementation_count": 17,
-      "family": "mask_memory_contract"
+      "family": "mask_memory_contract",
+      "checked_source_status": "coverage_gap",
+      "preconditions": [],
+      "checked_coverage_reason": "requires a span/slice and a typed mask-layout capacity plan"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"false\"],[\"packed\",\"true\"]],\"name\":\"load_mask_repr\",\"result_target\":[],\"signature\":\"m:=cptr\"}",
@@ -1499,7 +1523,10 @@
         "raw_pointer"
       ],
       "implementation_count": 17,
-      "family": "mask_memory_contract"
+      "family": "mask_memory_contract",
+      "checked_source_status": "coverage_gap",
+      "preconditions": [],
+      "checked_coverage_reason": "requires a span/slice and a typed mask-layout capacity plan"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"false\"],[\"packed\",\"true\"]],\"name\":\"store_mask_repr\",\"result_target\":[],\"signature\":\"void:=(ptr,m)\"}",
@@ -1516,7 +1543,10 @@
         "raw_pointer"
       ],
       "implementation_count": 17,
-      "family": "mask_memory_contract"
+      "family": "mask_memory_contract",
+      "checked_source_status": "coverage_gap",
+      "preconditions": [],
+      "checked_coverage_reason": "requires a span/slice and a typed mask-layout capacity plan"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"false\"]],\"name\":\"load\",\"result_target\":[],\"signature\":\"v:=cptr\"}",
@@ -1533,7 +1563,13 @@
         "raw_pointer"
       ],
       "implementation_count": 22,
-      "family": "contiguous_memory_contract"
+      "family": "contiguous_memory_contract",
+      "checked_source_status": "declared",
+      "preconditions": [
+        "contiguous_memory_extent",
+        "selected_memory_alignment"
+      ],
+      "checked_coverage_reason": "source preconditions are available for backend check planning"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"false\"]],\"name\":\"load_scalar\",\"result_target\":[],\"signature\":\"s:=cptr\"}",
@@ -1547,7 +1583,10 @@
         "raw_pointer"
       ],
       "implementation_count": 15,
-      "family": "contiguous_memory_contract"
+      "family": "contiguous_memory_contract",
+      "checked_source_status": "coverage_gap",
+      "preconditions": [],
+      "checked_coverage_reason": "requires a span/slice carrying readable or writable extent and selected alignment"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"false\"]],\"name\":\"store\",\"result_target\":[],\"signature\":\"void:=(ptr,s)\"}",
@@ -1561,7 +1600,13 @@
         "raw_pointer"
       ],
       "implementation_count": 14,
-      "family": "contiguous_memory_contract"
+      "family": "contiguous_memory_contract",
+      "checked_source_status": "declared",
+      "preconditions": [
+        "contiguous_memory_extent",
+        "selected_memory_alignment"
+      ],
+      "checked_coverage_reason": "source preconditions are available for backend check planning"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"false\"]],\"name\":\"store\",\"result_target\":[],\"signature\":\"void:=(ptr,v)\"}",
@@ -1578,7 +1623,13 @@
         "raw_pointer"
       ],
       "implementation_count": 26,
-      "family": "contiguous_memory_contract"
+      "family": "contiguous_memory_contract",
+      "checked_source_status": "declared",
+      "preconditions": [
+        "contiguous_memory_extent",
+        "selected_memory_alignment"
+      ],
+      "checked_coverage_reason": "source preconditions are available for backend check planning"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"true\"],[\"mask\",\"pass_through\"]],\"name\":\"load\",\"result_target\":[],\"signature\":\"v:=(m,cptr,v)\"}",
@@ -1594,7 +1645,13 @@
         "raw_pointer"
       ],
       "implementation_count": 24,
-      "family": "contiguous_memory_contract"
+      "family": "contiguous_memory_contract",
+      "checked_source_status": "declared",
+      "preconditions": [
+        "contiguous_memory_extent",
+        "selected_memory_alignment"
+      ],
+      "checked_coverage_reason": "source preconditions are available for backend check planning"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"true\"],[\"mask\",\"pass_through\"]],\"name\":\"store\",\"result_target\":[],\"signature\":\"void:=(m,ptr,v)\"}",
@@ -1610,7 +1667,13 @@
         "raw_pointer"
       ],
       "implementation_count": 24,
-      "family": "contiguous_memory_contract"
+      "family": "contiguous_memory_contract",
+      "checked_source_status": "declared",
+      "preconditions": [
+        "contiguous_memory_extent",
+        "selected_memory_alignment"
+      ],
+      "checked_coverage_reason": "source preconditions are available for backend check planning"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"true\"],[\"mask\",\"zero\"]],\"name\":\"load\",\"result_target\":[],\"signature\":\"v:=(m,cptr)\"}",
@@ -1626,7 +1689,13 @@
         "raw_pointer"
       ],
       "implementation_count": 24,
-      "family": "contiguous_memory_contract"
+      "family": "contiguous_memory_contract",
+      "checked_source_status": "declared",
+      "preconditions": [
+        "contiguous_memory_extent",
+        "selected_memory_alignment"
+      ],
+      "checked_coverage_reason": "source preconditions are available for backend check planning"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"true\"],[\"op\",\"expand\"]],\"name\":\"expand_load\",\"result_target\":[],\"signature\":\"v:=(m,cptr)\"}",
@@ -1642,7 +1711,12 @@
         "raw_pointer"
       ],
       "implementation_count": 20,
-      "family": "selected_memory_contract"
+      "family": "selected_memory_contract",
+      "checked_source_status": "declared",
+      "preconditions": [
+        "compacted_memory_extent"
+      ],
+      "checked_coverage_reason": "source preconditions are available for backend check planning"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"true\"],[\"op\",\"pack\"]],\"name\":\"compress_store\",\"result_target\":[],\"signature\":\"void:=(m,ptr,v)\"}",
@@ -1658,7 +1732,12 @@
         "raw_pointer"
       ],
       "implementation_count": 22,
-      "family": "selected_memory_contract"
+      "family": "selected_memory_contract",
+      "checked_source_status": "declared",
+      "preconditions": [
+        "compacted_memory_extent"
+      ],
+      "checked_coverage_reason": "source preconditions are available for backend check planning"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"true\"],[\"packed\",\"false\"]],\"name\":\"load_mask_repr\",\"result_target\":[],\"signature\":\"m:=cptr\"}",
@@ -1673,7 +1752,10 @@
         "raw_pointer"
       ],
       "implementation_count": 17,
-      "family": "mask_memory_contract"
+      "family": "mask_memory_contract",
+      "checked_source_status": "coverage_gap",
+      "preconditions": [],
+      "checked_coverage_reason": "requires a span/slice and a typed mask-layout capacity plan"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"true\"],[\"packed\",\"false\"]],\"name\":\"store_mask_repr\",\"result_target\":[],\"signature\":\"void:=(ptr,m)\"}",
@@ -1690,7 +1772,10 @@
         "raw_pointer"
       ],
       "implementation_count": 17,
-      "family": "mask_memory_contract"
+      "family": "mask_memory_contract",
+      "checked_source_status": "coverage_gap",
+      "preconditions": [],
+      "checked_coverage_reason": "requires a span/slice and a typed mask-layout capacity plan"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"true\"],[\"packed\",\"true\"]],\"name\":\"load_mask_repr\",\"result_target\":[],\"signature\":\"m:=cptr\"}",
@@ -1705,7 +1790,10 @@
         "raw_pointer"
       ],
       "implementation_count": 17,
-      "family": "mask_memory_contract"
+      "family": "mask_memory_contract",
+      "checked_source_status": "coverage_gap",
+      "preconditions": [],
+      "checked_coverage_reason": "requires a span/slice and a typed mask-layout capacity plan"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"true\"],[\"packed\",\"true\"]],\"name\":\"store_mask_repr\",\"result_target\":[],\"signature\":\"void:=(ptr,m)\"}",
@@ -1722,7 +1810,10 @@
         "raw_pointer"
       ],
       "implementation_count": 17,
-      "family": "mask_memory_contract"
+      "family": "mask_memory_contract",
+      "checked_source_status": "coverage_gap",
+      "preconditions": [],
+      "checked_coverage_reason": "requires a span/slice and a typed mask-layout capacity plan"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"true\"]],\"name\":\"load\",\"result_target\":[],\"signature\":\"v:=cptr\"}",
@@ -1739,7 +1830,13 @@
         "raw_pointer"
       ],
       "implementation_count": 22,
-      "family": "contiguous_memory_contract"
+      "family": "contiguous_memory_contract",
+      "checked_source_status": "declared",
+      "preconditions": [
+        "contiguous_memory_extent",
+        "selected_memory_alignment"
+      ],
+      "checked_coverage_reason": "source preconditions are available for backend check planning"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"true\"]],\"name\":\"store\",\"result_target\":[],\"signature\":\"void:=(ptr,s)\"}",
@@ -1753,7 +1850,13 @@
         "raw_pointer"
       ],
       "implementation_count": 14,
-      "family": "contiguous_memory_contract"
+      "family": "contiguous_memory_contract",
+      "checked_source_status": "declared",
+      "preconditions": [
+        "contiguous_memory_extent",
+        "selected_memory_alignment"
+      ],
+      "checked_coverage_reason": "source preconditions are available for backend check planning"
     },
     {
       "id": "{\"attributes\":[[\"aligned\",\"true\"]],\"name\":\"store\",\"result_target\":[],\"signature\":\"void:=(ptr,v)\"}",
@@ -1770,7 +1873,13 @@
         "raw_pointer"
       ],
       "implementation_count": 26,
-      "family": "contiguous_memory_contract"
+      "family": "contiguous_memory_contract",
+      "checked_source_status": "declared",
+      "preconditions": [
+        "contiguous_memory_extent",
+        "selected_memory_alignment"
+      ],
+      "checked_coverage_reason": "source preconditions are available for backend check planning"
     },
     {
       "id": "{\"attributes\":[[\"mask\",\"pass_through\"]],\"name\":\"gather\",\"result_target\":[],\"signature\":\"v:=(m,cptr,vidx,v,sImm)\"}",
@@ -1785,7 +1894,12 @@
         "raw_pointer"
       ],
       "implementation_count": 21,
-      "family": "indexed_memory_contract"
+      "family": "indexed_memory_contract",
+      "checked_source_status": "declared",
+      "preconditions": [
+        "indexed_memory_address_valid"
+      ],
+      "checked_coverage_reason": "source preconditions are available for backend check planning"
     },
     {
       "id": "{\"attributes\":[[\"mask\",\"zero\"]],\"name\":\"scatter\",\"result_target\":[],\"signature\":\"void:=(m,ptr,vidx,v,sImm)\"}",
@@ -1800,7 +1914,12 @@
         "raw_pointer"
       ],
       "implementation_count": 29,
-      "family": "indexed_memory_contract"
+      "family": "indexed_memory_contract",
+      "checked_source_status": "declared",
+      "preconditions": [
+        "indexed_memory_address_valid"
+      ],
+      "checked_coverage_reason": "source preconditions are available for backend check planning"
     },
     {
       "id": "{\"attributes\":[],\"name\":\"deallocate\",\"result_target\":[],\"signature\":\"void:=(ptr)\"}",
@@ -1813,7 +1932,10 @@
         "raw_pointer"
       ],
       "implementation_count": 11,
-      "family": "deallocation_provenance"
+      "family": "deallocation_provenance",
+      "checked_source_status": "coverage_gap",
+      "preconditions": [],
+      "checked_coverage_reason": "no honest pointer-only checked twin; design an owning allocation API separately"
     },
     {
       "id": "{\"attributes\":[],\"name\":\"gather\",\"result_target\":[],\"signature\":\"v:=(cptr,vidx,sImm)\"}",
@@ -1826,7 +1948,12 @@
         "raw_pointer"
       ],
       "implementation_count": 29,
-      "family": "indexed_memory_contract"
+      "family": "indexed_memory_contract",
+      "checked_source_status": "declared",
+      "preconditions": [
+        "indexed_memory_address_valid"
+      ],
+      "checked_coverage_reason": "source preconditions are available for backend check planning"
     },
     {
       "id": "{\"attributes\":[],\"name\":\"gather_narrow\",\"result_target\":[],\"signature\":\"v:=(cptr,cptr,sImm)\"}",
@@ -1838,7 +1965,10 @@
         "raw_pointer"
       ],
       "implementation_count": 17,
-      "family": "indexed_memory_contract"
+      "family": "indexed_memory_contract",
+      "checked_source_status": "coverage_gap",
+      "preconditions": [],
+      "checked_coverage_reason": "implemented for vector-index gather/scatter, including partial narrow gather, from a valid base view, typed scale, and active-index validation; pointer-indexed narrow gather remains omitted"
     },
     {
       "id": "{\"attributes\":[],\"name\":\"gather_narrow_partial\",\"result_target\":[],\"signature\":\"v:=(cptr,vidx,sImm)\"}",
@@ -1851,7 +1981,12 @@
         "raw_pointer"
       ],
       "implementation_count": 18,
-      "family": "indexed_memory_contract"
+      "family": "indexed_memory_contract",
+      "checked_source_status": "declared",
+      "preconditions": [
+        "indexed_memory_address_valid"
+      ],
+      "checked_coverage_reason": "source preconditions are available for backend check planning"
     },
     {
       "id": "{\"attributes\":[],\"name\":\"load_convert_up\",\"result_target\":[\"base\",\"ToBase\"],\"signature\":\"v:=cptr+\"}",
@@ -1868,7 +2003,10 @@
         "raw_pointer"
       ],
       "implementation_count": 74,
-      "family": "conversion_input_contract"
+      "family": "conversion_input_contract",
+      "checked_source_status": "coverage_gap",
+      "preconditions": [],
+      "checked_coverage_reason": "requires a source span/slice with the lowering-resolved element count"
     },
     {
       "id": "{\"attributes\":[],\"name\":\"memory_cp\",\"result_target\":[],\"signature\":\"void:=(ptr,cptr,s,s)\"}",
@@ -1881,7 +2019,10 @@
         "raw_pointer"
       ],
       "implementation_count": 34,
-      "family": "raw_copy_contract"
+      "family": "raw_copy_contract",
+      "checked_source_status": "coverage_gap",
+      "preconditions": [],
+      "checked_coverage_reason": "requires valid source/destination views plus an explicit overlap contract/check"
     },
     {
       "id": "{\"attributes\":[],\"name\":\"random_step\",\"result_target\":[],\"signature\":\"usize:=(ptr)\"}",
@@ -1894,7 +2035,10 @@
         "raw_pointer"
       ],
       "implementation_count": 3,
-      "family": "random_output_contract"
+      "family": "random_output_contract",
+      "checked_source_status": "coverage_gap",
+      "preconditions": [],
+      "checked_coverage_reason": "requires a mutable reference/view, or an owning optional/result value API"
     },
     {
       "id": "{\"attributes\":[],\"name\":\"scatter\",\"result_target\":[],\"signature\":\"void:=(ptr,vidx,v,sImm)\"}",
@@ -1907,7 +2051,12 @@
         "raw_pointer"
       ],
       "implementation_count": 29,
-      "family": "indexed_memory_contract"
+      "family": "indexed_memory_contract",
+      "checked_source_status": "declared",
+      "preconditions": [
+        "indexed_memory_address_valid"
+      ],
+      "checked_coverage_reason": "source preconditions are available for backend check planning"
     }
   ],
   "metadata_safety_gaps": [

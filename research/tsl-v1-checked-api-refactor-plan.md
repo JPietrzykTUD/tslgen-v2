@@ -2,8 +2,8 @@
 
 Date: 2026-09-02
 
-Status: accepted pre-v1 public-contract plan; Slices 0-5 are implemented and
-committed; Slice 6 is next
+Status: accepted pre-v1 public-contract plan; Slices 0-6 are implemented and
+committed; Slice 7 is next
 
 Related evidence: [TSL v1.0.0 generated API and documentation audit](tsl-v1-generated-api-docs-audit.md)
 
@@ -1077,6 +1077,40 @@ Deliverables:
 Validation must include negative/signed indexes where admitted, maximum scale,
 address-calculation overflow, all-inactive masks, exact capacity, one-short
 capacity, and canary-protected buffers.
+
+Observed Slice 6 evidence:
+
+- `indexed_memory_address_valid` and `compacted_memory_extent` are typed source
+  preconditions over the new indexed/compacted memory-addressing facts; the
+  source corpus contains no backend result, span, slice, or error spelling.
+- Checked vector-index gather/scatter, partial narrow gather, compress-store,
+  and expand-load validate complete enriched spans/slices before the unchecked
+  operation. Signed-negative indexes, scaled-address overflow, misalignment,
+  active-lane-only masked access, exact/short compacted capacity, empty inactive
+  masks, and destination canaries are covered by generated C++ and Rust
+  consumers.
+- Pointer-indexed `gather_narrow` remains an explicit coverage gap: a checked
+  form needs both a base view and a second extent-carrying index view, which the
+  current signature cannot honestly provide.
+- The design-review/fix loop found and corrected two projection defects. The
+  authored hover initially displayed only the primary error for a multi-error
+  condition, and Rust mask-lane testing initially treated compact native masks
+  as register-lane masks. Hover now consumes every descriptor-owned error, and
+  vector registrations project compact-bitset versus register-mask storage for
+  the shared lane test. No precondition vocabulary was copied into the VS Code
+  client.
+- For the focused `gather`, `gather_narrow_partial`, `scatter`,
+  `compress_store`, and `expand_load` AVX2 C++/Rust roots, generated
+  specializations increased from 7,458 to 8,698, output from 27,946,905 bytes
+  (687,380 lines) to 31,046,046 bytes (760,487 lines), generation time from
+  18.350 s to 28.018 s, and build time from 30.536 s to 40.029 s. The primary
+  increase is the portable masked indexed-check dependency closure; keeping it
+  representation-neutral is preferred to embedding mask-layout rules in the
+  wrapper renderer. Slice 8 must report this cost against the complete
+  pre-refactor release baseline.
+- Focused compiler, C++/Rust consumer, sanitizer, documentation, census,
+  authoring, and editor gates pass. The ordinary suite passes with 2,673 tests
+  and 119 expected skips; the generated build/value matrix passes all 84 gates.
 
 ### Slice 7 — Remaining raw-memory and allocation APIs
 

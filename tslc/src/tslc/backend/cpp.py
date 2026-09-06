@@ -91,8 +91,9 @@ def _cpp_checked_failure(
     plan: CppCheckedApiPlan,
     *,
     indent: str,
+    error_expression: str | None = None,
 ) -> str:
-    error = _cpp_precondition_error(condition.error)
+    error = error_expression or _cpp_precondition_error(condition.error)
     if not plan.has_value_result:
         return f"{indent}return {error};"
     if plan.failure_placeholder_expression is None:
@@ -140,6 +141,92 @@ def _cpp_checked_condition(
                 f"{plan.required_alignment_expression}) != 0) {{\n"
                 f"{_cpp_checked_failure(condition, plan, indent='            ')}\n"
                 "        }\n"
+                "    }"
+            )
+        if condition.kind is PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID:
+            if (
+                plan.memory_parameter_name is None
+                or condition.index_parameter_name is None
+                or condition.scale_parameter_name is None
+            ):
+                raise ValueError("C++ checked indexed memory plan is incomplete")
+            if (
+                PreconditionCheckPrimitive.VECTOR_TO_ARRAY
+                not in condition.check_primitives
+            ):
+                raise ValueError("indexed-memory check plan has no to-array primitive")
+            active = "true"
+            active_setup: tuple[str, ...] = ()
+            if condition.mask_parameter_name is not None:
+                required_mask_primitives = {
+                    PreconditionCheckPrimitive.MASK_FALSE,
+                    PreconditionCheckPrimitive.MASK_SET_LANE,
+                    PreconditionCheckPrimitive.MASK_AND,
+                    PreconditionCheckPrimitive.MASK_POPULATION_COUNT,
+                }
+                if not required_mask_primitives.issubset(
+                    condition.check_primitives
+                ):
+                    raise ValueError(
+                        "masked indexed-memory check plan lacks mask primitives"
+                    )
+                active_setup = (
+                    "            auto const __tsl_lane_mask = "
+                    "::tsl::set_mask_lane<Vec>(",
+                    "                ::tsl::mask_false<Vec>(), __tsl_lane, 1);",
+                    "            auto const __tsl_active = "
+                    "::tsl::mask_population_count<Vec>(",
+                    "                ::tsl::mask_binary_and<Vec>("
+                    f"{condition.mask_parameter_name}, __tsl_lane_mask)) != 0;",
+                )
+                active = "__tsl_active"
+            return "\n".join(
+                (
+                    "    {",
+                    "        auto const __tsl_indices = "
+                    f"::tsl::to_array<IndicesType>({condition.index_parameter_name});",
+                    "        for (std::size_t __tsl_lane = 0; "
+                    "__tsl_lane < IndicesType::lane_count(); ++__tsl_lane) {",
+                    *active_setup,
+                    f"            if ({active}) {{",
+                    "                auto const __tsl_error = "
+                    "::tsl::detail::indexed_memory_address_error<"
+                    "typename Vec::base_type>(",
+                    "                    __tsl_indices[__tsl_lane], "
+                    f"{condition.scale_parameter_name}, "
+                    f"{plan.memory_parameter_name}.size());",
+                    "                if (__tsl_error != "
+                    "::tsl::precondition_error::none) {",
+                    _cpp_checked_failure(
+                        condition,
+                        plan,
+                        indent="                    ",
+                        error_expression="__tsl_error",
+                    ),
+                    "                }",
+                    "            }",
+                    "        }",
+                    "    }",
+                )
+            )
+        if condition.kind is PreconditionKind.COMPACTED_MEMORY_EXTENT:
+            if (
+                plan.memory_parameter_name is None
+                or condition.mask_parameter_name is None
+            ):
+                raise ValueError("C++ checked compacted memory plan is incomplete")
+            if (
+                PreconditionCheckPrimitive.MASK_POPULATION_COUNT
+                not in condition.check_primitives
+            ):
+                raise ValueError(
+                    "compacted-memory check plan has no mask population primitive"
+                )
+            return (
+                f"    if ({plan.memory_parameter_name}.size() < "
+                f"::tsl::mask_population_count<Vec>("
+                f"{condition.mask_parameter_name})) {{\n"
+                f"{_cpp_checked_failure(condition, plan, indent='        ')}\n"
                 "    }"
             )
         raise ValueError(f"unsupported C++ checked condition {condition.kind.value!r}")
@@ -729,11 +816,27 @@ def _wrapper_signature(
     )
     has_target = shape.target is not None
     index_type = shape.type_params[0].name if shape.type_params else None
+    axis_defaults = {
+        key: (
+            "false"
+            if "false"
+            in {
+                dict(specialization.axis)[key]
+                for specialization in specializations
+                if key in dict(specialization.axis)
+            }
+            else value
+        )
+        for key, value in shape.axis
+    }
     template_params = (
         ["class Vec"]
         + (["class ToVec"] if has_target else [])
         + [f"class {param.name}" for param in shape.type_params]
-        + [f"bool {_axis_name(k)} = false" for k, _ in shape.axis]
+        + [
+            f"bool {_axis_name(key)} = {axis_defaults[key]}"
+            for key, _ in shape.axis
+        ]
         + immediate_params
         + [f"{typ} {name} = {default}" for name, typ, default in shape.generic_params]
         + [f"class Arg{i}" for i in varying]

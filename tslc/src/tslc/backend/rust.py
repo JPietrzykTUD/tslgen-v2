@@ -1273,22 +1273,54 @@ class RustBackend:
         if plan is None:
             return ""
         shape = specializations[0]
+        public_trait_args = _trait_args_by_name(shape)
+        trait_args = list(public_trait_args)
         declarations = _generic_decls(shape)
-        trait_args = _trait_args_by_name(shape)
+        target_owner: str | None = None
+        result_owner = "S"
+        if shape.target is not None:
+            trait_args = ["T", *trait_args]
+            public_trait_args = ["T", *public_trait_args]
+            declarations = ["T: StaticSimdVector", *declarations]
+            target_owner = "T"
+            result_owner = "T"
+        if shape.type_params:
+            type_names = _type_param_names(shape)
+            trait_args = [
+                *type_names,
+                *_type_param_base_key_args(shape, mode="projection"),
+                *trait_args,
+            ]
+            public_trait_args = [*type_names, *public_trait_args]
+            type_declarations = _type_param_decls(
+                shape, trait_prefix=_PRIMITIVE_TRAIT_PREFIX
+            )
+            declarations = [*type_declarations, *declarations]
+            vidx_type = f"{shape.type_params[0].name}::RegisterType"
+            if shape.result_vector_param is not None:
+                result_owner = shape.result_vector_param
+        else:
+            vidx_type = None
         rendered_trait_args = f"<{', '.join(trait_args)}>" if trait_args else ""
         vector_bound = (
             f"{_PRIMITIVE_TRAIT_PREFIX}"
             f"{rust_primitive_trait_name(primitive_name)}{rendered_trait_args}"
         )
         generics = ", ".join((f"S: {vector_bound}", *declarations))
-        params = _checked_params(shape, "S", plan)
-        result = _kind_type(shape.result_kind, "S")
+        params = _checked_params(
+            shape,
+            "S",
+            plan,
+            target_owner=target_owner,
+            vidx_type=vidx_type,
+        )
+        result = _kind_type(shape.result_kind, result_owner)
         doc = _rust_doc(
             shape, context="Rust checked wrapper", concrete=False, checked=True
         )
         call = (
             f"unsafe {{ {rust_raw_identifier(primitive_name)}"
-            f"::<{', '.join(('S', *trait_args))}>"
+            f"::<{', '.join(('S', *public_trait_args))}>"
             f"({_checked_runtime_names(shape, plan)}) }}"
         )
         checks: list[str] = []
@@ -1340,6 +1372,72 @@ class RustBackend:
                     )
                 )
                 continue
+            if condition.kind is PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID:
+                if (
+                    condition.index_parameter_name is None
+                    or condition.scale_parameter_name is None
+                ):
+                    raise ValueError("Rust checked indexed memory plan is incomplete")
+                if (
+                    PreconditionCheckPrimitive.VECTOR_TO_ARRAY
+                    not in condition.check_primitives
+                ):
+                    raise ValueError(
+                        "indexed-memory check plan has no to-array primitive"
+                    )
+                if not shape.type_params:
+                    raise ValueError(
+                        "Rust checked indexed memory requires an index vector type"
+                    )
+                index_owner = shape.type_params[0].name
+                active = (
+                    "true"
+                    if condition.mask_parameter_name is None
+                    else f"S::mask_lane_test({condition.mask_parameter_name}, __tsl_lane)"
+                )
+                checks.extend(
+                    (
+                        f"    let __tsl_indices = to_array::<{index_owner}>("
+                        f"{condition.index_parameter_name});",
+                        f"    for __tsl_lane in 0..{index_owner}::lane_count() {{",
+                        f"        if {active} {{",
+                        "            if let Some(error) = "
+                        "indexed_memory_address_error::<_, S::BaseType>(",
+                        "                __tsl_indices[__tsl_lane], "
+                        f"{condition.scale_parameter_name}, "
+                        f"{condition.parameter_name}.len(),",
+                        "            ) {",
+                        "                return Err(error);",
+                        "            }",
+                        "        }",
+                        "    }",
+                    )
+                )
+                continue
+            if condition.kind is PreconditionKind.COMPACTED_MEMORY_EXTENT:
+                if condition.mask_parameter_name is None:
+                    raise ValueError("Rust checked compacted memory plan has no mask")
+                if (
+                    PreconditionCheckPrimitive.MASK_POPULATION_COUNT
+                    not in condition.check_primitives
+                ):
+                    raise ValueError(
+                        "compacted-memory check plan has no mask population primitive"
+                    )
+                checks.extend(
+                    (
+                        "    let mut __tsl_required = 0usize;",
+                        "    for __tsl_lane in 0..S::lane_count() {",
+                        f"        if S::mask_lane_test({condition.mask_parameter_name}, __tsl_lane) {{",
+                        "            __tsl_required += 1;",
+                        "        }",
+                        "    }",
+                        f"    if {condition.parameter_name}.len() < __tsl_required {{",
+                        f"        return Err({_rust_precondition_error(condition.error)});",
+                        "    }",
+                    )
+                )
+                continue
             raise ValueError(
                 f"unsupported Rust checked condition {condition.kind.value!r}"
             )
@@ -1350,6 +1448,12 @@ class RustBackend:
         )
         body = "\n".join((*checks, success))
         where_clause = _checked_type_where(plan, "S")
+        index_where = _index_where(shape, base_dispatch="projection")
+        if where_clause and index_where:
+            raise ValueError(
+                "checked wrapper cannot combine numeric-domain and index-vector bounds"
+            )
+        where_clause = where_clause or index_where
         opening_brace = f"{where_clause}\n{{" if where_clause else " {"
         return (
             (f"{doc}\n" if doc else "")

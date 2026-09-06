@@ -30,6 +30,8 @@ class PreconditionKind(StrEnum):
     ACTIVE_DIVISOR_NONZERO = "active_divisor_nonzero"
     CONTIGUOUS_MEMORY_EXTENT = "contiguous_memory_extent"
     SELECTED_MEMORY_ALIGNMENT = "selected_memory_alignment"
+    INDEXED_MEMORY_ADDRESS_VALID = "indexed_memory_address_valid"
+    COMPACTED_MEMORY_EXTENT = "compacted_memory_extent"
 
 
 class PreconditionHazard(StrEnum):
@@ -56,7 +58,10 @@ class PreconditionCheckPrimitive(StrEnum):
 
     EQUAL = "equal"
     MASK_AND = "mask_binary_and"
+    MASK_FALSE = "mask_false"
     MASK_POPULATION_COUNT = "mask_population_count"
+    MASK_SET_LANE = "set_mask_lane"
+    VECTOR_TO_ARRAY = "to_array"
     ZERO_VECTOR = "set_zero"
 
 
@@ -69,6 +74,7 @@ class PreconditionDescriptor:
     hazard: PreconditionHazard
     error: PreconditionErrorKind
     unchecked_consequence: str
+    additional_errors: tuple[PreconditionErrorKind, ...] = ()
     required_roles: frozenset[OperandRole] = frozenset()
     compatible_operations: frozenset[PrimitiveOperation] = frozenset()
     logical_lane_owner_role: OperandRole | None = None
@@ -81,6 +87,10 @@ class PreconditionDescriptor:
     compatible_memory_accesses: frozenset[MemoryAccess] = frozenset()
     compatible_memory_addressings: frozenset[MemoryAddressing] = frozenset()
     binds_memory_operand: bool = False
+
+    @property
+    def errors(self) -> tuple[PreconditionErrorKind, ...]:
+        return (self.error, *self.additional_errors)
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,6 +219,63 @@ PRECONDITION_DESCRIPTORS: Mapping[
             unchecked_consequence=(
                 "Violating this precondition may cause undefined behavior, a "
                 "hardware fault, or a process-level trap."
+            ),
+        ),
+        PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID: PreconditionDescriptor(
+            kind=PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID,
+            description=(
+                "Every active index and compile-time byte scale form an aligned "
+                "element address wholly inside the represented base range without "
+                "overflowing address arithmetic."
+            ),
+            required_roles=frozenset({OperandRole.INDEX, OperandRole.SCALE}),
+            compatible_operations=frozenset(
+                {PrimitiveOperation.LOAD, PrimitiveOperation.STORE}
+            ),
+            compatible_memory_accesses=frozenset(
+                {MemoryAccess.READ, MemoryAccess.WRITE}
+            ),
+            compatible_memory_addressings=frozenset({MemoryAddressing.INDEXED}),
+            binds_memory_operand=True,
+            check_primitives=(PreconditionCheckPrimitive.VECTOR_TO_ARRAY,),
+            masked_check_primitives=(
+                PreconditionCheckPrimitive.MASK_FALSE,
+                PreconditionCheckPrimitive.MASK_SET_LANE,
+                PreconditionCheckPrimitive.MASK_AND,
+                PreconditionCheckPrimitive.MASK_POPULATION_COUNT,
+            ),
+            hazard=PreconditionHazard.CATASTROPHIC,
+            error=PreconditionErrorKind.INDEX_OUT_OF_BOUNDS,
+            additional_errors=(
+                PreconditionErrorKind.ADDRESS_OVERFLOW,
+                PreconditionErrorKind.MISALIGNED,
+            ),
+            unchecked_consequence=(
+                "Violating this precondition may form or access an invalid pointer, "
+                "causing undefined behavior or a process-level fault."
+            ),
+        ),
+        PreconditionKind.COMPACTED_MEMORY_EXTENT: PreconditionDescriptor(
+            kind=PreconditionKind.COMPACTED_MEMORY_EXTENT,
+            description=(
+                "The compacted memory operand represents at least one element for "
+                "every active mask lane."
+            ),
+            required_roles=frozenset({OperandRole.CONTROL_MASK}),
+            compatible_operations=frozenset(
+                {PrimitiveOperation.LOAD, PrimitiveOperation.STORE}
+            ),
+            compatible_memory_accesses=frozenset(
+                {MemoryAccess.READ, MemoryAccess.WRITE}
+            ),
+            compatible_memory_addressings=frozenset({MemoryAddressing.COMPACTED}),
+            binds_memory_operand=True,
+            check_primitives=(PreconditionCheckPrimitive.MASK_POPULATION_COUNT,),
+            hazard=PreconditionHazard.CATASTROPHIC,
+            error=PreconditionErrorKind.INSUFFICIENT_EXTENT,
+            unchecked_consequence=(
+                "Violating this precondition may read or write outside the live "
+                "memory object, causing undefined behavior or a process-level fault."
             ),
         ),
     }

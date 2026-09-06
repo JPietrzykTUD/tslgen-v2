@@ -30,11 +30,12 @@ _VECTOR_VALUES = frozenset({"v", "m", "im"})
 _ROLE_KINDS: dict[OperandRole, frozenset[str]] = {
     OperandRole.CONTROL_MASK: frozenset({"m"}),
     OperandRole.COUNT: frozenset({"s", "sImm", "usize", "v"}),
-    OperandRole.INDEX: frozenset({"usize"}),
+    OperandRole.INDEX: frozenset({"usize", "vidx"}),
     OperandRole.MEMORY_DESTINATION: frozenset({"ptr", "ptr+"}),
     OperandRole.MEMORY_SOURCE: frozenset({"cptr", "cptr+"}),
     OperandRole.PASS_THROUGH: frozenset({"v"}),
     OperandRole.PRIMARY: _VECTOR_VALUES,
+    OperandRole.SCALE: frozenset({"sImm"}),
     OperandRole.SECONDARY: _VECTOR_VALUES,
     OperandRole.VALUE: frozenset({"s", "s[]", "v", "im", "usize"}),
 }
@@ -113,7 +114,14 @@ _OPERATION_ROLES: dict[
     ),
     PrimitiveOperation.LOAD: (
         frozenset({OperandRole.MEMORY_SOURCE}),
-        frozenset({OperandRole.CONTROL_MASK, OperandRole.PASS_THROUGH}),
+        frozenset(
+            {
+                OperandRole.CONTROL_MASK,
+                OperandRole.INDEX,
+                OperandRole.PASS_THROUGH,
+                OperandRole.SCALE,
+            }
+        ),
     ),
     PrimitiveOperation.MASK_ALL_FALSE: (frozenset(), frozenset()),
     PrimitiveOperation.MASK_ALL_TRUE: (frozenset(), frozenset()),
@@ -169,7 +177,9 @@ _OPERATION_ROLES: dict[
     ),
     PrimitiveOperation.STORE: (
         frozenset({OperandRole.MEMORY_DESTINATION, OperandRole.VALUE}),
-        frozenset({OperandRole.CONTROL_MASK}),
+        frozenset(
+            {OperandRole.CONTROL_MASK, OperandRole.INDEX, OperandRole.SCALE}
+        ),
     ),
     PrimitiveOperation.VECTOR_FROM_ARRAY: (
         frozenset({OperandRole.VALUE}),
@@ -288,6 +298,10 @@ _OPERATION_ROLE_KINDS.update(
             OperandRole.INDEX: frozenset({"usize"}),
             OperandRole.VALUE: frozenset({"s"}),
         },
+        PrimitiveOperation.LOAD: {
+            OperandRole.INDEX: frozenset({"vidx"}),
+            OperandRole.SCALE: frozenset({"sImm"}),
+        },
         PrimitiveOperation.MASK_AND: {
             OperandRole.PRIMARY: frozenset({"m"}),
             OperandRole.SECONDARY: frozenset({"m"}),
@@ -328,7 +342,11 @@ _OPERATION_ROLE_KINDS.update(
         PrimitiveOperation.SHIFT_RIGHT_WRAPPING: {
             OperandRole.PRIMARY: frozenset({"v"})
         },
-        PrimitiveOperation.STORE: {OperandRole.VALUE: frozenset({"s", "v"})},
+        PrimitiveOperation.STORE: {
+            OperandRole.INDEX: frozenset({"vidx"}),
+            OperandRole.SCALE: frozenset({"sImm"}),
+            OperandRole.VALUE: frozenset({"s", "v"}),
+        },
         PrimitiveOperation.VECTOR_FROM_ARRAY: {
             OperandRole.VALUE: frozenset({"s[]"})
         },

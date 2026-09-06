@@ -51,6 +51,7 @@ def test_checked_condition_rejects_memory_facts_on_non_memory_precondition() -> 
             mask_parameter_name=None,
             applicable_type_tags=("si32",),
             memory_access=MemoryAccess.READ,
+            memory_addressing=MemoryAddressing.CONTIGUOUS,
             memory_payload_extents=(MemoryPayloadExtent.VECTOR,),
             memory_alignment_axis_name="aligned",
         )

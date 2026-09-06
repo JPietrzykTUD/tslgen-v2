@@ -9,7 +9,7 @@ import pytest
 from tslc.authoring_completion import authoring_completions
 from tslc.catalog.arithmetic import ArithmeticOperandRole
 from tslc.catalog.builder import CatalogBuilder
-from tslc.catalog.memory import MemoryPayloadExtent
+from tslc.catalog.memory import MemoryAddressing, MemoryPayloadExtent
 from tslc.catalog.model import Catalog
 from tslc.catalog.preconditions import PreconditionKind
 from tslc.catalog.semantics import OperandRole
@@ -191,6 +191,36 @@ def test_precondition_completion_hover_references_and_tokens_share_registry() ->
         if token.kind == "enumMember"
     }
     assert "lane_index_in_range" in token_text
+
+
+def test_indexed_memory_precondition_hover_lists_every_checked_error() -> None:
+    source = (
+        "prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):\n"
+        "  operation load\n"
+        "  operand_roles:\n"
+        "    memory_source base_ptr\n"
+        "    index index\n"
+        "    scale scale\n"
+        "  memory:\n"
+        "    access read\n"
+        "    addressing indexed\n"
+        "  preconditions [indexed_memory_address_valid]\n"
+    )
+    parsed, catalog, diagnostics = _build(source)
+    assert diagnostics == ()
+    index = build_catalog_index(catalog, parsed)
+    occurrence = next(
+        item
+        for item in index.occurrences_by_path[_PATH]
+        if item.kind == "precondition"
+    )
+
+    hover = index.hover(occurrence) or ""
+
+    assert "Checked errors" in hover
+    assert "`index_out_of_bounds`" in hover
+    assert "`address_overflow`" in hover
+    assert "`misaligned`" in hover
 
 
 def test_total_integral_mask_test_has_no_inferred_precondition(catalog: Catalog) -> None:
@@ -411,3 +441,48 @@ def test_current_contiguous_load_store_families_declare_memory_preconditions(
         for primitive in store_declarations
         if primitive.memory is not None
     } == {MemoryPayloadExtent.SCALAR, MemoryPayloadExtent.VECTOR}
+
+
+def test_irregular_memory_families_declare_only_honest_checked_contracts(
+    catalog: Catalog,
+) -> None:
+    indexed = (
+        *catalog.primitives_named("gather", unmasked=False),
+        *catalog.primitives_named("gather_narrow_partial", unmasked=False),
+        *catalog.primitives_named("scatter", unmasked=False),
+    )
+    assert len(indexed) == 5
+    assert {
+        primitive.memory.addressing
+        for primitive in indexed
+        if primitive.memory is not None
+    } == {MemoryAddressing.INDEXED}
+    assert {
+        tuple(condition.kind for condition in primitive.preconditions)
+        for primitive in indexed
+    } == {(PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID,)}
+
+    compacted = (
+        *catalog.primitives_named("compress_store", unmasked=False),
+        *catalog.primitives_named("expand_load", unmasked=False),
+    )
+    assert len(compacted) == 2
+    assert {
+        (
+            primitive.memory.addressing,
+            primitive.memory.payload_extent,
+        )
+        for primitive in compacted
+        if primitive.memory is not None
+    } == {(MemoryAddressing.COMPACTED, MemoryPayloadExtent.ACTIVE_LANES)}
+    assert {
+        tuple(condition.kind for condition in primitive.preconditions)
+        for primitive in compacted
+    } == {(PreconditionKind.COMPACTED_MEMORY_EXTENT,)}
+
+    pointer_indexed = catalog.primitives_named(
+        "gather_narrow", unmasked=False
+    )
+    assert len(pointer_indexed) == 1
+    assert pointer_indexed[0].memory is None
+    assert pointer_indexed[0].preconditions == ()

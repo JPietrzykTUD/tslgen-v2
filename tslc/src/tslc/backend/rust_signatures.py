@@ -181,6 +181,9 @@ def checked_params(
     shape: LoweredSpecialization,
     owner: str,
     plan: CheckedApiPlan,
+    *,
+    target_owner: str | None = None,
+    vidx_type: str | None = None,
 ) -> str:
     """Render a checked signature, replacing typed memory pointers with slices."""
 
@@ -188,7 +191,12 @@ def checked_params(
         condition for condition in plan.conditions if condition.memory_access is not None
     )
     if not memory_conditions:
-        return params(shape, owner)
+        return params(
+            shape,
+            owner,
+            target_owner=target_owner,
+            vidx_type=vidx_type,
+        )
     bindings = {
         (
             condition.parameter_index,
@@ -209,6 +217,16 @@ def checked_params(
                 raise ValueError("Rust checked memory binding has changed parameter name")
             borrow = "&" if memory_access is MemoryAccess.READ else "&mut "
             parts.append(f"{name}: {borrow}[{owner}::BaseType]")
+        elif shape.effective_param_type_overrides[index] is not None:
+            parts.append(f"{name}: {shape.effective_param_type_overrides[index]}")
+        elif DEFAULT_SUPPORT_POLICY.is_target_vector_parameter_kind(kind):
+            if target_owner is None:
+                raise ValueError("checked target-vector parameter has no owner")
+            parts.append(f"{name}: {param_kind_type(kind, target_owner)}")
+        elif kind == DEFAULT_SUPPORT_POLICY.index_vector_kind:
+            if vidx_type is None:
+                raise ValueError("checked index-vector parameter has no type")
+            parts.append(f"{name}: {vidx_type}")
         else:
             parts.append(f"{name}: {param_kind_type(kind, owner)}")
     return ", ".join(parts)

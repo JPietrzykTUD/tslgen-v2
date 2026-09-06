@@ -63,6 +63,7 @@ class OperandRole(StrEnum):
     MEMORY_SOURCE = "memory_source"
     PASS_THROUGH = "pass_through"
     PRIMARY = "primary"
+    SCALE = "scale"
     SECONDARY = "secondary"
     VALUE = "value"
 
@@ -182,6 +183,7 @@ OPERAND_ROLE_DESCRIPTIONS: Mapping[OperandRole, str] = MappingProxyType(
         OperandRole.MEMORY_SOURCE: "The memory source read by the operation.",
         OperandRole.PASS_THROUGH: "The value preserved where a control mask is inactive.",
         OperandRole.PRIMARY: "The primary logical value and natural method receiver.",
+        OperandRole.SCALE: "The compile-time byte scale applied to indexed addresses.",
         OperandRole.SECONDARY: "The second logical value operand.",
         OperandRole.VALUE: "A scalar or vector value inserted or stored by the operation.",
     }

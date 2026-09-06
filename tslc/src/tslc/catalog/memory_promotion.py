@@ -100,7 +100,13 @@ def build_memory_contract(
             )
         )
         return None
-    payload_extent = _payload_extent(declaration, semantic, access, diagnostics)
+    if not _validate_addressing_roles(
+        declaration, semantic, addressing, diagnostics
+    ):
+        return None
+    payload_extent = _payload_extent(
+        declaration, semantic, access, addressing, diagnostics
+    )
     if payload_extent is None:
         return None
     return PrimitiveMemoryContract(
@@ -117,8 +123,11 @@ def _payload_extent(
     declaration: ParsedPrimitiveDeclaration,
     semantic: PrimitiveSemanticContract,
     access: MemoryAccess,
+    addressing: MemoryAddressing,
     diagnostics: list[Diagnostic],
 ) -> MemoryPayloadExtent | None:
+    if addressing is MemoryAddressing.COMPACTED:
+        return MemoryPayloadExtent.ACTIVE_LANES
     signature = parse_signature(declaration.signature)
     kind: str | None
     if signature is None:
@@ -150,6 +159,57 @@ def _payload_extent(
         )
     )
     return None
+
+
+def _validate_addressing_roles(
+    declaration: ParsedPrimitiveDeclaration,
+    semantic: PrimitiveSemanticContract,
+    addressing: MemoryAddressing,
+    diagnostics: list[Diagnostic],
+) -> bool:
+    roles = frozenset(binding.role for binding in semantic.operand_bindings)
+    required = {
+        MemoryAddressing.CONTIGUOUS: frozenset(),
+        MemoryAddressing.INDEXED: frozenset(
+            {OperandRole.INDEX, OperandRole.SCALE}
+        ),
+        MemoryAddressing.COMPACTED: frozenset({OperandRole.CONTROL_MASK}),
+    }[addressing]
+    forbidden = {
+        MemoryAddressing.CONTIGUOUS: frozenset(
+            {OperandRole.INDEX, OperandRole.SCALE}
+        ),
+        MemoryAddressing.INDEXED: frozenset(),
+        MemoryAddressing.COMPACTED: frozenset(
+            {OperandRole.INDEX, OperandRole.SCALE}
+        ),
+    }[addressing]
+    missing = required - roles
+    unexpected = forbidden.intersection(roles)
+    if not missing and not unexpected:
+        return True
+    details: list[str] = []
+    if missing:
+        details.append(
+            "requires " + ", ".join(repr(role.value) for role in sorted(missing))
+        )
+    if unexpected:
+        details.append(
+            "forbids "
+            + ", ".join(repr(role.value) for role in sorted(unexpected))
+        )
+    diagnostics.append(
+        diagnostic_at(
+            severity="error",
+            code="TSL-CATALOG-MEMORY-ADDRESSING-ROLES",
+            message=(
+                f"memory addressing {addressing.value!r} on primitive "
+                f"{declaration.name!r} " + "; ".join(details)
+            ),
+            source=semantic.operand_roles_source or semantic.source,
+        )
+    )
+    return False
 
 
 __all__ = ("KNOWN_MEMORY_FIELDS", "build_memory_contract")

@@ -73,7 +73,7 @@ pub trait SimdVector: representation_sealed::SimdVector {
     type BaseType;
     type Extension;
     type RegisterType: Copy;
-    type MaskType;
+    type MaskType: Copy;
     // The integral mask (to_integral's result): the mask packed into an unsigned integer,
     // one bit per lane (the native __mmaskN, or a lane-sized uint on lane-bitmask ISAs).
     type ImaskType;
@@ -86,23 +86,30 @@ pub trait SimdVector: representation_sealed::SimdVector {
     type WithBaseType<ToBase>;
     type WithExtension<ToExtension>;
     const ALIGN: usize;
+    const MASK_IS_BITSET: bool = false;
 
     fn lane_count() -> usize;
 
-    // Test lane `index` of a register-backed lane mask (sse/avx2): the mask IS a data register
-    // whose lanes are all-ones (set) or all-zeros (clear), so lane `index` is a BaseType-sized
-    // byte chunk and nonzero means set. Counterpart to the register branch of C++
-    // `tsl::detail::helpers::mask_test`. `mask<test>` calls this only for register reprs; the integer
-    // bitset repr (generic `u64`, native `__mmaskN`) uses the inline shift template, so the
-    // default body is never reached for those.
+    // Test lane `index` for either an integer bitset or a register-backed lane mask. Compact
+    // bitsets use one bit per lane. Register masks use an all-zero/all-one BaseType-sized byte
+    // chunk per lane. The generated registrations project which representation is selected.
     fn mask_lane_test(mask: Self::MaskType, index: usize) -> bool {
-        let lane_bytes = core::mem::size_of::<Self::BaseType>();
         let bytes = unsafe {
             core::slice::from_raw_parts(
                 (&mask as *const Self::MaskType) as *const u8,
                 core::mem::size_of::<Self::MaskType>(),
             )
         };
+        if Self::MASK_IS_BITSET {
+            let logical_byte = index / 8;
+            let storage_byte = if cfg!(target_endian = "little") {
+                logical_byte
+            } else {
+                bytes.len() - logical_byte - 1
+            };
+            return ((bytes[storage_byte] >> (index % 8)) & 1) != 0;
+        }
+        let lane_bytes = core::mem::size_of::<Self::BaseType>();
         bytes[index * lane_bytes..(index + 1) * lane_bytes]
             .iter()
             .any(|&b| b != 0)
@@ -131,6 +138,7 @@ impl<T: Copy> SimdVector for Simd<T, Scalar> {
     type WithBaseType<ToBase> = Simd<ToBase, Scalar>;
     type WithExtension<ToExtension> = Simd<T, ToExtension>;
     const ALIGN: usize = core::mem::align_of::<T>();
+    const MASK_IS_BITSET: bool = true;
 
     fn lane_count() -> usize {
         1
@@ -170,6 +178,7 @@ impl<T: Copy, const LANES: usize> SimdVector for Simd<T, Generic<LANES>> {
     type WithBaseType<ToBase> = Simd<ToBase, Generic<LANES>>;
     type WithExtension<ToExtension> = Simd<T, ToExtension>;
     const ALIGN: usize = core::mem::align_of::<array_type<T, LANES>>();
+    const MASK_IS_BITSET: bool = true;
 
     fn lane_count() -> usize {
         LANES
@@ -492,12 +501,66 @@ pub fn ptr_add_mut<T>(p: *mut T, i: usize) -> *mut T {
 /// `IndicesType: IndexVector` guarantees its lanes are valid indices.
 pub trait IndexBase: Copy {
     fn as_offset(self) -> usize;
+    fn checked_byte_offset(self, scale: usize) -> Result<usize, PreconditionError>;
 }
 
-macro_rules! impl_index_base {
-    ($($t:ty),*) => { $(impl IndexBase for $t { fn as_offset(self) -> usize { self as usize } })* };
+macro_rules! impl_signed_index_base {
+    ($($t:ty),*) => { $(impl IndexBase for $t {
+        fn as_offset(self) -> usize { self as usize }
+        fn checked_byte_offset(self, scale: usize) -> Result<usize, PreconditionError> {
+            if self < 0 {
+                return Err(PreconditionError::IndexOutOfBounds);
+            }
+            let index = self as u128;
+            if index > usize::MAX as u128 {
+                return Err(PreconditionError::AddressOverflow);
+            }
+            (index as usize)
+                .checked_mul(scale)
+                .ok_or(PreconditionError::AddressOverflow)
+        }
+    })* };
 }
-impl_index_base!(i8, i16, i32, i64, u8, u16, u32, u64, isize, usize);
+
+macro_rules! impl_unsigned_index_base {
+    ($($t:ty),*) => { $(impl IndexBase for $t {
+        fn as_offset(self) -> usize { self as usize }
+        fn checked_byte_offset(self, scale: usize) -> Result<usize, PreconditionError> {
+            let index = self as u128;
+            if index > usize::MAX as u128 {
+                return Err(PreconditionError::AddressOverflow);
+            }
+            (index as usize)
+                .checked_mul(scale)
+                .ok_or(PreconditionError::AddressOverflow)
+        }
+    })* };
+}
+impl_signed_index_base!(i8, i16, i32, i64, isize);
+impl_unsigned_index_base!(u8, u16, u32, u64, usize);
+
+#[inline]
+pub(crate) fn indexed_memory_address_error<I: IndexBase, T>(
+    index: I,
+    scale: u32,
+    extent: usize,
+) -> Option<PreconditionError> {
+    let bytes = match extent.checked_mul(core::mem::size_of::<T>()) {
+        Some(bytes) => bytes,
+        None => return Some(PreconditionError::AddressOverflow),
+    };
+    let offset = match index.checked_byte_offset(scale as usize) {
+        Ok(offset) => offset,
+        Err(error) => return Some(error),
+    };
+    if offset % core::mem::align_of::<T>() != 0 {
+        return Some(PreconditionError::Misaligned);
+    }
+    if offset > bytes || core::mem::size_of::<T>() > bytes - offset {
+        return Some(PreconditionError::IndexOutOfBounds);
+    }
+    None
+}
 
 pub enum BaseSi8 {}
 pub enum BaseSi16 {}

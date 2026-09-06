@@ -121,6 +121,8 @@ def _cpp_registration(ext: str, extension: Extension | None) -> str:
         f"    using extension_type = {ext};\n"
         f"    using register_type = typename detail::{helper}<T>::type;\n"
         f"    using mask_type = {mask};\n"
+        f"    static constexpr bool mask_is_bitset = "
+        f"{str(_cpp_mask_is_bitset(extension)).lower()};\n"
         f"    using imask_type = {imask};\n"
         f"    template <class ToBase>\n"
         f"    using with_base_type = simd<ToBase, {ext}>;\n"
@@ -180,6 +182,8 @@ def _cpp_native_registration(
                 f"    using extension_type = {ext};\n"
                 f"    using register_type = {register};\n"
                 f"    using mask_type = {mask};\n"
+                f"    static constexpr bool mask_is_bitset = "
+                f"{str(_cpp_mask_is_bitset(extension)).lower()};\n"
                 f"    using imask_type = {imask};\n"
                 f"    template <class ToBase>\n"
                 f"    using with_base_type = simd<ToBase, {ext}>;\n"
@@ -227,6 +231,8 @@ def _cpp_sized_registration(
             f"    using extension_type = {ext}<LANES>;\n"
             "    using register_type = array_type<T, LANES>;\n"
             f"    using mask_type = {mask};\n"
+            f"    static constexpr bool mask_is_bitset = "
+            f"{str(_cpp_mask_is_bitset(extension)).lower()};\n"
             f"    using imask_type = {imask};\n"
             "    template <class ToBase>\n"
             f"    using with_base_type = simd<ToBase, {ext}<LANES>>;\n"
@@ -483,6 +489,13 @@ def _cpp_mask_type(
         lanes = vector_bits // scalar_bit_width_or_default(type_tag)
         return f"bool __attribute__((ext_vector_type({lanes})))"
     return register
+
+
+def _cpp_mask_is_bitset(extension: Extension | None) -> bool:
+    return extension is not None and extension.mask_policy.kind in {
+        "exact_lane_bitmask",
+        "native_predicate_by_lanes",
+    }
 
 
 def _cpp_imask_type(

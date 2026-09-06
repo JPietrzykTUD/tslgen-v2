@@ -11,7 +11,7 @@ from tslc.backend.primitive_rendering import (
 )
 from tslc.backend.precondition_error_rendering import rust_precondition_error
 from tslc.backend.signature_types import RUST_SIGNATURE_TYPES, rust_free_type
-from tslc.catalog.memory import MemoryAccess
+from tslc.catalog.memory import MemoryAccess, MemoryAddressing
 from tslc.catalog.preconditions import (
     PRECONDITION_DESCRIPTORS,
     PreconditionErrorKind,
@@ -69,12 +69,16 @@ def _rust_checked_error_facts(
     preconditions: tuple[PrimitivePrecondition, ...],
 ) -> str:
     return " ".join(
-        f"Returns `{_rust_error_name(descriptor.error)}` when this precondition "
+        f"Returns {_rust_error_names(descriptor.errors)} when this precondition "
         f"is violated: {descriptor.description}"
         for descriptor in (
             PRECONDITION_DESCRIPTORS[item.kind] for item in preconditions
         )
     )
+
+
+def _rust_error_names(errors: tuple[PreconditionErrorKind, ...]) -> str:
+    return ", ".join(f"`{_rust_error_name(error)}`" for error in errors)
 
 
 def _rust_error_name(error: PreconditionErrorKind) -> str:
@@ -100,9 +104,9 @@ def _parameter_summary(
     return "; ".join(
         f"{name}: "
         + (
-            "shared contiguous slice"
+            _memory_parameter_description(memory.addressing, read_only=True)
             if index in memory_indexes and memory.access is MemoryAccess.READ
-            else "exclusive mutable contiguous slice"
+            else _memory_parameter_description(memory.addressing, read_only=False)
             if index in memory_indexes
             else description
         )
@@ -110,6 +114,20 @@ def _parameter_summary(
             specializations
         )
     )
+
+
+def _memory_parameter_description(
+    addressing: MemoryAddressing,
+    *,
+    read_only: bool,
+) -> str:
+    access = "shared" if read_only else "exclusive mutable"
+    shape = {
+        MemoryAddressing.CONTIGUOUS: "contiguous slice",
+        MemoryAddressing.INDEXED: "indexed base slice",
+        MemoryAddressing.COMPACTED: "compacted-memory slice",
+    }[addressing]
+    return f"{access} {shape}"
 
 
 def _doc_block(

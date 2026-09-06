@@ -1105,4 +1105,7 @@ def test_clang_generic_index_memory_ops_delegate_to_fixed_native_leaf(
     assert {
         (origin.dependency.primitive, origin.dependency.source.extension_isa)
         for origin in lowered.call_dependency_origins
-    } == {(primitive, fixed_isa)}
+    } == {
+        (primitive, fixed_isa),
+        ("to_array", extension),
+    }

@@ -554,6 +554,12 @@ class RustFacadeCheckedCondition:
     memory_access: MemoryAccess | None
     memory_payload_extents: tuple[MemoryPayloadExtent, ...]
     memory_alignment_axis_name: str | None
+    additional_errors: tuple[PreconditionErrorKind, ...] = ()
+    memory_addressing: MemoryAddressing | None = None
+
+    @property
+    def errors(self) -> tuple[PreconditionErrorKind, ...]:
+        return (self.error, *self.additional_errors)
 
     def __post_init__(self) -> None:
         if not self.applicable_type_tags:
@@ -563,16 +569,19 @@ class RustFacadeCheckedCondition:
         is_memory = self.kind in {
             PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
             PreconditionKind.SELECTED_MEMORY_ALIGNMENT,
+            PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID,
+            PreconditionKind.COMPACTED_MEMORY_EXTENT,
         }
         has_any_memory = (
             self.memory_access is not None
+            or self.memory_addressing is not None
             or bool(self.memory_payload_extents)
             or self.memory_alignment_axis_name is not None
         )
         has_complete_memory = (
             self.memory_access is not None
+            and self.memory_addressing is not None
             and bool(self.memory_payload_extents)
-            and self.memory_alignment_axis_name is not None
         )
         if has_any_memory and not has_complete_memory:
             raise ValueError(
@@ -581,6 +590,13 @@ class RustFacadeCheckedCondition:
         if is_memory != has_complete_memory:
             raise ValueError(
                 "Rust facade checked memory conditions require complete memory facts"
+            )
+        if (
+            self.kind is PreconditionKind.SELECTED_MEMORY_ALIGNMENT
+            and self.memory_alignment_axis_name is None
+        ):
+            raise ValueError(
+                "Rust facade checked alignment conditions require an alignment axis"
             )
         if len(set(self.memory_payload_extents)) != len(
             self.memory_payload_extents

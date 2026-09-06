@@ -83,6 +83,9 @@ class CallerUnsafePath:
     reasons: tuple[str, ...]
     implementation_count: int
     family_id: str
+    checked_source_status: str
+    preconditions: tuple[str, ...]
+    checked_coverage_reason: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -343,6 +346,10 @@ def _caller_unsafe_paths(catalog: Catalog) -> tuple[CallerUnsafePath, ...]:
             "result_target": result_target,
         }
         identity = json.dumps(identity_payload, separators=(",", ":"), sort_keys=True)
+        family_id = _classify_caller_unsafe_path(primitive)
+        preconditions = tuple(
+            sorted(precondition.kind.value for precondition in primitive.preconditions)
+        )
         records.append(
             CallerUnsafePath(
                 identity=identity,
@@ -352,7 +359,16 @@ def _caller_unsafe_paths(catalog: Catalog) -> tuple[CallerUnsafePath, ...]:
                 result_target=result_target,
                 reasons=reasons,
                 implementation_count=len(unsafe),
-                family_id=_classify_caller_unsafe_path(primitive),
+                family_id=family_id,
+                checked_source_status=(
+                    "declared" if preconditions else "coverage_gap"
+                ),
+                preconditions=preconditions,
+                checked_coverage_reason=(
+                    "source preconditions are available for backend check planning"
+                    if preconditions
+                    else FAMILY_BY_ID[family_id].checked_feasibility
+                ),
             )
         )
     return tuple(sorted(records, key=lambda record: record.identity))
@@ -447,6 +463,9 @@ def serialize(census: Census) -> str:
                 "reasons": list(record.reasons),
                 "implementation_count": record.implementation_count,
                 "family": record.family_id,
+                "checked_source_status": record.checked_source_status,
+                "preconditions": list(record.preconditions),
+                "checked_coverage_reason": record.checked_coverage_reason,
             }
             for record in census.caller_unsafe_paths
         ],
@@ -496,6 +515,8 @@ def render_markdown(census: Census, context: RepoContext) -> str:
         "",
         f"- Exact generated runtime-failure sites: {len(census.runtime_sites)}",
         f"- Exact typed public callable identities with at least one `caller_unsafe` implementation: {len(census.caller_unsafe_paths)}",
+        "- Checked source-contract coverage gaps among those identities: "
+        f"{sum(record.checked_source_status == 'coverage_gap' for record in census.caller_unsafe_paths)}",
         f"- Applicable source safety-metadata gaps: {len(census.metadata_gaps)} "
         f"({sum(gap.caller_unsafe_required for gap in census.metadata_gaps)} require caller unsafety)",
         "",
@@ -554,7 +575,9 @@ def render_markdown(census: Census, context: RepoContext) -> str:
             target = ",".join(record.result_target) or "none"
             lines.append(
                 f"- `{record.name} {record.signature}`; attributes `{attrs}`; result target `{target}`; "
-                f"reasons `{', '.join(record.reasons)}`; caller-unsafe implementations {record.implementation_count}"
+                f"reasons `{', '.join(record.reasons)}`; caller-unsafe implementations {record.implementation_count}; "
+                f"checked source status `{record.checked_source_status}`; preconditions "
+                f"`{', '.join(record.preconditions) or 'none'}`; coverage: {record.checked_coverage_reason}"
             )
         lines.extend(("", f"Review: {family.review}", ""))
     caller_gaps = tuple(gap for gap in census.metadata_gaps if gap.caller_unsafe_required)

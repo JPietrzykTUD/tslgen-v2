@@ -1,4 +1,13 @@
 prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
+  operation store
+  operand_roles:
+    control_mask m
+    memory_destination ptr
+    value a
+  memory:
+    access write
+    addressing compacted
+  preconditions [compacted_memory_extent]
   cross_lane true
   brief_description "Packs active mask lanes from a vector register into contiguous memory."
   detailed_description """
@@ -264,6 +273,14 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
               }
             """
 prim<v:=(m,cptr)>[aligned=true, op=expand] expand_load(m, ptr):
+  operation load
+  operand_roles:
+    control_mask m
+    memory_source ptr
+  memory:
+    access read
+    addressing compacted
+  preconditions [compacted_memory_extent]
   cross_lane true
   brief_description "Loads contiguous memory values into active mask lanes and writes zero to inactive lanes."
   detailed_description """

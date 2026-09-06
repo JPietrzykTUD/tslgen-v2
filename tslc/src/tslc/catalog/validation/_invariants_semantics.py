@@ -118,12 +118,16 @@ def _logical_parameter_index(
     contract: PrimitiveSemanticContract,
     parameter_index: int,
 ) -> int:
-    control_indexes = {
-        binding.parameter_index
-        for binding in contract.operand_bindings
-        if binding.role is OperandRole.CONTROL_MASK
+    roles_by_index: dict[int, set[OperandRole]] = defaultdict(set)
+    for binding in contract.operand_bindings:
+        roles_by_index[binding.parameter_index].add(binding.role)
+    policy_roles = {OperandRole.CONTROL_MASK, OperandRole.PASS_THROUGH}
+    policy_indexes = {
+        index
+        for index, roles in roles_by_index.items()
+        if roles and roles.issubset(policy_roles)
     }
-    return sum(index not in control_indexes for index in range(parameter_index))
+    return sum(index not in policy_indexes for index in range(parameter_index))
 
 
 def _validate_domain_contract(

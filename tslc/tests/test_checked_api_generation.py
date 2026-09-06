@@ -22,9 +22,10 @@ from tslc.backend.cpp_checked_api import plan_cpp_checked_api
 from tslc.backend.rust import RustBackend
 from tslc.backend.registry import create_backend_dialect
 from tslc.catalog.machine_profiles import MachineProfile
-from tslc.catalog.memory import MemoryPayloadExtent
+from tslc.catalog.memory import MemoryAddressing, MemoryPayloadExtent
 from tslc.catalog.model import Catalog, PrimitiveMaskMode
 from tslc.catalog.preconditions import (
+    PreconditionCheckPrimitive,
     PreconditionErrorKind,
     PreconditionKind,
 )
@@ -454,6 +455,96 @@ def test_scalable_memory_checked_plan_uses_runtime_lane_count(
     assert "ptr.size() < Vec::lane_count()" in cpp_checked
 
 
+def test_indexed_memory_checked_twins_use_typed_address_facts(
+    catalog: Catalog,
+    machine_profiles: Mapping[str, MachineProfile],
+) -> None:
+    gather = _lowered(catalog, machine_profiles, "gather", "cpp")
+    plan = checked_api_plan((gather,))
+    assert plan is not None
+    assert len(plan.conditions) == 1
+    condition = plan.conditions[0]
+    assert condition.kind is PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID
+    assert condition.memory_addressing is MemoryAddressing.INDEXED
+    assert condition.memory_payload_extents == (MemoryPayloadExtent.VECTOR,)
+    assert condition.index_parameter_name == "index"
+    assert condition.scale_parameter_name == "scale"
+    assert condition.errors == (
+        PreconditionErrorKind.INDEX_OUT_OF_BOUNDS,
+        PreconditionErrorKind.ADDRESS_OVERFLOW,
+        PreconditionErrorKind.MISALIGNED,
+    )
+    assert condition.check_primitives == (
+        PreconditionCheckPrimitive.VECTOR_TO_ARRAY,
+    )
+
+    cpp = CppBackend().render_checked_wrappers("gather", (gather,))
+    rust_spec = _lowered(catalog, machine_profiles, "gather", "rust")
+    rust = RustBackend().render_primitive_public("gather", (rust_spec,))
+    assert "::tsl::span<typename Vec::base_type const> base_ptr" in cpp
+    assert "::tsl::to_array<IndicesType>(index)" in cpp
+    assert "indexed_memory_address_error<typename Vec::base_type>" in cpp
+    assert "base_ptr: &[S::BaseType]" in rust
+    assert "let __tsl_indices = to_array::<IndicesType>(index);" in rust
+    assert "indexed_memory_address_error::<_, S::BaseType>" in rust
+
+    masked = _lowered(
+        catalog,
+        machine_profiles,
+        "gather",
+        "cpp",
+        mask_mode=PrimitiveMaskMode.PASS_THROUGH,
+    )
+    masked_plan = checked_api_plan((masked,))
+    assert masked_plan is not None
+    assert masked_plan.conditions[0].mask_parameter_name == "mask"
+    masked_cpp = CppBackend().render_checked_wrappers(
+        "gather_mask", (masked,)
+    )
+    assert "::tsl::set_mask_lane<Vec>(" in masked_cpp
+    assert "::tsl::mask_binary_and<Vec>(mask, __tsl_lane_mask)" in masked_cpp
+    masked_rust = RustBackend().render_primitive_public(
+        "gather_mask",
+        (
+            _lowered(
+                catalog,
+                machine_profiles,
+                "gather",
+                "rust",
+                mask_mode=PrimitiveMaskMode.PASS_THROUGH,
+            ),
+        ),
+    )
+    assert "S::mask_lane_test(mask, __tsl_lane)" in masked_rust
+
+
+def test_compacted_memory_checked_twins_use_active_lane_capacity(
+    catalog: Catalog,
+    machine_profiles: Mapping[str, MachineProfile],
+) -> None:
+    compress = _lowered(catalog, machine_profiles, "compress_store", "cpp")
+    plan = checked_api_plan((compress,))
+    assert plan is not None
+    condition = plan.conditions[0]
+    assert condition.kind is PreconditionKind.COMPACTED_MEMORY_EXTENT
+    assert condition.memory_addressing is MemoryAddressing.COMPACTED
+    assert condition.memory_payload_extents == (
+        MemoryPayloadExtent.ACTIVE_LANES,
+    )
+    assert condition.mask_parameter_name == "m"
+
+    cpp = CppBackend().render_checked_wrappers("compress_store", (compress,))
+    rust_spec = _lowered(catalog, machine_profiles, "compress_store", "rust")
+    rust = RustBackend().render_primitive_public(
+        "compress_store", (rust_spec,)
+    )
+    assert "ptr.size() < ::tsl::mask_population_count<Vec>(m)" in cpp
+    assert "bool Aligned = true" in cpp
+    assert "ptr: &mut [S::BaseType]" in rust
+    assert "let mut __tsl_required = 0usize;" in rust
+    assert "S::mask_lane_test(m, __tsl_lane)" in rust
+
+
 @pytest.fixture(scope="module")
 def checked_lane_cpp_project(
     data_root: Path,
@@ -546,6 +637,37 @@ def checked_memory_project(
         primitives=["load", "store", "mask_false"],
         profiles=["scalar", "avx2"],
         type_tags=("si32",),
+        backends=["cpp", "rust"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    report = write_artifacts(result.artifacts, output_root)
+    assert not has_errors(report.diagnostics), report.diagnostics
+    return output_root
+
+
+@pytest.fixture(scope="module")
+def checked_irregular_memory_project(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Path:
+    output_root = tmp_path_factory.mktemp("checked-irregular-memory-project")
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=[
+            "compress_store",
+            "expand_load",
+            "from_array",
+            "gather",
+            "gather_narrow_partial",
+            "mask_false",
+            "scatter",
+            "set_mask_lane",
+            "to_array",
+        ],
+        profiles=["avx2"],
+        type_tags=("si32", "si64"),
         backends=["cpp", "rust"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -934,6 +1056,109 @@ def test_checked_memory_rust_consumer_covers_extent_alignment_and_canaries(
     )
     completed = subprocess.run(
         (cargo, "run", "--release", "--bin", "memory_consumer"),
+        cwd=project,
+        env=environment,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+@pytest.mark.generated_build
+def test_checked_irregular_memory_cpp_consumer_covers_address_and_capacity_edges(
+    checked_irregular_memory_project: Path,
+    tmp_path: Path,
+) -> None:
+    compilers = _cpp_compilers()
+    if not compilers:
+        pytest.skip("GCC or Clang C++ compiler required")
+    source = _FIXTURES / "irregular_memory_consumer.cpp"
+    include = checked_irregular_memory_project / "cpp" / "include"
+
+    for compiler in compilers:
+        compiler_id = Path(compiler).name.replace("+", "x")
+        binary = tmp_path / f"irregular-memory-{compiler_id}"
+        completed = subprocess.run(
+            (
+                compiler,
+                "-std=c++17",
+                "-O2",
+                "-mavx2",
+                "-mrdrnd",
+                "-msse4.2",
+                "-mssse3",
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "-fno-exceptions",
+                "-I",
+                str(include),
+                str(source),
+                "-o",
+                str(binary),
+            ),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert completed.returncode == 0, completed.stderr
+        subprocess.run((str(binary),), check=True)
+
+    sanitizer = tmp_path / "irregular-memory-sanitizer"
+    completed = subprocess.run(
+        (
+            compilers[0],
+            "-std=c++17",
+            "-O1",
+            "-g",
+            "-mavx2",
+            "-mrdrnd",
+            "-msse4.2",
+            "-mssse3",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-fsanitize=address,undefined",
+            "-fno-omit-frame-pointer",
+            "-I",
+            str(include),
+            str(source),
+            "-o",
+            str(sanitizer),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+    environment = os.environ.copy()
+    environment["ASAN_OPTIONS"] = "detect_leaks=0"
+    subprocess.run((str(sanitizer),), check=True, env=environment)
+
+
+@pytest.mark.generated_build
+def test_checked_irregular_memory_rust_consumer_covers_address_and_capacity_edges(
+    checked_irregular_memory_project: Path,
+    tmp_path: Path,
+) -> None:
+    cargo = shutil.which("cargo")
+    if cargo is None:
+        pytest.skip("cargo is not available")
+    if os.uname().machine != "x86_64":
+        pytest.skip("the checked AVX2 irregular-memory consumer requires x86-64")
+    project = checked_irregular_memory_project / "rust"
+    source = _FIXTURES / "irregular_memory_consumer.rs"
+    binary_source = project / "src" / "bin"
+    binary_source.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source, binary_source / source.name)
+    environment = os.environ.copy()
+    environment["CARGO_TARGET_DIR"] = str(tmp_path / "cargo-target")
+    environment["RUSTFLAGS"] = (
+        "-C target-feature=+avx,+avx2,+rdrand,+sse,+sse2,+sse4.1,+sse4.2,+ssse3"
+    )
+    completed = subprocess.run(
+        (cargo, "run", "--release", "--bin", "irregular_memory_consumer"),
         cwd=project,
         env=environment,
         check=False,

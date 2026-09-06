@@ -69,9 +69,30 @@ def documentation_checked_wrapper(
         return ""
     shape = specializations[0]
     declarations = generic_decls(shape)
+    result_owner = "S"
+    target_owner: str | None = None
+    if shape.target is not None:
+        declarations = ["T: StaticSimdVector", *declarations]
+        result_owner = "T"
+        target_owner = "T"
+    index_type: str | None = None
+    if shape.type_params:
+        declarations = [
+            *(f"{param.name}: StaticSimdVector" for param in shape.type_params),
+            *declarations,
+        ]
+        index_type = f"{shape.type_params[0].name}::RegisterType"
+        if shape.result_vector_param is not None:
+            result_owner = shape.result_vector_param
     generics = ", ".join(("S: StaticSimdVector", *declarations))
-    rendered_params = checked_params(shape, "S", plan)
-    result_type = kind_type(shape.result_kind, "S")
+    rendered_params = checked_params(
+        shape,
+        "S",
+        plan,
+        target_owner=target_owner,
+        vidx_type=index_type,
+    )
+    result_type = kind_type(shape.result_kind, result_owner)
     doc = rust_doc(
         shape,
         context="Rust checked documentation facade",
@@ -80,6 +101,12 @@ def documentation_checked_wrapper(
         specializations=specializations,
     )
     where_clause = checked_type_where(plan, "S")
+    index_clause = index_where(shape, base_dispatch="projection")
+    if where_clause and index_clause:
+        raise ValueError(
+            "checked documentation wrapper cannot combine numeric and index bounds"
+        )
+    where_clause = where_clause or index_clause
     opening_brace = f"{where_clause}\n{{" if where_clause else " {"
     return (
         (f"{doc}\n" if doc else "")

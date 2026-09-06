@@ -14,7 +14,7 @@ Classification = Literal[
     "tooling-only validation",
 ]
 
-BASELINE_VERSION = 1
+BASELINE_VERSION = 2
 DECLARATION_ROOT = Path("tslc/tests/fixtures/checked_api")
 CPP_DECLARATIONS = DECLARATION_ROOT / "cpp_declarations.snap"
 RUST_DECLARATIONS = DECLARATION_ROOT / "rust_declarations.snap"
@@ -172,15 +172,15 @@ FAMILIES = (
         "selected_memory_contract",
         "dynamic precondition",
         "Expand/compress operations may access a mask-dependent number of elements.",
-        "requires a range plus capacity derived from the active mask",
+        "implemented for compress-store and expand-load from a range plus capacity derived from the active mask",
         "Validation must precede any compress-store output write.",
     ),
     SemanticFamily(
         "indexed_memory_contract",
         "dynamic precondition",
         "Gather/scatter paths may access invalid addresses for active indices.",
-        "requires a valid base view, extent, typed scale, and active-index validation",
-        "Bare pointers do not provide enough evidence for an honest checked twin.",
+        "implemented for vector-index gather/scatter, including partial narrow gather, from a valid base view, typed scale, and active-index validation; pointer-indexed narrow gather remains omitted",
+        "Pointer-indexed narrow gather requires a second extent-carrying index view before an honest checked twin can be emitted.",
     ),
     SemanticFamily(
         "deallocation_provenance",

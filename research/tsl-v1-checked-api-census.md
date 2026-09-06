@@ -17,6 +17,7 @@ This generated maintenance report tracks the reviewed evidence at the current ch
 
 - Exact generated runtime-failure sites: 154
 - Exact typed public callable identities with at least one `caller_unsafe` implementation: 33
+- Checked source-contract coverage gaps among those identities: 14
 - Applicable source safety-metadata gaps: 138 (26 require caller unsafety)
 
 Runtime sites by classification:
@@ -44,8 +45,8 @@ Runtime sites by classification:
 | `implementation_invariant` | implementation hazard | A debug assertion or unwrap fails if an internal compiler-owned invariant is broken. | no checked twin; retain or replace with compiler validation |
 | `contiguous_memory_contract` | dynamic precondition | Raw C++ pointers remain unchecked; Rust public exposure must be unsafe until a safe slice wrapper discharges the contract. | requires a span/slice carrying readable or writable extent and selected alignment |
 | `mask_memory_contract` | dynamic precondition | Raw mask representation loads/stores have the same pointer hazard plus layout-dependent capacity. | requires a span/slice and a typed mask-layout capacity plan |
-| `selected_memory_contract` | dynamic precondition | Expand/compress operations may access a mask-dependent number of elements. | requires a range plus capacity derived from the active mask |
-| `indexed_memory_contract` | dynamic precondition | Gather/scatter paths may access invalid addresses for active indices. | requires a valid base view, extent, typed scale, and active-index validation |
+| `selected_memory_contract` | dynamic precondition | Expand/compress operations may access a mask-dependent number of elements. | implemented for compress-store and expand-load from a range plus capacity derived from the active mask |
+| `indexed_memory_contract` | dynamic precondition | Gather/scatter paths may access invalid addresses for active indices. | implemented for vector-index gather/scatter, including partial narrow gather, from a valid base view, typed scale, and active-index validation; pointer-indexed narrow gather remains omitted |
 | `deallocation_provenance` | dynamic precondition | Mismatched, dead, or foreign allocation provenance can cause undefined behavior. | no honest pointer-only checked twin; design an owning allocation API separately |
 | `random_output_contract` | dynamic precondition | The random-step intrinsic writes through a raw output pointer on success. | requires a mutable reference/view, or an owning optional/result value API |
 | `raw_copy_contract` | dynamic precondition | Invalid ranges or prohibited overlap can cause undefined behavior or corruption. | requires valid source/destination views plus an explicit overlap contract/check |
@@ -112,10 +113,10 @@ It is not part of a generated runtime API contract.
 - `tslc/src/tslc/backend/assets/tsl_rust_policy_json.rs:425` — owner `Err` — `expect` — `.expect("JSON number spelling is ASCII");`
 - `tslc/src/tslc/backend/assets/tsl_rust_policy_json.rs:486` — owner `string_segment` — `expect` — `.expect("JSON string segment comes from validated UTF-8 input")`
 - `tslc/src/tslc/backend/assets/tsl_rust_variant_policy_validation.rs:271` — owner `Err` — `unreachable` — `unreachable!("descriptor status was validated")`
-- `tslc/src/tslc/backend/rust_documentation_api.py:90` — owner `documentation_checked_wrapper` — `unimplemented` — `" unimplemented!()\n"`
-- `tslc/src/tslc/backend/rust_documentation_api.py:201` — owner `documentation_free_function` — `unimplemented` — `" unimplemented!()\n"`
-- `tslc/src/tslc/backend/rust_documentation_api.py:181` — owner `documentation_overloaded_checked_wrapper` — `unimplemented` — `" unimplemented!()\n"`
-- `tslc/src/tslc/backend/rust_documentation_api.py:125` — owner `documentation_overloaded_wrapper` — `unimplemented` — `" unimplemented!()\n"`
+- `tslc/src/tslc/backend/rust_documentation_api.py:117` — owner `documentation_checked_wrapper` — `unimplemented` — `" unimplemented!()\n"`
+- `tslc/src/tslc/backend/rust_documentation_api.py:228` — owner `documentation_free_function` — `unimplemented` — `" unimplemented!()\n"`
+- `tslc/src/tslc/backend/rust_documentation_api.py:208` — owner `documentation_overloaded_checked_wrapper` — `unimplemented` — `" unimplemented!()\n"`
+- `tslc/src/tslc/backend/rust_documentation_api.py:152` — owner `documentation_overloaded_wrapper` — `unimplemented` — `" unimplemented!()\n"`
 - `tslc/src/tslc/backend/rust_documentation_api.py:58` — owner `documentation_wrapper` — `unimplemented` — `" unimplemented!()\n"`
 - `tslc/src/tslc/benchmark/render_cpp.py:229` — owner `_render_policy_read` — `throw` — `throw std::runtime_error("policy has an unterminated decision for " + std::string({stable_id}));`
 - `tslc/src/tslc/benchmark/render_cpp.py:233` — owner `_render_policy_read` — `throw` — `throw std::runtime_error("policy selects an unavailable candidate for " + std::string({stable_id}));`
@@ -195,11 +196,11 @@ Sizes, lane counts, and mask-storage capacity are compiler-owned specialization 
 - `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6134` — owner `transform_unary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_unary requires a vector with at least one lane", );`
 - `tslc/src/tslc/backend/assets/tsl_algorithm.rs:662` — owner `validate_integral_mask_vector` — `assert` — `assert!( lanes <= <V::ImaskType as IntegralMaskWord>::BITS, "{} requires an integral mask storage type with at least one bit per lane", helper_name, );`
 - `tslc/src/tslc/backend/assets/tsl_algorithm.rs:657` — owner `validate_integral_mask_vector` — `assert` — `assert!( lanes > 0, "{} requires a vector with at least one lane", helper_name, );`
-- `tslc/src/tslc/backend/assets/tsl_core.hpp:463` — owner `require_same_lanes` — `throw` — `throw std::invalid_argument( "lane-preserving conversion requires equal source and target lane counts" );`
-- `tslc/src/tslc/backend/assets/tsl_core.hpp:461` — owner `require_same_lanes` — `trap` — `__builtin_trap();`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:281` — owner `bit_cast` — `assert_eq` — `assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:295` — owner `reinterpret_unchecked` — `assert_eq` — `assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:690` — owner `require_same_lanes` — `assert_eq` — `assert_eq!( source_lanes, target_lanes, "lane-preserving conversion requires equal source and target lane counts" );`
+- `tslc/src/tslc/backend/assets/tsl_core.hpp:508` — owner `require_same_lanes` — `throw` — `throw std::invalid_argument( "lane-preserving conversion requires equal source and target lane counts" );`
+- `tslc/src/tslc/backend/assets/tsl_core.hpp:506` — owner `require_same_lanes` — `trap` — `__builtin_trap();`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:290` — owner `bit_cast` — `assert_eq` — `assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:304` — owner `reinterpret_unchecked` — `assert_eq` — `assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:753` — owner `require_same_lanes` — `assert_eq` — `assert_eq!( source_lanes, target_lanes, "lane-preserving conversion requires equal source and target lane counts" );`
 
 ### `static_immediate_nonzero` (2)
 
@@ -228,11 +229,11 @@ The checked signature must establish an addressable extent.
 
 This is a compiler/backend defect if reachable, not invalid caller data.
 
-- `tslc/src/tslc/backend/assets/tsl_core.rs:1074` — owner `saturating_cast_value` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:1031` — owner `saturating_from_f64` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:946` — owner `saturating_from_i128` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:989` — owner `saturating_from_u128` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:903` — owner `scalar_as_cast_value` — `panic` — `panic!("unsupported scalar-as cast")`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:1137` — owner `saturating_cast_value` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:1094` — owner `saturating_from_f64` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:1009` — owner `saturating_from_i128` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:1052` — owner `saturating_from_u128` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:966` — owner `scalar_as_cast_value` — `panic` — `panic!("unsupported scalar-as cast")`
 
 ### `implementation_invariant` (3)
 
@@ -240,7 +241,7 @@ The condition is not part of the public call domain.
 
 - `tslc/src/tslc/backend/assets/tsl_algorithm.rs:146` — owner `lane_is_set` — `debug_assert` — `debug_assert!(lane < <Self as IntegralMaskWord>::BITS);`
 - `tslc/src/tslc/backend/assets/tsl_algorithm.rs:133` — owner `one_at` — `debug_assert` — `debug_assert!(lane < <Self as IntegralMaskWord>::BITS);`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:671` — owner `ostream_write` — `unwrap` — `.unwrap()`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:734` — owner `ostream_write` — `unwrap` — `.unwrap()`
 
 ## Typed `caller_unsafe` public paths
 
@@ -248,74 +249,74 @@ These identities come from `Catalog` and `ImplementationSafety`, not target-text
 
 ### `contiguous_memory_contract` (13)
 
-- `load v:=(m,cptr,v)`; attributes `aligned=false, mask=pass_through`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 24
-- `store void:=(m,ptr,v)`; attributes `aligned=false, mask=pass_through`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 24
-- `load v:=(m,cptr)`; attributes `aligned=false, mask=zero`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 24
-- `load v:=cptr`; attributes `aligned=false`; result target `none`; reasons `compiler_builtin, intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 22
-- `load_scalar s:=cptr`; attributes `aligned=false`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 15
-- `store void:=(ptr,s)`; attributes `aligned=false`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 14
-- `store void:=(ptr,v)`; attributes `aligned=false`; result target `none`; reasons `compiler_builtin, intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 26
-- `load v:=(m,cptr,v)`; attributes `aligned=true, mask=pass_through`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 24
-- `store void:=(m,ptr,v)`; attributes `aligned=true, mask=pass_through`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 24
-- `load v:=(m,cptr)`; attributes `aligned=true, mask=zero`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 24
-- `load v:=cptr`; attributes `aligned=true`; result target `none`; reasons `compiler_builtin, intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 22
-- `store void:=(ptr,s)`; attributes `aligned=true`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 14
-- `store void:=(ptr,v)`; attributes `aligned=true`; result target `none`; reasons `compiler_builtin, intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 26
+- `load v:=(m,cptr,v)`; attributes `aligned=false, mask=pass_through`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 24; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
+- `store void:=(m,ptr,v)`; attributes `aligned=false, mask=pass_through`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 24; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
+- `load v:=(m,cptr)`; attributes `aligned=false, mask=zero`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 24; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
+- `load v:=cptr`; attributes `aligned=false`; result target `none`; reasons `compiler_builtin, intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 22; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
+- `load_scalar s:=cptr`; attributes `aligned=false`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 15; checked source status `coverage_gap`; preconditions `none`; coverage: requires a span/slice carrying readable or writable extent and selected alignment
+- `store void:=(ptr,s)`; attributes `aligned=false`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 14; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
+- `store void:=(ptr,v)`; attributes `aligned=false`; result target `none`; reasons `compiler_builtin, intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 26; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
+- `load v:=(m,cptr,v)`; attributes `aligned=true, mask=pass_through`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 24; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
+- `store void:=(m,ptr,v)`; attributes `aligned=true, mask=pass_through`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 24; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
+- `load v:=(m,cptr)`; attributes `aligned=true, mask=zero`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 24; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
+- `load v:=cptr`; attributes `aligned=true`; result target `none`; reasons `compiler_builtin, intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 22; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
+- `store void:=(ptr,s)`; attributes `aligned=true`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 14; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
+- `store void:=(ptr,v)`; attributes `aligned=true`; result target `none`; reasons `compiler_builtin, intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 26; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
 
 Review: A pointer and caller-claimed count cannot establish lifetime or provenance.
 
 ### `mask_memory_contract` (8)
 
-- `load_mask_repr m:=cptr`; attributes `aligned=false, packed=false`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 17
-- `store_mask_repr void:=(ptr,m)`; attributes `aligned=false, packed=false`; result target `none`; reasons `compiler_builtin, raw_memory, raw_pointer`; caller-unsafe implementations 17
-- `load_mask_repr m:=cptr`; attributes `aligned=false, packed=true`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 17
-- `store_mask_repr void:=(ptr,m)`; attributes `aligned=false, packed=true`; result target `none`; reasons `compiler_builtin, raw_memory, raw_pointer`; caller-unsafe implementations 17
-- `load_mask_repr m:=cptr`; attributes `aligned=true, packed=false`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 17
-- `store_mask_repr void:=(ptr,m)`; attributes `aligned=true, packed=false`; result target `none`; reasons `compiler_builtin, raw_memory, raw_pointer`; caller-unsafe implementations 17
-- `load_mask_repr m:=cptr`; attributes `aligned=true, packed=true`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 17
-- `store_mask_repr void:=(ptr,m)`; attributes `aligned=true, packed=true`; result target `none`; reasons `compiler_builtin, raw_memory, raw_pointer`; caller-unsafe implementations 17
+- `load_mask_repr m:=cptr`; attributes `aligned=false, packed=false`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 17; checked source status `coverage_gap`; preconditions `none`; coverage: requires a span/slice and a typed mask-layout capacity plan
+- `store_mask_repr void:=(ptr,m)`; attributes `aligned=false, packed=false`; result target `none`; reasons `compiler_builtin, raw_memory, raw_pointer`; caller-unsafe implementations 17; checked source status `coverage_gap`; preconditions `none`; coverage: requires a span/slice and a typed mask-layout capacity plan
+- `load_mask_repr m:=cptr`; attributes `aligned=false, packed=true`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 17; checked source status `coverage_gap`; preconditions `none`; coverage: requires a span/slice and a typed mask-layout capacity plan
+- `store_mask_repr void:=(ptr,m)`; attributes `aligned=false, packed=true`; result target `none`; reasons `compiler_builtin, raw_memory, raw_pointer`; caller-unsafe implementations 17; checked source status `coverage_gap`; preconditions `none`; coverage: requires a span/slice and a typed mask-layout capacity plan
+- `load_mask_repr m:=cptr`; attributes `aligned=true, packed=false`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 17; checked source status `coverage_gap`; preconditions `none`; coverage: requires a span/slice and a typed mask-layout capacity plan
+- `store_mask_repr void:=(ptr,m)`; attributes `aligned=true, packed=false`; result target `none`; reasons `compiler_builtin, raw_memory, raw_pointer`; caller-unsafe implementations 17; checked source status `coverage_gap`; preconditions `none`; coverage: requires a span/slice and a typed mask-layout capacity plan
+- `load_mask_repr m:=cptr`; attributes `aligned=true, packed=true`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 17; checked source status `coverage_gap`; preconditions `none`; coverage: requires a span/slice and a typed mask-layout capacity plan
+- `store_mask_repr void:=(ptr,m)`; attributes `aligned=true, packed=true`; result target `none`; reasons `compiler_builtin, raw_memory, raw_pointer`; caller-unsafe implementations 17; checked source status `coverage_gap`; preconditions `none`; coverage: requires a span/slice and a typed mask-layout capacity plan
 
 Review: Packed and lane-mask representations require different element counts.
 
 ### `selected_memory_contract` (2)
 
-- `expand_load v:=(m,cptr)`; attributes `aligned=true, op=expand`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 20
-- `compress_store void:=(m,ptr,v)`; attributes `aligned=true, op=pack`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 22
+- `expand_load v:=(m,cptr)`; attributes `aligned=true, op=expand`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 20; checked source status `declared`; preconditions `compacted_memory_extent`; coverage: source preconditions are available for backend check planning
+- `compress_store void:=(m,ptr,v)`; attributes `aligned=true, op=pack`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 22; checked source status `declared`; preconditions `compacted_memory_extent`; coverage: source preconditions are available for backend check planning
 
 Review: Validation must precede any compress-store output write.
 
 ### `indexed_memory_contract` (6)
 
-- `gather v:=(m,cptr,vidx,v,sImm)`; attributes `mask=pass_through`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 21
-- `scatter void:=(m,ptr,vidx,v,sImm)`; attributes `mask=zero`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 29
-- `gather v:=(cptr,vidx,sImm)`; attributes `none`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 29
-- `gather_narrow v:=(cptr,cptr,sImm)`; attributes `none`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 17
-- `gather_narrow_partial v:=(cptr,vidx,sImm)`; attributes `none`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 18
-- `scatter void:=(ptr,vidx,v,sImm)`; attributes `none`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 29
+- `gather v:=(m,cptr,vidx,v,sImm)`; attributes `mask=pass_through`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 21; checked source status `declared`; preconditions `indexed_memory_address_valid`; coverage: source preconditions are available for backend check planning
+- `scatter void:=(m,ptr,vidx,v,sImm)`; attributes `mask=zero`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 29; checked source status `declared`; preconditions `indexed_memory_address_valid`; coverage: source preconditions are available for backend check planning
+- `gather v:=(cptr,vidx,sImm)`; attributes `none`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 29; checked source status `declared`; preconditions `indexed_memory_address_valid`; coverage: source preconditions are available for backend check planning
+- `gather_narrow v:=(cptr,cptr,sImm)`; attributes `none`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 17; checked source status `coverage_gap`; preconditions `none`; coverage: implemented for vector-index gather/scatter, including partial narrow gather, from a valid base view, typed scale, and active-index validation; pointer-indexed narrow gather remains omitted
+- `gather_narrow_partial v:=(cptr,vidx,sImm)`; attributes `none`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 18; checked source status `declared`; preconditions `indexed_memory_address_valid`; coverage: source preconditions are available for backend check planning
+- `scatter void:=(ptr,vidx,v,sImm)`; attributes `none`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 29; checked source status `declared`; preconditions `indexed_memory_address_valid`; coverage: source preconditions are available for backend check planning
 
-Review: Bare pointers do not provide enough evidence for an honest checked twin.
+Review: Pointer-indexed narrow gather requires a second extent-carrying index view before an honest checked twin can be emitted.
 
 ### `deallocation_provenance` (1)
 
-- `deallocate void:=(ptr)`; attributes `none`; result target `none`; reasons `raw_memory, raw_pointer`; caller-unsafe implementations 11
+- `deallocate void:=(ptr)`; attributes `none`; result target `none`; reasons `raw_memory, raw_pointer`; caller-unsafe implementations 11; checked source status `coverage_gap`; preconditions `none`; coverage: no honest pointer-only checked twin; design an owning allocation API separately
 
 Review: A runtime pointer inspection cannot prove matching live allocation provenance.
 
 ### `random_output_contract` (1)
 
-- `random_step usize:=(ptr)`; attributes `none`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 3
+- `random_step usize:=(ptr)`; attributes `none`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 3; checked source status `coverage_gap`; preconditions `none`; coverage: requires a mutable reference/view, or an owning optional/result value API
 
 Review: The current status result does not establish output pointer validity.
 
 ### `raw_copy_contract` (1)
 
-- `memory_cp void:=(ptr,cptr,s,s)`; attributes `none`; result target `none`; reasons `raw_memory, raw_pointer`; caller-unsafe implementations 34
+- `memory_cp void:=(ptr,cptr,s,s)`; attributes `none`; result target `none`; reasons `raw_memory, raw_pointer`; caller-unsafe implementations 34; checked source status `coverage_gap`; preconditions `none`; coverage: requires valid source/destination views plus an explicit overlap contract/check
 
 Review: Omit the twin unless every range and overlap obligation is represented.
 
 ### `conversion_input_contract` (1)
 
-- `load_convert_up v:=cptr+`; attributes `none`; result target `base,ToBase`; reasons `intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 74
+- `load_convert_up v:=cptr+`; attributes `none`; result target `base,ToBase`; reasons `intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 74; checked source status `coverage_gap`; preconditions `none`; coverage: requires a source span/slice with the lowering-resolved element count
 
 Review: The result-target relationship determines the exact required source extent.
 
@@ -325,32 +326,32 @@ The existing typed metadata audit finds additional direct body/signature facts w
 
 The 26 caller-visible gaps are:
 
-- `tsldata/primitives/load_store/pack_expand.tsl:577` — load_convert_up avx512/si8/ToBase/si16
-- `tsldata/primitives/load_store/pack_expand.tsl:590` — load_convert_up avx512/si8/ToBase/si32
-- `tsldata/primitives/load_store/pack_expand.tsl:602` — load_convert_up avx512/si8/ToBase/si64
-- `tsldata/primitives/load_store/pack_expand.tsl:622` — load_convert_up avx512/ui8/ToBase/ui16
-- `tsldata/primitives/load_store/pack_expand.tsl:635` — load_convert_up avx512/ui8/ToBase/ui32
-- `tsldata/primitives/load_store/pack_expand.tsl:647` — load_convert_up avx512/ui8/ToBase/ui64
-- `tsldata/primitives/load_store/pack_expand.tsl:667` — load_convert_up avx512/si16/ToBase/si32
-- `tsldata/primitives/load_store/pack_expand.tsl:679` — load_convert_up avx512/si16/ToBase/si64
-- `tsldata/primitives/load_store/pack_expand.tsl:694` — load_convert_up avx512/ui16/ToBase/ui32
-- `tsldata/primitives/load_store/pack_expand.tsl:706` — load_convert_up avx512/ui16/ToBase/ui64
-- `tsldata/primitives/load_store/pack_expand.tsl:721` — load_convert_up avx512/si32/ToBase/si64
-- `tsldata/primitives/load_store/pack_expand.tsl:736` — load_convert_up avx512/ui32/ToBase/ui64
-- `tsldata/primitives/load_store/pack_expand.tsl:751` — load_convert_up avx512/f32/ToBase/f64
-- `tsldata/primitives/load_store/pack_expand.tsl:815` — load_convert_up [avx2, avx2_vl]/si8/ToBase/si16
-- `tsldata/primitives/load_store/pack_expand.tsl:848` — load_convert_up [avx2, avx2_vl]/ui8/ToBase/ui16
-- `tsldata/primitives/load_store/pack_expand.tsl:881` — load_convert_up [avx2, avx2_vl]/si16/ToBase/si32
-- `tsldata/primitives/load_store/pack_expand.tsl:914` — load_convert_up [avx2, avx2_vl]/ui16/ToBase/ui32
-- `tsldata/primitives/load_store/pack_expand.tsl:947` — load_convert_up [avx2, avx2_vl]/si32/ToBase/si64
-- `tsldata/primitives/load_store/pack_expand.tsl:964` — load_convert_up [avx2, avx2_vl]/ui32/ToBase/ui64
-- `tsldata/primitives/load_store/pack_expand.tsl:981` — load_convert_up [avx2, avx2_vl]/f32/ToBase/f64
-- `tsldata/primitives/load_store/rnd_access.tsl:428` — gather sve/arith
-- `tsldata/primitives/load_store/rnd_access.tsl:787` — gather_narrow_partial sve/[bword, dword]
-- `tsldata/primitives/load_store/rnd_access.tsl:978` — gather_narrow sve/[bword, dword]
-- `tsldata/primitives/load_store/rnd_access.tsl:1368` — gather sve/arith
-- `tsldata/primitives/load_store/rnd_access.tsl:1764` — scatter sve/arith
-- `tsldata/primitives/load_store/rnd_access.tsl:2272` — scatter sve/arith
+- `tsldata/primitives/load_store/pack_expand.tsl:594` — load_convert_up avx512/si8/ToBase/si16
+- `tsldata/primitives/load_store/pack_expand.tsl:607` — load_convert_up avx512/si8/ToBase/si32
+- `tsldata/primitives/load_store/pack_expand.tsl:619` — load_convert_up avx512/si8/ToBase/si64
+- `tsldata/primitives/load_store/pack_expand.tsl:639` — load_convert_up avx512/ui8/ToBase/ui16
+- `tsldata/primitives/load_store/pack_expand.tsl:652` — load_convert_up avx512/ui8/ToBase/ui32
+- `tsldata/primitives/load_store/pack_expand.tsl:664` — load_convert_up avx512/ui8/ToBase/ui64
+- `tsldata/primitives/load_store/pack_expand.tsl:684` — load_convert_up avx512/si16/ToBase/si32
+- `tsldata/primitives/load_store/pack_expand.tsl:696` — load_convert_up avx512/si16/ToBase/si64
+- `tsldata/primitives/load_store/pack_expand.tsl:711` — load_convert_up avx512/ui16/ToBase/ui32
+- `tsldata/primitives/load_store/pack_expand.tsl:723` — load_convert_up avx512/ui16/ToBase/ui64
+- `tsldata/primitives/load_store/pack_expand.tsl:738` — load_convert_up avx512/si32/ToBase/si64
+- `tsldata/primitives/load_store/pack_expand.tsl:753` — load_convert_up avx512/ui32/ToBase/ui64
+- `tsldata/primitives/load_store/pack_expand.tsl:768` — load_convert_up avx512/f32/ToBase/f64
+- `tsldata/primitives/load_store/pack_expand.tsl:832` — load_convert_up [avx2, avx2_vl]/si8/ToBase/si16
+- `tsldata/primitives/load_store/pack_expand.tsl:865` — load_convert_up [avx2, avx2_vl]/ui8/ToBase/ui16
+- `tsldata/primitives/load_store/pack_expand.tsl:898` — load_convert_up [avx2, avx2_vl]/si16/ToBase/si32
+- `tsldata/primitives/load_store/pack_expand.tsl:931` — load_convert_up [avx2, avx2_vl]/ui16/ToBase/ui32
+- `tsldata/primitives/load_store/pack_expand.tsl:964` — load_convert_up [avx2, avx2_vl]/si32/ToBase/si64
+- `tsldata/primitives/load_store/pack_expand.tsl:981` — load_convert_up [avx2, avx2_vl]/ui32/ToBase/ui64
+- `tsldata/primitives/load_store/pack_expand.tsl:998` — load_convert_up [avx2, avx2_vl]/f32/ToBase/f64
+- `tsldata/primitives/load_store/rnd_access.tsl:437` — gather sve/arith
+- `tsldata/primitives/load_store/rnd_access.tsl:805` — gather_narrow_partial sve/[bword, dword]
+- `tsldata/primitives/load_store/rnd_access.tsl:996` — gather_narrow sve/[bword, dword]
+- `tsldata/primitives/load_store/rnd_access.tsl:1397` — gather sve/arith
+- `tsldata/primitives/load_store/rnd_access.tsl:1803` — scatter sve/arith
+- `tsldata/primitives/load_store/rnd_access.tsl:2322` — scatter sve/arith
 
 ## Representative declaration snapshots
 

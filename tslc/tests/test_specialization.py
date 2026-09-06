@@ -434,6 +434,7 @@ def test_cpp_core_vectors_expose_metadata_constants(
     assert "inline constexpr implementation_state implementation_state_v" in core
     assert "static constexpr bool has_static_lane_count_v = true;" in core
     assert "using extension_type = scalar;" in core
+    assert "static constexpr bool mask_is_bitset = true;" in core
     assert "using with_base_type = simd<ToBase, scalar>;" in core
     assert "using with_extension = simd<T, ToExtension>;" in core
     assert "static constexpr std::size_t lane_count_v = 1;" in core
@@ -702,7 +703,7 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     documentation = specialization_artifacts["rust/src/tsl_documentation.rs"]
 
     assert sha256(avx2.encode()).hexdigest() == (
-        "c13ee1dcead480ce964f8e918ecc21aa67005a912cab9a82af56853a5adc6071"
+        "4a67fa2fd75873c0f7c8988198e234269ca0a324b237358cb1c2e19826728cf8"
     )
 
     assert 'name = "tsl"' in cargo
@@ -752,6 +753,7 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
         name for name in documented_functions if name.endswith("_checked")
     }
     assert checked_functions == {
+        "compress_store_checked",
         "extract_value_at_checked",
         "insert_value_at_checked",
         "load_checked",
@@ -1175,6 +1177,7 @@ def test_cpp_specialization_structure(specialization_artifacts: dict[str, str]) 
     assert "static constexpr std::size_t vector_alignment = 32;" in avx2
     assert "static constexpr std::size_t simd_register_alignment_v = vector_alignment;" in avx2
     assert "using extension_type = avx2;" in avx2
+    assert "static constexpr bool mask_is_bitset = false;" in avx2
     assert "using with_base_type = simd<ToBase, avx2>;" in avx2
     assert "using with_extension = simd<T, ToExtension>;" in avx2
     assert "struct add_impl<tsl::simd<int32_t, tsl::avx2>>" in avx2
@@ -1360,7 +1363,9 @@ def test_rust_specialization_structure(specialization_artifacts: dict[str, str])
     assert "const ELEMENT_COUNT: usize = 1;" in core
     assert "const ELEMENT_COUNT: usize = LANES;" in core
     assert "const ALIGN: usize;" in core
+    assert "const MASK_IS_BITSET: bool = false;" in core
     assert "const ALIGN: usize = core::mem::align_of::<T>();" in core
+    assert "const MASK_IS_BITSET: bool = true;" in core
     assert "impl<T: Copy> SimdVector for Simd<T, Scalar>" in core
     assert "impl<T: Copy, const LANES: usize> SimdVector" in core
     assert (
@@ -1383,6 +1388,7 @@ def test_rust_specialization_structure(specialization_artifacts: dict[str, str])
     assert "const ELEMENT_COUNT: usize = 8;" in avx2
     assert "fn lane_count() -> usize { 8 }" in avx2
     assert "const ALIGN: usize = 32;" in avx2
+    assert "const MASK_IS_BITSET: bool = false;" in avx2
     assert "unsafe { return core::arch::x86_64::_mm256_add_epi32(left, right); }" in avx2
     assert "impl AddImpl for Simd<i32, Sse> {" in avx2
     assert "#[doc(hidden)]\npub mod detail {\n    pub mod primitives {" in avx2

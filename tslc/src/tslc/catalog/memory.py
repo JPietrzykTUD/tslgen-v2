@@ -18,6 +18,8 @@ class MemoryAccess(StrEnum):
 
 class MemoryAddressing(StrEnum):
     CONTIGUOUS = "contiguous"
+    INDEXED = "indexed"
+    COMPACTED = "compacted"
 
 
 class MemoryAlignment(StrEnum):
@@ -26,10 +28,11 @@ class MemoryAlignment(StrEnum):
 
 
 class MemoryPayloadExtent(StrEnum):
-    """How many elements one contiguous memory operation consumes."""
+    """How a memory operation determines its element payload."""
 
     SCALAR = "scalar"
     VECTOR = "vector"
+    ACTIVE_LANES = "active_lanes"
 
 
 _MEMORY_ALIGNMENT_AXIS = "aligned"
@@ -63,7 +66,15 @@ MEMORY_ACCESS_DESCRIPTIONS: Mapping[MemoryAccess, str] = MappingProxyType(
     }
 )
 MEMORY_ADDRESSING_DESCRIPTIONS: Mapping[MemoryAddressing, str] = MappingProxyType(
-    {MemoryAddressing.CONTIGUOUS: "Accesses consecutive elements in memory."}
+    {
+        MemoryAddressing.CONTIGUOUS: "Accesses consecutive elements in memory.",
+        MemoryAddressing.INDEXED: (
+            "Accesses per-lane byte offsets computed from an index vector and scale."
+        ),
+        MemoryAddressing.COMPACTED: (
+            "Accesses consecutive elements selected by active mask lanes."
+        ),
+    }
 )
 
 

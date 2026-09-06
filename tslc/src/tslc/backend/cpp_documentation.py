@@ -9,7 +9,7 @@ from tslc.backend.primitive_rendering import (
 )
 from tslc.backend.precondition_error_rendering import cpp_precondition_error
 from tslc.backend.signature_types import CPP_SIGNATURE_TYPES
-from tslc.catalog.memory import MemoryAccess
+from tslc.catalog.memory import MemoryAccess, MemoryAddressing
 from tslc.catalog.preconditions import (
     PRECONDITION_DESCRIPTORS,
     PreconditionErrorKind,
@@ -202,8 +202,9 @@ def _cpp_checked_errors(
         f"`precondition_error::{_cpp_error_name(error)}`"
         for error in sorted(
             {
-                PRECONDITION_DESCRIPTORS[item.kind].error
+                error
                 for item in preconditions
+                for error in PRECONDITION_DESCRIPTORS[item.kind].errors
             },
             key=lambda item: item.value,
         )
@@ -233,9 +234,9 @@ def _parameter_summary(
     return "; ".join(
         f"{name}: "
         + (
-            "read-only contiguous span"
+            _memory_parameter_description(memory.addressing, read_only=True)
             if index in memory_indexes and memory.access is MemoryAccess.READ
-            else "writable contiguous span"
+            else _memory_parameter_description(memory.addressing, read_only=False)
             if index in memory_indexes
             else description
         )
@@ -243,6 +244,20 @@ def _parameter_summary(
             specializations
         )
     )
+
+
+def _memory_parameter_description(
+    addressing: MemoryAddressing,
+    *,
+    read_only: bool,
+) -> str:
+    access = "read-only" if read_only else "writable"
+    shape = {
+        MemoryAddressing.CONTIGUOUS: "contiguous span",
+        MemoryAddressing.INDEXED: "indexed base span",
+        MemoryAddressing.COMPACTED: "compacted-memory span",
+    }[addressing]
+    return f"{access} {shape}"
 
 
 def _template_summary(spec: LoweredSpecialization) -> str:

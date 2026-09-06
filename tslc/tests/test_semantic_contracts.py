@@ -672,7 +672,10 @@ def test_memory_and_conversion_completions_use_closed_typed_values() -> None:
     access_edit = source.split("access read", 1)[0] + "access r"
     assert _completion_labels(catalog, source, access_edit) == {"read"}
     addressing_edit = source.split("addressing contiguous", 1)[0] + "addressing c"
-    assert _completion_labels(catalog, source, addressing_edit) == {"contiguous"}
+    assert _completion_labels(catalog, source, addressing_edit) == {
+        "compacted",
+        "contiguous",
+    }
     kind_edit = source.split("kind numeric", 1)[0] + "kind n"
     assert _completion_labels(catalog, source, kind_edit) == {"numeric"}
     lane_edit = source.split("preserve_register_width", 1)[0] + "preserve_"

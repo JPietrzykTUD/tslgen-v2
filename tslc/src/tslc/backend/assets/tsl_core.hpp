@@ -266,6 +266,7 @@ struct simd<T, scalar> {
     using extension_type = scalar;
     using register_type = T;
     using mask_type = bool;
+    static constexpr bool mask_is_bitset = true;
     // Integral mask: a fixed unsigned scalar (to_integral packs the 0/1 mask into it).
     using imask_type = std::uint64_t;
     template <class ToBase>
@@ -304,6 +305,49 @@ template <class Idx>
 inline std::size_t idx_offset(Idx index, std::size_t scale) {
     return static_cast<std::size_t>(index) * scale;
 }
+
+namespace detail {
+
+template <class Element, class Index>
+inline precondition_error indexed_memory_address_error(
+    Index raw_index,
+    std::size_t scale,
+    std::size_t extent) noexcept {
+    using index_type = std::remove_cv_t<Index>;
+    static_assert(std::is_integral_v<index_type>,
+                  "checked indexed-memory indices must be integral");
+    if constexpr (std::is_signed_v<index_type>) {
+        if (raw_index < 0) {
+            return precondition_error::index_out_of_bounds;
+        }
+    }
+    constexpr auto max_size = (std::numeric_limits<std::size_t>::max)();
+    using unsigned_index = std::make_unsigned_t<index_type>;
+    const auto unsigned_raw = static_cast<unsigned_index>(raw_index);
+    if constexpr (sizeof(unsigned_index) > sizeof(std::size_t)) {
+        if (unsigned_raw > static_cast<unsigned_index>(max_size)) {
+            return precondition_error::address_overflow;
+        }
+    }
+    const auto index = static_cast<std::size_t>(unsigned_raw);
+    if (scale != 0 && index > max_size / scale) {
+        return precondition_error::address_overflow;
+    }
+    if (extent > max_size / sizeof(Element)) {
+        return precondition_error::address_overflow;
+    }
+    const auto offset = index * scale;
+    const auto bytes = extent * sizeof(Element);
+    if (offset % alignof(Element) != 0) {
+        return precondition_error::misaligned;
+    }
+    if (offset > bytes || sizeof(Element) > bytes - offset) {
+        return precondition_error::index_out_of_bounds;
+    }
+    return precondition_error::none;
+}
+
+}  // namespace detail
 
 // A fixed-size, over-aligned array buffer (the `s[]` kind). Wraps std::array so
 // `.data()`/`operator[]`/`.fill()` are uniform with the Rust counterpart; `Align`
@@ -414,6 +458,7 @@ struct simd<T, generic<LANES>> {
     using register_type = array_type<T, LANES>;
     // Emulated mask: a bitset, one bit per lane (≤64 lanes covers all real widths).
     using mask_type = std::uint64_t;
+    static constexpr bool mask_is_bitset = true;
     // Integral mask: the same 64-bit bitset (LANES is a template param, so the lane count
     // can't size a smaller integer at this point).
     using imask_type = std::uint64_t;
@@ -688,7 +733,7 @@ inline typename ToVec::imask_type imask_extract(
 template <class Vec>
 inline bool mask_test(const typename Vec::mask_type& mask, std::size_t index) {
     using MaskT = typename Vec::mask_type;
-    if constexpr (std::is_integral_v<MaskT>) {
+    if constexpr (Vec::mask_is_bitset) {
         return ((mask >> index) & 1ull) != 0;
     } else {
         using BaseT = typename Vec::base_type;

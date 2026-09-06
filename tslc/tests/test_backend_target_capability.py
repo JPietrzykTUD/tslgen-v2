@@ -91,6 +91,10 @@ def test_width_indexed_register_capabilities_derive_from_family_role(
     assert "static constexpr std::size_t lane_count() noexcept" in rendered
     assert "static constexpr std::size_t vector_alignment = 32;" in rendered
     assert "static constexpr std::size_t simd_register_alignment_v = vector_alignment;" in rendered
+    assert "static constexpr bool mask_is_bitset = false;" in rendered
+
+    avx512_rendered = _cpp_registration("avx512", catalog.extensions["avx512"])
+    assert "static constexpr bool mask_is_bitset = true;" in avx512_rendered
 
 
 def test_cpp_native_registration_exposes_vector_metadata(catalog: Catalog) -> None:
@@ -228,6 +232,31 @@ def test_rust_registration_uses_source_tag_and_lowered_register(
     assert "const ELEMENT_COUNT: usize = 8;" in rendered
     assert "fn lane_count() -> usize { 8 }" in rendered
     assert "const ALIGN: usize = 32;" in rendered
+    assert "const MASK_IS_BITSET: bool = false;" in rendered
+
+
+def test_rust_native_predicate_registration_marks_compact_mask_storage(
+    catalog: Catalog,
+) -> None:
+    extension = catalog.extensions["avx512"]
+    spec = LoweredSpecialization(
+        backend_id="rust",
+        primitive_name="add",
+        source_primitive_name="add",
+        extension_name="avx512",
+        type_tag="si32",
+        base_type_spelling="i32",
+        register_spelling="core::arch::x86_64::__m512i",
+        result_kind="v",
+        param_names=("left", "right"),
+        param_kinds=("v", "v"),
+        body=LoweredBody.from_text("return left;"),
+        vector_spelling="Simd<i32, Avx512>",
+    )
+
+    rendered = rust_registrations({"add": (spec,)}, {"avx512": extension})
+
+    assert "const MASK_IS_BITSET: bool = true;" in rendered
 
 
 def test_rust_registration_ignores_free_function_scalar_register(

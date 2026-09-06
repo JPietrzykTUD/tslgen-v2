@@ -60,6 +60,8 @@ def rust_registrations(
             f"type WithBaseType<ToBase> = Simd<ToBase, {tag}>; "
             f"type WithExtension<ToExtension> = Simd<{base}, ToExtension>; "
             f"const ALIGN: usize = {alignment}; "
+            f"const MASK_IS_BITSET: bool = "
+            f"{str(_rust_mask_is_bitset(extension)).lower()}; "
             f"fn lane_count() -> usize {{ {lane_count} }} }}"
         )
         lines.append(
@@ -98,6 +100,7 @@ def _rust_sized_registrations(
             f"type WithBaseType<ToBase> = Simd<ToBase, {sized_tag}>; "
             "type WithExtension<ToExtension> = Simd<T, ToExtension>; "
             "const ALIGN: usize = core::mem::align_of::<array_type<T, LANES>>(); "
+            "const MASK_IS_BITSET: bool = true; "
             "fn lane_count() -> usize { LANES } }"
         )
         lines.append(
@@ -218,6 +221,13 @@ def rust_mask_type(extension: Extension | None, type_bits: int, register: str) -
         return register
     lanes = extension.vector_bits // type_bits
     return extension.mask_policy.spelling_for_lanes("rust", max(8, lanes)) or register
+
+
+def _rust_mask_is_bitset(extension: Extension) -> bool:
+    return extension.mask_policy.kind in {
+        "exact_lane_bitmask",
+        "native_predicate_by_lanes",
+    }
 
 
 def rust_imask_type(

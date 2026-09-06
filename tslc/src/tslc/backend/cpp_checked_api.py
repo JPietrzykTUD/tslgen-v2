@@ -9,7 +9,7 @@ from tslc.backend.checked_api import (
     applicable_checked_api_plan,
 )
 from tslc.catalog.arithmetic import ArithmeticNumericDomain
-from tslc.catalog.memory import MemoryAccess, MemoryPayloadExtent
+from tslc.catalog.memory import MemoryAccess, MemoryAddressing, MemoryPayloadExtent
 from tslc.catalog.semantics import OperandRole
 from tslc.lower.lowerer import LoweredSpecialization, varying_positions
 
@@ -30,6 +30,7 @@ class CppCheckedApiPlan:
     memory_parameter_name: str | None
     memory_parameter_index: int | None
     memory_access: MemoryAccess | None
+    memory_addressing: MemoryAddressing | None
     required_extent_expression: str | None
     required_alignment_expression: str | None
     alignment_parameter_name: str | None
@@ -88,6 +89,7 @@ def plan_cpp_checked_api(
                 condition.parameter_name,
                 condition.parameter_index,
                 condition.memory_access,
+                condition.memory_addressing,
                 condition.memory_payload_extents,
                 condition.memory_alignment_axis_name,
             )
@@ -99,6 +101,7 @@ def plan_cpp_checked_api(
             memory_parameter_name,
             memory_parameter_index,
             memory_access,
+            memory_addressing,
             payload_extents,
             alignment_axis_name,
         ) = next(iter(memory_identities))
@@ -107,7 +110,10 @@ def plan_cpp_checked_api(
             if alignment_axis_name is not None
             else None
         )
-        if payload_extents == (MemoryPayloadExtent.SCALAR,):
+        if memory_addressing is not MemoryAddressing.CONTIGUOUS:
+            required_extent_expression = None
+            required_alignment_expression = None
+        elif payload_extents == (MemoryPayloadExtent.SCALAR,):
             required_extent_expression = "std::size_t{1}"
             required_alignment_expression = "alignof(typename Vec::base_type)"
         elif payload_extents == (MemoryPayloadExtent.VECTOR,):
@@ -166,6 +172,9 @@ def plan_cpp_checked_api(
         memory_parameter_name=memory_parameter_name,
         memory_parameter_index=memory_parameter_index,
         memory_access=memory_access,
+        memory_addressing=(
+            memory_conditions[0].memory_addressing if memory_conditions else None
+        ),
         required_extent_expression=required_extent_expression,
         required_alignment_expression=required_alignment_expression,
         alignment_parameter_name=alignment_parameter_name,

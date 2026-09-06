@@ -315,11 +315,11 @@ def _checked_conditions(candidate: _Candidate) -> tuple[RustFacadeCheckedConditi
         return ()
     return tuple(
         RustFacadeCheckedCondition(
-            condition.kind,
-            condition.parameter_name,
-            condition.error,
-            condition.mask_parameter_name,
-            tuple(
+            kind=condition.kind,
+            parameter_name=condition.parameter_name,
+            error=condition.error,
+            mask_parameter_name=condition.mask_parameter_name,
+            applicable_type_tags=tuple(
                 sorted(
                     {
                         spec.type_tag
@@ -330,9 +330,11 @@ def _checked_conditions(candidate: _Candidate) -> tuple[RustFacadeCheckedConditi
                     }
                 )
             ),
-            condition.memory_access,
-            condition.memory_payload_extents,
-            condition.memory_alignment_axis_name,
+            memory_access=condition.memory_access,
+            memory_payload_extents=condition.memory_payload_extents,
+            memory_alignment_axis_name=condition.memory_alignment_axis_name,
+            additional_errors=condition.additional_errors,
+            memory_addressing=condition.memory_addressing,
         )
         for condition in plan.conditions
     )
