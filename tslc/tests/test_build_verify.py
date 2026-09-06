@@ -860,6 +860,25 @@ def test_rust_path_dependency_consumer_builds(
     packaged_paths = set(packaged.stdout.splitlines())
     assert {"Cargo.toml", "README.md", "src/lib.rs", "src/tsl_facade.rs"} <= packaged_paths
     assert not any(path.startswith("tslc/") for path in packaged_paths)
+    generated_doc_junk = generated / "rust/docs/target/doc/tsl/index.html"
+    generated_doc_junk.parent.mkdir(parents=True)
+    generated_doc_junk.write_text("generated docs must not enter the package\n")
+    repackaged = subprocess.run(
+        (
+            "cargo",
+            "package",
+            "--manifest-path",
+            str(generated_manifest),
+            "--allow-dirty",
+            "--no-verify",
+            "--list",
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert repackaged.returncode == 0, repackaged.stderr + repackaged.stdout
+    assert set(repackaged.stdout.splitlines()) == packaged_paths
     manifest_text = generated_manifest.read_text(encoding="utf-8")
     assert "[build-dependencies]" not in manifest_text
     assert 'rust-version = "1.89"' in manifest_text
@@ -963,7 +982,7 @@ def test_rust_path_dependency_consumer_builds(
         check=False,
         capture_output=True,
         text=True,
-        env={**os.environ, "RUSTDOCFLAGS": "-D warnings"},
+        env={**os.environ, "RUSTDOCFLAGS": "-D warnings -D missing_docs"},
     )
     assert documented.returncode == 0, documented.stderr + documented.stdout
     root_docs = (

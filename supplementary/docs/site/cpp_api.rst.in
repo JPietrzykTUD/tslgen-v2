@@ -1,5 +1,15 @@
 C++ API
 =======
 
+The stable TSL 1.x C++ surface consists of the declarations reachable through
+``tsl.hpp`` in namespace ``tsl``: vector and span types, primitive wrappers and
+their checked companions, ``dataparallel`` policies, and public ``algo``
+functions and policy tags. Physical profile headers, ``detail`` namespaces,
+and compiler-selection macros are implementation details.
+
+Unsuffixed calls do not validate dynamic preconditions. The checked contract,
+error-output convention, residual C++ object obligations, and a compiled
+example are described in :doc:`checked_api_contract`.
+
 .. doxygenindex::
    :project: TSL

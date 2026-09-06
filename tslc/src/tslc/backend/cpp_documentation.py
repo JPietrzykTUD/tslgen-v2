@@ -8,6 +8,7 @@ from tslc.backend.primitive_rendering import (
     runtime_parameter_summary,
 )
 from tslc.backend.precondition_error_rendering import cpp_precondition_error
+from tslc.backend.primitive_facade import DataparallelPrimitiveFacade
 from tslc.backend.signature_types import CPP_SIGNATURE_TYPES
 from tslc.catalog.memory import MemoryAccess, MemoryAddressing
 from tslc.catalog.preconditions import (
@@ -68,6 +69,33 @@ def cpp_target_register_doc(spec: LoweredSpecialization) -> str:
         lane_parameter=spec.target.lane_parameter or spec.lane_parameter,
         register_is_base=False,
         fallback=spec.target.native_register_spelling or spec.target.register_spelling,
+    )
+
+
+def cpp_dataparallel_facade_doc(facade: DataparallelPrimitiveFacade) -> str:
+    """Document the policy overload as its own public callable identity."""
+
+    shape = facade.shape
+    type_parameters = (
+        "Policy selects the lane-width policy; FromT selects the source element "
+        "type; ToT selects the target element type"
+        if shape.target is not None
+        else "Policy selects the lane-width policy; T selects the element type"
+    )
+    return render_cpp_doc(
+        DocumentationBlock(
+            brief=f"Policy-based overload of `{facade.primitive_name}`.",
+            facts=(
+                ("Template parameters", type_parameters),
+                ("Parameters", _parameter_summary((shape,), checked=False)),
+                (
+                    "Dispatch",
+                    "Resolves the vector type through `tsl::dataparallel::simd_for_t` "
+                    "and delegates to the vector-typed overload",
+                ),
+            ),
+            facts_title="Policy API",
+        )
     )
 
 
@@ -295,6 +323,7 @@ def _result_summary(spec: LoweredSpecialization, *, concrete: bool) -> str:
             CPP_SIGNATURE_TYPES.free_type(
                 spec.result_kind,
                 base=spec.base_type_spelling,
+                base_type_tag=spec.type_tag,
             ),
         )
     if concrete:

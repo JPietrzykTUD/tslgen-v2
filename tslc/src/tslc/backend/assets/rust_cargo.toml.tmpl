@@ -1,6 +1,7 @@
 [package]
 name = @{package_name}
 version = @{package_version}
+description = @{package_description}
 edition = @{package_edition}
 rust-version = @{rust_version}
 license = @{package_license}
@@ -8,6 +9,18 @@ repository = @{repository_url}
 documentation = @{documentation_url}
 readme = @{readme_path}
 autoexamples = false
+include = [
+    "Cargo.toml",
+    "LICENSE",
+    @{package_readme},
+    "rustfmt.toml",
+    "build.rs",
+    "*.rs",
+    "src/**",
+    "tests/**",
+    "benches/**",
+    "bench/**",
+]
 
 [lib]
 path = "src/lib.rs"

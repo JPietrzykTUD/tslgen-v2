@@ -256,7 +256,13 @@ def _result_summary(spec: LoweredSpecialization, *, concrete: bool) -> str:
     ):
         return result_summary(
             spec.result_kind,
-            _inline_code(rust_free_type(spec.result_kind, spec.base_type_spelling)),
+            _inline_code(
+                rust_free_type(
+                    spec.result_kind,
+                    spec.base_type_spelling,
+                    base_type_tag=spec.type_tag,
+                )
+            ),
         )
     if concrete:
         return result_summary(spec.result_kind, _inline_code(_concrete_result(spec)))

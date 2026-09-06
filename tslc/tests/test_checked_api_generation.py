@@ -358,17 +358,18 @@ def test_cpp_contiguous_memory_checked_twins_use_spans_and_typed_extents(
     catalog: Catalog,
     machine_profiles: Mapping[str, MachineProfile],
 ) -> None:
-    load = _lowered(catalog, machine_profiles, "load", "cpp")
+    loads = _lowered_group(catalog, machine_profiles, "load", "cpp")
+    load = loads[0]
     assert load.safety.caller_unsafe
-    load_plan = checked_api_plan((load,))
+    load_plan = checked_api_plan(loads)
     assert load_plan is not None
     assert {
         extent
         for condition in load_plan.conditions
         for extent in condition.memory_payload_extents
     } == {MemoryPayloadExtent.VECTOR}
-    rendered_load = CppBackend().render_checked_wrappers("load", (load,))
-    load_docs = CppBackend().render_documentation_api_declaration("load", (load,))
+    rendered_load = CppBackend().render_checked_wrappers("load", loads)
+    load_docs = CppBackend().render_documentation_api_declaration("load", loads)
     assert "::tsl::span<typename Vec::base_type const> ptr" in rendered_load
     assert "if (ptr.size() < Vec::lane_count())" in rendered_load
     assert "if constexpr (Aligned)" in rendered_load
@@ -377,6 +378,8 @@ def test_cpp_contiguous_memory_checked_twins_use_spans_and_typed_extents(
     assert "return ::tsl::load<Vec, Aligned>(ptr.data());" in rendered_load
     assert "ptr: read-only contiguous span" in load_docs
     assert "construction does not validate that C++ object invariant" in load_docs
+    assert "@par Policy API" in load_docs
+    assert "simd_for_t" in load_docs
 
     stores = _lowered_group(catalog, machine_profiles, "store", "cpp")
     rendered_store = CppBackend().render_checked_wrappers("store", stores)
@@ -387,6 +390,40 @@ def test_cpp_contiguous_memory_checked_twins_use_spans_and_typed_extents(
     assert "::tsl::store<Vec, Aligned>(ptr.data(), data);" in rendered_store
     assert "return ::tsl::precondition_error::none;" in rendered_store
     assert "data: SIMD register or scalar value" in store_docs
+
+
+def test_free_pointer_results_have_exact_documented_indirection(
+    catalog: Catalog,
+    machine_profiles: Mapping[str, MachineProfile],
+) -> None:
+    cpp = _lowered(
+        catalog,
+        machine_profiles,
+        "allocate",
+        "cpp",
+        type_tag="ui64",
+        extension_name="generic",
+        profile_name="scalar",
+    )
+    rust = _lowered(
+        catalog,
+        machine_profiles,
+        "allocate",
+        "rust",
+        type_tag="ui64",
+        extension_name="generic",
+        profile_name="scalar",
+    )
+
+    cpp_docs = CppBackend().render_documentation_api_declaration(
+        "allocate", (cpp,)
+    )
+    rust_docs = RustBackend().render_documentation_api("allocate", (rust,))
+
+    assert "Returns: mutable element pointer (void *)" in cpp_docs
+    assert "void * *" not in cpp_docs
+    assert "Returns: mutable element pointer (`*mut core::ffi::c_void`)" in rust_docs
+    assert "*mut *mut" not in rust_docs
 
 
 def test_rust_contiguous_memory_checked_twins_use_slices_and_overload_facts(

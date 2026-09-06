@@ -504,6 +504,7 @@ def _rust_lib(
     )
     return assets.fill(
         "rust_lib.rs.tmpl",
+        checked_api_examples=_rust_checked_api_examples(profiles),
         facade_function_exports=_rust_facade_function_exports(facade_plan),
         primitive_tags=(f"{primitive_tags}\n\n" if primitive_tags else ""),
         profile_modules=profile_modules,
@@ -519,6 +520,44 @@ def _rust_lib(
             else ""
         ),
     )
+
+
+def _rust_checked_api_examples(profiles: tuple[EmittedProfile, ...]) -> str:
+    available = {
+        primitive_name
+        for profile in profiles
+        for primitive_name in profile.specializations("rust")
+    }
+    if "extract_value_at" not in available:
+        return ""
+    return """# Examples
+
+The ordinary lower-level path requires the caller to uphold its safety
+contract:
+
+```
+use tsl::tsl_core::{Scalar, Simd as ProfileSimd};
+
+type V = ProfileSimd<i32, Scalar>;
+let lane = unsafe { tsl::profile::extract_value_at::<V>(7, 0) };
+if lane != 7 {
+    std::process::abort();
+}
+```
+
+The checked path reports invalid runtime data without invoking the ordinary
+operation:
+
+```
+use tsl::tsl_core::{Scalar, Simd as ProfileSimd};
+use tsl::PreconditionError;
+
+type V = ProfileSimd<i32, Scalar>;
+let result = tsl::profile::extract_value_at_checked::<V>(7, 1);
+if result != Err(PreconditionError::IndexOutOfBounds) {
+    std::process::abort();
+}
+```"""
 
 
 def _rust_lib_profile_module(
@@ -705,12 +744,14 @@ def _rust_cargo(
         "rust_cargo.toml.tmpl",
         package_name=json.dumps(package_config.name),
         package_version=json.dumps(package_config.version),
+        package_description=json.dumps(package_config.description),
         package_edition=json.dumps(package_config.edition),
         rust_version=json.dumps(package_config.rust_version),
         package_license=json.dumps(package_config.license),
         repository_url=json.dumps(package_config.repository),
         documentation_url=json.dumps(package_config.documentation),
         readme_path=json.dumps(package_config.readme),
+        package_readme=json.dumps(package_config.readme),
         features="\n".join(features),
         bench_targets=(
             "\n\n"

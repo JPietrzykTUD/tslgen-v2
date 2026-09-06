@@ -14,6 +14,7 @@ from tslc.backend.cpp_profile_model import (
 )
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.compiler_assets import RenderAssets
+from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact
 from tslc.render._common import slug, text
 from tslc.render.cpp_build import _cpp_cmakelists
@@ -281,16 +282,16 @@ def _cpp_documentation_facade(
 ) -> str:
     backend = CppBackend()
     api_declarations: list[str] = []
-    seen_api: set[str] = set()
+    by_primitive: dict[str, list[LoweredSpecialization]] = {}
     for emitted_profile in profiles:
-        by_primitive = emitted_profile.specializations("cpp")
-        for name in sorted(by_primitive):
-            declaration = backend.render_documentation_api_declaration(
-                name, by_primitive[name]
+        for name, specializations in emitted_profile.specializations("cpp").items():
+            by_primitive.setdefault(name, []).extend(specializations)
+    for name in sorted(by_primitive):
+        api_declarations.append(
+            backend.render_documentation_api_declaration(
+                name, tuple(by_primitive[name])
             )
-            if declaration not in seen_api:
-                api_declarations.append(declaration)
-                seen_api.add(declaration)
+        )
     declarations = "\n\n".join(api_declarations)
     return assets.fill(
         "cpp_documentation.hpp.tmpl",

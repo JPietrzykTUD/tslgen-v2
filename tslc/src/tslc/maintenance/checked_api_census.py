@@ -19,10 +19,10 @@ from pathlib import Path
 import re
 import sys
 
-from tslc._pipeline_inputs import load_catalog_inputs
 from tslc.catalog.model import Catalog, Primitive
 from tslc.diagnostics import format_diagnostic, has_errors
 from tslc.maintenance import _repo_context
+from tslc.maintenance._catalog import load_repository_catalog
 from tslc.maintenance._repo_context import RepoContext
 from tslc.maintenance.checked_api_census_policy import (
     ABI_EVIDENCE,
@@ -35,7 +35,6 @@ from tslc.maintenance.checked_api_census_policy import (
     VALIDATION_LIMITS,
 )
 from tslc.maintenance.metadata_audit import audit_metadata
-from tslc.sources import expand_source_paths
 
 
 _RUNTIME_PATTERN = re.compile(
@@ -115,7 +114,7 @@ def canonical_report_path(context: RepoContext) -> Path:
 
 
 def build_census(context: RepoContext) -> Census:
-    catalog = _load_catalog(context)
+    catalog = load_repository_catalog(context, purpose="checked-API census")
     return Census(
         runtime_sites=_runtime_sites(context),
         caller_unsafe_paths=_caller_unsafe_paths(catalog),
@@ -125,18 +124,6 @@ def build_census(context: RepoContext) -> Census:
             for path in (CPP_DECLARATIONS, RUST_DECLARATIONS)
         ),
     )
-
-
-def _load_catalog(context: RepoContext) -> Catalog:
-    catalog_inputs, diagnostics = load_catalog_inputs(
-        expand_source_paths((context.data_root,)),
-        required_backends=("cpp", "rust"),
-    )
-    if catalog_inputs is None or has_errors(diagnostics):
-        rendered = "\n".join(format_diagnostic(item) for item in diagnostics)
-        raise RuntimeError(f"cannot build checked-API census catalog:\n{rendered}")
-    return catalog_inputs.catalog
-
 
 def _runtime_sites(context: RepoContext) -> tuple[RuntimeSite, ...]:
     source_root = context.root / "tslc" / "src" / "tslc"

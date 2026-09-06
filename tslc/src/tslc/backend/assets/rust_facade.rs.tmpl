@@ -51,7 +51,9 @@ mod private {
 pub trait SimdElement:
     private::SealedElement + Copy + core::fmt::Debug + Send + Sync + Unpin + 'static
 {
+    /// Generated native-width SIMD value for this element type.
     type NativeSimd: Copy + Send + Sync + Unpin + 'static;
+    /// Generated native-width mask value for this element type.
     type NativeMask: Copy + Send + Sync + Unpin + 'static;
 }
 

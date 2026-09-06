@@ -1,3 +1,22 @@
+#![doc = r#"
+TSL 1.0 generated SIMD API.
+
+The opaque [`Simd`] and [`Mask`] facade is the stable, representation-neutral
+Rust surface. [`profile`] is the stable lower-level primitive surface selected
+from compile-target features. [`tsl_core`] and [`tsl_algorithm`] remain public
+because generated lower-level signatures depend on them, but are advanced
+substrates rather than representation-stable types.
+
+Unsuffixed lower-level operations do exactly the requested work. An operation
+whose caller precondition can cause undefined behavior is an `unsafe fn`; it
+does not sanitize inputs. A generated `_checked` companion exists only when TSL
+can validate the complete catastrophic precondition before invoking the
+ordinary operation. It returns [`Result`] with [`PreconditionError`]. Valid
+references and slices remain a caller obligation because Rust cannot validate
+forged references.
+
+@{checked_api_examples}
+"#]
 #![cfg_attr(not(any(feature = "std", tsl_variant_benchmarks)), no_std)]
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
@@ -5,7 +24,11 @@
 
 extern crate alloc;
 
+#[doc(hidden)]
+#[allow(missing_docs)]
 pub mod tsl_core;
+#[doc(hidden)]
+#[allow(missing_docs)]
 pub mod tsl_algorithm;
 #[doc(hidden)]
 pub mod tsl_test_core;

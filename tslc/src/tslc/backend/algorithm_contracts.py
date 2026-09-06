@@ -10,6 +10,59 @@ from types import MappingProxyType
 from tslc.catalog.preconditions import PreconditionErrorKind
 
 
+# Backend-neutral callable families shared by the generated C++ and Rust
+# whole-array algorithm surfaces. Backends may add overload or spelling
+# suffixes, but adding/removing a family is a v1 public-surface change.
+ALGORITHM_PUBLIC_FAMILIES = frozenset(
+    {
+        "aggregate_binary",
+        "aggregate_masked_binary",
+        "aggregate_masked_unary",
+        "aggregate_selected_binary",
+        "aggregate_selected_unary",
+        "aggregate_unary",
+        "bit_mask_count",
+        "byte_mask_count",
+        "consume_binary",
+        "consume_masked_binary",
+        "consume_masked_unary",
+        "consume_selected_binary",
+        "consume_selected_unary",
+        "consume_unary",
+        "count_binary",
+        "count_masked_binary",
+        "count_masked_unary",
+        "count_selected_binary",
+        "count_selected_unary",
+        "count_unary",
+        "for_each_chunk",
+        "integral_mask_chunk_count",
+        "mask_chunk_count",
+        "native_mask_chunk_count",
+        "predicate_binary",
+        "predicate_unary",
+        "select_binary",
+        "select_indices_binary",
+        "select_indices_unary",
+        "select_masked_binary",
+        "select_masked_indices_binary",
+        "select_masked_indices_unary",
+        "select_masked_unary",
+        "select_selected_indices_binary",
+        "select_selected_indices_unary",
+        "select_unary",
+        "transform_binary",
+        "transform_masked_binary",
+        "transform_masked_unary",
+        "transform_selected_binary",
+        "transform_selected_unary",
+        "transform_unary",
+        "transform_where_binary",
+        "transform_where_unary",
+    }
+)
+
+
 ALGORITHM_ERROR_EXPLANATIONS: Mapping[PreconditionErrorKind, str] = (
     MappingProxyType(
         {
@@ -641,6 +694,7 @@ if len(ALGORITHM_CONTRACTS) != len(_ALGORITHM_CONTRACT_SEQUENCE):
 
 
 __all__ = (
+    "ALGORITHM_PUBLIC_FAMILIES",
     "ALGORITHM_ERROR_EXPLANATIONS",
     "ALGORITHM_CONTRACTS",
     "AlgorithmContract",

@@ -210,6 +210,7 @@ def test_project_config_paths_are_relative_to_config(tmp_path: Path) -> None:
                 "[tslc.rust_package]",
                 'name = "custom-tsl"',
                 'version = "1.2.3"',
+                'description = "Custom generated SIMD package"',
                 'edition = "2024"',
                 'rust_version = "1.85"',
                 'license = "Apache-2.0"',

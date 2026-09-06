@@ -619,10 +619,8 @@ def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
     assert "transform_binary_loop_peel_to_aligned" in helper
     assert "transform_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment>" in helper
     assert "namespace mask_layout" in helper
-    assert (
-        "struct integral {};\nstruct native {};\nstruct bytes {};\nstruct bits {};"
-        in helper
-    )
+    for mask_layout in ("integral", "native", "bytes", "bits"):
+        assert f"struct {mask_layout} {{}};" in helper
     assert "fixed_native_mask_type" in helper
     assert "native_mask_chunk_count" in helper
     assert "fixed_byte_mask_type" in helper

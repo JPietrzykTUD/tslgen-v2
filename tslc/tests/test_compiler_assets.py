@@ -7,6 +7,7 @@ import tomllib
 import pytest
 
 from rust_project_test_support import render_rust_artifacts_for_test
+from tslc.backend.algorithm_contracts import ALGORITHM_PUBLIC_FAMILIES
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.rust_package import RustPackageConfig
 from tslc.backend.rust_policy_manifest import load_rust_policy_manifest
@@ -162,6 +163,7 @@ def test_rust_project_renderer_uses_typed_release_metadata() -> None:
     package = RustPackageConfig(
         name="custom-tsl",
         version="2.3.4",
+        description="Custom generated SIMD package",
         edition="2024",
         rust_version="1.85",
         license="MIT",
@@ -187,6 +189,7 @@ def test_rust_project_renderer_uses_typed_release_metadata() -> None:
     assert manifest["package"] == {
         "name": "custom-tsl",
         "version": "2.3.4",
+        "description": "Custom generated SIMD package",
         "edition": "2024",
         "rust-version": "1.85",
         "license": "MIT",
@@ -194,6 +197,18 @@ def test_rust_project_renderer_uses_typed_release_metadata() -> None:
         "documentation": "https://example.test/docs",
         "readme": "CRATE.md",
         "autoexamples": False,
+        "include": [
+            "Cargo.toml",
+            "LICENSE",
+            "CRATE.md",
+            "rustfmt.toml",
+            "build.rs",
+            "*.rs",
+            "src/**",
+            "tests/**",
+            "benches/**",
+            "bench/**",
+        ],
     }
     assert manifest["features"] == {
         "default": [],
@@ -211,6 +226,7 @@ def test_rust_project_renderer_uses_typed_release_metadata() -> None:
         ("name", "a" * 65),
         ("version", "01.0.0"),
         ("version", "1.0.0-01"),
+        ("description", ""),
         ("edition", "2030"),
         ("rust_version", "nightly"),
         ("license", "MIT\nApache-2.0"),
@@ -228,6 +244,7 @@ def test_rust_package_config_rejects_invalid_metadata(
     metadata = {
         "name": "tsl",
         "version": "1.2.3",
+        "description": "Generated SIMD package",
         "edition": "2021",
         "rust_version": "1.89",
         "license": "Apache-2.0",
@@ -328,6 +345,29 @@ def test_rust_algorithm_reserved_name_manifest_matches_static_asset() -> None:
     public_names = frozenset(function_names | alias_names)
 
     assert public_names == RUST_ALGORITHM_RESERVED_NAMES
+
+
+def test_cpp_algorithm_name_manifest_matches_static_asset() -> None:
+    algorithms = load_default_render_assets().text("tsl_algorithm.hpp")
+    public_names = frozenset(
+        re.findall(
+            r"^inline [^({]+ ([A-Za-z_][A-Za-z0-9_]*)\(",
+            algorithms,
+            flags=re.MULTILINE,
+        )
+    )
+
+    assert public_names == ALGORITHM_PUBLIC_FAMILIES
+
+
+def test_rust_algorithm_names_cover_shared_public_families() -> None:
+    families = {
+        re.sub(r"(?:_mask_layout|_scaled|_checked|_raw)+$", "", name)
+        for name in RUST_ALGORITHM_RESERVED_NAMES
+    }
+
+    assert families == ALGORITHM_PUBLIC_FAMILIES
+
 
 def test_package_resource_reads_stay_in_compiler_asset_boundary() -> None:
     package_root = Path(__file__).resolve().parents[1] / "src" / "tslc"

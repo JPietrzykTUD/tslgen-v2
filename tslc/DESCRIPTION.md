@@ -520,6 +520,22 @@ count. Neutral lowering never constructs a C++ or Rust lane-count expression.
   [backend/rust_algorithm_manifest.py](src/tslc/backend/rust_algorithm_manifest.py),
   with an asset-consistency test preventing drift.
 
+The public safety surface is a typed projection, not a renderer convention.
+[backend/checked_api.py](src/tslc/backend/checked_api.py) admits a `_checked`
+companion only for a complete catastrophic runtime precondition declared in the
+catalog. C++ value companions preserve the ordinary value return and append a
+final `precondition_error&`; C++ void companions return that error directly.
+Rust companions return `Result`, while the ordinary Rust function remains
+`unsafe` when its caller contract can cause undefined behavior. A failed
+companion reports before dispatch; C++ returns only an initialized,
+semantically unspecified placeholder. Memory companions replace bare pointers
+with spans/slices carrying the exact checkable extent, but valid object
+lifetime, provenance, references, and concurrency remain caller obligations.
+[backend/cpp_checked_api.py](src/tslc/backend/cpp_checked_api.py) owns C++
+signature/check projection, and the backend-neutral algorithm family inventory
+in [backend/algorithm_contracts.py](src/tslc/backend/algorithm_contracts.py)
+prevents C++ and Rust algorithm surfaces from drifting.
+
 The ordinary Rust API is finalized before source rendering by the frozen records
 in [backend/rust_api_model.py](src/tslc/backend/rust_api_model.py), the
 cross-record invariants in
@@ -557,7 +573,26 @@ compile target selects one exact private hardware representation or the
 source-backed generic representation; no profile or extension is a Cargo
 feature. Complete release metadata is carried through the backend-neutral
 `ProjectRenderConfig` into the Rust package renderer, so templates format
-configured Cargo facts rather than owning repository release policy.
+configured Cargo facts rather than owning repository release policy. The Cargo
+manifest uses an explicit source/test/benchmark include set: generated docs,
+research history, scratch trees, and unrelated checkout files cannot enter the
+published crate merely because documentation was built in place.
+
+Generated documentation is assembled by
+[maintenance/documentation.py](src/tslc/maintenance/documentation.py). Doxygen
+consumes the documentation-only primitive facade plus stable core,
+data-parallel, and ordinary/checked algorithm headers. Strict mode validates
+typed public type and algorithm manifests, primitive prose, unique callable
+identities, and ordinary twins for checked callables. Rustdoc treats the opaque
+root facade and selected `profile` API as the stable documented boundary; its
+public low-level substrate remains available for generated signatures but is
+hidden from the stable overview. Shared examples and the Sphinx contract page
+explain unchecked preconditions, checked errors, and residual language-level
+obligations. The repository maintenance projections
+[maintenance/public_api_baseline.py](src/tslc/maintenance/public_api_baseline.py)
+and [maintenance/checked_api_census.py](src/tslc/maintenance/checked_api_census.py)
+ratchet the v1 callable-family boundary and exact checked coverage separately;
+both load the typed corpus through one maintenance-only catalog boundary.
 
 A static substrate ships as assets
 ([backend/assets/tsl_core.hpp](src/tslc/backend/assets/tsl_core.hpp),

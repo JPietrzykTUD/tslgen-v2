@@ -20,6 +20,7 @@ _RUST_VERSION = re.compile(r"^1\.[0-9]+(?:\.[0-9]+)?$")
 class RustPackageConfig:
     name: str
     version: str
+    description: str
     edition: str
     rust_version: str
     license: str
@@ -32,6 +33,8 @@ class RustPackageConfig:
             raise ValueError("Rust package name is not a valid Cargo package name")
         if not _valid_version(self.version):
             raise ValueError("Rust package version must be a three-part release version")
+        if not _single_line(self.description):
+            raise ValueError("Rust package description cannot be empty")
         if self.edition not in {"2015", "2018", "2021", "2024"}:
             raise ValueError("Rust package edition is not supported")
         if not _RUST_VERSION.fullmatch(self.rust_version):
@@ -77,7 +80,8 @@ def _absolute_url(value: str) -> bool:
 
 DEFAULT_RUST_PACKAGE_CONFIG = RustPackageConfig(
     name="tsl",
-    version="0.1.0",
+    version="1.0.0",
+    description="Generated cross-platform SIMD primitives and data-parallel algorithms",
     edition="2021",
     rust_version="1.89",
     license="Apache-2.0",

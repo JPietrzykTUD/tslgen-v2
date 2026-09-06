@@ -1,7 +1,7 @@
 PROJECT_NAME           = "@PROJECT_NAME@"
 PROJECT_BRIEF          = "Generated C++ SIMD API"
 OUTPUT_DIRECTORY       = "@OUTPUT_DIR@"
-INPUT                  = "@INPUT_DIR@"
+INPUT                  = @INPUTS@
 RECURSIVE              = YES
 FILE_PATTERNS          = *.hpp
 GENERATE_HTML          = NO
@@ -13,3 +13,4 @@ MARKDOWN_SUPPORT       = YES
 JAVADOC_AUTOBRIEF      = NO
 QUIET                  = YES
 WARN_IF_UNDOCUMENTED   = NO
+EXCLUDE_SYMBOLS        = tsl::detail tsl::detail::* tsl::algo::detail tsl::algo::detail::*

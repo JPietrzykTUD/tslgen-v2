@@ -8,6 +8,7 @@
 use core::marker::PhantomData;
 use core::ops::{Index, IndexMut};
 
+/// How a selected primitive specialization is implemented.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ImplementationState {
     Native,
@@ -16,16 +17,25 @@ pub enum ImplementationState {
     Unknown,
 }
 
+/// A failure reported before a checked operation invokes its ordinary twin.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum PreconditionError {
+    /// A runtime lane or memory index is outside the represented extent.
     IndexOutOfBounds,
+    /// An active integer divisor lane is zero.
     ZeroDivisor,
+    /// A contiguous memory view is shorter than the operation payload.
     InsufficientExtent,
+    /// A secondary input or mask range is shorter than the driving range.
     InsufficientInput,
+    /// An output range cannot hold every result selected by the contract.
     InsufficientOutput,
+    /// An aligned operation received an address with insufficient alignment.
     Misaligned,
+    /// Ranges overlap where the operation requires them to be disjoint.
     OverlappingRanges,
+    /// A scaled or offset address cannot be represented.
     AddressOverflow,
 }
 

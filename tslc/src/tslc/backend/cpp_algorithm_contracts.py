@@ -361,6 +361,12 @@ def render_cpp_checked_algorithm_definitions() -> str:
     return "\n\n".join(definitions)
 
 
+def cpp_checked_algorithm_families() -> frozenset[str]:
+    """Public checked algorithm families supported by the C++ range surface."""
+
+    return frozenset(contract.name for contract in _cpp_contracts())
+
+
 def cpp_algorithm_contract_holes() -> Mapping[str, str]:
     """Return semantic fragments required by the C++ checked asset."""
 
@@ -374,6 +380,7 @@ def cpp_algorithm_contract_holes() -> Mapping[str, str]:
 
 
 __all__ = (
+    "cpp_checked_algorithm_families",
     "cpp_algorithm_contract_holes",
     "render_cpp_algorithm_check",
     "render_cpp_checked_algorithm_definitions",

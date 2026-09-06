@@ -2,8 +2,8 @@
 
 Date: 2026-09-02
 
-Status: accepted pre-v1 public-contract plan; Slices 0-7 are implemented and
-committed; Slice 8 is next
+Status: accepted pre-v1 public-contract plan; all eight implementation slices
+are complete, with release evidence recorded below
 
 Related evidence: [TSL v1.0.0 generated API and documentation audit](tsl-v1-generated-api-docs-audit.md)
 
@@ -1211,6 +1211,39 @@ Validation:
   gate; and
 - reproducible package contents before and after documentation generation.
 
+Observed after implementation:
+
+- The generated overviews and shared checked-API guide define the same
+  unsuffixed/checked contract, residual span/reference obligations, C++ direct
+  value plus error-reference convention, and Rust `Result` convention.
+  Doxygen now consumes the facade and stable core/algorithm headers, and its
+  strict validator checks public types, every algorithm family, primitive
+  prose, callable identity uniqueness, and ordinary twins for checked names.
+- The v1 public baseline freezes 181 primitive families, 44 C++ algorithm
+  families, 35 C++ checked-algorithm families, 174 Rust algorithm names,
+  and the stable root/core identities. The checked census remains exact at 33
+  caller-unsafe identities, including eleven explicit no-honest-twin gaps.
+- Strict Rustdoc, two executable overview doctests, strict Doxygen, the Sphinx
+  site, GCC/Clang documentation consumers, the Python LSP suite, VS Code unit
+  and integration suites, and the bundled Linux x64 runtime-package smoke gate
+  pass. Building full Rustdoc leaves the 68-file Cargo publish set byte-for-byte
+  identical at the package-list level.
+- Against `08954770`, the explicit release corpus grows by 45,523,654 bytes
+  (+2.678%) and 187,557 lines (+0.463%); generation changes from 152.63 s to
+  157.17 s. The compressed Rust package grows from 2,553,107 to 2,662,921
+  bytes (+4.301%).
+- The maintained scalar/AVX2 C++ and Rust mechanism consumers execute raw,
+  unsuffixed, checked-valid, and checked-failure cases for lane extraction,
+  integer division, and aligned load. C++ unsuffixed timings and codegen track
+  the raw paths, checked call sites preserve direct register returns, and every
+  failure avoids the operation. The experiment also exposes a pre-existing
+  Rust AVX2 cross-crate inlining cost independent of checking. Full commands,
+  measurements, disassembly fingerprints, and limitations are in
+  [the release evidence](tsl-v1-checked-api-release-evidence.md).
+- Final gates pass with 2,689 ordinary compiler tests, 46 checked-API
+  generated/ABI tests, and all 84 generated build/value tests; the expected
+  skips are recorded in the release evidence.
+
 ## Performance and correctness showcase
 
 The refactor needs a genuine experiment demonstrating the intended lever.
@@ -1394,14 +1427,11 @@ and documented API and is outside this plan.
 
 ## Out of scope
 
-This plan does not itself resolve every finding in the v1 audit. Separate
-release slices are still required for:
+This refactor does not resolve every finding in the broader v1 audit. Remaining
+work outside this plan includes:
 
 - the GCC intrinsic-mask warning;
-- complete C++ and Rust API documentation beyond safety contracts;
-- Rust package-content reproducibility;
 - general generated-artifact size reduction;
-- stable-public-surface selection and semver ratcheting; and
 - unsupported hardware/profile implementation gaps.
 
 It also does not introduce exceptions, a global runtime safety mode, a compile

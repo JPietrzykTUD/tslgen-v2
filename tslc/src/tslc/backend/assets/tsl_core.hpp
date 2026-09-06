@@ -45,6 +45,7 @@
 
 namespace tsl {
 
+/** Describes whether a selected specialization is native, composed, or a fallback. */
 enum class implementation_state {
     native,
     composed,
@@ -52,6 +53,7 @@ enum class implementation_state {
     unknown,
 };
 
+/** Error written or returned before a checked operation invokes its ordinary twin. */
 enum class precondition_error : std::uint8_t {
     none,
     index_out_of_bounds,
@@ -99,11 +101,13 @@ class span {
   std::size_t size_;
 };
 
+/** Wraps an immediate value for implementation-state queries. */
 template <auto Value>
 struct value_arg {
     static constexpr auto value = Value;
 };
 
+/** Compile-time implementation-state query; generated profiles specialize it. */
 template <class Primitive, class... Args>
 struct implementation_state_of {
     static constexpr implementation_state value = implementation_state::unknown;
@@ -253,13 +257,19 @@ inline T *assume_aligned(T *ptr) noexcept {
 #endif
 }
 
-// Primary trait: simd<BaseType, Extension> exposes base_type and register_type.
+/**
+ * Vector descriptor specialized by generated profiles.
+ *
+ * A specialization exposes its scalar, register, mask, integral-mask, lane,
+ * and alignment types and constants. Register layout is backend-specific.
+ */
 template <class T, class Ext>
 struct simd;
 
-// scalar is always available and needs no SIMD substrate.
+/** Scalar extension tag, always available. */
 struct scalar {};
 
+/** One-lane scalar vector descriptor. */
 template <class T>
 struct simd<T, scalar> {
     using base_type = T;
@@ -283,7 +293,7 @@ struct simd<T, scalar> {
     static constexpr std::size_t simd_register_alignment_v = vector_alignment;
 };
 
-// How a register value is passed to apply(): by value.
+/** Parameter-passing type selected for a vector register. */
 template <class Vec>
 struct reg_param {
     using type = typename Vec::register_type;
@@ -353,6 +363,7 @@ inline precondition_error indexed_memory_address_error(
 // `.data()`/`operator[]`/`.fill()` are uniform with the Rust counterpart; `Align`
 // over-aligns the storage so an aligned store into it (via `assume_aligned`) is valid.
 // `Align` defaults to the element alignment (the scalar case, length 1).
+/** Fixed-size owned lane buffer with explicit storage alignment. */
 template <class T, std::size_t N, std::size_t Align = alignof(T)>
 struct alignas(Align) array_type {
     std::array<T, N> _storage;
@@ -443,9 +454,11 @@ inline void ostream_write(std::string &out, const array_type<T, N, Align> &arr, 
 // stays an ordinary two-argument specialization. Its register is an indexable `array_type`,
 // so emulated bodies can `result[i] = ...` and delegate per lane to scalar. Always available
 // (no hardware feature), hence defined here in the static core rather than per profile.
+/** Portable array-backed extension tag with `LANES` logical lanes. */
 template <std::size_t LANES>
 struct generic {};
 
+/** Portable array-backed vector descriptor. */
 template <class T, std::size_t LANES>
 struct simd<T, generic<LANES>> {
     // The generic vector models a portable register, so its total width must be a whole number of

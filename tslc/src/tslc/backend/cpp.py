@@ -11,6 +11,7 @@ from tslc.backend.checked_api import (
 )
 from tslc.backend.cpp_checked_api import CppCheckedApiPlan, plan_cpp_checked_api
 from tslc.backend.cpp_documentation import (
+    cpp_dataparallel_facade_doc,
     cpp_doc as _cpp_doc,
     cpp_register_doc as _cpp_register_doc,
     cpp_target_register_doc as _cpp_target_register_doc,
@@ -967,14 +968,15 @@ def _dataparallel_primitive_facade_wrapper(
         f"template <{template_params}>\n"
         f"inline {result_type} {primitive_name}({params})"
     )
-    if not define:
-        return signature + ";"
-    return (
+    declaration = signature + ";"
+    definition = (
         signature
         + " {\n"
         f"    return ::tsl::{primitive_name}<{impl_args}>({', '.join(shape.param_names)});\n"
         "}"
     )
+    doc = cpp_dataparallel_facade_doc(facade)
+    return f"{doc}\n{definition if define else declaration}"
 
 
 def _dataparallel_memory_facade_wrapper(
@@ -997,15 +999,18 @@ def _dataparallel_memory_facade_wrapper(
         f"template <class Policy, class T, bool {axis_name} = false>\n"
         f"inline {result_type} {primitive_name}({params})"
     )
+    doc = cpp_dataparallel_facade_doc(facade)
     if not define:
-        return signature + ";"
+        return f"{doc}\n{signature};"
     call = (
         f"::tsl::{primitive_name}<{vec}, {axis_name}>"
         f"({', '.join(shape.param_names)})"
     )
     if shape.result_kind == "void":
-        return signature + " {\n" f"    {call};\n" "}"
-    return signature + " {\n" f"    return {call};\n" "}"
+        definition = signature + " {\n" f"    {call};\n" "}"
+    else:
+        definition = signature + " {\n" f"    return {call};\n" "}"
+    return f"{doc}\n{definition}"
 
 
 def _dataparallel_facade_result_type(result_kind: str, vec: str) -> str:

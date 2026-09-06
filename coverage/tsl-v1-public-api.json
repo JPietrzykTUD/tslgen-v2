@@ -1,0 +1,2045 @@
+{
+  "version": 1,
+  "compatibility": {
+    "cpp": "names reachable through tsl.hpp, excluding detail namespaces, physical profile headers, and compiler-selection macros",
+    "rust": "opaque root facade plus profile primitive callables; core and algorithm substrate representations are not stable ABI",
+    "identity_level": "typed callable family; backend overload sets and representative rendered declarations are ratcheted by generated snapshots"
+  },
+  "cpp_core_identities": [
+    "tsl::array_type",
+    "tsl::dataparallel::fixed",
+    "tsl::dataparallel::generic",
+    "tsl::dataparallel::native",
+    "tsl::implementation_state",
+    "tsl::precondition_error",
+    "tsl::reg_param",
+    "tsl::simd",
+    "tsl::span"
+  ],
+  "rust_root_identities": [
+    "tsl::Mask",
+    "tsl::NativeMask",
+    "tsl::NativeSimd",
+    "tsl::PreconditionError",
+    "tsl::Simd",
+    "tsl::SimdElement",
+    "tsl::SupportedSimd",
+    "tsl::profile"
+  ],
+  "primitive_callable_families": [
+    {
+      "name": "abs",
+      "signature": "v:=(v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "add",
+      "signature": "v:=(m,v,v)",
+      "attributes": {
+        "mask": "pass_through"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "add",
+      "signature": "v:=(m,v,v)",
+      "attributes": {
+        "mask": "zero"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "add",
+      "signature": "v:=(v,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "align_right_lanes",
+      "signature": "v:=(v,v,sImm)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "allocate",
+      "signature": "ptr:=(usize)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "allocate_aligned",
+      "signature": "ptr:=(usize,usize)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "between_exclusive",
+      "signature": "m:=(m,v,v,v)",
+      "attributes": {
+        "mask": "zero"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "between_exclusive",
+      "signature": "m:=(v,v,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "between_inclusive",
+      "signature": "m:=(m,v,v,v)",
+      "attributes": {
+        "mask": "zero"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "between_inclusive",
+      "signature": "m:=(v,v,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "between_left_inclusive",
+      "signature": "m:=(m,v,v,v)",
+      "attributes": {
+        "mask": "zero"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "between_left_inclusive",
+      "signature": "m:=(v,v,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "between_right_inclusive",
+      "signature": "m:=(m,v,v,v)",
+      "attributes": {
+        "mask": "zero"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "between_right_inclusive",
+      "signature": "m:=(v,v,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "binary_and",
+      "signature": "v:=(m,v,v)",
+      "attributes": {
+        "mask": "pass_through"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "binary_and",
+      "signature": "v:=(m,v,v)",
+      "attributes": {
+        "mask": "zero"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "binary_and",
+      "signature": "v:=(v,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "binary_andnot",
+      "signature": "v:=(m,v,v)",
+      "attributes": {
+        "mask": "pass_through"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "binary_andnot",
+      "signature": "v:=(m,v,v)",
+      "attributes": {
+        "mask": "zero"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "binary_andnot",
+      "signature": "v:=(v,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "binary_or",
+      "signature": "v:=(m,v,v)",
+      "attributes": {
+        "mask": "pass_through"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "binary_or",
+      "signature": "v:=(m,v,v)",
+      "attributes": {
+        "mask": "zero"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "binary_or",
+      "signature": "v:=(v,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "binary_xor",
+      "signature": "v:=(m,v,v)",
+      "attributes": {
+        "mask": "pass_through"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "binary_xor",
+      "signature": "v:=(m,v,v)",
+      "attributes": {
+        "mask": "zero"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "binary_xor",
+      "signature": "v:=(v,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "blend_add",
+      "signature": "v:=(m,v,v,v)",
+      "attributes": {
+        "mask": "pass_through"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "cast",
+      "signature": "v:=v",
+      "attributes": {
+        "cast": "convert"
+      },
+      "result_target": [
+        "base",
+        "ToBase"
+      ],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "compress",
+      "signature": "v:=(m,v)",
+      "attributes": {
+        "mask": "zero",
+        "op": "pack"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "compress_store",
+      "signature": "void:=(m,ptr,v)",
+      "attributes": {
+        "aligned": "true",
+        "op": "pack"
+      },
+      "result_target": [],
+      "checked_source_contract": true,
+      "preconditions": [
+        "compacted_memory_extent"
+      ]
+    },
+    {
+      "name": "concat",
+      "signature": "v:=(v,v)",
+      "attributes": {},
+      "result_target": [
+        "extension",
+        "ToExtension"
+      ],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "conflict",
+      "signature": "v:=v",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "conflict_free",
+      "signature": "m:=(m,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "convert_down",
+      "signature": "v:=(v,sImm)",
+      "attributes": {
+        "cast": "convert",
+        "direction": "down"
+      },
+      "result_target": [
+        "base",
+        "ToBase"
+      ],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "convert_lanes",
+      "signature": "v:=v",
+      "attributes": {},
+      "result_target": [
+        "vector",
+        "ToVec"
+      ],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "convert_up",
+      "signature": "v:=(v,sImm)",
+      "attributes": {
+        "cast": "convert",
+        "direction": "up"
+      },
+      "result_target": [
+        "base",
+        "ToBase"
+      ],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "count_matches",
+      "signature": "s:=(v,s)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "custom_sequence",
+      "signature": "v:=(s,s)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "deallocate",
+      "signature": "void:=(ptr)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "div",
+      "signature": "v:=(m,v,v)",
+      "attributes": {
+        "mask": "pass_through"
+      },
+      "result_target": [],
+      "checked_source_contract": true,
+      "preconditions": [
+        "active_divisor_nonzero"
+      ]
+    },
+    {
+      "name": "div",
+      "signature": "v:=(m,v,v)",
+      "attributes": {
+        "mask": "zero"
+      },
+      "result_target": [],
+      "checked_source_contract": true,
+      "preconditions": [
+        "active_divisor_nonzero"
+      ]
+    },
+    {
+      "name": "div",
+      "signature": "v:=(v,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": true,
+      "preconditions": [
+        "active_divisor_nonzero"
+      ]
+    },
+    {
+      "name": "equal",
+      "signature": "m:=(m,v,v)",
+      "attributes": {
+        "mask": "zero"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "equal",
+      "signature": "m:=(v,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "expand",
+      "signature": "v:=(m,v,v)",
+      "attributes": {
+        "mask": "pass_through",
+        "op": "expand"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "expand_load",
+      "signature": "v:=(m,cptr)",
+      "attributes": {
+        "aligned": "true",
+        "op": "expand"
+      },
+      "result_target": [],
+      "checked_source_contract": true,
+      "preconditions": [
+        "compacted_memory_extent"
+      ]
+    },
+    {
+      "name": "extract",
+      "signature": "v:=(v,sImm)",
+      "attributes": {
+        "cast": "reinterpret"
+      },
+      "result_target": [
+        "extension",
+        "ToExtension"
+      ],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "extract_imask",
+      "signature": "im:=(im,usize)",
+      "attributes": {},
+      "result_target": [
+        "base",
+        "ToBase"
+      ],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "extract_imask",
+      "signature": "im:=(im,usize)",
+      "attributes": {},
+      "result_target": [
+        "extension",
+        "ToExtension"
+      ],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "extract_value",
+      "signature": "s:=v[idx]",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "extract_value_at",
+      "signature": "s:=(v,usize)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": true,
+      "preconditions": [
+        "lane_index_in_range"
+      ]
+    },
+    {
+      "name": "from_array",
+      "signature": "v:=s[]",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "gather",
+      "signature": "v:=(cptr,vidx,sImm)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": true,
+      "preconditions": [
+        "indexed_memory_address_valid"
+      ]
+    },
+    {
+      "name": "gather",
+      "signature": "v:=(m,cptr,vidx,v,sImm)",
+      "attributes": {
+        "mask": "pass_through"
+      },
+      "result_target": [],
+      "checked_source_contract": true,
+      "preconditions": [
+        "indexed_memory_address_valid"
+      ]
+    },
+    {
+      "name": "gather_narrow",
+      "signature": "v:=(cptr,cptr,sImm)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "gather_narrow_partial",
+      "signature": "v:=(cptr,vidx,sImm)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": true,
+      "preconditions": [
+        "indexed_memory_address_valid"
+      ]
+    },
+    {
+      "name": "greater_than",
+      "signature": "m:=(m,v,v)",
+      "attributes": {
+        "mask": "zero"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "greater_than",
+      "signature": "m:=(v,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "greater_than_or_equal",
+      "signature": "m:=(m,v,v)",
+      "attributes": {
+        "mask": "zero"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "greater_than_or_equal",
+      "signature": "m:=(v,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "hadd",
+      "signature": "s:=(m,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "hadd",
+      "signature": "s:=v",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "hand",
+      "signature": "s:=(m,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "hand",
+      "signature": "s:=v",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "hmax",
+      "signature": "s:=(m,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "hmax",
+      "signature": "s:=v",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "hmin",
+      "signature": "s:=(m,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "hmin",
+      "signature": "s:=v",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "hor",
+      "signature": "s:=(m,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "hor",
+      "signature": "s:=v",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "insert",
+      "signature": "v:=(vt,v,sImm)",
+      "attributes": {
+        "cast": "reinterpret"
+      },
+      "result_target": [
+        "extension",
+        "ToExtension"
+      ],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "insert_imask",
+      "signature": "im:=(imt,im,usize)",
+      "attributes": {},
+      "result_target": [
+        "base",
+        "ToBase"
+      ],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "insert_imask",
+      "signature": "im:=(imt,im,usize)",
+      "attributes": {},
+      "result_target": [
+        "extension",
+        "ToExtension"
+      ],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "insert_value",
+      "signature": "v:=(v,s)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "insert_value_at",
+      "signature": "v:=(v,usize,s)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": true,
+      "preconditions": [
+        "lane_index_in_range"
+      ]
+    },
+    {
+      "name": "inv",
+      "signature": "v:=(m,v)",
+      "attributes": {
+        "mask": "pass_through"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "inv",
+      "signature": "v:=(m,v)",
+      "attributes": {
+        "mask": "zero"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "inv",
+      "signature": "v:=v",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "less_than",
+      "signature": "m:=(m,v,v)",
+      "attributes": {
+        "mask": "zero"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "less_than",
+      "signature": "m:=(v,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "less_than_or_equal",
+      "signature": "m:=(m,v,v)",
+      "attributes": {
+        "mask": "zero"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "less_than_or_equal",
+      "signature": "m:=(v,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "load",
+      "signature": "v:=(m,cptr)",
+      "attributes": {
+        "aligned": "false",
+        "mask": "zero"
+      },
+      "result_target": [],
+      "checked_source_contract": true,
+      "preconditions": [
+        "contiguous_memory_extent",
+        "selected_memory_alignment"
+      ]
+    },
+    {
+      "name": "load",
+      "signature": "v:=(m,cptr)",
+      "attributes": {
+        "aligned": "true",
+        "mask": "zero"
+      },
+      "result_target": [],
+      "checked_source_contract": true,
+      "preconditions": [
+        "contiguous_memory_extent",
+        "selected_memory_alignment"
+      ]
+    },
+    {
+      "name": "load",
+      "signature": "v:=(m,cptr,v)",
+      "attributes": {
+        "aligned": "false",
+        "mask": "pass_through"
+      },
+      "result_target": [],
+      "checked_source_contract": true,
+      "preconditions": [
+        "contiguous_memory_extent",
+        "selected_memory_alignment"
+      ]
+    },
+    {
+      "name": "load",
+      "signature": "v:=(m,cptr,v)",
+      "attributes": {
+        "aligned": "true",
+        "mask": "pass_through"
+      },
+      "result_target": [],
+      "checked_source_contract": true,
+      "preconditions": [
+        "contiguous_memory_extent",
+        "selected_memory_alignment"
+      ]
+    },
+    {
+      "name": "load",
+      "signature": "v:=cptr",
+      "attributes": {
+        "aligned": "false"
+      },
+      "result_target": [],
+      "checked_source_contract": true,
+      "preconditions": [
+        "contiguous_memory_extent",
+        "selected_memory_alignment"
+      ]
+    },
+    {
+      "name": "load",
+      "signature": "v:=cptr",
+      "attributes": {
+        "aligned": "true"
+      },
+      "result_target": [],
+      "checked_source_contract": true,
+      "preconditions": [
+        "contiguous_memory_extent",
+        "selected_memory_alignment"
+      ]
+    },
+    {
+      "name": "load_convert_up",
+      "signature": "v:=cptr+",
+      "attributes": {},
+      "result_target": [
+        "base",
+        "ToBase"
+      ],
+      "checked_source_contract": true,
+      "preconditions": [
+        "contiguous_memory_extent"
+      ]
+    },
+    {
+      "name": "load_mask_repr",
+      "signature": "m:=cptr",
+      "attributes": {
+        "aligned": "false",
+        "packed": "false"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "load_mask_repr",
+      "signature": "m:=cptr",
+      "attributes": {
+        "aligned": "false",
+        "packed": "true"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "load_mask_repr",
+      "signature": "m:=cptr",
+      "attributes": {
+        "aligned": "true",
+        "packed": "false"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "load_mask_repr",
+      "signature": "m:=cptr",
+      "attributes": {
+        "aligned": "true",
+        "packed": "true"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "load_scalar",
+      "signature": "s:=cptr",
+      "attributes": {
+        "aligned": "false"
+      },
+      "result_target": [],
+      "checked_source_contract": true,
+      "preconditions": [
+        "contiguous_memory_extent"
+      ]
+    },
+    {
+      "name": "lzc",
+      "signature": "v:=v",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "lzc_imask",
+      "signature": "usize:=m",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "lzc_scalar",
+      "signature": "usize:=s",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "mask_binary_and",
+      "signature": "m:=(m,m)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "mask_binary_not",
+      "signature": "m:=m",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "mask_binary_or",
+      "signature": "m:=(m,m)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "mask_binary_xor",
+      "signature": "m:=(m,m)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "mask_false",
+      "signature": "m:=()",
+      "attributes": {
+        "value": "zero"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "mask_population_count",
+      "signature": "usize:=m",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "mask_true",
+      "signature": "m:=()",
+      "attributes": {
+        "value": "all"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "masked_set1",
+      "signature": "v:=(m,v,s)",
+      "attributes": {
+        "mask": "zero"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "max",
+      "signature": "v:=(v,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "memory_cp",
+      "signature": "void:=(ptr,cptr,s,s)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "min",
+      "signature": "v:=(v,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "mod",
+      "signature": "v:=(m,v,v)",
+      "attributes": {
+        "mask": "pass_through"
+      },
+      "result_target": [],
+      "checked_source_contract": true,
+      "preconditions": [
+        "active_divisor_nonzero"
+      ]
+    },
+    {
+      "name": "mod",
+      "signature": "v:=(m,v,v)",
+      "attributes": {
+        "mask": "zero"
+      },
+      "result_target": [],
+      "checked_source_contract": true,
+      "preconditions": [
+        "active_divisor_nonzero"
+      ]
+    },
+    {
+      "name": "mod",
+      "signature": "v:=(v,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": true,
+      "preconditions": [
+        "active_divisor_nonzero"
+      ]
+    },
+    {
+      "name": "mod_imm",
+      "signature": "v:=(m,v,sImm)",
+      "attributes": {
+        "mask": "pass_through"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "mod_imm",
+      "signature": "v:=(m,v,sImm)",
+      "attributes": {
+        "mask": "zero"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "mod_imm",
+      "signature": "v:=(v,sImm)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "mov",
+      "signature": "v:=(m,v)",
+      "attributes": {
+        "mask": "zero",
+        "op": "keep"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "mov",
+      "signature": "v:=(m,v,v)",
+      "attributes": {
+        "mask": "pass_through"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "mul",
+      "signature": "v:=(m,v,v)",
+      "attributes": {
+        "mask": "pass_through"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "mul",
+      "signature": "v:=(m,v,v)",
+      "attributes": {
+        "mask": "zero"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "mul",
+      "signature": "v:=(v,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "mul_imm",
+      "signature": "v:=(m,v,sImm)",
+      "attributes": {
+        "mask": "pass_through"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "mul_imm",
+      "signature": "v:=(m,v,sImm)",
+      "attributes": {
+        "mask": "zero"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "mul_imm",
+      "signature": "v:=(v,sImm)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "neg",
+      "signature": "v:=v",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "nequal",
+      "signature": "m:=(m,v,v)",
+      "attributes": {
+        "mask": "zero"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "nequal",
+      "signature": "m:=(v,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "overlay_imask",
+      "signature": "im:=(im,im,usize)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "permute_lanes",
+      "signature": "v:=(m,v,v,vidx)",
+      "attributes": {
+        "mask": "pass_through"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "permute_lanes",
+      "signature": "v:=(m,v,vidx)",
+      "attributes": {
+        "mask": "zero"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "permute_lanes",
+      "signature": "v:=(v,sImm)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "permute_lanes",
+      "signature": "v:=(v,vidx)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "popcnt",
+      "signature": "v:=v",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "random_step",
+      "signature": "usize:=(ptr)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": true,
+      "preconditions": [
+        "contiguous_memory_extent"
+      ]
+    },
+    {
+      "name": "reinterpret",
+      "signature": "v:=v",
+      "attributes": {
+        "cast": "reinterpret"
+      },
+      "result_target": [
+        "base",
+        "ToBase"
+      ],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "resize_down",
+      "signature": "v:=v",
+      "attributes": {},
+      "result_target": [
+        "extension",
+        "ToExtension"
+      ],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "resize_up_undef",
+      "signature": "v:=v",
+      "attributes": {
+        "value": "undef"
+      },
+      "result_target": [
+        "extension",
+        "ToExtension"
+      ],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "resize_up_zero",
+      "signature": "v:=v",
+      "attributes": {
+        "value": "zero"
+      },
+      "result_target": [
+        "extension",
+        "ToExtension"
+      ],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "scatter",
+      "signature": "void:=(m,ptr,vidx,v,sImm)",
+      "attributes": {
+        "mask": "zero"
+      },
+      "result_target": [],
+      "checked_source_contract": true,
+      "preconditions": [
+        "indexed_memory_address_valid"
+      ]
+    },
+    {
+      "name": "scatter",
+      "signature": "void:=(ptr,vidx,v,sImm)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": true,
+      "preconditions": [
+        "indexed_memory_address_valid"
+      ]
+    },
+    {
+      "name": "select",
+      "signature": "v:=(m,v,v)",
+      "attributes": {
+        "mask": "pass_through"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "sequence",
+      "signature": "v:=()",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "set",
+      "signature": "v:=(lanes<s>)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "set1",
+      "signature": "v:=s",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "set_mask_lane",
+      "signature": "m:=(m,usize,usize)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": true,
+      "preconditions": [
+        "lane_index_in_range"
+      ]
+    },
+    {
+      "name": "set_undef",
+      "signature": "v:=()",
+      "attributes": {
+        "value": "undef"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "set_zero",
+      "signature": "v:=()",
+      "attributes": {
+        "value": "zero"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "shift_left",
+      "signature": "v:=(m,v,sImm)",
+      "attributes": {
+        "mask": "pass_through"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "shift_left",
+      "signature": "v:=(v,s)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "shift_left",
+      "signature": "v:=(v,sImm)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "shift_left",
+      "signature": "v:=(v,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "shift_left_imask",
+      "signature": "im:=(im,usize)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "shift_left_wrapping",
+      "signature": "v:=(v,s)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "shift_left_wrapping",
+      "signature": "v:=(v,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "shift_right",
+      "signature": "v:=(v,s)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "shift_right",
+      "signature": "v:=(v,sImm)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "shift_right",
+      "signature": "v:=(v,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "shift_right_imask",
+      "signature": "im:=(im,usize)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "shift_right_wrapping",
+      "signature": "v:=(v,s)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "shift_right_wrapping",
+      "signature": "v:=(v,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "store",
+      "signature": "void:=(m,ptr,v)",
+      "attributes": {
+        "aligned": "false",
+        "mask": "pass_through"
+      },
+      "result_target": [],
+      "checked_source_contract": true,
+      "preconditions": [
+        "contiguous_memory_extent",
+        "selected_memory_alignment"
+      ]
+    },
+    {
+      "name": "store",
+      "signature": "void:=(m,ptr,v)",
+      "attributes": {
+        "aligned": "true",
+        "mask": "pass_through"
+      },
+      "result_target": [],
+      "checked_source_contract": true,
+      "preconditions": [
+        "contiguous_memory_extent",
+        "selected_memory_alignment"
+      ]
+    },
+    {
+      "name": "store",
+      "signature": "void:=(ptr,s)",
+      "attributes": {
+        "aligned": "false"
+      },
+      "result_target": [],
+      "checked_source_contract": true,
+      "preconditions": [
+        "contiguous_memory_extent",
+        "selected_memory_alignment"
+      ]
+    },
+    {
+      "name": "store",
+      "signature": "void:=(ptr,s)",
+      "attributes": {
+        "aligned": "true"
+      },
+      "result_target": [],
+      "checked_source_contract": true,
+      "preconditions": [
+        "contiguous_memory_extent",
+        "selected_memory_alignment"
+      ]
+    },
+    {
+      "name": "store",
+      "signature": "void:=(ptr,v)",
+      "attributes": {
+        "aligned": "false"
+      },
+      "result_target": [],
+      "checked_source_contract": true,
+      "preconditions": [
+        "contiguous_memory_extent",
+        "selected_memory_alignment"
+      ]
+    },
+    {
+      "name": "store",
+      "signature": "void:=(ptr,v)",
+      "attributes": {
+        "aligned": "true"
+      },
+      "result_target": [],
+      "checked_source_contract": true,
+      "preconditions": [
+        "contiguous_memory_extent",
+        "selected_memory_alignment"
+      ]
+    },
+    {
+      "name": "store_mask_repr",
+      "signature": "void:=(ptr,m)",
+      "attributes": {
+        "aligned": "false",
+        "packed": "false"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "store_mask_repr",
+      "signature": "void:=(ptr,m)",
+      "attributes": {
+        "aligned": "false",
+        "packed": "true"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "store_mask_repr",
+      "signature": "void:=(ptr,m)",
+      "attributes": {
+        "aligned": "true",
+        "packed": "false"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "store_mask_repr",
+      "signature": "void:=(ptr,m)",
+      "attributes": {
+        "aligned": "true",
+        "packed": "true"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "sub",
+      "signature": "v:=(m,v,v)",
+      "attributes": {
+        "mask": "pass_through"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "sub",
+      "signature": "v:=(m,v,v)",
+      "attributes": {
+        "mask": "zero"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "sub",
+      "signature": "v:=(v,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "table_lookup",
+      "signature": "v:=(v,vidx,v)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "test_imask",
+      "signature": "im:=(im,usize)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "to_array",
+      "signature": "s[]:=v",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "to_integral",
+      "signature": "im:=m",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "to_mask",
+      "signature": "m:=im",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "to_ostream",
+      "signature": "o:=(o,v,s)",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "to_vector",
+      "signature": "v:=m",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "tzc",
+      "signature": "usize:=m",
+      "attributes": {},
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "unequal_zero",
+      "signature": "m:=v",
+      "attributes": {
+        "value": "zero"
+      },
+      "result_target": [],
+      "checked_source_contract": false,
+      "preconditions": []
+    }
+  ],
+  "algorithm_callable_families": [
+    "aggregate_binary",
+    "aggregate_masked_binary",
+    "aggregate_masked_unary",
+    "aggregate_selected_binary",
+    "aggregate_selected_unary",
+    "aggregate_unary",
+    "bit_mask_count",
+    "byte_mask_count",
+    "consume_binary",
+    "consume_masked_binary",
+    "consume_masked_unary",
+    "consume_selected_binary",
+    "consume_selected_unary",
+    "consume_unary",
+    "count_binary",
+    "count_masked_binary",
+    "count_masked_unary",
+    "count_selected_binary",
+    "count_selected_unary",
+    "count_unary",
+    "for_each_chunk",
+    "integral_mask_chunk_count",
+    "mask_chunk_count",
+    "native_mask_chunk_count",
+    "predicate_binary",
+    "predicate_unary",
+    "select_binary",
+    "select_indices_binary",
+    "select_indices_unary",
+    "select_masked_binary",
+    "select_masked_indices_binary",
+    "select_masked_indices_unary",
+    "select_masked_unary",
+    "select_selected_indices_binary",
+    "select_selected_indices_unary",
+    "select_unary",
+    "transform_binary",
+    "transform_masked_binary",
+    "transform_masked_unary",
+    "transform_selected_binary",
+    "transform_selected_unary",
+    "transform_unary",
+    "transform_where_binary",
+    "transform_where_unary"
+  ],
+  "cpp_checked_algorithm_families": [
+    "aggregate_binary",
+    "aggregate_masked_binary",
+    "aggregate_masked_unary",
+    "aggregate_selected_binary",
+    "aggregate_selected_unary",
+    "consume_binary",
+    "consume_masked_binary",
+    "consume_masked_unary",
+    "consume_selected_binary",
+    "consume_selected_unary",
+    "count_binary",
+    "count_masked_binary",
+    "count_masked_unary",
+    "count_selected_binary",
+    "count_selected_unary",
+    "predicate_binary",
+    "predicate_unary",
+    "select_binary",
+    "select_indices_binary",
+    "select_indices_unary",
+    "select_masked_binary",
+    "select_masked_indices_binary",
+    "select_masked_indices_unary",
+    "select_masked_unary",
+    "select_selected_indices_binary",
+    "select_selected_indices_unary",
+    "select_unary",
+    "transform_binary",
+    "transform_masked_binary",
+    "transform_masked_unary",
+    "transform_selected_binary",
+    "transform_selected_unary",
+    "transform_unary",
+    "transform_where_binary",
+    "transform_where_unary"
+  ],
+  "rust_algorithm_callables": [
+    "aggregate_binary",
+    "aggregate_binary_checked",
+    "aggregate_binary_raw",
+    "aggregate_masked_binary",
+    "aggregate_masked_binary_checked",
+    "aggregate_masked_binary_raw",
+    "aggregate_masked_unary",
+    "aggregate_masked_unary_checked",
+    "aggregate_masked_unary_raw",
+    "aggregate_selected_binary",
+    "aggregate_selected_binary_checked",
+    "aggregate_selected_binary_raw",
+    "aggregate_selected_binary_scaled_checked",
+    "aggregate_selected_binary_scaled_raw",
+    "aggregate_selected_unary",
+    "aggregate_selected_unary_checked",
+    "aggregate_selected_unary_raw",
+    "aggregate_selected_unary_scaled_checked",
+    "aggregate_selected_unary_scaled_raw",
+    "aggregate_unary",
+    "aggregate_unary_raw",
+    "bit_mask_count",
+    "byte_mask_count",
+    "consume_binary",
+    "consume_binary_checked",
+    "consume_binary_raw",
+    "consume_masked_binary",
+    "consume_masked_binary_checked",
+    "consume_masked_binary_raw",
+    "consume_masked_unary",
+    "consume_masked_unary_checked",
+    "consume_masked_unary_raw",
+    "consume_selected_binary",
+    "consume_selected_binary_checked",
+    "consume_selected_binary_raw",
+    "consume_selected_binary_scaled_checked",
+    "consume_selected_binary_scaled_raw",
+    "consume_selected_unary",
+    "consume_selected_unary_checked",
+    "consume_selected_unary_raw",
+    "consume_selected_unary_scaled_checked",
+    "consume_selected_unary_scaled_raw",
+    "consume_unary",
+    "consume_unary_raw",
+    "count_binary",
+    "count_binary_checked",
+    "count_binary_raw",
+    "count_masked_binary",
+    "count_masked_binary_checked",
+    "count_masked_binary_mask_layout",
+    "count_masked_binary_mask_layout_checked",
+    "count_masked_binary_mask_layout_raw",
+    "count_masked_binary_raw",
+    "count_masked_unary",
+    "count_masked_unary_checked",
+    "count_masked_unary_mask_layout",
+    "count_masked_unary_mask_layout_checked",
+    "count_masked_unary_mask_layout_raw",
+    "count_masked_unary_raw",
+    "count_selected_binary",
+    "count_selected_binary_checked",
+    "count_selected_binary_raw",
+    "count_selected_binary_scaled_checked",
+    "count_selected_binary_scaled_raw",
+    "count_selected_unary",
+    "count_selected_unary_checked",
+    "count_selected_unary_raw",
+    "count_selected_unary_scaled_checked",
+    "count_selected_unary_scaled_raw",
+    "count_unary",
+    "count_unary_raw",
+    "for_each_chunk",
+    "for_each_chunk_raw",
+    "integral_mask_chunk_count",
+    "mask_chunk_count",
+    "native_mask_chunk_count",
+    "predicate_binary",
+    "predicate_binary_checked",
+    "predicate_binary_mask_layout",
+    "predicate_binary_mask_layout_checked",
+    "predicate_binary_mask_layout_raw",
+    "predicate_binary_raw",
+    "predicate_unary",
+    "predicate_unary_checked",
+    "predicate_unary_mask_layout",
+    "predicate_unary_mask_layout_checked",
+    "predicate_unary_mask_layout_raw",
+    "predicate_unary_raw",
+    "select_binary",
+    "select_binary_checked",
+    "select_binary_raw",
+    "select_indices_binary",
+    "select_indices_binary_checked",
+    "select_indices_binary_raw",
+    "select_indices_unary",
+    "select_indices_unary_checked",
+    "select_indices_unary_raw",
+    "select_masked_binary",
+    "select_masked_binary_checked",
+    "select_masked_binary_mask_layout",
+    "select_masked_binary_mask_layout_checked",
+    "select_masked_binary_mask_layout_raw",
+    "select_masked_binary_raw",
+    "select_masked_indices_binary",
+    "select_masked_indices_binary_checked",
+    "select_masked_indices_binary_mask_layout",
+    "select_masked_indices_binary_mask_layout_checked",
+    "select_masked_indices_binary_mask_layout_raw",
+    "select_masked_indices_binary_raw",
+    "select_masked_indices_unary",
+    "select_masked_indices_unary_checked",
+    "select_masked_indices_unary_mask_layout",
+    "select_masked_indices_unary_mask_layout_checked",
+    "select_masked_indices_unary_mask_layout_raw",
+    "select_masked_indices_unary_raw",
+    "select_masked_unary",
+    "select_masked_unary_checked",
+    "select_masked_unary_mask_layout",
+    "select_masked_unary_mask_layout_checked",
+    "select_masked_unary_mask_layout_raw",
+    "select_masked_unary_raw",
+    "select_selected_indices_binary",
+    "select_selected_indices_binary_checked",
+    "select_selected_indices_binary_raw",
+    "select_selected_indices_binary_scaled_checked",
+    "select_selected_indices_binary_scaled_raw",
+    "select_selected_indices_unary",
+    "select_selected_indices_unary_checked",
+    "select_selected_indices_unary_raw",
+    "select_selected_indices_unary_scaled_checked",
+    "select_selected_indices_unary_scaled_raw",
+    "select_unary",
+    "select_unary_checked",
+    "select_unary_raw",
+    "transform_binary",
+    "transform_binary_checked",
+    "transform_binary_raw",
+    "transform_masked_binary",
+    "transform_masked_binary_checked",
+    "transform_masked_binary_mask_layout",
+    "transform_masked_binary_mask_layout_checked",
+    "transform_masked_binary_mask_layout_raw",
+    "transform_masked_binary_raw",
+    "transform_masked_unary",
+    "transform_masked_unary_checked",
+    "transform_masked_unary_mask_layout",
+    "transform_masked_unary_mask_layout_checked",
+    "transform_masked_unary_mask_layout_raw",
+    "transform_masked_unary_raw",
+    "transform_selected_binary",
+    "transform_selected_binary_checked",
+    "transform_selected_binary_raw",
+    "transform_selected_binary_scaled_checked",
+    "transform_selected_binary_scaled_raw",
+    "transform_selected_unary",
+    "transform_selected_unary_checked",
+    "transform_selected_unary_raw",
+    "transform_selected_unary_scaled_checked",
+    "transform_selected_unary_scaled_raw",
+    "transform_unary",
+    "transform_unary_checked",
+    "transform_unary_raw",
+    "transform_where_binary",
+    "transform_where_binary_checked",
+    "transform_where_binary_mask_layout",
+    "transform_where_binary_mask_layout_checked",
+    "transform_where_binary_mask_layout_raw",
+    "transform_where_binary_raw",
+    "transform_where_unary",
+    "transform_where_unary_checked",
+    "transform_where_unary_mask_layout",
+    "transform_where_unary_mask_layout_checked",
+    "transform_where_unary_mask_layout_raw",
+    "transform_where_unary_raw"
+  ]
+}
