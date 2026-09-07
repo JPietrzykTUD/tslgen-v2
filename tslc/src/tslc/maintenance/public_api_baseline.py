@@ -9,10 +9,22 @@ from pathlib import Path
 import sys
 
 from tslc.backend.algorithm_contracts import (
+    ALGORITHM_CONTRACTS,
     ALGORITHM_PUBLIC_FAMILIES,
 )
 from tslc.backend.cpp_algorithm_contracts import cpp_checked_algorithm_families
+from tslc.backend.precondition_error_rendering import (
+    cpp_precondition_error,
+    rust_precondition_error,
+)
 from tslc.backend.rust_algorithm_manifest import RUST_ALGORITHM_RESERVED_NAMES
+from tslc.catalog.arithmetic import ArithmeticOperandBinding
+from tslc.catalog.model import Primitive
+from tslc.catalog.preconditions import (
+    PRECONDITION_DESCRIPTORS,
+    PreconditionErrorKind,
+)
+from tslc.catalog.semantics import OperandBinding
 from tslc.maintenance import _repo_context
 from tslc.maintenance._catalog import load_repository_catalog
 from tslc.maintenance._repo_context import RepoContext
@@ -22,33 +34,281 @@ def canonical_baseline_path(context: RepoContext) -> Path:
     return context.coverage_root / "tsl-v1-public-api.json"
 
 
+def _operand_binding(
+    binding: OperandBinding | ArithmeticOperandBinding,
+) -> dict[str, object]:
+    return {
+        "domain": (
+            "arithmetic"
+            if isinstance(binding, ArithmeticOperandBinding)
+            else "operation"
+        ),
+        "role": binding.role.value,
+        "parameter": binding.parameter_name,
+        "parameter_index": binding.parameter_index,
+        "parameter_kind": binding.parameter_kind,
+    }
+
+
+def _primitive_family(primitive: Primitive) -> dict[str, object]:
+    operation = primitive.operation
+    arithmetic = primitive.arithmetic
+    memory = primitive.memory
+    conversion = primitive.conversion
+    shift = primitive.shift
+    overload = primitive.overload
+    return {
+        "name": primitive.name,
+        "signature": primitive.signature,
+        "parameters": list(primitive.parameters),
+        "attributes": dict(sorted(primitive.attributes.items())),
+        "result_target": list(primitive.result_target or ()),
+        "immediate_parameters": [
+            {
+                "name": parameter.name,
+                "type": parameter.type_tag,
+                "value_range": (
+                    list(parameter.value_range)
+                    if parameter.value_range is not None
+                    else None
+                ),
+                "dispatch": [list(item) for item in parameter.dispatch],
+            }
+            for parameter in primitive.immediate_params
+        ],
+        "generic_parameters": [
+            {
+                "name": parameter.name,
+                "kind": parameter.kind,
+                "default": parameter.default,
+                "base_types": list(parameter.base_type_constraints),
+                "specialize_base": parameter.specialize_base,
+                "base_width_relations": [
+                    constraint.relation
+                    for constraint in parameter.base_width_constraints
+                ],
+            }
+            for parameter in primitive.generic_params
+        ],
+        "parameter_type_rules": [
+            {
+                "parameter": rule.parameter_name,
+                "attribute": rule.attribute_name,
+                "value": rule.attribute_value,
+                "type": rule.type_expr.source_text,
+            }
+            for rule in primitive.param_type_rules
+        ],
+        "overload": (
+            {
+                "axis": overload.axis,
+                "value": overload.value,
+                "declares_primary": overload.declares_primary,
+            }
+            if overload is not None
+            else None
+        ),
+        "operation": (
+            {
+                "kind": operation.kind.value,
+                "operands": [
+                    _operand_binding(binding)
+                    for binding in operation.operand_bindings
+                ],
+            }
+            if operation is not None
+            else None
+        ),
+        "arithmetic": (
+            {
+                "operations": [
+                    item.value for item in arithmetic.ordered_operations
+                ],
+                "guarantees": [
+                    item.value for item in arithmetic.ordered_guarantees
+                ],
+                "operands": [
+                    _operand_binding(binding)
+                    for binding in arithmetic.operand_bindings
+                ],
+            }
+            if arithmetic is not None
+            else None
+        ),
+        "memory": (
+            {
+                "access": memory.access.value,
+                "addressing": memory.addressing.value,
+                "payload_extent": memory.payload_extent.value,
+                "indexed_lane_extent": (
+                    memory.indexed_lane_extent.value
+                    if memory.indexed_lane_extent is not None
+                    else None
+                ),
+            }
+            if memory is not None
+            else None
+        ),
+        "conversion": (
+            {
+                "kind": conversion.kind.value,
+                "lane_count": conversion.lane_count.value,
+                "numeric_mode": (
+                    conversion.numeric_mode.value
+                    if conversion.numeric_mode is not None
+                    else None
+                ),
+            }
+            if conversion is not None
+            else None
+        ),
+        "shift": (
+            {
+                "count_rule": shift.count_rule.value,
+                "lane_rule": shift.lane_rule.value,
+                "scalar_count_types": list(shift.scalar_count_types),
+            }
+            if shift is not None
+            else None
+        ),
+        "checked_source_contract": bool(primitive.preconditions),
+        "preconditions": [
+            {
+                "kind": condition.kind.value,
+                "operands": [
+                    _operand_binding(binding)
+                    for binding in condition.operand_bindings
+                ],
+            }
+            for condition in primitive.preconditions
+        ],
+    }
+
+
+def _checked_algorithm_contracts() -> list[dict[str, object]]:
+    return [
+        {
+            "name": contract.name,
+            "result_kind": contract.result_kind.value,
+            "ranges": [
+                {
+                    "name": binding.name,
+                    "role": binding.role.value,
+                    "mask_storage": (
+                        binding.mask_storage.value
+                        if binding.mask_storage is not None
+                        else None
+                    ),
+                }
+                for binding in contract.ranges
+            ],
+            "conditions": [
+                {
+                    "kind": condition.kind.value,
+                    "range": condition.range_name,
+                    "reference": condition.reference_name,
+                    "error": condition.error.value,
+                }
+                for condition in contract.conditions
+            ],
+            "alias_rules": [
+                {
+                    "writable": rule.writable_range_name,
+                    "readable": list(rule.readable_range_names),
+                    "allow_exact_alias": rule.allow_exact_alias,
+                }
+                for rule in contract.alias_rules
+            ],
+        }
+        for contract in sorted(
+            ALGORITHM_CONTRACTS.values(), key=lambda item: item.name
+        )
+    ]
+
+
+def _checked_precondition_contracts() -> list[dict[str, object]]:
+    """Freeze every compiler-owned fact that defines one checked condition."""
+
+    return [
+        {
+            "kind": descriptor.kind.value,
+            "description": descriptor.description,
+            "hazard": descriptor.hazard.value,
+            "error": descriptor.error.value,
+            "additional_errors": [
+                error.value for error in descriptor.additional_errors
+            ],
+            "unchecked_consequence": descriptor.unchecked_consequence,
+            "required_roles": sorted(role.value for role in descriptor.required_roles),
+            "compatible_operations": sorted(
+                operation.value for operation in descriptor.compatible_operations
+            ),
+            "required_arithmetic_roles": sorted(
+                role.value for role in descriptor.required_arithmetic_roles
+            ),
+            "compatible_arithmetic_operations": sorted(
+                operation.value
+                for operation in descriptor.compatible_arithmetic_operations
+            ),
+            "numeric_domain": (
+                descriptor.numeric_domain.value
+                if descriptor.numeric_domain is not None
+                else None
+            ),
+            "checkable_arithmetic_binding_kinds": sorted(
+                descriptor.checkable_arithmetic_binding_kinds
+            ),
+            "check_primitives": [
+                primitive.value for primitive in descriptor.check_primitives
+            ],
+            "masked_check_primitives": [
+                primitive.value for primitive in descriptor.masked_check_primitives
+            ],
+            "compatible_memory_accesses": sorted(
+                access.value for access in descriptor.compatible_memory_accesses
+            ),
+            "compatible_memory_addressings": sorted(
+                addressing.value
+                for addressing in descriptor.compatible_memory_addressings
+            ),
+        }
+        for descriptor in sorted(
+            PRECONDITION_DESCRIPTORS.values(),
+            key=lambda item: item.kind.value,
+        )
+    ]
+
+
+def _checked_error_contract() -> dict[str, object]:
+    """Freeze semantic failures and both backend-owned public spellings."""
+
+    return {
+        "cpp_success": "none",
+        "failures": [
+            {
+                "kind": error.value,
+                "cpp": cpp_precondition_error(error, qualified=False),
+                "rust": rust_precondition_error(error, prefix=""),
+            }
+            for error in PreconditionErrorKind
+        ],
+    }
+
+
 def build_public_api_baseline(context: RepoContext) -> dict[str, object]:
     """Project public identities from typed catalog and backend manifests."""
 
     catalog = load_repository_catalog(context, purpose="public-API baseline")
-    primitives = [
-        {
-            "name": primitive.name,
-            "signature": primitive.signature,
-            "attributes": dict(sorted(primitive.attributes.items())),
-            "result_target": list(primitive.result_target or ()),
-            "checked_source_contract": bool(primitive.preconditions),
-            "preconditions": sorted(
-                condition.kind.value for condition in primitive.preconditions
-            ),
-        }
-        for primitive in sorted(
-            catalog.primitives,
-            key=lambda item: (
-                item.name,
-                item.signature,
-                tuple(sorted(item.attributes.items())),
-                tuple(item.result_target or ()),
-            ),
+    primitives = [_primitive_family(primitive) for primitive in catalog.primitives]
+    primitives.sort(
+        key=lambda item: (
+            str(item["name"]),
+            str(item["signature"]),
+            json.dumps(item, sort_keys=True),
         )
-    ]
+    )
     return {
-        "version": 1,
+        "version": 2,
         "compatibility": {
             "cpp": (
                 "names reachable through tsl.hpp, excluding detail namespaces, "
@@ -59,8 +319,10 @@ def build_public_api_baseline(context: RepoContext) -> dict[str, object]:
                 "algorithm substrate representations are not stable ABI"
             ),
             "identity_level": (
-                "typed callable family; backend overload sets and representative "
-                "rendered declarations are ratcheted by generated snapshots"
+                "typed source callable-family contracts and catalog-owned public "
+                "semantics; selected per-profile safety and exact emitted backend "
+                "declarations remain outside this baseline, while representative "
+                "spellings have focused compile and generation tests"
             ),
         },
         "cpp_core_identities": [
@@ -85,7 +347,10 @@ def build_public_api_baseline(context: RepoContext) -> dict[str, object]:
             "tsl::profile",
         ],
         "primitive_callable_families": primitives,
+        "checked_precondition_contracts": _checked_precondition_contracts(),
+        "checked_error_contract": _checked_error_contract(),
         "algorithm_callable_families": sorted(ALGORITHM_PUBLIC_FAMILIES),
+        "checked_algorithm_contracts": _checked_algorithm_contracts(),
         "cpp_checked_algorithm_families": sorted(cpp_checked_algorithm_families()),
         "rust_algorithm_callables": sorted(RUST_ALGORITHM_RESERVED_NAMES),
     }

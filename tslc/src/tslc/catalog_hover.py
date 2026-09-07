@@ -14,7 +14,11 @@ from tslc.catalog.conversion import (
     LANE_COUNT_RELATION_DESCRIPTIONS,
     NUMERIC_CONVERSION_MODE_DESCRIPTIONS,
 )
-from tslc.catalog.memory import MEMORY_ACCESS_DESCRIPTIONS, MEMORY_ADDRESSING_DESCRIPTIONS
+from tslc.catalog.memory import (
+    MEMORY_ACCESS_DESCRIPTIONS,
+    MEMORY_ADDRESSING_DESCRIPTIONS,
+    MEMORY_INDEXED_LANE_EXTENT_DESCRIPTIONS,
+)
 from tslc.catalog.model import Catalog, Primitive
 from tslc.catalog.preconditions import PRECONDITION_DESCRIPTORS
 from tslc.catalog.semantics import OPERAND_ROLE_DESCRIPTIONS, PRIMITIVE_OPERATION_DESCRIPTIONS
@@ -226,6 +230,11 @@ def hover_text(
         ("operand-role", "Operand role", OPERAND_ROLE_DESCRIPTIONS.items()),
         ("memory-access", "Memory access", MEMORY_ACCESS_DESCRIPTIONS.items()),
         ("memory-addressing", "Memory addressing", MEMORY_ADDRESSING_DESCRIPTIONS.items()),
+        (
+            "memory-indexed-lane-extent",
+            "Indexed memory lane extent",
+            MEMORY_INDEXED_LANE_EXTENT_DESCRIPTIONS.items(),
+        ),
         ("conversion-kind", "Conversion kind", CONVERSION_KIND_DESCRIPTIONS.items()),
         ("lane-count-relation", "Lane-count relation", LANE_COUNT_RELATION_DESCRIPTIONS.items()),
         ("numeric-conversion-mode", "Numeric conversion mode", NUMERIC_CONVERSION_MODE_DESCRIPTIONS.items()),

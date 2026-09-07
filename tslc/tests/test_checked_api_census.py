@@ -1,4 +1,4 @@
-"""Frozen evidence for the pre-v1 checked-API refactor."""
+"""Frozen evidence for the TSL v1 checked-API contract."""
 
 from __future__ import annotations
 

@@ -11,6 +11,9 @@ type Vec32 = Simd<i32, Avx2>;
 type Vec64 = Simd<i64, Avx2>;
 type Generic32 = Simd<i32, Generic<4>>;
 
+#[repr(align(32))]
+struct AlignedI32([i32; 8]);
+
 fn reg32(values: [i32; 8]) -> __m256i {
     unsafe { core::mem::transmute(values) }
 }
@@ -42,6 +45,11 @@ fn check_indexed() {
     )
     .unwrap();
     assert_eq!(lanes32(partial), [11, 13, 15, 17, 0, 0, 0, 0]);
+
+    assert!(matches!(
+        gather_checked::<Vec32, Vec64, 4, 1>(&input, partial_indices),
+        Err(PreconditionError::IndexOutOfBounds)
+    ));
 
     let negative = reg32([-1, 0, 0, 0, 0, 0, 0, 0]);
     assert!(matches!(
@@ -84,25 +92,36 @@ fn check_indexed() {
 fn check_compacted() {
     let value = reg32([10, 11, 12, 13, 14, 15, 16, 17]);
     let mask = two_lane_mask();
-    let mut output = [-7_i32; 4];
+    let mut output = AlignedI32([-7_i32; 8]);
     assert_eq!(
-        compress_store_checked::<Vec32, true>(mask, &mut output[1..2], value),
+        compress_store_checked::<Vec32, true>(mask, &mut output.0[0..1], value),
         Err(PreconditionError::InsufficientExtent)
     );
-    assert_eq!(output, [-7; 4]);
-    compress_store_checked::<Vec32, true>(mask, &mut output[1..3], value).unwrap();
-    assert_eq!(output, [-7, 11, 13, -7]);
+    assert_eq!(output.0, [-7; 8]);
+    assert_eq!(
+        compress_store_checked::<Vec32, true>(mask, &mut output.0[1..3], value),
+        Err(PreconditionError::Misaligned)
+    );
+    assert_eq!(output.0, [-7; 8]);
+    compress_store_checked::<Vec32, true>(mask, &mut output.0[0..2], value).unwrap();
+    assert_eq!(output.0, [11, 13, -7, -7, -7, -7, -7, -7]);
 
+    let packed = AlignedI32([31, 33, 0, 0, 0, 0, 0, 0]);
     assert!(matches!(
-        expand_load_checked::<Vec32, true>(mask, &[31]),
+        expand_load_checked::<Vec32, true>(mask, &packed.0[0..1]),
         Err(PreconditionError::InsufficientExtent)
     ));
-    let expanded = expand_load_checked::<Vec32, true>(mask, &[31, 33]).unwrap();
+    assert!(matches!(
+        expand_load_checked::<Vec32, true>(mask, &packed.0[1..3]),
+        Err(PreconditionError::Misaligned)
+    ));
+    let expanded = expand_load_checked::<Vec32, true>(mask, &packed.0[0..2]).unwrap();
     assert_eq!(lanes32(expanded), [0, 31, 0, 33, 0, 0, 0, 0]);
 
     let inactive = mask_false::<Vec32>();
-    compress_store_checked::<Vec32, true>(inactive, &mut [], value).unwrap();
-    let zero = expand_load_checked::<Vec32, true>(inactive, &[]).unwrap();
+    compress_store_checked::<Vec32, true>(inactive, &mut output.0[1..1], value)
+        .unwrap();
+    let zero = expand_load_checked::<Vec32, true>(inactive, &packed.0[1..1]).unwrap();
     assert_eq!(lanes32(zero), [0; 8]);
 }
 

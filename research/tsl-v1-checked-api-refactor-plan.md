@@ -2,8 +2,9 @@
 
 Date: 2026-09-02
 
-Status: accepted pre-v1 public-contract plan; all eight implementation slices
-are complete, with release evidence recorded below
+Status: post-implementation review; Slices 0 through 8 are implemented, but
+TSL v1 release readiness remains blocked on explicit transitive-precondition
+accounting and the exact public-declaration manifest in Slices 9 and 10
 
 Related evidence: [TSL v1.0.0 generated API and documentation audit](tsl-v1-generated-api-docs-audit.md)
 
@@ -633,12 +634,17 @@ resolving only specialization facts such as element type, lane count,
 alignment mode, active mask binding, and immediate-versus-runtime status.
 
 Lowering must not render checks or target-language expressions. Existing
-conservative `ImplementationSafety` propagation remains in force. A checked root
-is eligible only when every propagated caller obligation is covered by an
-explicit root-level typed precondition and backend check plan; an unmatched
-obligation produces a checked-coverage gap. The initial design must not attempt to
-prove from opaque target text that an implementation discharged a callee
-precondition.
+conservative `ImplementationSafety` propagation remains in force. For a direct
+caller-unsafe memory specialization, checked admission now requires the
+reviewed `raw_pointer` obligation, a complete root-level typed memory
+precondition plan, and no safety-reason labels beyond the narrow
+implementation-mechanism set observed on the reviewed corpus. Unknown labels,
+unchecked indexing, and generic unsafe operations fail closed. The current
+lowerer classifies `value_reinterpretation` and `unsafe_callee` as internal-only
+framing effects, so those labels do not by themselves block a wrapper. This
+guard must not be mistaken for a transitive proof: Slice 9 must make every
+callee condition explicitly forwarded or discharged. No stage may try to
+prove either fact from opaque target text.
 
 ### Backend API planning
 
@@ -750,7 +756,7 @@ validated independently. Do not implement the entire corpus in one branch.
 
 ### Slice 0 — Freeze the public policy and census current checks
 
-Goal: establish an exact baseline before changing generated APIs.
+Goal: establish a reviewed semantic baseline before changing generated APIs.
 
 Deliverables:
 
@@ -768,7 +774,9 @@ Deliverables:
   dynamic precondition;
 - record which public operations can and cannot receive an honest checked form;
   and
-- freeze representative C++ and Rust declaration snapshots.
+- record representative C++ and Rust declaration-shape examples. These examples
+  support review and focused generation tests; they are not an exhaustive
+  compatibility ratchet.
 
 Out of scope: changing generated behavior.
 
@@ -1089,6 +1097,16 @@ Observed Slice 6 evidence:
   active-lane-only masked access, exact/short compacted capacity, empty inactive
   masks, and destination canaries are covered by generated C++ and Rust
   consumers.
+- Post-implementation review found that vector-indexed wrappers validated the
+  index vector's lane count even where the ordinary operation consumes one
+  index per result-vector lane. `memory.indexed_lanes` now owns that distinction
+  in source data; catalog validation, lowering, editor projections, both
+  backends, documentation, stage dumps, and generated consumers project it.
+- The same review found that compacted wrappers checked capacity but omitted
+  the source-selected aligned-memory contract. `compress_store` and
+  `expand_load` now declare both compacted extent and selected alignment;
+  wrappers reject misalignment before nonempty access while preserving valid
+  all-inactive empty operations.
 - Pointer-indexed `gather_narrow` remains an explicit coverage gap: a checked
   form needs both a base view and a second extent-carrying index view, which the
   current signature cannot honestly provide.
@@ -1195,7 +1213,8 @@ Deliverables:
 - an exact checked-API coverage inventory with reasons for omissions;
 - bundled-editor smoke coverage for precondition completion, diagnostics,
   hover, references, and semantic tokens from the packaged Python server;
-- public API declaration baselines; and
+- a typed public-contract baseline plus representative declaration-shape
+  examples; and
 - package-size and generated-size comparison against the pre-refactor
   baseline.
 
@@ -1219,10 +1238,21 @@ Observed after implementation:
   Doxygen now consumes the facade and stable core/algorithm headers, and its
   strict validator checks public types, every algorithm family, primitive
   prose, callable identity uniqueness, and ordinary twins for checked names.
-- The v1 public baseline freezes 181 primitive families, 44 C++ algorithm
+- The typed v1 public baseline freezes 181 primitive families, 44 C++ algorithm
   families, 35 C++ checked-algorithm families, 174 Rust algorithm names,
-  and the stable root/core identities. The checked census remains exact at 33
-  caller-unsafe identities, including eleven explicit no-honest-twin gaps.
+  stable root/core identities, source signature semantics, checked-condition
+  descriptors, checked error spellings, and algorithm contracts. The checked
+  census remains exact at 33 caller-unsafe identities, including eleven
+  explicit no-honest-twin gaps. It does not yet ratchet every exact emitted
+  backend declaration.
+- Post-implementation review tightened checked-memory admission: a range
+  signature may discharge the reviewed `raw_pointer` obligation, but it cannot
+  silently erase unknown safety labels, unchecked indexing, generic unsafe
+  operations. Compiler-derived internal-only value-reinterpretation and
+  unsafe-callee framing effects remain compatible; this does not resolve the
+  transitive callee condition, which remains Slice 9's release gate. The
+  current corpus remains admitted without treating an unclassified direct
+  caller obligation as discharged.
 - Strict Rustdoc, two executable overview doctests, strict Doxygen, the Sphinx
   site, GCC/Clang documentation consumers, the Python LSP suite, VS Code unit
   and integration suites, and the bundled Linux x64 runtime-package smoke gate
@@ -1243,6 +1273,99 @@ Observed after implementation:
 - Final gates pass with 2,689 ordinary compiler tests, 46 checked-API
   generated/ABI tests, and all 84 generated build/value tests; the expected
   skips are recorded in the release evidence.
+
+### Slice 9 — Explicit transitive-precondition accounting
+
+Goal: make every call from one generated primitive to a dynamically
+preconditioned primitive carry a source-visible, typed disposition.
+
+The current compiler records the selected callee identity and wraps a call to a
+caller-unsafe Rust primitive in a local `unsafe` block. Dependency closure then
+propagates the need for an internal unsafe frame, but intentionally does not
+make the caller's public function unsafe. This is correct for calls over
+compiler-sized local arrays and for calls whose arguments have been sanitized;
+blindly propagating caller unsafety would make those sound abstractions unsafe.
+It is not sufficient as a v1 proof, however: `CallDependency` does not record
+which callee precondition was forwarded or discharged, so the compiler cannot
+distinguish those cases from an accidentally lost caller obligation.
+
+Deliverables:
+
+- extend the recognized TSIL call semantics with a minimal source-authored,
+  typed disposition for every applicable catastrophic callee precondition;
+- represent each disposition in the call region and lowered dependency model,
+  with the callee condition, source span, and either an explicit matching root
+  precondition or an explicit implementation-author discharge assertion;
+- validate forwarded conditions from typed operand identities and reject
+  ambiguous or unmatched forwarding rather than interpreting raw C++ or Rust
+  expressions;
+- require an explicit discharge assertion for internally established facts such
+  as compiler-sized local storage or sanitized nonzero divisors; the assertion
+  is the implementation author's unsafe proof boundary and is visible to audit
+  tooling;
+- make checked-wrapper admission fail closed when dependency closure contains an
+  unresolved applicable obligation;
+- expose the new call-site semantics through compiler-owned diagnostics, hover,
+  references, completion, stage dumps, and the primitive explorer, without
+  copying the vocabulary into the TypeScript client; and
+- annotate and ratchet every current call to `div`, `mod`, `load`, and `store`
+  that carries a catastrophic dynamic precondition.
+
+Validation: focused closure tests for direct and recursive forwarding,
+explicit discharge, masked type applicability, immediate compile-time
+discharge, compiler-sized local memory, ambiguous overloads, and source-located
+missing/stale annotations; generated Rust safety tests; and a deterministic
+maintenance report with no unresolved current-corpus obligations.
+
+Stop release if the implementation requires parsing raw target-language text,
+silently treats a local `unsafe` block as proof, or propagates caller unsafety
+through every abstraction regardless of an explicit discharge.
+
+### Slice 10 — Exact backend public-declaration manifest
+
+Goal: make public compatibility exact without parsing or hashing rendered target
+text.
+
+The typed source-family baseline added in Slice 8 protects the semantic inputs
+to generation, and focused compile tests protect representative declarations.
+Neither proves that every emitted C++ and Rust public declaration is stable: a
+renderer could still change a qualifier, generic bound, overload, visibility,
+module reachability, parameter type, or checked result form without changing
+the current baseline. The reviewed `.snap` files are examples and must not be
+treated as exhaustive release ratchets.
+
+Deliverables:
+
+- backend-owned frozen declaration records for every stable C++ and Rust public
+  item, including public name and owner, reachability, template/type/const
+  parameters and bounds, parameter types and roles, qualifiers and safety,
+  result/error form, ordinary/checked relationship, and overload identity;
+- renderers that format those finalized records rather than independently
+  reconstructing declaration semantics;
+- one deterministic manifest serializer over the same records, with an
+  intentional schema-version bump and readable compatibility diffs;
+- classification of every emitted public item as stable, explicitly unstable,
+  or implementation detail, with no unclassified exported declaration; and
+- exact parity tests proving that each stable rendered declaration is owned by
+  exactly one manifest record for C++, the Rust opaque facade, profile
+  callables, and stable algorithm entry points.
+
+The declaration records belong in their respective backends because C++
+`noexcept`, `[[nodiscard]]`, reference/output conventions, and overload sets are
+not Rust `unsafe`, slice, const-generic, or `Result` semantics. Shared lowered
+facts remain backend-neutral inputs. The maintenance command may serialize the
+records but must not re-derive signatures, inspect source bodies, regex-parse
+target code, or make render decisions.
+
+Validation: deterministic manifests under repeated generation and source-order
+perturbation; one-record/one-declaration coverage; negative tests for qualifier,
+visibility, bound, parameter, result, checked-twin, and reachability drift;
+strict generated C++/Rust compilation and documentation; and the full public
+baseline, checked-census, generated-build, and editor/package gates.
+
+Stop release if either backend cannot name a single typed owner for a stable
+declaration fact. Do not paper over that ownership gap with whole-artifact
+hashes or target-language parsing.
 
 ## Performance and correctness showcase
 
@@ -1408,10 +1531,17 @@ analysis plan. The TypeScript client owns presentation only, and
 
 ### Transitive calls leak or lose obligations
 
-Control: retain conservative caller-safety propagation and require every
-transitive obligation to match an explicit root precondition before generating a
-checked wrapper. Add call-closure tests for matched and unmatched obligations; do
-not invent proof or discharge semantics from raw target text.
+Current limitation: lowering records callee identities and inserts local Rust
+`unsafe` blocks, while dependency closure propagates internal unsafety only. A
+review of the current call sites found matching root conditions, compile-time
+nonzero immediates, sanitized divisors, raw-pointer roots that remain unsafe, or
+compiler-sized local/fixed-array storage, but those discharge facts are not yet
+represented or validated by the compiler.
+
+Control: Slice 9 adds an explicit typed forwarded/discharged disposition for
+every applicable catastrophic callee condition. Checked-wrapper admission must
+reject unresolved closure obligations. Do not infer proofs from raw target text
+and do not make every sound abstraction caller-unsafe by blind propagation.
 
 ### Masked operations reject irrelevant lanes
 
@@ -1430,7 +1560,8 @@ and documented API and is outside this plan.
 This refactor does not resolve every finding in the broader v1 audit. Remaining
 work outside this plan includes:
 
-- the GCC intrinsic-mask warning;
+- unrelated warnings in full-corpus native generated headers (the checked-API
+  mask-layout trait warning was fixed during post-implementation review);
 - general generated-artifact size reduction;
 - unsupported hardware/profile implementation gaps.
 
@@ -1470,3 +1601,11 @@ The refactor is complete when:
 13. compiler-owned editor surfaces complete, diagnose, index, and explain
     source preconditions from the typed registry, while the TypeScript client
     and TSIL grammar contain no copied precondition semantics.
+
+Post-implementation review validates items 2, 3, 5 through 8, and 10 through 13
+for directly declared operations after the corrections recorded above. Items 1,
+4, and 9 are not yet release-complete: Slice 9 must turn the reviewed current
+transitive-call assumptions into compiler-validated obligations, and Slice 10
+must add the exact backend declaration manifest. The typed source-family and
+checked-coverage baselines remain strong semantic ratchets, but they are not a
+substitute for either gate.

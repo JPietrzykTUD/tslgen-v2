@@ -13,7 +13,7 @@ from tslc.backend.cpp_detection import (
     CPP_PROFILE_AUTO_GATES,
     CPP_PROFILE_DETECTION_KINDS,
 )
-from tslc.backend.checked_api import checked_api_plan
+from tslc.backend.checked_api import applicable_checked_api_plan
 from tslc.backend.target_capability import (
     cpp_width_indexed_register_helper,
     width_indexed_register_bits,
@@ -34,7 +34,7 @@ def validate_cpp_profiles(profiles: tuple[EmittedProfile, ...]) -> tuple[Diagnos
             primitive_specializations.items()
         ):
             if (
-                checked_api_plan(specializations) is not None
+                applicable_checked_api_plan(specializations) is not None
                 and f"{primitive_name}_checked" in emitted_names
             ):
                 diagnostics.append(

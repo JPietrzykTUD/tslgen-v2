@@ -26,7 +26,12 @@ from tslc.catalog.conversion import (
     LaneCountRelation,
     NumericConversionMode,
 )
-from tslc.catalog.memory import MemoryAccess, MemoryAddressing, MemoryPayloadExtent
+from tslc.catalog.memory import (
+    MemoryAccess,
+    MemoryAddressing,
+    MemoryIndexedLaneExtent,
+    MemoryPayloadExtent,
+)
 from tslc.catalog.model import Extension, PrimitiveMaskMode, VectorBitsKind
 from tslc.catalog.preconditions import PreconditionKind
 from tslc.catalog.scalar_types import scalar_bit_width
@@ -54,7 +59,12 @@ class _CandidateKey:
     conversion: tuple[
         ConversionKind, LaneCountRelation, NumericConversionMode | None
     ] | None
-    memory: tuple[MemoryAccess, MemoryAddressing, MemoryPayloadExtent] | None
+    memory: tuple[
+        MemoryAccess,
+        MemoryAddressing,
+        MemoryPayloadExtent,
+        MemoryIndexedLaneExtent | None,
+    ] | None
     has_concrete_target: bool
     mask_policy: PrimitiveMaskMode | None
     overload: tuple[str, str, bool] | None
@@ -279,7 +289,12 @@ def _candidate_key(spec: LoweredSpecialization) -> _CandidateKey:
             else None
         ),
         memory=(
-            (memory.access, memory.addressing, memory.payload_extent)
+            (
+                memory.access,
+                memory.addressing,
+                memory.payload_extent,
+                memory.indexed_lane_extent,
+            )
             if memory is not None
             else None
         ),

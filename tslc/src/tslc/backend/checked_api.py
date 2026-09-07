@@ -21,46 +21,72 @@ from tslc.catalog.memory import (
     MemoryAccess,
     MemoryAddressing,
     MemoryAlignment,
+    MemoryIndexedLaneExtent,
     MemoryPayloadExtent,
 )
 from tslc.catalog.semantics import OperandBinding, OperandRole
 from tslc.lower.lowerer import LoweredSpecialization
 
 
+# These are the narrow implementation-mechanism labels observed on the
+# reviewed memory families. ``value_reinterpretation`` and ``unsafe_callee``
+# are included because the current lowerer adds them as internal-only effects;
+# neither label itself declares a new public caller obligation.
+# Labels such as ``unchecked_index`` and ``unsafe_operation`` are deliberately
+# not accepted here: without a typed caller-obligation model the checked
+# planner cannot prove that a range check discharges them. Slice 9 still has to
+# prove that each unsafe callee's own dynamic conditions were forwarded or
+# discharged; admitting its internal framing label is not that proof.
+_RANGE_COMPATIBLE_IMPLEMENTATION_REASONS = frozenset(
+    {
+        "compiler_builtin",
+        "intrinsic",
+        "raw_memory",
+        "unsafe_callee",
+        "value_reinterpretation",
+    }
+)
+_RANGE_DISCHARGED_CALLER_REASON = "raw_pointer"
+
+
 @dataclass(frozen=True, slots=True)
 class CheckedConditionPlan:
     kind: PreconditionKind
+    description: str
+    unchecked_consequence: str
     error: PreconditionErrorKind
     additional_errors: tuple[PreconditionErrorKind, ...]
     parameter_name: str
     parameter_index: int
+    applicable_type_tags: tuple[str, ...]
     numeric_domain: ArithmeticNumericDomain | None = None
     check_primitives: tuple[PreconditionCheckPrimitive, ...] = ()
     mask_parameter_name: str | None = None
     mask_parameter_index: int | None = None
     memory_access: MemoryAccess | None = None
     memory_addressing: MemoryAddressing | None = None
+    memory_indexed_lane_extent: MemoryIndexedLaneExtent | None = None
     memory_payload_extents: tuple[MemoryPayloadExtent, ...] = ()
     memory_alignment_axis_name: str | None = None
     index_parameter_name: str | None = None
-    index_parameter_index: int | None = None
     scale_parameter_name: str | None = None
-    scale_parameter_index: int | None = None
 
     @property
     def errors(self) -> tuple[PreconditionErrorKind, ...]:
         return (self.error, *self.additional_errors)
 
     def __post_init__(self) -> None:
-        is_memory = self.kind in {
-            PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
-            PreconditionKind.SELECTED_MEMORY_ALIGNMENT,
-            PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID,
-            PreconditionKind.COMPACTED_MEMORY_EXTENT,
-        }
+        if not self.description.strip() or not self.unchecked_consequence.strip():
+            raise ValueError("checked conditions require complete public prose")
+        if self.error in self.additional_errors or len(set(self.errors)) != len(
+            self.errors
+        ):
+            raise ValueError("checked condition errors must be unique")
+        is_memory = PRECONDITION_DESCRIPTORS[self.kind].binds_memory_operand
         has_any_memory = (
             self.memory_access is not None
             or self.memory_addressing is not None
+            or self.memory_indexed_lane_extent is not None
             or bool(self.memory_payload_extents)
             or self.memory_alignment_axis_name is not None
         )
@@ -77,10 +103,24 @@ class CheckedConditionPlan:
             raise ValueError(
                 "checked memory conditions require complete typed memory facts"
             )
-        if len(set(self.memory_payload_extents)) != len(
-            self.memory_payload_extents
+        if (self.memory_addressing is MemoryAddressing.INDEXED) != (
+            self.memory_indexed_lane_extent is not None
         ):
-            raise ValueError("checked memory payload extents must be unique")
+            raise ValueError(
+                "checked indexed-memory conditions require one lane extent"
+            )
+        if self.memory_payload_extents != tuple(
+            sorted(set(self.memory_payload_extents), key=lambda item: item.value)
+        ):
+            raise ValueError(
+                "checked memory payload extents must be unique and sorted"
+            )
+        if self.applicable_type_tags != tuple(
+            sorted(set(self.applicable_type_tags))
+        ):
+            raise ValueError(
+                "checked condition applicable type tags must be unique and sorted"
+            )
         if (
             self.kind is PreconditionKind.SELECTED_MEMORY_ALIGNMENT
             and self.memory_alignment_axis_name is None
@@ -90,21 +130,26 @@ class CheckedConditionPlan:
             self.mask_parameter_index is None
         ):
             raise ValueError("checked mask bindings must be complete")
-        if (self.index_parameter_name is None) != (
-            self.index_parameter_index is None
+        if (
+            self.memory_addressing is MemoryAddressing.COMPACTED
+            and self.mask_parameter_name is None
         ):
-            raise ValueError("checked index bindings must be complete")
-        if (self.scale_parameter_name is None) != (
-            self.scale_parameter_index is None
-        ):
-            raise ValueError("checked scale bindings must be complete")
-        has_indexed_bindings = (
+            raise ValueError(
+                "checked compacted-memory conditions require a mask binding"
+            )
+        has_any_indexed_binding = (
+            self.index_parameter_name is not None
+            or self.scale_parameter_name is not None
+        )
+        has_complete_indexed_bindings = (
             self.index_parameter_name is not None
             and self.scale_parameter_name is not None
         )
+        if has_any_indexed_binding and not has_complete_indexed_bindings:
+            raise ValueError("checked indexed bindings must be complete")
         if (
             self.kind is PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID
-        ) != has_indexed_bindings:
+        ) != has_complete_indexed_bindings:
             raise ValueError(
                 "checked indexed-address conditions require index and scale bindings"
             )
@@ -113,7 +158,44 @@ class CheckedConditionPlan:
 @dataclass(frozen=True, slots=True)
 class CheckedApiPlan:
     conditions: tuple[CheckedConditionPlan, ...]
-    result_kind: str
+
+    def __post_init__(self) -> None:
+        if not self.conditions:
+            raise ValueError("checked API plans require at least one condition")
+        kinds = tuple(condition.kind for condition in self.conditions)
+        if len(set(kinds)) != len(kinds):
+            raise ValueError("checked API plans require unique condition kinds")
+
+
+def checked_memory_condition(
+    conditions: tuple[CheckedConditionPlan, ...],
+) -> CheckedConditionPlan | None:
+    """Return the one shared memory binding represented by checked conditions."""
+
+    memory_conditions = tuple(
+        condition for condition in conditions if condition.memory_access is not None
+    )
+    if not memory_conditions:
+        return None
+    identities = {
+        (
+            condition.parameter_name,
+            condition.parameter_index,
+            condition.memory_access,
+            condition.memory_addressing,
+            condition.memory_indexed_lane_extent,
+            condition.memory_payload_extents,
+            condition.memory_alignment_axis_name,
+            condition.mask_parameter_name,
+            condition.mask_parameter_index,
+            condition.index_parameter_name,
+            condition.scale_parameter_name,
+        )
+        for condition in memory_conditions
+    }
+    if len(identities) != 1:
+        raise ValueError("checked memory conditions disagree on their binding")
+    return memory_conditions[0]
 
 
 def checked_api_plan(
@@ -190,12 +272,7 @@ def checked_api_plan(
             binding = precondition.arithmetic_binding(ArithmeticOperandRole.DIVISOR)
             if binding is None:
                 raise ValueError("divisor precondition has no resolved divisor binding")
-        elif precondition.kind in {
-            PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
-            PreconditionKind.SELECTED_MEMORY_ALIGNMENT,
-            PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID,
-            PreconditionKind.COMPACTED_MEMORY_EXTENT,
-        }:
+        elif descriptor.binds_memory_operand:
             memory = first.primitive_semantics.memory
             if memory is None:
                 raise ValueError("memory precondition has no resolved memory contract")
@@ -211,18 +288,12 @@ def checked_api_plan(
             return None
         memory_access: MemoryAccess | None = None
         memory_addressing: MemoryAddressing | None = None
+        memory_indexed_lane_extent: MemoryIndexedLaneExtent | None = None
         memory_payload_extents: tuple[MemoryPayloadExtent, ...] = ()
         memory_alignment_axis_name: str | None = None
         index_parameter_name: str | None = None
-        index_parameter_index: int | None = None
         scale_parameter_name: str | None = None
-        scale_parameter_index: int | None = None
-        if precondition.kind in {
-            PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
-            PreconditionKind.SELECTED_MEMORY_ALIGNMENT,
-            PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID,
-            PreconditionKind.COMPACTED_MEMORY_EXTENT,
-        }:
+        if descriptor.binds_memory_operand:
             memories = tuple(
                 spec.primitive_semantics.memory for spec in specializations
             )
@@ -237,6 +308,14 @@ def checked_api_plan(
             if len(addressing_values) != 1:
                 raise ValueError("checked memory family disagrees on memory addressing")
             memory_addressing = next(iter(addressing_values))
+            indexed_lane_extent_values = {
+                memory.indexed_lane_extent for memory in memory_values
+            }
+            if len(indexed_lane_extent_values) != 1:
+                raise ValueError(
+                    "checked memory family disagrees on indexed lane extent"
+                )
+            memory_indexed_lane_extent = next(iter(indexed_lane_extent_values))
             memory_payload_extents = tuple(
                 sorted(
                     {memory.payload_extent for memory in memory_values},
@@ -272,9 +351,7 @@ def checked_api_plan(
                     "indexed-address precondition has incomplete index/scale bindings"
                 )
             index_parameter_name = index_binding.parameter_name
-            index_parameter_index = index_binding.parameter_index
             scale_parameter_name = scale_binding.parameter_name
-            scale_parameter_index = scale_binding.parameter_index
             operation = first.primitive_semantics.operation
             mask_binding = (
                 None
@@ -284,33 +361,52 @@ def checked_api_plan(
             if mask_binding is not None:
                 mask_name = mask_binding.parameter_name
                 mask_index = mask_binding.parameter_index
-        if precondition.kind is PreconditionKind.COMPACTED_MEMORY_EXTENT:
+        if memory_addressing is MemoryAddressing.COMPACTED:
             mask_binding = precondition.binding(OperandRole.CONTROL_MASK)
             if mask_binding is None:
+                operation = first.primitive_semantics.operation
+                mask_binding = (
+                    None
+                    if operation is None
+                    else operation.binding(OperandRole.CONTROL_MASK)
+                )
+            if mask_binding is None:
                 raise ValueError(
-                    "compacted-memory precondition has no resolved mask binding"
+                    "compacted-memory condition has no resolved mask binding"
                 )
             mask_name = mask_binding.parameter_name
             mask_index = mask_binding.parameter_index
         conditions.append(
             CheckedConditionPlan(
                 kind=precondition.kind,
+                description=descriptor.description,
+                unchecked_consequence=descriptor.unchecked_consequence,
                 error=descriptor.error,
                 additional_errors=descriptor.additional_errors,
                 parameter_name=binding.parameter_name,
                 parameter_index=binding.parameter_index,
+                applicable_type_tags=tuple(
+                    sorted(
+                        {
+                            spec.type_tag
+                            for spec in specializations
+                            for item in spec.primitive_semantics.preconditions
+                            if item.kind is precondition.kind
+                            and precondition_applies_to_type(item, spec.type_tag)
+                        }
+                    )
+                ),
                 numeric_domain=descriptor.numeric_domain,
                 check_primitives=check_primitives,
                 mask_parameter_name=mask_name,
                 mask_parameter_index=mask_index,
                 memory_access=memory_access,
                 memory_addressing=memory_addressing,
+                memory_indexed_lane_extent=memory_indexed_lane_extent,
                 memory_payload_extents=memory_payload_extents,
                 memory_alignment_axis_name=memory_alignment_axis_name,
                 index_parameter_name=index_parameter_name,
-                index_parameter_index=index_parameter_index,
                 scale_parameter_name=scale_parameter_name,
-                scale_parameter_index=scale_parameter_index,
             )
         )
     if not conditions:
@@ -320,7 +416,7 @@ def checked_api_plan(
         and not _has_complete_memory_check(tuple(conditions), specializations)
     ):
         return None
-    return CheckedApiPlan(tuple(conditions), first.result_kind)
+    return CheckedApiPlan(tuple(conditions))
 
 
 def _has_complete_memory_check(
@@ -329,42 +425,26 @@ def _has_complete_memory_check(
 ) -> bool:
     """Whether a richer range signature discharges raw-memory caller unsafety."""
 
-    memory_kinds = {
-        PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
-        PreconditionKind.SELECTED_MEMORY_ALIGNMENT,
-        PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID,
-        PreconditionKind.COMPACTED_MEMORY_EXTENT,
-    }
-    memory_conditions = tuple(
-        condition
-        for condition in conditions
-        if condition.kind in memory_kinds
-    )
-    identities = {
-        (
-            condition.parameter_name,
-            condition.parameter_index,
-            condition.memory_access,
-            condition.memory_addressing,
-            condition.memory_payload_extents,
-            condition.memory_alignment_axis_name,
-        )
-        for condition in memory_conditions
-    }
-    if len(identities) != 1:
+    if any(
+        not _caller_unsafety_is_range_only(spec)
+        for spec in specializations
+        if spec.safety.caller_unsafe
+    ):
         return False
-    addressing = memory_conditions[0].memory_addressing
+
+    try:
+        memory_condition = checked_memory_condition(conditions)
+    except ValueError:
+        return False
+    if memory_condition is None:
+        return False
+    addressing = memory_condition.memory_addressing
     if addressing is None:
         return False
-    contiguous = {PreconditionKind.CONTIGUOUS_MEMORY_EXTENT}
-    if any(
-        alignment is not None and alignment.mode is MemoryAlignment.ALIGNED
-        for spec in specializations
-        for alignment in (spec.primitive_semantics.memory_alignment,)
-    ):
-        contiguous.add(PreconditionKind.SELECTED_MEMORY_ALIGNMENT)
     required = {
-        MemoryAddressing.CONTIGUOUS: contiguous,
+        MemoryAddressing.CONTIGUOUS: {
+            PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
+        },
         MemoryAddressing.INDEXED: {
             PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID,
         },
@@ -373,8 +453,41 @@ def _has_complete_memory_check(
         },
     }
     required_kinds = required.get(addressing)
-    return required_kinds is not None and required_kinds.issubset(
-        {condition.kind for condition in memory_conditions}
+    if required_kinds is None:
+        return False
+    required_kinds = set(required_kinds)
+    if any(
+        alignment is not None and alignment.mode is MemoryAlignment.ALIGNED
+        for spec in specializations
+        for alignment in (spec.primitive_semantics.memory_alignment,)
+    ):
+        required_kinds.add(PreconditionKind.SELECTED_MEMORY_ALIGNMENT)
+    return required_kinds.issubset(
+        {
+            condition.kind
+            for condition in conditions
+            if condition.memory_access is not None
+        }
+    )
+
+
+def _caller_unsafety_is_range_only(spec: LoweredSpecialization) -> bool:
+    """Prove that a range wrapper can discharge every caller obligation.
+
+    Safety reason labels are intentionally open for source authors.  The
+    checked API therefore admits only the one caller obligation it knows how
+    to discharge and a closed set of implementation-only framing labels.
+    Unknown labels and explicit caller obligations fail closed.  The lowerer's
+    internal ``unsafe_callee`` framing label is admitted here, but does not prove
+    that a callee precondition was forwarded or discharged; that separate typed
+    call-edge proof remains a release gate.
+    """
+
+    reasons = spec.safety.reasons
+    return _RANGE_DISCHARGED_CALLER_REASON in reasons and not (
+        reasons
+        - _RANGE_COMPATIBLE_IMPLEMENTATION_REASONS
+        - {_RANGE_DISCHARGED_CALLER_REASON}
     )
 
 
@@ -400,16 +513,10 @@ def applicable_checked_api_plan(
     plan = checked_api_plan(specializations)
     if plan is None:
         return None
-    applicable_kinds = {
-        precondition.kind
-        for spec in specializations
-        for precondition in spec.primitive_semantics.preconditions
-        if precondition_applies_to_type(precondition, spec.type_tag)
-    }
     conditions = tuple(
-        condition for condition in plan.conditions if condition.kind in applicable_kinds
+        condition for condition in plan.conditions if condition.applicable_type_tags
     )
-    return CheckedApiPlan(conditions, plan.result_kind) if conditions else None
+    return CheckedApiPlan(conditions) if conditions else None
 
 
 __all__ = (
@@ -417,5 +524,6 @@ __all__ = (
     "CheckedConditionPlan",
     "applicable_checked_api_plan",
     "checked_api_plan",
+    "checked_memory_condition",
     "public_call_requires_unsafe",
 )

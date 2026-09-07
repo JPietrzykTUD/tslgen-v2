@@ -77,7 +77,6 @@ class PreconditionDescriptor:
     additional_errors: tuple[PreconditionErrorKind, ...] = ()
     required_roles: frozenset[OperandRole] = frozenset()
     compatible_operations: frozenset[PrimitiveOperation] = frozenset()
-    logical_lane_owner_role: OperandRole | None = None
     required_arithmetic_roles: frozenset[ArithmeticOperandRole] = frozenset()
     compatible_arithmetic_operations: frozenset[ArithmeticOperation] = frozenset()
     numeric_domain: ArithmeticNumericDomain | None = None
@@ -86,7 +85,23 @@ class PreconditionDescriptor:
     masked_check_primitives: tuple[PreconditionCheckPrimitive, ...] = ()
     compatible_memory_accesses: frozenset[MemoryAccess] = frozenset()
     compatible_memory_addressings: frozenset[MemoryAddressing] = frozenset()
-    binds_memory_operand: bool = False
+
+    @property
+    def binds_memory_operand(self) -> bool:
+        """Whether compatibility requires a resolved memory operand binding."""
+
+        return bool(
+            self.compatible_memory_accesses
+            or self.compatible_memory_addressings
+        )
+
+    def __post_init__(self) -> None:
+        if bool(self.compatible_memory_accesses) != bool(
+            self.compatible_memory_addressings
+        ):
+            raise ValueError(
+                "memory preconditions require both access and addressing domains"
+            )
 
     @property
     def errors(self) -> tuple[PreconditionErrorKind, ...]:
@@ -100,6 +115,14 @@ class PrimitivePrecondition:
     kind: PreconditionKind
     operand_bindings: tuple[OperandBinding | ArithmeticOperandBinding, ...]
     source: SourceSpan | None = None
+
+    @property
+    def description(self) -> str:
+        return PRECONDITION_DESCRIPTORS[self.kind].description
+
+    @property
+    def unchecked_consequence(self) -> str:
+        return PRECONDITION_DESCRIPTORS[self.kind].unchecked_consequence
 
     def binding(self, role: OperandRole) -> OperandBinding | None:
         return next(
@@ -140,7 +163,6 @@ PRECONDITION_DESCRIPTORS: Mapping[
                     PrimitiveOperation.MASK_SET_LANE,
                 }
             ),
-            logical_lane_owner_role=OperandRole.PRIMARY,
             hazard=PreconditionHazard.CATASTROPHIC,
             error=PreconditionErrorKind.INDEX_OUT_OF_BOUNDS,
             unchecked_consequence=(
@@ -195,7 +217,6 @@ PRECONDITION_DESCRIPTORS: Mapping[
             compatible_memory_addressings=frozenset(
                 {MemoryAddressing.CONTIGUOUS}
             ),
-            binds_memory_operand=True,
             hazard=PreconditionHazard.CATASTROPHIC,
             error=PreconditionErrorKind.INSUFFICIENT_EXTENT,
             unchecked_consequence=(
@@ -206,8 +227,9 @@ PRECONDITION_DESCRIPTORS: Mapping[
         PreconditionKind.SELECTED_MEMORY_ALIGNMENT: PreconditionDescriptor(
             kind=PreconditionKind.SELECTED_MEMORY_ALIGNMENT,
             description=(
-                "When aligned access is selected, the contiguous memory operand "
-                "satisfies the payload's required alignment."
+                "When aligned access is selected and the operation accesses at "
+                "least one element, the memory operand satisfies the payload's "
+                "required alignment."
             ),
             compatible_operations=frozenset(
                 {PrimitiveOperation.LOAD, PrimitiveOperation.STORE}
@@ -216,9 +238,11 @@ PRECONDITION_DESCRIPTORS: Mapping[
                 {MemoryAccess.READ, MemoryAccess.WRITE}
             ),
             compatible_memory_addressings=frozenset(
-                {MemoryAddressing.CONTIGUOUS}
+                {
+                    MemoryAddressing.CONTIGUOUS,
+                    MemoryAddressing.COMPACTED,
+                }
             ),
-            binds_memory_operand=True,
             hazard=PreconditionHazard.CATASTROPHIC,
             error=PreconditionErrorKind.MISALIGNED,
             unchecked_consequence=(
@@ -229,9 +253,10 @@ PRECONDITION_DESCRIPTORS: Mapping[
         PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID: PreconditionDescriptor(
             kind=PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID,
             description=(
-                "Every active index and compile-time byte scale form an aligned "
-                "element address wholly inside the represented base range without "
-                "overflowing address arithmetic."
+                "The index-vector lane extent satisfies the indexed memory "
+                "contract, and every active accessed index with its compile-time "
+                "byte scale forms an aligned element address wholly inside the "
+                "represented base range without overflowing address arithmetic."
             ),
             required_roles=frozenset({OperandRole.INDEX, OperandRole.SCALE}),
             compatible_operations=frozenset(
@@ -241,7 +266,6 @@ PRECONDITION_DESCRIPTORS: Mapping[
                 {MemoryAccess.READ, MemoryAccess.WRITE}
             ),
             compatible_memory_addressings=frozenset({MemoryAddressing.INDEXED}),
-            binds_memory_operand=True,
             check_primitives=(PreconditionCheckPrimitive.VECTOR_TO_ARRAY,),
             masked_check_primitives=(
                 PreconditionCheckPrimitive.MASK_FALSE,
@@ -274,7 +298,6 @@ PRECONDITION_DESCRIPTORS: Mapping[
                 {MemoryAccess.READ, MemoryAccess.WRITE}
             ),
             compatible_memory_addressings=frozenset({MemoryAddressing.COMPACTED}),
-            binds_memory_operand=True,
             check_primitives=(PreconditionCheckPrimitive.MASK_POPULATION_COUNT,),
             hazard=PreconditionHazard.CATASTROPHIC,
             error=PreconditionErrorKind.INSUFFICIENT_EXTENT,

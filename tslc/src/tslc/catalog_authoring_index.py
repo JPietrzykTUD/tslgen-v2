@@ -17,7 +17,11 @@ from tslc.catalog.conversion import (
     lane_count_relation_values,
     numeric_conversion_mode_values,
 )
-from tslc.catalog.memory import memory_access_values, memory_addressing_values
+from tslc.catalog.memory import (
+    memory_access_values,
+    memory_addressing_values,
+    memory_indexed_lane_extent_values,
+)
 from tslc.catalog.model import RESULT_DIM_VECTOR
 from tslc.catalog.preconditions import precondition_values
 from tslc.catalog.semantics import primitive_operation_values
@@ -422,6 +426,7 @@ def _primitive_semantic_tokens(
                     {
                         "access": memory_access_values(),
                         "addressing": memory_addressing_values(),
+                        "indexed_lanes": memory_indexed_lane_extent_values(),
                     },
                 )
             )

@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "policy": {
     "checked_suffix": "_checked",
     "eligibility": "catastrophic dynamic caller precondition; complete pre-side-effect check must be expressible from the checked signature",
@@ -14,7 +14,7 @@
     "environment": "x86-64 System V",
     "gcc": "GCC 15.2.0",
     "clang": "Clang 21.1.8",
-    "msvc": "not available in the Slice 0 Linux environment",
+    "msvc": "not available in the original Linux ABI-probe environment",
     "raw_return": "value returned in ymm0; no value-result memory output",
     "chosen_return": "value returned in ymm0; scalar error written through rdi",
     "aggregate_return": "hidden result pointer in rdi; vector value written to memory",
@@ -127,9 +127,9 @@
     {
       "id": "selected_memory_contract",
       "classification": "dynamic precondition",
-      "backend_consequence": "Expand/compress operations may access a mask-dependent number of elements.",
-      "checked_feasibility": "implemented for compress-store and expand-load from a range plus capacity derived from the active mask",
-      "review": "Validation must precede any compress-store output write."
+      "backend_consequence": "Expand/compress operations may access a mask-dependent number of elements through a selected aligned or unaligned memory contract.",
+      "checked_feasibility": "implemented for compress-store and expand-load from a range plus capacity derived from the active mask; selected alignment is checked before nonempty aligned access",
+      "review": "Validation must precede any compress-store output write; an all-inactive operation accesses no memory and does not reject an empty unaligned view."
     },
     {
       "id": "indexed_memory_contract",
@@ -1716,7 +1716,8 @@
       "family": "selected_memory_contract",
       "checked_source_status": "declared",
       "preconditions": [
-        "compacted_memory_extent"
+        "compacted_memory_extent",
+        "selected_memory_alignment"
       ],
       "checked_coverage_reason": "source preconditions are available for backend check planning"
     },
@@ -1737,7 +1738,8 @@
       "family": "selected_memory_contract",
       "checked_source_status": "declared",
       "preconditions": [
-        "compacted_memory_extent"
+        "compacted_memory_extent",
+        "selected_memory_alignment"
       ],
       "checked_coverage_reason": "source preconditions are available for backend check planning"
     },

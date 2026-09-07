@@ -9,7 +9,11 @@ import pytest
 from tslc.authoring_completion import authoring_completions
 from tslc.catalog.arithmetic import ArithmeticOperandRole
 from tslc.catalog.builder import CatalogBuilder
-from tslc.catalog.memory import MemoryAddressing, MemoryPayloadExtent
+from tslc.catalog.memory import (
+    MemoryAddressing,
+    MemoryIndexedLaneExtent,
+    MemoryPayloadExtent,
+)
 from tslc.catalog.model import Catalog
 from tslc.catalog.preconditions import PreconditionKind
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
@@ -204,6 +208,7 @@ def test_indexed_memory_precondition_hover_lists_every_checked_error() -> None:
         "  memory:\n"
         "    access read\n"
         "    addressing indexed\n"
+        "    indexed_lanes vector\n"
         "  preconditions [indexed_memory_address_valid]\n"
     )
     parsed, catalog, diagnostics = _build(source)
@@ -221,6 +226,59 @@ def test_indexed_memory_precondition_hover_lists_every_checked_error() -> None:
     assert "`index_out_of_bounds`" in hover
     assert "`address_overflow`" in hover
     assert "`misaligned`" in hover
+    assert catalog.primitives[0].memory is not None
+    assert (
+        catalog.primitives[0].memory.indexed_lane_extent
+        is MemoryIndexedLaneExtent.VECTOR
+    )
+
+    lane_extent = next(
+        item
+        for item in index.occurrences_by_path[_PATH]
+        if item.kind == "memory-indexed-lane-extent"
+    )
+    assert lane_extent.name == "vector"
+    assert "index vector must cover" in (index.hover(lane_extent) or "")
+
+    edited = source.split("indexed_lanes vector", 1)[0] + "indexed_lanes v"
+    context = authoring_cursor_context(parsed, _PATH, edited, len(edited))
+    assert {item.label for item in authoring_completions(context, catalog)} == {
+        "vector"
+    }
+
+
+@pytest.mark.parametrize(
+    ("memory", "code"),
+    [
+        (
+            "    access read\n    addressing indexed\n",
+            "TSL-CATALOG-MISSING-MEMORY-INDEXED-LANES",
+        ),
+        (
+            "    access read\n    addressing contiguous\n"
+            "    indexed_lanes vector\n",
+            "TSL-CATALOG-MEMORY-INDEXED-LANES",
+        ),
+    ],
+)
+def test_indexed_lane_extent_is_present_only_on_indexed_memory(
+    memory: str,
+    code: str,
+) -> None:
+    source = (
+        "prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):\n"
+        "  operation load\n"
+        "  operand_roles:\n"
+        "    memory_source base_ptr\n"
+        "    index index\n"
+        "    scale scale\n"
+        "  memory:\n"
+        f"{memory}"
+    )
+
+    _parsed, _catalog, diagnostics = _build(source)
+
+    assert code in {diagnostic.code for diagnostic in diagnostics}
 
 
 def test_total_integral_mask_test_has_no_inferred_precondition(catalog: Catalog) -> None:
@@ -458,6 +516,15 @@ def test_irregular_memory_families_declare_only_honest_checked_contracts(
         if primitive.memory is not None
     } == {MemoryAddressing.INDEXED}
     assert {
+        (primitive.name, primitive.memory.indexed_lane_extent)
+        for primitive in indexed
+        if primitive.memory is not None
+    } == {
+        ("gather", MemoryIndexedLaneExtent.VECTOR),
+        ("gather_narrow_partial", MemoryIndexedLaneExtent.INDEX_VECTOR),
+        ("scatter", MemoryIndexedLaneExtent.VECTOR),
+    }
+    assert {
         tuple(condition.kind for condition in primitive.preconditions)
         for primitive in indexed
     } == {(PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID,)}
@@ -478,7 +545,12 @@ def test_irregular_memory_families_declare_only_honest_checked_contracts(
     assert {
         tuple(condition.kind for condition in primitive.preconditions)
         for primitive in compacted
-    } == {(PreconditionKind.COMPACTED_MEMORY_EXTENT,)}
+    } == {
+        (
+            PreconditionKind.COMPACTED_MEMORY_EXTENT,
+            PreconditionKind.SELECTED_MEMORY_ALIGNMENT,
+        )
+    }
 
     pointer_indexed = catalog.primitives_named(
         "gather_narrow", unmasked=False

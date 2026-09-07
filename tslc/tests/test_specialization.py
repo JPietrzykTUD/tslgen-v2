@@ -451,6 +451,17 @@ def test_cpp_core_vectors_expose_metadata_constants(
     )
 
 
+def test_cpp_algorithm_mask_layout_uses_typed_vector_metadata(
+    specialization_artifacts: dict[str, str]
+) -> None:
+    detail = specialization_artifacts[
+        "cpp/include/tsl_algorithm_detail_core.hpp"
+    ]
+
+    assert "if constexpr (Vec::mask_is_bitset)" in detail
+    assert "std::is_integral<typename Vec::mask_type>" not in detail
+
+
 def test_cpp_static_lane_mismatch_traps_on_non_unwinding_targets(
     specialization_artifacts: dict[str, str]
 ) -> None:
@@ -701,7 +712,7 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     documentation = specialization_artifacts["rust/src/tsl_documentation.rs"]
 
     assert sha256(avx2.encode()).hexdigest() == (
-        "4a67fa2fd75873c0f7c8988198e234269ca0a324b237358cb1c2e19826728cf8"
+        "d0b200cb8a235d531314361fd333ca7f4becd3a93206571f97bf5ba61e41fb88"
     )
 
     assert 'name = "tsl"' in cargo
@@ -722,6 +733,7 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     assert 'target_feature = "avx2"' in lib
     assert "#[doc(inline)]\npub use crate::tsl_avx2 as profile;" in lib
     assert "pub use crate::tsl_avx2 as profile;" in lib
+    assert "let result = tsl::profile::extract_value_at_checked::<V>(7, 1);" in lib
     assert "pub fn hadd(self)" in facade
     assert "pub fn hadd_masked(self, mask:" in facade
     assert (

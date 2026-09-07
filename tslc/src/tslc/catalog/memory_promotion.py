@@ -10,10 +10,12 @@ from tslc.catalog._semantic_promotion_common import (
 from tslc.catalog.memory import (
     MemoryAccess,
     MemoryAddressing,
+    MemoryIndexedLaneExtent,
     MemoryPayloadExtent,
     PrimitiveMemoryContract,
     memory_access_values,
     memory_addressing_values,
+    memory_indexed_lane_extent_values,
     memory_operations,
 )
 from tslc.catalog.semantics import (
@@ -27,7 +29,7 @@ from tslc.syntax.access import source_span
 from tslc.syntax.ast import ParsedPrimitiveDeclaration
 
 
-KNOWN_MEMORY_FIELDS = frozenset({"access", "addressing"})
+KNOWN_MEMORY_FIELDS = frozenset({"access", "addressing", "indexed_lanes"})
 
 
 def build_memory_contract(
@@ -63,6 +65,7 @@ def build_memory_contract(
         KNOWN_MEMORY_FIELDS,
         "memory",
         diagnostics,
+        required={"access", "addressing"},
     )
     access = enum_member(
         declaration,
@@ -82,7 +85,46 @@ def build_memory_contract(
         "TSL-CATALOG-MEMORY-ADDRESSING",
         diagnostics,
     )
+    indexed_lane_extent = enum_member(
+        declaration,
+        members.get("indexed_lanes"),
+        MemoryIndexedLaneExtent,
+        memory_indexed_lane_extent_values(),
+        "indexed memory lane extent",
+        "TSL-CATALOG-MEMORY-INDEXED-LANES",
+        diagnostics,
+    )
     if access is None or addressing is None:
+        return None
+    if addressing is MemoryAddressing.INDEXED and indexed_lane_extent is None:
+        if members.get("indexed_lanes") is None:
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-MISSING-MEMORY-INDEXED-LANES",
+                    message=(
+                        f"indexed memory on primitive {declaration.name!r} must "
+                        "declare 'indexed_lanes'"
+                    ),
+                    source=source_span(field.source),
+                )
+            )
+        return None
+    if addressing is not MemoryAddressing.INDEXED and indexed_lane_extent is not None:
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-MEMORY-INDEXED-LANES",
+                message=(
+                    f"memory addressing {addressing.value!r} on primitive "
+                    f"{declaration.name!r} cannot declare 'indexed_lanes'"
+                ),
+                source=(
+                    member_value_source(members.get("indexed_lanes"))
+                    or source_span(field.source)
+                ),
+            )
+        )
         return None
     expected_operations = memory_operations(access)
     if semantic is None or semantic.kind not in expected_operations:
@@ -123,9 +165,13 @@ def build_memory_contract(
         access=access,
         addressing=addressing,
         payload_extent=payload_extent,
+        indexed_lane_extent=indexed_lane_extent,
         source=source_span(field.source),
         access_source=member_value_source(members.get("access")),
         addressing_source=member_value_source(members.get("addressing")),
+        indexed_lane_extent_source=member_value_source(
+            members.get("indexed_lanes")
+        ),
     )
 
 

@@ -6,6 +6,7 @@ import re
 from collections import defaultdict
 
 from tslc.backend.checked_api import (
+    CheckedConditionPlan,
     applicable_checked_api_plan,
     public_call_requires_unsafe,
 )
@@ -36,13 +37,11 @@ from tslc.backend.rust_api_model import (
     RustFacadeReceiverKind,
     RustFacadeTypeParameter,
     RustFacadeTypeParameterRole,
-    RustFacadeCheckedCondition,
 )
 from tslc.backend.rust_api_types import RUST_FACADE_SIGNATURE_TYPES
 from tslc.catalog.conversion import LaneCountRelation
 from tslc.catalog.memory import MemoryAccess
 from tslc.catalog.model import PrimitiveMaskMode
-from tslc.catalog.preconditions import precondition_applies_to_type
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
 from tslc.diagnostics import Diagnostic
 
@@ -307,37 +306,13 @@ def _public_name(
     return name, None
 
 
-def _checked_conditions(candidate: _Candidate) -> tuple[RustFacadeCheckedCondition, ...]:
+def _checked_conditions(candidate: _Candidate) -> tuple[CheckedConditionPlan, ...]:
     plan = applicable_checked_api_plan(
         tuple(spec for _profile_name, spec in candidate.specs)
     )
     if plan is None:
         return ()
-    return tuple(
-        RustFacadeCheckedCondition(
-            kind=condition.kind,
-            parameter_name=condition.parameter_name,
-            error=condition.error,
-            mask_parameter_name=condition.mask_parameter_name,
-            applicable_type_tags=tuple(
-                sorted(
-                    {
-                        spec.type_tag
-                        for _profile_name, spec in candidate.specs
-                        for precondition in spec.primitive_semantics.preconditions
-                        if precondition.kind is condition.kind
-                        and precondition_applies_to_type(precondition, spec.type_tag)
-                    }
-                )
-            ),
-            memory_access=condition.memory_access,
-            memory_payload_extents=condition.memory_payload_extents,
-            memory_alignment_axis_name=condition.memory_alignment_axis_name,
-            additional_errors=condition.additional_errors,
-            memory_addressing=condition.memory_addressing,
-        )
-        for condition in plan.conditions
-    )
+    return plan.conditions
 
 
 def _safety_requirements(candidate: _Candidate) -> tuple[str, ...]:

@@ -8,6 +8,10 @@ import pytest
 
 from rust_project_test_support import render_rust_artifacts_for_test
 from tslc.backend.algorithm_contracts import ALGORITHM_PUBLIC_FAMILIES
+from tslc.backend.precondition_error_rendering import (
+    cpp_precondition_error,
+    rust_precondition_error,
+)
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.rust_package import RustPackageConfig
 from tslc.backend.rust_policy_manifest import load_rust_policy_manifest
@@ -16,6 +20,7 @@ from tslc.backend.rust_static_selection import plan_rust_static_selection
 from tslc.backend.rust_algorithm_manifest import RUST_ALGORITHM_RESERVED_NAMES
 from tslc.backend.rust_algorithm_contracts import rust_algorithm_contract_holes
 from tslc.catalog.machine_profiles import MachineProfile
+from tslc.catalog.preconditions import PreconditionErrorKind
 from tslc.compiler_assets import (
     RenderAssets,
     load_default_render_assets,
@@ -26,6 +31,39 @@ from tslc.syntax.ast import ParsedTslScalarValue
 from tslc.syntax.parser import TslParser
 
 RUST_POLICY_MANIFEST = load_rust_policy_manifest()
+
+
+def test_checked_error_assets_match_the_typed_error_registry() -> None:
+    assets = load_default_render_assets()
+    cpp = assets.text("tsl_core.hpp")
+    rust = assets.text("tsl_core.rs")
+
+    cpp_start = cpp.index("enum class precondition_error")
+    cpp_end = cpp.index("};", cpp_start)
+    cpp_enum = cpp[cpp_start:cpp_end]
+    cpp_spellings = ("none",) + tuple(
+        cpp_precondition_error(error, qualified=False)
+        for error in PreconditionErrorKind
+    )
+    assert tuple(
+        line.strip().removesuffix(",")
+        for line in cpp_enum.splitlines()[1:]
+        if line.strip()
+    ) == cpp_spellings
+
+    rust_start = rust.index("pub enum PreconditionError")
+    rust_end = rust.index("}\n", rust_start)
+    rust_enum = rust[rust_start:rust_end]
+    rust_spellings = tuple(
+        rust_precondition_error(error, prefix="")
+        for error in PreconditionErrorKind
+    )
+    assert tuple(
+        line.strip().removesuffix(",")
+        for line in rust_enum.splitlines()[1:]
+        if line.startswith("    ") and not line.startswith("    ///")
+    ) == rust_spellings
+    assert rust_enum.count("    ///") == len(PreconditionErrorKind)
 
 
 def test_render_assets_freeze_and_fill_templates() -> None:

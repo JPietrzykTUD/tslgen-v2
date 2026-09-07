@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import replace
 import os
 from pathlib import Path
 import re
@@ -13,8 +14,10 @@ import pytest
 
 from tslc.api import generate_project, write_artifacts
 from tslc.backend.checked_api import (
+    CheckedConditionPlan,
     applicable_checked_api_plan,
     checked_api_plan,
+    checked_memory_condition,
     public_call_requires_unsafe,
 )
 from tslc.backend.cpp import CppBackend
@@ -22,19 +25,65 @@ from tslc.backend.cpp_checked_api import plan_cpp_checked_api
 from tslc.backend.rust import RustBackend
 from tslc.backend.registry import create_backend_dialect
 from tslc.catalog.machine_profiles import MachineProfile
-from tslc.catalog.memory import MemoryAddressing, MemoryPayloadExtent
-from tslc.catalog.model import Catalog, PrimitiveMaskMode
+from tslc.catalog.memory import (
+    MemoryAccess,
+    MemoryAddressing,
+    MemoryIndexedLaneExtent,
+    MemoryPayloadExtent,
+)
+from tslc.catalog.model import Catalog, ImplementationSafety, PrimitiveMaskMode
 from tslc.catalog.preconditions import (
     PreconditionCheckPrimitive,
     PreconditionErrorKind,
     PreconditionKind,
 )
 from tslc.diagnostics import has_errors
-from tslc.lower.lowerer import LoweredSpecialization, Lowerer
+from tslc.lower.lowerer import LoweredSpecialization, LoweredTypeParam, Lowerer
 from tslc.select.selector import Selector
 
 
 _FIXTURES = Path(__file__).parent / "fixtures" / "checked_api"
+
+
+def test_checked_memory_conditions_require_one_complete_shared_binding() -> None:
+    extent = CheckedConditionPlan(
+        kind=PreconditionKind.COMPACTED_MEMORY_EXTENT,
+        description="The compacted memory operand is valid.",
+        unchecked_consequence="An invalid operand may cause undefined behavior.",
+        error=PreconditionErrorKind.INSUFFICIENT_EXTENT,
+        additional_errors=(),
+        parameter_name="memory",
+        parameter_index=1,
+        applicable_type_tags=("si32",),
+        check_primitives=(PreconditionCheckPrimitive.MASK_POPULATION_COUNT,),
+        mask_parameter_name="mask",
+        mask_parameter_index=0,
+        memory_access=MemoryAccess.WRITE,
+        memory_addressing=MemoryAddressing.COMPACTED,
+        memory_payload_extents=(MemoryPayloadExtent.ACTIVE_LANES,),
+    )
+    alignment = CheckedConditionPlan(
+        kind=PreconditionKind.SELECTED_MEMORY_ALIGNMENT,
+        description="The compacted memory operand is valid.",
+        unchecked_consequence="An invalid operand may cause undefined behavior.",
+        error=PreconditionErrorKind.MISALIGNED,
+        additional_errors=(),
+        parameter_name="memory",
+        parameter_index=1,
+        applicable_type_tags=("si32",),
+        mask_parameter_name="different_mask",
+        mask_parameter_index=2,
+        memory_access=MemoryAccess.WRITE,
+        memory_addressing=MemoryAddressing.COMPACTED,
+        memory_payload_extents=(MemoryPayloadExtent.ACTIVE_LANES,),
+        memory_alignment_axis_name="aligned",
+    )
+
+    with pytest.raises(ValueError, match="disagree on their binding"):
+        checked_memory_condition((extent, alignment))
+
+    with pytest.raises(ValueError, match="indexed bindings must be complete"):
+        replace(extent, index_parameter_name="indices")
 
 
 def _lowered(
@@ -111,7 +160,9 @@ def test_cpp_lane_checked_twin_has_direct_result_and_error_reference(
         "extract_value_at", (spec,)
     )
 
-    assert checked_api_plan((spec,)) is not None
+    shared_plan = checked_api_plan((spec,))
+    assert shared_plan is not None
+    assert shared_plan.conditions[0].applicable_type_tags == (spec.type_tag,)
     cpp_plan = plan_cpp_checked_api(
         (spec,), result_kind=spec.result_kind, result_type="typename Vec::base_type"
     )
@@ -275,6 +326,9 @@ def test_checked_divisor_dependencies_are_typed_and_domain_specific(
     }
     assert applicable_checked_api_plan((integer,)) is not None
     assert applicable_checked_api_plan((floating,)) is None
+    floating_plan = checked_api_plan((floating,))
+    assert floating_plan is not None
+    assert floating_plan.conditions[0].applicable_type_tags == ()
     assert plan_cpp_checked_api(
         (floating,),
         result_kind=floating.result_kind,
@@ -392,6 +446,34 @@ def test_cpp_contiguous_memory_checked_twins_use_spans_and_typed_extents(
     assert "data: SIMD register or scalar value" in store_docs
 
 
+@pytest.mark.parametrize(
+    "unresolved_reason",
+    (
+        "foreign_invariant",
+        "unchecked_index",
+        "unsafe_operation",
+    ),
+)
+def test_checked_memory_admission_fails_closed_for_unresolved_caller_obligations(
+    catalog: Catalog,
+    machine_profiles: Mapping[str, MachineProfile],
+    unresolved_reason: str,
+) -> None:
+    specs = _lowered_group(catalog, machine_profiles, "load", "cpp")
+    unsafe_spec = specs[0]
+    assert unsafe_spec.safety.caller_unsafe
+    replaced = replace(
+        unsafe_spec,
+        safety=ImplementationSafety(
+            internal_unsafe=True,
+            caller_unsafe=True,
+            reasons=unsafe_spec.safety.reasons | {unresolved_reason},
+        ),
+    )
+
+    assert checked_api_plan((replaced, *specs[1:])) is None
+
+
 def test_free_pointer_results_have_exact_documented_indirection(
     catalog: Catalog,
     machine_profiles: Mapping[str, MachineProfile],
@@ -503,6 +585,10 @@ def test_indexed_memory_checked_twins_use_typed_address_facts(
     condition = plan.conditions[0]
     assert condition.kind is PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID
     assert condition.memory_addressing is MemoryAddressing.INDEXED
+    assert (
+        condition.memory_indexed_lane_extent
+        is MemoryIndexedLaneExtent.VECTOR
+    )
     assert condition.memory_payload_extents == (MemoryPayloadExtent.VECTOR,)
     assert condition.index_parameter_name == "index"
     assert condition.scale_parameter_name == "scale"
@@ -520,9 +606,13 @@ def test_indexed_memory_checked_twins_use_typed_address_facts(
     rust = RustBackend().render_primitive_public("gather", (rust_spec,))
     assert "::tsl::span<typename Vec::base_type const> base_ptr" in cpp
     assert "::tsl::to_array<IndicesType>(index)" in cpp
+    assert "IndicesType::lane_count() < Vec::lane_count()" in cpp
+    assert "__tsl_lane < Vec::lane_count()" in cpp
     assert "indexed_memory_address_error<typename Vec::base_type>" in cpp
     assert "base_ptr: &[S::BaseType]" in rust
     assert "let __tsl_indices = to_array::<IndicesType>(index);" in rust
+    assert "IndicesType::lane_count() < S::lane_count()" in rust
+    assert "0..S::lane_count()" in rust
     assert "indexed_memory_address_error::<_, S::BaseType>" in rust
 
     masked = _lowered(
@@ -554,6 +644,62 @@ def test_indexed_memory_checked_twins_use_typed_address_facts(
     )
     assert "S::mask_lane_test(mask, __tsl_lane)" in masked_rust
 
+    partial = _lowered(
+        catalog,
+        machine_profiles,
+        "gather_narrow_partial",
+        "cpp",
+    )
+    partial_plan = checked_api_plan((partial,))
+    assert partial_plan is not None
+    assert (
+        partial_plan.conditions[0].memory_indexed_lane_extent
+        is MemoryIndexedLaneExtent.INDEX_VECTOR
+    )
+    partial_cpp = CppBackend().render_checked_wrappers(
+        "gather_narrow_partial", (partial,)
+    )
+    assert "IndicesType::lane_count() > Vec::lane_count()" in partial_cpp
+    assert "__tsl_lane < IndicesType::lane_count()" in partial_cpp
+    partial_rust = RustBackend().render_primitive_public(
+        "gather_narrow_partial",
+        (
+            _lowered(
+                catalog,
+                machine_profiles,
+                "gather_narrow_partial",
+                "rust",
+            ),
+        ),
+    )
+    assert "IndicesType::lane_count() > S::lane_count()" in partial_rust
+    assert "0..IndicesType::lane_count()" in partial_rust
+
+
+def test_indexed_checked_backends_reject_ambiguous_vector_type_ownership(
+    catalog: Catalog,
+    machine_profiles: Mapping[str, MachineProfile],
+) -> None:
+    cpp = _lowered(catalog, machine_profiles, "gather", "cpp")
+    ambiguous_cpp = replace(
+        cpp,
+        type_params=(*cpp.type_params, LoweredTypeParam("OtherVector")),
+    )
+    with pytest.raises(ValueError, match="one consistent index type parameter"):
+        plan_cpp_checked_api(
+            (ambiguous_cpp,),
+            result_kind=ambiguous_cpp.result_kind,
+            result_type="typename Vec::register_type",
+        )
+
+    rust = _lowered(catalog, machine_profiles, "gather", "rust")
+    ambiguous_rust = replace(
+        rust,
+        type_params=(*rust.type_params, LoweredTypeParam("OtherVector")),
+    )
+    with pytest.raises(ValueError, match="exactly one index vector type"):
+        RustBackend().render_primitive_public("gather", (ambiguous_rust,))
+
 
 def test_compacted_memory_checked_twins_use_active_lane_capacity(
     catalog: Catalog,
@@ -562,13 +708,21 @@ def test_compacted_memory_checked_twins_use_active_lane_capacity(
     compress = _lowered(catalog, machine_profiles, "compress_store", "cpp")
     plan = checked_api_plan((compress,))
     assert plan is not None
-    condition = plan.conditions[0]
-    assert condition.kind is PreconditionKind.COMPACTED_MEMORY_EXTENT
-    assert condition.memory_addressing is MemoryAddressing.COMPACTED
-    assert condition.memory_payload_extents == (
+    assert tuple(condition.kind for condition in plan.conditions) == (
+        PreconditionKind.COMPACTED_MEMORY_EXTENT,
+        PreconditionKind.SELECTED_MEMORY_ALIGNMENT,
+    )
+    extent, alignment = plan.conditions
+    assert extent.memory_addressing is MemoryAddressing.COMPACTED
+    assert extent.memory_payload_extents == (
         MemoryPayloadExtent.ACTIVE_LANES,
     )
-    assert condition.mask_parameter_name == "m"
+    assert extent.mask_parameter_name == "m"
+    assert alignment.memory_addressing is MemoryAddressing.COMPACTED
+    assert alignment.memory_payload_extents == (
+        MemoryPayloadExtent.ACTIVE_LANES,
+    )
+    assert alignment.mask_parameter_name == "m"
 
     cpp = CppBackend().render_checked_wrappers("compress_store", (compress,))
     rust_spec = _lowered(catalog, machine_profiles, "compress_store", "rust")
@@ -576,10 +730,14 @@ def test_compacted_memory_checked_twins_use_active_lane_capacity(
         "compress_store", (rust_spec,)
     )
     assert "ptr.size() < ::tsl::mask_population_count<Vec>(m)" in cpp
+    assert "(::tsl::mask_population_count<Vec>(m) != 0) &&" in cpp
+    assert "% Vec::vector_alignment" in cpp
     assert "bool Aligned = true" in cpp
     assert "ptr: &mut [S::BaseType]" in rust
     assert "let mut __tsl_required = 0usize;" in rust
     assert "S::mask_lane_test(m, __tsl_lane)" in rust
+    assert "(0..S::lane_count()).any(|__tsl_lane|" in rust
+    assert ".is_multiple_of(S::ALIGN)" in rust
 
 
 def test_remaining_scalar_target_and_random_memory_twins_use_exact_extents(
@@ -872,6 +1030,43 @@ def _cpp_compilers() -> tuple[str, ...]:
         for name in ("g++", "clang++")
         if (compiler := shutil.which(name)) is not None
     )
+
+
+@pytest.mark.generated_build
+def test_native_mask_layout_consumer_is_warning_clean(
+    checked_lane_cpp_project: Path,
+    tmp_path: Path,
+) -> None:
+    compilers = _cpp_compilers()
+    if not compilers:
+        pytest.skip("GCC or Clang C++ compiler required")
+    source = _FIXTURES / "native_mask_layout_codegen.cpp"
+
+    for compiler in compilers:
+        compiler_id = Path(compiler).name.replace("+", "x")
+        object_path = tmp_path / f"native-mask-layout-{compiler_id}.o"
+        completed = subprocess.run(
+            (
+                compiler,
+                "-std=c++17",
+                "-O2",
+                "-mavx2",
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "-DTSL_PROFILE_AVX2=1",
+                "-I",
+                str(checked_lane_cpp_project),
+                "-c",
+                str(source),
+                "-o",
+                str(object_path),
+            ),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert completed.returncode == 0, completed.stderr
 
 
 @pytest.mark.generated_build

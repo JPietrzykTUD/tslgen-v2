@@ -19,6 +19,10 @@ from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.rust_const_args import RUST_CONST_ARG_WRAPPERS
 from tslc.backend.rust_implementation_state import const_arg_type
 from tslc.backend.rust_validation import validate_rust_profiles
+from tslc.catalog.arithmetic import (
+    ArithmeticOperandBinding,
+    ArithmeticOperandRole,
+)
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import (
     BackendExtensionMetadata,
@@ -121,6 +125,66 @@ def test_rust_checked_twin_rejects_an_authored_name_collision() -> None:
         if item.code == "TSL-BACKEND-RUST-CHECKED-NAME-COLLISION"
     )
     assert diagnostic.span == source
+
+
+@pytest.mark.parametrize(
+    ("backend", "validate", "diagnostic_code"),
+    (
+        ("cpp", validate_cpp_profiles, "TSL-BACKEND-CPP-CHECKED-NAME-COLLISION"),
+        (
+            "rust",
+            validate_rust_profiles,
+            "TSL-BACKEND-RUST-CHECKED-NAME-COLLISION",
+        ),
+    ),
+)
+def test_inapplicable_checked_condition_does_not_create_a_name_collision(
+    backend: str,
+    validate,
+    diagnostic_code: str,
+) -> None:
+    precondition = PrimitivePrecondition(
+        PreconditionKind.ACTIVE_DIVISOR_NONZERO,
+        (
+            ArithmeticOperandBinding(
+                ArithmeticOperandRole.PRIMARY,
+                "dividend",
+                0,
+                0,
+                "v",
+            ),
+            ArithmeticOperandBinding(
+                ArithmeticOperandRole.DIVISOR,
+                "divisor",
+                1,
+                1,
+                "v",
+            ),
+        ),
+    )
+    division = _Specialization(
+        "scalar",
+        type_tag="f32",
+        base_type_spelling="f32",
+        result_kind="v",
+        param_kinds=("v", "v"),
+        primitive_semantics=LoweredPrimitiveSemantics(
+            preconditions=(precondition,)
+        ),
+    )
+    profile = _profile(
+        **{
+            backend: {
+                "div": (division,),
+                "div_checked": (_Specialization("scalar", type_tag="f32"),),
+            }
+        },
+        extensions={"scalar": _extension("scalar", **{backend: True})},
+    )
+
+    diagnostics = validate((profile,))
+
+    assert diagnostic_code not in {item.code for item in diagnostics}
 
 
 def test_cpp_unsupported_width_indexed_register_is_source_located() -> None:

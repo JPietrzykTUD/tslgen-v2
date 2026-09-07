@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tslc.backend.checked_api import CheckedApiPlan
+from tslc.backend.checked_api import CheckedApiPlan, checked_memory_condition
 from tslc.backend.rust_type_params import (
     type_param_decls,
     type_param_names,
@@ -187,27 +187,17 @@ def checked_params(
 ) -> str:
     """Render a checked signature, replacing typed memory pointers with slices."""
 
-    memory_conditions = tuple(
-        condition for condition in plan.conditions if condition.memory_access is not None
-    )
-    if not memory_conditions:
+    memory = checked_memory_condition(plan.conditions)
+    if memory is None:
         return params(
             shape,
             owner,
             target_owner=target_owner,
             vidx_type=vidx_type,
         )
-    bindings = {
-        (
-            condition.parameter_index,
-            condition.parameter_name,
-            condition.memory_access,
-        )
-        for condition in memory_conditions
-    }
-    if len(bindings) != 1:
-        raise ValueError("Rust checked memory conditions disagree on their binding")
-    memory_index, memory_name, memory_access = next(iter(bindings))
+    memory_index = memory.parameter_index
+    memory_name = memory.parameter_name
+    memory_access = memory.memory_access
     parts: list[str] = []
     for index, (name, kind) in enumerate(zip(shape.param_names, shape.param_kinds)):
         if kind == DEFAULT_SUPPORT_POLICY.immediate_kind:
@@ -246,18 +236,11 @@ def checked_runtime_names(
 ) -> str:
     """Render arguments forwarded from a checked slice signature to raw kernels."""
 
-    memory_conditions = tuple(
-        condition for condition in plan.conditions if condition.memory_access is not None
-    )
-    if not memory_conditions:
+    memory = checked_memory_condition(plan.conditions)
+    if memory is None:
         return runtime_names(shape)
-    bindings = {
-        (condition.parameter_index, condition.memory_access)
-        for condition in memory_conditions
-    }
-    if len(bindings) != 1:
-        raise ValueError("Rust checked memory conditions disagree on their binding")
-    memory_index, memory_access = next(iter(bindings))
+    memory_index = memory.parameter_index
+    memory_access = memory.memory_access
     return ", ".join(
         (
             f"{name}.as_ptr()"

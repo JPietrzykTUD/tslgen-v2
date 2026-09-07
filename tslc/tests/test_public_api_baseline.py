@@ -20,4 +20,65 @@ def test_public_api_matches_reviewed_v1_baseline() -> None:
     assert baseline["cpp_core_identities"]
     assert baseline["rust_root_identities"]
     assert baseline["algorithm_callable_families"]
+    assert baseline["checked_algorithm_contracts"]
+    assert baseline["checked_precondition_contracts"]
+    assert baseline["checked_error_contract"] == {
+        "cpp_success": "none",
+        "failures": [
+            {
+                "kind": "index_out_of_bounds",
+                "cpp": "index_out_of_bounds",
+                "rust": "IndexOutOfBounds",
+            },
+            {
+                "kind": "zero_divisor",
+                "cpp": "zero_divisor",
+                "rust": "ZeroDivisor",
+            },
+            {
+                "kind": "insufficient_extent",
+                "cpp": "insufficient_extent",
+                "rust": "InsufficientExtent",
+            },
+            {
+                "kind": "insufficient_input",
+                "cpp": "insufficient_input",
+                "rust": "InsufficientInput",
+            },
+            {
+                "kind": "insufficient_output",
+                "cpp": "insufficient_output",
+                "rust": "InsufficientOutput",
+            },
+            {
+                "kind": "misaligned",
+                "cpp": "misaligned",
+                "rust": "Misaligned",
+            },
+            {
+                "kind": "overlapping_ranges",
+                "cpp": "overlapping_ranges",
+                "rust": "OverlappingRanges",
+            },
+            {
+                "kind": "address_overflow",
+                "cpp": "address_overflow",
+                "rust": "AddressOverflow",
+            },
+        ],
+    }
     assert baseline["cpp_checked_algorithm_families"]
+    assert baseline["version"] == 2
+    primitive_families = baseline["primitive_callable_families"]
+    assert isinstance(primitive_families, list)
+    gather = next(
+        item
+        for item in primitive_families
+        if isinstance(item, dict)
+        and item["name"] == "gather"
+        and item["signature"] == "v:=(cptr,vidx,sImm)"
+    )
+    assert gather["parameters"] == ["base_ptr", "index", "scale"]
+    assert gather["memory"]["indexed_lane_extent"] == "vector"
+    assert gather["generic_parameters"][0]["name"] == "IndicesType"
+    assert gather["preconditions"][0]["kind"] == "indexed_memory_address_valid"

@@ -25,11 +25,13 @@ from tslc.backend.algorithm_contracts import (
 )
 from tslc.backend.cpp_algorithm_contracts import (
     render_cpp_algorithm_check,
+    render_cpp_checked_algorithm_definition,
     render_cpp_checked_algorithm_definitions,
 )
 from tslc.backend.rust_algorithm_contracts import (
     render_rust_algorithm_check,
     render_rust_algorithm_error_docs,
+    render_rust_scaled_checked_algorithm,
     rust_algorithm_contract_holes,
 )
 from tslc.catalog.preconditions import PreconditionErrorKind
@@ -225,6 +227,60 @@ def test_backend_checks_project_the_typed_binding_names() -> None:
     )
     assert "PreconditionError::Misaligned" not in default_docs
     assert "PreconditionError::Misaligned" in scaled_docs
+
+    renamed_selected = replace(
+        selected,
+        ranges=tuple(
+            replace(
+                binding,
+                name={
+                    AlgorithmRangeRole.DRIVING_INDEX: "rows",
+                    AlgorithmRangeRole.SELECTED_INPUT: "source_values",
+                    AlgorithmRangeRole.VALUE_OUTPUT: "destination_values",
+                }.get(binding.role, binding.name),
+            )
+            for binding in selected.ranges
+        ),
+        conditions=tuple(
+            replace(
+                condition,
+                range_name={
+                    "input": "source_values",
+                    "output": "destination_values",
+                }.get(condition.range_name, condition.range_name),
+                reference_name={
+                    "indices": "rows",
+                }.get(condition.reference_name, condition.reference_name),
+            )
+            for condition in selected.conditions
+        ),
+        alias_rules=tuple(
+            replace(
+                rule,
+                writable_range_name="destination_values",
+                readable_range_names=tuple(
+                    {
+                        "input": "source_values",
+                        "indices": "rows",
+                    }.get(name, name)
+                    for name in rule.readable_range_names
+                ),
+            )
+            for rule in selected.alias_rules
+        ),
+    )
+    rendered_selected = render_rust_scaled_checked_algorithm(renamed_selected)
+    assert "rows.as_ptr()" in rendered_selected
+    assert "source_values.as_ptr()" in rendered_selected
+    assert "destination_values.as_mut_ptr()" in rendered_selected
+
+    rendered_cpp = render_cpp_checked_algorithm_definition(renamed_selected)
+    assert "class RowsRange" in rendered_cpp
+    assert "class SourceValuesRange" in rendered_cpp
+    assert "class DestinationValuesRange" in rendered_cpp
+    assert "const RowsRange& rows" in rendered_cpp
+    assert "const SourceValuesRange& source_values" in rendered_cpp
+    assert "DestinationValuesRange& destination_values" in rendered_cpp
 
 
 def test_generated_transform_checked_surfaces_use_contract_guards(

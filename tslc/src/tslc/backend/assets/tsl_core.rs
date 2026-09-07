@@ -25,7 +25,7 @@ pub enum PreconditionError {
     IndexOutOfBounds,
     /// An active integer divisor lane is zero.
     ZeroDivisor,
-    /// A contiguous memory view is shorter than the operation payload.
+    /// A memory view is shorter than the operation's required payload.
     InsufficientExtent,
     /// A secondary input or mask range is shorter than the driving range.
     InsufficientInput,

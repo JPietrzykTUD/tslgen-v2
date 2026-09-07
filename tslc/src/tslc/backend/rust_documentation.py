@@ -4,6 +4,12 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from tslc.backend.checked_api import (
+    CheckedConditionPlan,
+    applicable_checked_api_plan,
+    checked_memory_condition,
+)
+from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.primitive_rendering import (
     family_runtime_parameter_descriptions,
     family_runtime_parameter_summary,
@@ -13,7 +19,6 @@ from tslc.backend.precondition_error_rendering import rust_precondition_error
 from tslc.backend.signature_types import RUST_SIGNATURE_TYPES, rust_free_type
 from tslc.catalog.memory import MemoryAccess, MemoryAddressing
 from tslc.catalog.preconditions import (
-    PRECONDITION_DESCRIPTORS,
     PreconditionErrorKind,
     PrimitivePrecondition,
     precondition_applies_to_type,
@@ -30,12 +35,53 @@ from tslc.lower.lowerer import LoweredSpecialization
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 
+def rust_checked_api_examples(profiles: tuple[EmittedProfile, ...]) -> str:
+    """Project overview examples only when their typed primitive is emitted."""
+
+    example_specs = tuple(
+        spec
+        for profile in profiles
+        for spec in profile.specializations("rust").get("extract_value_at", ())
+        if spec.type_tag == "si32" and spec.extension_name == "scalar"
+    )
+    if not example_specs or applicable_checked_api_plan(example_specs) is None:
+        return ""
+    return """# Examples
+
+The ordinary lower-level path requires the caller to uphold its safety
+contract:
+
+```
+use tsl::tsl_core::{Scalar, Simd as ProfileSimd};
+
+type V = ProfileSimd<i32, Scalar>;
+let lane = unsafe { tsl::profile::extract_value_at::<V>(7, 0) };
+if lane != 7 {
+    std::process::abort();
+}
+```
+
+The checked path reports invalid runtime data without invoking the ordinary
+operation:
+
+```
+use tsl::tsl_core::{Scalar, Simd as ProfileSimd};
+use tsl::PreconditionError;
+
+type V = ProfileSimd<i32, Scalar>;
+let result = tsl::profile::extract_value_at_checked::<V>(7, 1);
+if result != Err(PreconditionError::IndexOutOfBounds) {
+    std::process::abort();
+}
+```"""
+
+
 def rust_doc(
     spec: LoweredSpecialization,
     *,
     context: str,
     concrete: bool = True,
-    checked: bool = False,
+    checked_conditions: tuple[CheckedConditionPlan, ...] | None = None,
     specializations: tuple[LoweredSpecialization, ...] = (),
 ) -> str:
     rendered = render_rust_doc(
@@ -43,37 +89,36 @@ def rust_doc(
             spec,
             context=context,
             concrete=concrete,
-            checked=checked,
+            checked_conditions=checked_conditions,
             specializations=specializations or (spec,),
         )
     )
-    preconditions = _documented_preconditions(spec, concrete=concrete)
-    if concrete or not preconditions:
+    if concrete:
         return rendered
-    detail = precondition_fact(
-        preconditions,
-        include_unchecked_consequence=not checked,
-    )
-    section = (
-        "/// # Errors\n"
-        "///\n"
-        f"/// {_rust_checked_error_facts(preconditions)} The unchecked operation "
-        "is not invoked."
-        if checked
-        else "/// # Safety\n///\n/// " + detail
-    )
+    if checked_conditions is not None:
+        if not checked_conditions:
+            return rendered
+        section = (
+            "/// # Errors\n"
+            "///\n"
+            f"/// {_rust_checked_error_facts(checked_conditions)} The unchecked operation "
+            "is not invoked."
+        )
+    else:
+        preconditions = _documented_preconditions(spec, concrete=concrete)
+        if not preconditions:
+            return rendered
+        section = "/// # Safety\n///\n/// " + precondition_fact(preconditions)
     return f"{rendered}\n///\n{section}" if rendered else section
 
 
 def _rust_checked_error_facts(
-    preconditions: tuple[PrimitivePrecondition, ...],
+    conditions: tuple[CheckedConditionPlan, ...],
 ) -> str:
     return " ".join(
-        f"Returns {_rust_error_names(descriptor.errors)} when this precondition "
-        f"is violated: {descriptor.description}"
-        for descriptor in (
-            PRECONDITION_DESCRIPTORS[item.kind] for item in preconditions
-        )
+        f"Returns {_rust_error_names(condition.errors)} when this precondition "
+        f"is violated: {condition.description}"
+        for condition in conditions
     )
 
 
@@ -88,26 +133,23 @@ def _rust_error_name(error: PreconditionErrorKind) -> str:
 def _parameter_summary(
     specializations: tuple[LoweredSpecialization, ...],
     *,
-    checked: bool,
+    checked_conditions: tuple[CheckedConditionPlan, ...] | None,
 ) -> str:
     spec = specializations[0]
     memory = spec.primitive_semantics.memory
-    if not checked or memory is None:
+    if checked_conditions is None or memory is None:
         return family_runtime_parameter_summary(specializations)
-    memory_indexes = {
-        binding.parameter_index
-        for condition in spec.primitive_semantics.preconditions
-        for binding in condition.operand_bindings
-        if binding.parameter_index < len(spec.param_kinds)
-        and spec.param_kinds[binding.parameter_index] in {"cptr", "ptr"}
-    }
+    checked_memory = checked_memory_condition(checked_conditions)
+    if checked_memory is None:
+        return family_runtime_parameter_summary(specializations)
     return "; ".join(
         f"{name}: "
         + (
             _memory_parameter_description(memory.addressing, read_only=True)
-            if index in memory_indexes and memory.access is MemoryAccess.READ
+            if index == checked_memory.parameter_index
+            and memory.access is MemoryAccess.READ
             else _memory_parameter_description(memory.addressing, read_only=False)
-            if index in memory_indexes
+            if index == checked_memory.parameter_index
             else description
         )
         for index, name, description in family_runtime_parameter_descriptions(
@@ -135,12 +177,18 @@ def _doc_block(
     *,
     context: str,
     concrete: bool,
-    checked: bool,
+    checked_conditions: tuple[CheckedConditionPlan, ...] | None,
     specializations: tuple[LoweredSpecialization, ...],
 ) -> DocumentationBlock:
     if not concrete:
+        checked = checked_conditions is not None
+        documented_conditions = (
+            checked_conditions
+            if checked_conditions is not None
+            else _documented_preconditions(spec, concrete=concrete)
+        )
         preconditions = precondition_fact(
-            _documented_preconditions(spec, concrete=concrete),
+            documented_conditions,
             include_unchecked_consequence=False,
         )
         condition_facts = (
@@ -155,7 +203,10 @@ def _doc_block(
                 ("Returns", _result_summary(spec, concrete=False)),
                 (
                     "Parameters",
-                    _parameter_summary(specializations, checked=checked),
+                    _parameter_summary(
+                        specializations,
+                        checked_conditions=checked_conditions,
+                    ),
                 ),
                 *condition_facts,
             ),

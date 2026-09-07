@@ -14,7 +14,7 @@ Classification = Literal[
     "tooling-only validation",
 ]
 
-BASELINE_VERSION = 3
+BASELINE_VERSION = 4
 DECLARATION_ROOT = Path("tslc/tests/fixtures/checked_api")
 CPP_DECLARATIONS = DECLARATION_ROOT / "cpp_declarations.snap"
 RUST_DECLARATIONS = DECLARATION_ROOT / "rust_declarations.snap"
@@ -40,7 +40,7 @@ ABI_EVIDENCE = {
     "environment": "x86-64 System V",
     "gcc": "GCC 15.2.0",
     "clang": "Clang 21.1.8",
-    "msvc": "not available in the Slice 0 Linux environment",
+    "msvc": "not available in the original Linux ABI-probe environment",
     "raw_return": "value returned in ymm0; no value-result memory output",
     "chosen_return": "value returned in ymm0; scalar error written through rdi",
     "aggregate_return": "hidden result pointer in rdi; vector value written to memory",
@@ -171,9 +171,9 @@ FAMILIES = (
     SemanticFamily(
         "selected_memory_contract",
         "dynamic precondition",
-        "Expand/compress operations may access a mask-dependent number of elements.",
-        "implemented for compress-store and expand-load from a range plus capacity derived from the active mask",
-        "Validation must precede any compress-store output write.",
+        "Expand/compress operations may access a mask-dependent number of elements through a selected aligned or unaligned memory contract.",
+        "implemented for compress-store and expand-load from a range plus capacity derived from the active mask; selected alignment is checked before nonempty aligned access",
+        "Validation must precede any compress-store output write; an all-inactive operation accesses no memory and does not reject an empty unaligned view.",
     ),
     SemanticFamily(
         "indexed_memory_contract",

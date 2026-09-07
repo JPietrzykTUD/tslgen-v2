@@ -1,12 +1,15 @@
 # TSL v1 checked-API release evidence
 
 Date: 2026-09-06
-Current source: `af8c6afa` plus the reviewed Slice 8 worktree
+Reviewed implementation: Slice 8 completion `cb32a29e`
 Pre-refactor source: `08954770`
 
-This report closes the documentation, compatibility, package, and mechanism
-measurement slice of the checked-API refactor. It is release evidence, not a
-claim that one workstation microbenchmark predicts application performance.
+This report records the documentation, typed-contract compatibility, package,
+and mechanism measurement results produced by Slice 8. The later
+post-implementation review supersedes it as a release-readiness decision:
+transitive-precondition accounting and exact backend declaration compatibility
+remain open. It is also not a claim that one workstation microbenchmark
+predicts application performance.
 
 ## Public contract and inventory
 
@@ -25,11 +28,13 @@ The generated C++ and Rust overviews now state the same two-path contract:
   concurrency remain language-level caller obligations rather than facts that
   TSL pretends to validate.
 
-The frozen v1 public baseline contains 181 typed primitive callable families,
+The typed v1 public baseline contains 181 primitive callable families,
 44 C++ algorithm families, 35 C++ checked-algorithm families, 174 Rust
 algorithm callable names, nine C++ core identities, and eight Rust root
-identities. Backend overloads and representative rendered declarations remain
-covered by generated snapshots.
+identities. It now records complete source signature semantics, checked
+condition descriptors, error spellings, and algorithm contracts. Focused tests
+cover representative rendered declarations, but no exact backend declaration
+manifest exists yet.
 
 The checked census contains 33 exact public callable identities with at least
 one caller-unsafe implementation. Twenty-two have source contracts from which
@@ -232,7 +237,8 @@ the TypeScript client or TextMate grammar.
 Final validation completed with 2,689 ordinary compiler tests passing and 121
 expected opt-in/platform skips, 46 checked-API generated/ABI tests passing with
 one unavailable-platform skip, and all 84 generated build/value gates passing.
-Compiler type checking, both release ratchets, strict C++/Rust documentation,
+Compiler type checking, the typed public-contract and checked-coverage
+ratchets, strict C++/Rust documentation,
 the two executable Rust doctests, GCC/Clang documentation consumers, Python LSP
 tests, VS Code unit/integration tests, and the Linux x64 runtime-package smoke
 gate also passed.
@@ -241,6 +247,10 @@ The checked representation achieves its intended C++ lever: callers opt into
 validation without changing the unsuffixed path or forcing a value-owning
 result aggregate. Rust's `Result` path is explicit and correct, but the
 showcase also identifies an independent AVX2 cross-crate inlining opportunity.
-The release baselines prevent accidental public-family drift, the checked
-census keeps every omission explicit, and package/doc gates make the v1 surface
-reproducible.
+The existing baselines prevent accidental typed-family and checked-coverage
+drift, the checked census keeps every omission explicit, and package/doc gates
+make generated artifacts reproducible. They do not yet prevent every emitted
+qualifier, overload, parameter, result, visibility, or reachability change;
+typed transitive-precondition accounting in Slice 9 and the exact backend
+declaration manifest in Slice 10 remain TSL v1 release blockers. See the
+[post-implementation review](tsl-v1-checked-api-post-implementation-review.md).

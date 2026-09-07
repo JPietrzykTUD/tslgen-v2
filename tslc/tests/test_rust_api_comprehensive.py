@@ -12,8 +12,8 @@ from rust_api_test_support import (
     _plan,
     _spec,
 )
+from tslc.backend.checked_api import CheckedConditionPlan
 from tslc.backend.rust_api_model import (
-    RustFacadeCheckedCondition,
     RustFacadeConstParameterSource,
     RustFacadeCoverageStatus,
     RustFacadeParameterPlacement,
@@ -42,13 +42,16 @@ from tslc.render.rust_facade_comprehensive import render_comprehensive_facade
 def test_checked_condition_rejects_memory_facts_on_non_memory_precondition() -> None:
     with pytest.raises(
         ValueError,
-        match="checked memory conditions require complete memory facts",
+        match="checked memory conditions require complete typed memory facts",
     ):
-        RustFacadeCheckedCondition(
+        CheckedConditionPlan(
             kind=PreconditionKind.LANE_INDEX_IN_RANGE,
+            description="The runtime lane index is in range.",
+            unchecked_consequence="An invalid index may cause undefined behavior.",
             parameter_name="index",
+            parameter_index=0,
             error=PreconditionErrorKind.INDEX_OUT_OF_BOUNDS,
-            mask_parameter_name=None,
+            additional_errors=(),
             applicable_type_tags=("si32",),
             memory_access=MemoryAccess.READ,
             memory_addressing=MemoryAddressing.CONTIGUOUS,
@@ -171,6 +174,49 @@ def test_declared_lane_precondition_produces_unsafe_and_checked_facade_methods()
     assert "pub fn extract_value_at_checked(self, index: usize)" in rendered
     assert "if index >=" in rendered
     assert "PreconditionError::IndexOutOfBounds" in rendered
+
+
+def test_compacted_checked_facade_checks_extent_and_conditional_alignment() -> None:
+    spec = _spec(
+        "compress_store",
+        result_kind="void",
+        param_names=("mask", "ptr", "data"),
+        param_kinds=("m", "ptr", "v"),
+        operation=PrimitiveOperation.STORE,
+        roles=(
+            (OperandRole.CONTROL_MASK, 0, "m"),
+            (OperandRole.MEMORY_DESTINATION, 1, "ptr"),
+            (OperandRole.VALUE, 2, "v"),
+        ),
+        safety=ImplementationSafety(
+            caller_unsafe=True,
+            reasons=frozenset({"raw_pointer"}),
+        ),
+        memory=PrimitiveMemoryContract(
+            MemoryAccess.WRITE,
+            MemoryAddressing.COMPACTED,
+            MemoryPayloadExtent.ACTIVE_LANES,
+        ),
+        memory_alignment=LoweredMemoryAlignment(
+            "aligned",
+            MemoryAlignment.ALIGNED,
+        ),
+        preconditions=(
+            PreconditionKind.COMPACTED_MEMORY_EXTENT,
+            PreconditionKind.SELECTED_MEMORY_ALIGNMENT,
+        ),
+    )
+    spec = replace(spec, axis=(("aligned", "true"),))
+
+    plan = plan_rust_facade((), _plan(spec))
+    rendered = render_comprehensive_facade(plan).public_items
+
+    assert "pub fn compress_store_masked_checked" in rendered
+    assert ".into_iter().filter(|active| *active).count()" in rendered
+    assert ".to_array().into_iter().any(|active| active)" in rendered
+    assert ".is_multiple_of(" in rendered
+    assert "PreconditionError::InsufficientExtent" in rendered
+    assert "PreconditionError::Misaligned" in rendered
 
 
 def test_checked_facade_is_omitted_when_a_caller_obligation_remains() -> None:

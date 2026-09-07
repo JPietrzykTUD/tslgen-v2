@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from tslc.backend.checked_api import (
+    CheckedConditionPlan,
+    checked_memory_condition,
+)
 from tslc.backend.primitive_rendering import (
     family_runtime_parameter_descriptions,
     family_runtime_parameter_summary,
@@ -12,7 +16,6 @@ from tslc.backend.primitive_facade import DataparallelPrimitiveFacade
 from tslc.backend.signature_types import CPP_SIGNATURE_TYPES
 from tslc.catalog.memory import MemoryAccess, MemoryAddressing
 from tslc.catalog.preconditions import (
-    PRECONDITION_DESCRIPTORS,
     PreconditionErrorKind,
     PrimitivePrecondition,
     precondition_applies_to_type,
@@ -35,7 +38,7 @@ def cpp_doc(
     context: str,
     indent: str = "",
     concrete: bool = True,
-    checked: bool = False,
+    checked_conditions: tuple[CheckedConditionPlan, ...] | None = None,
     specializations: tuple[LoweredSpecialization, ...] = (),
 ) -> str:
     return render_cpp_doc(
@@ -43,7 +46,7 @@ def cpp_doc(
             spec,
             context=context,
             concrete=concrete,
-            checked=checked,
+            checked_conditions=checked_conditions,
             specializations=specializations or (spec,),
         ),
         indent=indent,
@@ -87,7 +90,10 @@ def cpp_dataparallel_facade_doc(facade: DataparallelPrimitiveFacade) -> str:
             brief=f"Policy-based overload of `{facade.primitive_name}`.",
             facts=(
                 ("Template parameters", type_parameters),
-                ("Parameters", _parameter_summary((shape,), checked=False)),
+                (
+                    "Parameters",
+                    _parameter_summary((shape,), checked_conditions=None),
+                ),
                 (
                     "Dispatch",
                     "Resolves the vector type through `tsl::dataparallel::simd_for_t` "
@@ -104,12 +110,18 @@ def _doc_block(
     *,
     context: str,
     concrete: bool,
-    checked: bool,
+    checked_conditions: tuple[CheckedConditionPlan, ...] | None,
     specializations: tuple[LoweredSpecialization, ...],
 ) -> DocumentationBlock:
     if not concrete:
+        checked = checked_conditions is not None
+        documented_conditions = (
+            checked_conditions
+            if checked_conditions is not None
+            else _documented_preconditions(spec, concrete=concrete)
+        )
         preconditions = precondition_fact(
-            _documented_preconditions(spec, concrete=concrete),
+            documented_conditions,
             include_unchecked_consequence=not checked,
         )
         condition_facts = (
@@ -126,13 +138,13 @@ def _doc_block(
                 (
                     "Failure",
                     (
-                        f"sets {_cpp_checked_errors(spec.primitive_semantics.preconditions)}, "
+                        f"sets {_cpp_checked_errors(checked_conditions or ())}, "
                         "returns a fully initialized placeholder with no TSL-defined "
                         "value, and does not invoke the unchecked operation"
                         if spec.result_kind != "void"
                         else (
                             "returns "
-                            f"{_cpp_checked_errors(spec.primitive_semantics.preconditions)} "
+                            f"{_cpp_checked_errors(checked_conditions or ())} "
                             "and does not invoke the unchecked operation"
                         )
                     ),
@@ -150,7 +162,10 @@ def _doc_block(
                 ("Returns", _result_summary(spec, concrete=False)),
                 (
                     "Parameters",
-                    _parameter_summary(specializations, checked=checked),
+                    _parameter_summary(
+                        specializations,
+                        checked_conditions=checked_conditions,
+                    ),
                 ),
                 *condition_facts,
                 *(
@@ -224,15 +239,15 @@ def _documented_preconditions(
 
 
 def _cpp_checked_errors(
-    preconditions: tuple[PrimitivePrecondition, ...],
+    conditions: tuple[CheckedConditionPlan, ...],
 ) -> str:
     return ", ".join(
         f"`precondition_error::{_cpp_error_name(error)}`"
         for error in sorted(
             {
                 error
-                for item in preconditions
-                for error in PRECONDITION_DESCRIPTORS[item.kind].errors
+                for condition in conditions
+                for error in condition.errors
             },
             key=lambda item: item.value,
         )
@@ -246,26 +261,23 @@ def _cpp_error_name(error: PreconditionErrorKind) -> str:
 def _parameter_summary(
     specializations: tuple[LoweredSpecialization, ...],
     *,
-    checked: bool,
+    checked_conditions: tuple[CheckedConditionPlan, ...] | None,
 ) -> str:
     spec = specializations[0]
     memory = spec.primitive_semantics.memory
-    if not checked or memory is None:
+    if checked_conditions is None or memory is None:
         return family_runtime_parameter_summary(specializations)
-    memory_indexes = {
-        binding.parameter_index
-        for condition in spec.primitive_semantics.preconditions
-        for binding in condition.operand_bindings
-        if binding.parameter_index < len(spec.param_kinds)
-        and spec.param_kinds[binding.parameter_index] in {"cptr", "ptr"}
-    }
+    checked_memory = checked_memory_condition(checked_conditions)
+    if checked_memory is None:
+        return family_runtime_parameter_summary(specializations)
     return "; ".join(
         f"{name}: "
         + (
             _memory_parameter_description(memory.addressing, read_only=True)
-            if index in memory_indexes and memory.access is MemoryAccess.READ
+            if index == checked_memory.parameter_index
+            and memory.access is MemoryAccess.READ
             else _memory_parameter_description(memory.addressing, read_only=False)
-            if index in memory_indexes
+            if index == checked_memory.parameter_index
             else description
         )
         for index, name, description in family_runtime_parameter_descriptions(

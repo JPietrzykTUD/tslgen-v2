@@ -531,6 +531,26 @@ companion reports before dispatch; C++ returns only an initialized,
 semantically unspecified placeholder. Memory companions replace bare pointers
 with spans/slices carrying the exact checkable extent, but valid object
 lifetime, provenance, references, and concurrency remain caller obligations.
+Checked-memory admission also fails closed unless every caller-unsafe
+specialization carries the reviewed `raw_pointer` obligation and only the
+narrow implementation-mechanism labels currently known to coexist with it.
+Unknown labels, unchecked indexing, and generic unsafe operations cannot be
+erased by a range signature. Compiler-derived, internal-only
+`value_reinterpretation` and `unsafe_callee` framing effects are admitted; the
+latter does not prove that the callee's own condition was forwarded or
+discharged. This is a conservative direct-admission guard over the current
+lowered safety model; the typed transitive proof described below remains a v1
+release gate.
+[catalog/memory.py](src/tslc/catalog/memory.py) also owns whether indexed
+operations consume one address per result-vector lane or per index-vector lane;
+catalog validation requires that fact for indexed memory, and checked wrappers
+validate the corresponding lane-count relationship before inspecting index
+lanes or dispatching.
+Compacted memory likewise carries both its mask-dependent payload extent and
+the selected alignment contract. Checked wrappers validate capacity first and,
+when an aligned specialization would access at least one element, validate the
+selected vector alignment before dispatch. An all-inactive compacted operation
+accesses no memory and therefore does not reject an empty, unaligned view.
 [backend/cpp_checked_api.py](src/tslc/backend/cpp_checked_api.py) owns C++
 signature/check projection, and the backend-neutral algorithm family inventory
 in [backend/algorithm_contracts.py](src/tslc/backend/algorithm_contracts.py)
@@ -543,6 +563,15 @@ cross-record invariants in
 the joined semantic-and-call inventory in
 [backend/rust_api_core.py](src/tslc/backend/rust_api_core.py), and focused
 candidate, comprehensive, curated, and surface planners under `backend/rust_api_*`.
+Rust facade checked-condition translation remains in
+[backend/rust_facade_checked.py](src/tslc/backend/rust_facade_checked.py); the
+renderer receives those finalized backend facts and only formats public items.
+Primitive-call lowering currently records callee identities and creates the
+necessary local Rust unsafe boundary, but does not yet carry a typed proof that
+an applicable callee precondition was forwarded or discharged. The reviewed
+current corpus is accounted for manually; explicit call-site obligation
+semantics remain a TSL v1 release gate and must stay in typed TSIL/lowering
+rather than being inferred from raw target text.
 The public
 [backend/rust_api_planner.py](src/tslc/backend/rust_api_planner.py)
 orchestrates those projections directly and preserves the compiler-facing
@@ -591,8 +620,11 @@ explain unchecked preconditions, checked errors, and residual language-level
 obligations. The repository maintenance projections
 [maintenance/public_api_baseline.py](src/tslc/maintenance/public_api_baseline.py)
 and [maintenance/checked_api_census.py](src/tslc/maintenance/checked_api_census.py)
-ratchet the v1 callable-family boundary and exact checked coverage separately;
-both load the typed corpus through one maintenance-only catalog boundary.
+ratchet the typed v1 callable-family contract and exact checked coverage
+separately; both load the typed corpus through one maintenance-only catalog
+boundary. They do not yet serialize every backend-emitted declaration. Exact
+C++ and Rust declaration compatibility therefore remains a release gate rather
+than being inferred from representative target-text examples.
 
 A static substrate ships as assets
 ([backend/assets/tsl_core.hpp](src/tslc/backend/assets/tsl_core.hpp),

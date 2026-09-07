@@ -7,6 +7,7 @@ prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
   memory:
     access read
     addressing indexed
+    indexed_lanes vector
   preconditions [indexed_memory_address_valid]
   brief_description "Gathers vector lanes from memory addresses computed from a base pointer, index vector, and compile-time scale."
   detailed_description """
@@ -632,6 +633,7 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
   memory:
     access read
     addressing indexed
+    indexed_lanes index_vector
   preconditions [indexed_memory_address_valid]
   brief_description "Gathers narrow memory elements using a wider index vector and writes zero to result lanes that have no index."
   detailed_description """
@@ -1038,6 +1040,7 @@ prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, s
   memory:
     access read
     addressing indexed
+    indexed_lanes vector
   preconditions [indexed_memory_address_valid]
   brief_description "Gathers active mask lanes from indexed memory addresses and keeps the source lane where the mask is inactive."
   detailed_description """
@@ -1528,6 +1531,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
   memory:
     access write
     addressing indexed
+    indexed_lanes vector
   preconditions [indexed_memory_address_valid]
   brief_description "Scatters vector lanes to memory addresses computed from a base pointer, index vector, and compile-time scale."
   detailed_description """
@@ -1972,6 +1976,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
   memory:
     access write
     addressing indexed
+    indexed_lanes vector
   preconditions [indexed_memory_address_valid]
   brief_description "Scatters active mask lanes to indexed memory addresses and leaves inactive lanes untouched."
   detailed_description """

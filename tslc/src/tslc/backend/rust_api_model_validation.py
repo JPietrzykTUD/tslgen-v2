@@ -79,6 +79,15 @@ def _validate_comprehensive_methods(
     shapes_by_key: _ShapeIndex,
 ) -> None:
     for method in methods:
+        if any(
+            not condition.applicable_type_tags
+            or not set(condition.applicable_type_tags).issubset(method.type_tags)
+            for condition in method.checked_conditions
+        ):
+            raise ValueError(
+                "Final Rust checked conditions require a nonempty method-local "
+                "type domain"
+            )
         expected_public_shapes = (
             ()
             if method.receiver_kind is RustFacadeReceiverKind.FREE

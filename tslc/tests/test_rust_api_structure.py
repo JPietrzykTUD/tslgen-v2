@@ -9,6 +9,7 @@ from pathlib import Path
 _BACKEND_ROOT = (
     Path(__file__).parents[1] / "src" / "tslc" / "backend"
 )
+_RENDER_ROOT = Path(__file__).parents[1] / "src" / "tslc" / "render"
 _CHILD_MODULES = (
     "rust_api_candidates.py",
     "rust_api_comprehensive.py",
@@ -76,6 +77,60 @@ def test_rust_facade_plan_validation_is_a_focused_module() -> None:
         "_validate_bit_conversions",
         "_validate_trait_implementations",
     } <= definitions
+
+
+def test_checked_facade_semantic_translation_is_backend_owned() -> None:
+    render_path = _RENDER_ROOT / "rust_facade_comprehensive.py"
+    render_tree = ast.parse(render_path.read_text(encoding="utf-8"))
+    catalog_imports = {
+        node.module
+        for node in ast.walk(render_tree)
+        if isinstance(node, ast.ImportFrom)
+        and node.module is not None
+        and node.module.startswith("tslc.catalog")
+    }
+    assert catalog_imports == set()
+
+    backend_path = _BACKEND_ROOT / "rust_facade_checked.py"
+    backend_tree = ast.parse(backend_path.read_text(encoding="utf-8"))
+    backend_functions = {
+        node.name
+        for node in backend_tree.body
+        if isinstance(node, ast.FunctionDef)
+    }
+    assert {
+        "rust_checked_conditions_for_type",
+        "rust_checked_guards",
+        "rust_checked_public_call_argument",
+        "rust_checked_public_parameter_type",
+    } <= backend_functions
+
+    model_tree = ast.parse(
+        (_BACKEND_ROOT / "rust_api_model.py").read_text(encoding="utf-8")
+    )
+    assert "RustFacadeCheckedCondition" not in {
+        node.name for node in model_tree.body if isinstance(node, ast.ClassDef)
+    }
+
+    render_functions = {
+        node.name for node in render_tree.body if isinstance(node, ast.FunctionDef)
+    }
+    project_tree = ast.parse(
+        (_RENDER_ROOT / "rust_project.py").read_text(encoding="utf-8")
+    )
+    project_functions = {
+        node.name for node in project_tree.body if isinstance(node, ast.FunctionDef)
+    }
+    documentation_tree = ast.parse(
+        (_BACKEND_ROOT / "rust_documentation.py").read_text(encoding="utf-8")
+    )
+    documentation_functions = {
+        node.name
+        for node in documentation_tree.body
+        if isinstance(node, ast.FunctionDef)
+    }
+    assert "_rust_checked_api_examples" not in render_functions | project_functions
+    assert "rust_checked_api_examples" in documentation_functions
 
 
 def test_rust_facade_orchestrator_contains_only_public_api_and_pipeline() -> None:

@@ -7,6 +7,7 @@ from collections.abc import Mapping, Sequence
 from tslc.backend.rust import RustBackend
 from tslc.backend.rust_api_model import RustFacadePlan, RustFacadeReceiverKind
 from tslc.backend.rust_dispatch import RustDispatchPlan
+from tslc.backend.rust_documentation import rust_checked_api_examples
 from tslc.backend.rust_benchmark_context import (
     RUST_BENCHMARK_CODEGEN_CONTRACT,
     RUST_BENCHMARK_POLICY_SCHEMA_VERSION,
@@ -504,7 +505,7 @@ def _rust_lib(
     )
     return assets.fill(
         "rust_lib.rs.tmpl",
-        checked_api_examples=_rust_checked_api_examples(profiles),
+        checked_api_examples=rust_checked_api_examples(profiles),
         facade_function_exports=_rust_facade_function_exports(facade_plan),
         primitive_tags=(f"{primitive_tags}\n\n" if primitive_tags else ""),
         profile_modules=profile_modules,
@@ -520,44 +521,6 @@ def _rust_lib(
             else ""
         ),
     )
-
-
-def _rust_checked_api_examples(profiles: tuple[EmittedProfile, ...]) -> str:
-    available = {
-        primitive_name
-        for profile in profiles
-        for primitive_name in profile.specializations("rust")
-    }
-    if "extract_value_at" not in available:
-        return ""
-    return """# Examples
-
-The ordinary lower-level path requires the caller to uphold its safety
-contract:
-
-```
-use tsl::tsl_core::{Scalar, Simd as ProfileSimd};
-
-type V = ProfileSimd<i32, Scalar>;
-let lane = unsafe { tsl::profile::extract_value_at::<V>(7, 0) };
-if lane != 7 {
-    std::process::abort();
-}
-```
-
-The checked path reports invalid runtime data without invoking the ordinary
-operation:
-
-```
-use tsl::tsl_core::{Scalar, Simd as ProfileSimd};
-use tsl::PreconditionError;
-
-type V = ProfileSimd<i32, Scalar>;
-let result = tsl::profile::extract_value_at_checked::<V>(7, 1);
-if result != Err(PreconditionError::IndexOutOfBounds) {
-    std::process::abort();
-}
-```"""
 
 
 def _rust_lib_profile_module(

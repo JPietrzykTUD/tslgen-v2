@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Freeze the pre-v1 checked-API policy and its current safety evidence.
+"""Freeze the TSL v1 checked-API policy and its current safety evidence.
 
 This is a repository maintenance projection.  Runtime-failure spellings in
 render assets are scanned only to make existing generated behavior reviewable;
@@ -483,7 +483,7 @@ def render_markdown(census: Census, context: RepoContext) -> str:
     lines = [
         "# TSL v1 checked-API baseline census",
         "",
-        "This generated maintenance report tracks the reviewed evidence at the current checked-API migration checkpoint. "
+        "This generated maintenance report tracks reviewed evidence for the implemented direct TSL v1 checked-API contract. "
         "Its lexical runtime-site scan is tooling evidence only; production semantics must come from typed "
         "source/catalog facts and finalized backend plans.",
         "",
@@ -573,8 +573,8 @@ def render_markdown(census: Census, context: RepoContext) -> str:
             "## Source safety-metadata completeness caveat",
             "",
             "The existing typed metadata audit finds additional direct body/signature facts whose source-owned "
-            "safety metadata is incomplete. Applying those suggestions could change generated Rust safety and is "
-            "therefore intentionally outside Slice 0. The exact gap set is locked in the JSON baseline.",
+            "safety metadata is incomplete. Applying those suggestions can change generated Rust safety and remains "
+            "a separately reviewed corpus-hardening task. The exact gap set is locked in the JSON baseline.",
             "",
             f"The {len(caller_gaps)} caller-visible gaps are:",
             "",
@@ -583,9 +583,10 @@ def render_markdown(census: Census, context: RepoContext) -> str:
                 for gap in caller_gaps
             ),
             "",
-            "## Representative declaration snapshots",
+            "## Reviewed declaration-shape examples",
             "",
-            "These are contract snapshots, not current generated declarations. Later slices make the compiler emit them.",
+            "These examples record reviewed C++ and Rust contract shapes. They are not an exhaustive "
+            "serialization of the emitted public surface and therefore are not an exact compatibility ratchet.",
             "",
             "### C++",
             "",

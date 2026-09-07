@@ -36,6 +36,13 @@ class MemoryPayloadExtent(StrEnum):
     ACTIVE_LANES = "active_lanes"
 
 
+class MemoryIndexedLaneExtent(StrEnum):
+    """Which logical lanes an indexed memory operation may access."""
+
+    VECTOR = "vector"
+    INDEX_VECTOR = "index_vector"
+
+
 _MEMORY_ALIGNMENT_AXIS = "aligned"
 
 
@@ -81,6 +88,20 @@ MEMORY_ADDRESSING_DESCRIPTIONS: Mapping[MemoryAddressing, str] = MappingProxyTyp
         ),
     }
 )
+MEMORY_INDEXED_LANE_EXTENT_DESCRIPTIONS: Mapping[
+    MemoryIndexedLaneExtent, str
+] = MappingProxyType(
+    {
+        MemoryIndexedLaneExtent.VECTOR: (
+            "Accesses one index for every logical operation lane; the index "
+            "vector must cover those lanes."
+        ),
+        MemoryIndexedLaneExtent.INDEX_VECTOR: (
+            "Accesses one element for every supplied index lane; those lanes "
+            "must fit in the operation result."
+        ),
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,9 +109,19 @@ class PrimitiveMemoryContract:
     access: MemoryAccess
     addressing: MemoryAddressing
     payload_extent: MemoryPayloadExtent
+    indexed_lane_extent: MemoryIndexedLaneExtent | None = None
     source: SourceSpan | None = None
     access_source: SourceSpan | None = None
     addressing_source: SourceSpan | None = None
+    indexed_lane_extent_source: SourceSpan | None = None
+
+    def __post_init__(self) -> None:
+        if (self.addressing is MemoryAddressing.INDEXED) != (
+            self.indexed_lane_extent is not None
+        ):
+            raise ValueError(
+                "indexed memory contracts require exactly one indexed-lane extent"
+            )
 
 
 def memory_access_values() -> tuple[str, ...]:
@@ -101,16 +132,23 @@ def memory_addressing_values() -> tuple[str, ...]:
     return tuple(sorted(value.value for value in MemoryAddressing))
 
 
+def memory_indexed_lane_extent_values() -> tuple[str, ...]:
+    return tuple(sorted(value.value for value in MemoryIndexedLaneExtent))
+
+
 __all__ = (
     "MEMORY_ACCESS_DESCRIPTIONS",
     "MEMORY_ADDRESSING_DESCRIPTIONS",
+    "MEMORY_INDEXED_LANE_EXTENT_DESCRIPTIONS",
     "MemoryAccess",
     "MemoryAddressing",
     "MemoryAlignment",
+    "MemoryIndexedLaneExtent",
     "MemoryPayloadExtent",
     "PrimitiveMemoryContract",
     "memory_access_values",
     "memory_addressing_values",
+    "memory_indexed_lane_extent_values",
     "memory_operations",
     "resolve_memory_alignment",
 )

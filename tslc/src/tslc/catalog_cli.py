@@ -199,6 +199,11 @@ def _primitive(item: Primitive) -> dict[str, object]:
                 "access": item.memory.access.value,
                 "addressing": item.memory.addressing.value,
                 "payload_extent": item.memory.payload_extent.value,
+                "indexed_lane_extent": (
+                    item.memory.indexed_lane_extent.value
+                    if item.memory.indexed_lane_extent is not None
+                    else None
+                ),
             }
         ),
         "conversion": (

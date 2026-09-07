@@ -10,6 +10,7 @@ from tslc.backend.checked_api import (
     CheckedConditionPlan,
     applicable_checked_api_plan,
     checked_api_plan,
+    checked_memory_condition,
     public_call_requires_unsafe,
 )
 from tslc.backend.primitive_rendering import variant_names as _variant_names
@@ -80,7 +81,12 @@ from tslc.catalog.preconditions import (
     PreconditionErrorKind,
     PreconditionKind,
 )
-from tslc.catalog.memory import MemoryAccess, MemoryPayloadExtent
+from tslc.catalog.memory import (
+    MemoryAccess,
+    MemoryAddressing,
+    MemoryIndexedLaneExtent,
+    MemoryPayloadExtent,
+)
 from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS
 from tslc.lower.lowerer import (
     LoweredSpecialization,
@@ -230,26 +236,43 @@ def _rust_forwarded_precondition_method(
     )
 
 
-def _rust_checked_memory_requirements(
+def _rust_checked_memory_extent(
     condition: CheckedConditionPlan,
     owner: str,
     *,
     target_owner: str | None = None,
-) -> tuple[str, str | None, str | None]:
+) -> str:
     payload_extents = condition.memory_payload_extents
     if payload_extents == (MemoryPayloadExtent.SCALAR,):
-        extent = "1"
-        alignment = f"core::mem::align_of::<{owner}::BaseType>()"
-    elif payload_extents == (MemoryPayloadExtent.VECTOR,):
-        extent = f"{owner}::lane_count()"
-        alignment = f"{owner}::ALIGN"
-    elif payload_extents == (MemoryPayloadExtent.TARGET_VECTOR,):
+        return "1"
+    if payload_extents == (MemoryPayloadExtent.VECTOR,):
+        return f"{owner}::lane_count()"
+    if payload_extents == (MemoryPayloadExtent.TARGET_VECTOR,):
         if target_owner is None:
             raise ValueError(
                 "target-vector checked memory requires a target owner"
             )
-        extent = f"{target_owner}::lane_count()"
+        return f"{target_owner}::lane_count()"
+    raise ValueError(
+        "non-overloaded Rust checked memory API requires one static payload extent"
+    )
+
+
+def _rust_checked_memory_alignment(
+    condition: CheckedConditionPlan,
+    owner: str,
+) -> tuple[str, str]:
+    payload_extents = condition.memory_payload_extents
+    if payload_extents in {
+        (MemoryPayloadExtent.SCALAR,),
+        (MemoryPayloadExtent.TARGET_VECTOR,),
+    }:
         alignment = f"core::mem::align_of::<{owner}::BaseType>()"
+    elif payload_extents in {
+        (MemoryPayloadExtent.VECTOR,),
+        (MemoryPayloadExtent.ACTIVE_LANES,),
+    }:
+        alignment = f"{owner}::ALIGN"
     else:
         raise ValueError(
             "non-overloaded Rust checked memory API requires one payload extent"
@@ -259,7 +282,9 @@ def _rust_checked_memory_requirements(
         if condition.memory_alignment_axis_name is None
         else _axis_name(condition.memory_alignment_axis_name)
     )
-    return extent, alignment, axis
+    if axis is None:
+        raise ValueError("Rust checked alignment condition has no alignment axis")
+    return alignment, axis
 
 
 def _rust_overloaded_memory_trait_members(
@@ -892,31 +917,19 @@ class RustBackend:
         plan = applicable_checked_api_plan(specs)
         if plan is None:
             return ""
-        memory_conditions = tuple(
-            condition
-            for condition in plan.conditions
-            if condition.memory_access is not None
-        )
-        if not memory_conditions:
+        memory = checked_memory_condition(plan.conditions)
+        if memory is None:
             raise ValueError("checked Rust overload has no supported memory plan")
         shape = specs[0]
         varying = varying_positions(specs)
         if len(varying) != 1:
             raise ValueError("checked Rust overload requires one varying parameter")
         varying_index = varying[0]
-        identities = {
-            (
-                condition.parameter_index,
-                condition.parameter_name,
-                condition.memory_access,
-                condition.memory_alignment_axis_name,
-            )
-            for condition in memory_conditions
-        }
-        if len(identities) != 1:
-            raise ValueError("checked Rust overload has inconsistent memory conditions")
-        memory_index, memory_name, memory_access, alignment_axis = next(
-            iter(identities)
+        memory_index, memory_name, memory_access, alignment_axis = (
+            memory.parameter_index,
+            memory.parameter_name,
+            memory.memory_access,
+            memory.memory_alignment_axis_name,
         )
         if memory_access is not MemoryAccess.WRITE:
             raise ValueError("checked Rust memory overload currently requires writable memory")
@@ -998,7 +1011,7 @@ class RustBackend:
             shape,
             context="Rust checked wrapper",
             concrete=False,
-            checked=True,
+            checked_conditions=plan.conditions,
             specializations=specs,
         )
         return (
@@ -1343,7 +1356,10 @@ class RustBackend:
         )
         result = _kind_type(shape.result_kind, result_owner)
         doc = _rust_doc(
-            shape, context="Rust checked wrapper", concrete=False, checked=True
+            shape,
+            context="Rust checked wrapper",
+            concrete=False,
+            checked_conditions=plan.conditions,
         )
         call = (
             f"unsafe {{ {rust_raw_identifier(primitive_name)}"
@@ -1375,7 +1391,7 @@ class RustBackend:
                 )
                 continue
             if condition.kind is PreconditionKind.CONTIGUOUS_MEMORY_EXTENT:
-                extent, _alignment, _axis = _rust_checked_memory_requirements(
+                extent = _rust_checked_memory_extent(
                     condition, "S", target_owner=target_owner
                 )
                 checks.extend(
@@ -1387,16 +1403,21 @@ class RustBackend:
                 )
                 continue
             if condition.kind is PreconditionKind.SELECTED_MEMORY_ALIGNMENT:
-                _extent, alignment, axis = _rust_checked_memory_requirements(
-                    condition, "S", target_owner=target_owner
-                )
-                if alignment is None or axis is None:
-                    raise ValueError(
-                        "Rust checked alignment condition has no alignment axis"
+                alignment, axis = _rust_checked_memory_alignment(condition, "S")
+                active_guard = ""
+                if condition.memory_addressing is MemoryAddressing.COMPACTED:
+                    if condition.mask_parameter_name is None:
+                        raise ValueError(
+                            "Rust checked compacted alignment has no mask binding"
+                        )
+                    active_guard = (
+                        f"(0..S::lane_count()).any(|__tsl_lane| "
+                        f"S::mask_lane_test({condition.mask_parameter_name}, "
+                        "__tsl_lane)) && "
                     )
                 checks.extend(
                     (
-                        f"    if {axis} && !({condition.parameter_name}.as_ptr() as usize)"
+                        f"    if {axis} && {active_guard}!({condition.parameter_name}.as_ptr() as usize)"
                         f".is_multiple_of({alignment}) {{",
                         f"        return Err({_rust_precondition_error(condition.error)});",
                         "    }",
@@ -1407,6 +1428,7 @@ class RustBackend:
                 if (
                     condition.index_parameter_name is None
                     or condition.scale_parameter_name is None
+                    or condition.memory_indexed_lane_extent is None
                 ):
                     raise ValueError("Rust checked indexed memory plan is incomplete")
                 if (
@@ -1416,11 +1438,29 @@ class RustBackend:
                     raise ValueError(
                         "indexed-memory check plan has no to-array primitive"
                     )
-                if not shape.type_params:
+                if len(shape.type_params) != 1:
                     raise ValueError(
-                        "Rust checked indexed memory requires an index vector type"
+                        "Rust checked indexed memory requires exactly one index vector type"
                     )
                 index_owner = shape.type_params[0].name
+                if (
+                    condition.memory_indexed_lane_extent
+                    is MemoryIndexedLaneExtent.VECTOR
+                ):
+                    invalid_lane_extent = (
+                        f"{index_owner}::lane_count() < S::lane_count()"
+                    )
+                    accessed_lanes = "S::lane_count()"
+                elif (
+                    condition.memory_indexed_lane_extent
+                    is MemoryIndexedLaneExtent.INDEX_VECTOR
+                ):
+                    invalid_lane_extent = (
+                        f"{index_owner}::lane_count() > S::lane_count()"
+                    )
+                    accessed_lanes = f"{index_owner}::lane_count()"
+                else:  # pragma: no cover - closed enum, guarded above
+                    raise AssertionError("unknown indexed memory lane extent")
                 active = (
                     "true"
                     if condition.mask_parameter_name is None
@@ -1428,9 +1468,12 @@ class RustBackend:
                 )
                 checks.extend(
                     (
+                        f"    if {invalid_lane_extent} {{",
+                        f"        return Err({_rust_precondition_error(condition.error)});",
+                        "    }",
                         f"    let __tsl_indices = to_array::<{index_owner}>("
                         f"{condition.index_parameter_name});",
-                        f"    for __tsl_lane in 0..{index_owner}::lane_count() {{",
+                        f"    for __tsl_lane in 0..{accessed_lanes} {{",
                         f"        if {active} {{",
                         "            if let Some(error) = "
                         "indexed_memory_address_error::<_, S::BaseType>(",
@@ -1495,6 +1538,7 @@ class RustBackend:
             f"{body}\n"
             "}"
         )
+
     def _target_feature_body(
         self,
         spec: LoweredSpecialization,

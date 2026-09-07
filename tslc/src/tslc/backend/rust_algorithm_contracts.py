@@ -153,14 +153,18 @@ def _selected_kernel_trait(contract: AlgorithmContract) -> str:
 
 
 def _rust_range_parameter(name: str, role: AlgorithmRangeRole) -> str:
-    if name in {"input", "left", "right"}:
+    if role in {
+        AlgorithmRangeRole.DRIVING_INPUT,
+        AlgorithmRangeRole.SECONDARY_INPUT,
+        AlgorithmRangeRole.SELECTED_INPUT,
+    }:
         return f"    {name}: &[T],"
-    if name in {"indices", "input_indices"}:
+    if role is AlgorithmRangeRole.DRIVING_INDEX:
         return f"    {name}: &[usize],"
-    if name == "output_indices":
-        return "    output_indices: &mut [usize],"
-    if name == "output":
-        return "    output: &mut [T],"
+    if role is AlgorithmRangeRole.INDEX_OUTPUT:
+        return f"    {name}: &mut [usize],"
+    if role is AlgorithmRangeRole.VALUE_OUTPUT:
+        return f"    {name}: &mut [T],"
     raise ValueError(f"unsupported selected Rust range {name!r} ({role!r})")
 
 
@@ -191,7 +195,9 @@ def _selected_extra_profile_bounds(contract: AlgorithmContract) -> tuple[str, ..
     return ()
 
 
-def _render_rust_scaled_checked(contract: AlgorithmContract) -> str:
+def render_rust_scaled_checked_algorithm(contract: AlgorithmContract) -> str:
+    """Render one checked selected-row algorithm from typed range roles."""
+
     trait = _selected_kernel_trait(contract)
     parameters = "\n".join(
         _rust_range_parameter(binding.name, binding.role)
@@ -209,7 +215,15 @@ def _render_rust_scaled_checked(contract: AlgorithmContract) -> str:
     driver = _driving_range(contract)
     raw_arguments = ["policy", "op"]
     for binding in contract.ranges:
-        pointer = "as_mut_ptr" if binding.name in {"output", "output_indices"} else "as_ptr"
+        pointer = (
+            "as_mut_ptr"
+            if binding.role
+            in {
+                AlgorithmRangeRole.VALUE_OUTPUT,
+                AlgorithmRangeRole.INDEX_OUTPUT,
+            }
+            else "as_ptr"
+        )
         raw_arguments.append(f"{binding.name}.{pointer}()")
     raw_arguments.append(f"{driver}.len()")
     raw_call = ",\n            ".join(raw_arguments)
@@ -355,7 +369,7 @@ def rust_algorithm_contract_holes() -> Mapping[str, str]:
         "unchecked_algorithm_aliases": aliases,
         "profile_unchecked_algorithm_aliases": profile_aliases,
         "scaled_checked_algorithm_definitions": "\n\n".join(
-            _render_rust_scaled_checked(contract)
+            render_rust_scaled_checked_algorithm(contract)
             for contract in _selected_contracts()
         ),
         "profile_scaled_checked_algorithm_definitions": "\n\n".join(
@@ -368,5 +382,6 @@ def rust_algorithm_contract_holes() -> Mapping[str, str]:
 __all__ = (
     "render_rust_algorithm_check",
     "render_rust_algorithm_error_docs",
+    "render_rust_scaled_checked_algorithm",
     "rust_algorithm_contract_holes",
 )

@@ -219,6 +219,12 @@ def _dump_catalog(catalog: Catalog, primitive: str | None) -> tuple[str, object,
                 f"    memory: access={prim.memory.access.value}  "
                 f"addressing={prim.memory.addressing.value}  "
                 f"payload_extent={prim.memory.payload_extent.value}"
+                + (
+                    "  indexed_lane_extent="
+                    f"{prim.memory.indexed_lane_extent.value}"
+                    if prim.memory.indexed_lane_extent is not None
+                    else ""
+                )
             )
         if prim.conversion is not None:
             lines.append(
@@ -270,6 +276,11 @@ def _primitive_json(prim: Primitive) -> dict:
                 "access": prim.memory.access.value,
                 "addressing": prim.memory.addressing.value,
                 "payload_extent": prim.memory.payload_extent.value,
+                **(
+                    {"indexed_lane_extent": prim.memory.indexed_lane_extent.value}
+                    if prim.memory.indexed_lane_extent is not None
+                    else {}
+                ),
             }
             if prim.memory is not None
             else None
@@ -551,6 +562,11 @@ def _lowered_text(header: str, spec: LoweredSpecialization) -> list[str]:
             f"      memory={semantics.memory.access.value}:"
             f"{semantics.memory.addressing.value}:"
             f"{semantics.memory.payload_extent.value}"
+            + (
+                f":{semantics.memory.indexed_lane_extent.value}"
+                if semantics.memory.indexed_lane_extent is not None
+                else ""
+            )
         )
     if semantics.conversion is not None:
         lines.append(
@@ -659,6 +675,11 @@ def _lowered_semantics_json(spec: LoweredSpecialization) -> dict:
                 "access": memory.access.value,
                 "addressing": memory.addressing.value,
                 "payload_extent": memory.payload_extent.value,
+                **(
+                    {"indexed_lane_extent": memory.indexed_lane_extent.value}
+                    if memory.indexed_lane_extent is not None
+                    else {}
+                ),
             }
             if memory is not None
             else None

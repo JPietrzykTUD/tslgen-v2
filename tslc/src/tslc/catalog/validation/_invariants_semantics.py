@@ -146,7 +146,12 @@ def _validate_domain_contract(
         if field == "memory" and (
             actual.access,
             actual.addressing,
-        ) == (expected.access, expected.addressing):
+            actual.indexed_lane_extent,
+        ) == (
+            expected.access,
+            expected.addressing,
+            expected.indexed_lane_extent,
+        ):
             return
         if field == "conversion" and (
             actual.kind,

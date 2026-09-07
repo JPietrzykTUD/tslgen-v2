@@ -91,6 +91,49 @@ def test_catalog_dumps_language_neutral_operation_and_domain_contracts(
         }
 
 
+def test_catalog_and_lowered_dumps_include_indexed_lane_extent(
+    data_root: Path, machine_profiles_path: Path
+) -> None:
+    catalog_text, catalog_payload, errors = _run(
+        "catalog",
+        data_root,
+        machine_profiles_path,
+        primitive="gather_narrow_partial",
+    )
+
+    assert errors == []
+    assert "indexed_lane_extent=index_vector" in catalog_text
+    assert {
+        primitive["memory"]["indexed_lane_extent"]
+        for primitive in catalog_payload["primitives"]
+    } == {"index_vector"}
+
+    lowered_text, lowered_payload, errors = _run(
+        "lowered",
+        data_root,
+        machine_profiles_path,
+        profile="avx2",
+        backend="cpp",
+        primitive="gather_narrow_partial",
+        type_tag="si32",
+        extension="avx2",
+    )
+
+    assert errors == []
+    specialization = next(
+        item
+        for item in lowered_payload["specializations"]
+        if item["lowered"]
+    )
+    assert specialization["primitive_semantics"]["memory"] == {
+        "access": "read",
+        "addressing": "indexed",
+        "payload_extent": "vector",
+        "indexed_lane_extent": "index_vector",
+    }
+    assert "memory=read:indexed:vector:index_vector" in lowered_text
+
+
 def test_catalog_unknown_primitive_errors(
     data_root: Path, machine_profiles_path: Path
 ) -> None:

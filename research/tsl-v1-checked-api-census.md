@@ -1,6 +1,6 @@
 # TSL v1 checked-API baseline census
 
-This generated maintenance report tracks the reviewed evidence at the current checked-API migration checkpoint. Its lexical runtime-site scan is tooling evidence only; production semantics must come from typed source/catalog facts and finalized backend plans.
+This generated maintenance report tracks reviewed evidence for the implemented direct TSL v1 checked-API contract. Its lexical runtime-site scan is tooling evidence only; production semantics must come from typed source/catalog facts and finalized backend plans.
 
 ## Frozen public policy
 
@@ -45,7 +45,7 @@ Runtime sites by classification:
 | `implementation_invariant` | implementation hazard | A debug assertion or unwrap fails if an internal compiler-owned invariant is broken. | no checked twin; retain or replace with compiler validation |
 | `contiguous_memory_contract` | dynamic precondition | Raw C++ pointers remain unchecked; Rust public exposure must be unsafe until a safe slice wrapper discharges the contract. | implemented for scalar/vector loads and stores from a span/slice carrying the exact readable or writable extent and selected alignment |
 | `mask_memory_contract` | dynamic precondition | Raw mask representation loads/stores have the same pointer hazard plus layout-dependent capacity. | no honest twin until a new typed mask-storage layout contract projects exact capacity into span/slice signatures |
-| `selected_memory_contract` | dynamic precondition | Expand/compress operations may access a mask-dependent number of elements. | implemented for compress-store and expand-load from a range plus capacity derived from the active mask |
+| `selected_memory_contract` | dynamic precondition | Expand/compress operations may access a mask-dependent number of elements through a selected aligned or unaligned memory contract. | implemented for compress-store and expand-load from a range plus capacity derived from the active mask; selected alignment is checked before nonempty aligned access |
 | `indexed_memory_contract` | dynamic precondition | Gather/scatter paths may access invalid addresses for active indices. | implemented for vector-index gather/scatter, including partial narrow gather, from a valid base view, typed scale, and active-index validation; pointer-indexed narrow gather remains omitted |
 | `deallocation_provenance` | dynamic precondition | Mismatched, dead, or foreign allocation provenance can cause undefined behavior. | no honest pointer-only checked twin; design an owning allocation API separately |
 | `random_output_contract` | dynamic precondition | The random-step intrinsic writes through a raw output pointer on success. | implemented with a mutable one-element-or-larger span/slice and an insufficient-extent result |
@@ -113,11 +113,11 @@ It is not part of a generated runtime API contract.
 - `tslc/src/tslc/backend/assets/tsl_rust_policy_json.rs:425` — owner `Err` — `expect` — `.expect("JSON number spelling is ASCII");`
 - `tslc/src/tslc/backend/assets/tsl_rust_policy_json.rs:486` — owner `string_segment` — `expect` — `.expect("JSON string segment comes from validated UTF-8 input")`
 - `tslc/src/tslc/backend/assets/tsl_rust_variant_policy_validation.rs:271` — owner `Err` — `unreachable` — `unreachable!("descriptor status was validated")`
-- `tslc/src/tslc/backend/rust_documentation_api.py:117` — owner `documentation_checked_wrapper` — `unimplemented` — `" unimplemented!()\n"`
-- `tslc/src/tslc/backend/rust_documentation_api.py:228` — owner `documentation_free_function` — `unimplemented` — `" unimplemented!()\n"`
-- `tslc/src/tslc/backend/rust_documentation_api.py:208` — owner `documentation_overloaded_checked_wrapper` — `unimplemented` — `" unimplemented!()\n"`
-- `tslc/src/tslc/backend/rust_documentation_api.py:152` — owner `documentation_overloaded_wrapper` — `unimplemented` — `" unimplemented!()\n"`
-- `tslc/src/tslc/backend/rust_documentation_api.py:58` — owner `documentation_wrapper` — `unimplemented` — `" unimplemented!()\n"`
+- `tslc/src/tslc/backend/rust_documentation_api.py:120` — owner `documentation_checked_wrapper` — `unimplemented` — `" unimplemented!()\n"`
+- `tslc/src/tslc/backend/rust_documentation_api.py:225` — owner `documentation_free_function` — `unimplemented` — `" unimplemented!()\n"`
+- `tslc/src/tslc/backend/rust_documentation_api.py:205` — owner `documentation_overloaded_checked_wrapper` — `unimplemented` — `" unimplemented!()\n"`
+- `tslc/src/tslc/backend/rust_documentation_api.py:155` — owner `documentation_overloaded_wrapper` — `unimplemented` — `" unimplemented!()\n"`
+- `tslc/src/tslc/backend/rust_documentation_api.py:61` — owner `documentation_wrapper` — `unimplemented` — `" unimplemented!()\n"`
 - `tslc/src/tslc/benchmark/render_cpp.py:229` — owner `_render_policy_read` — `throw` — `throw std::runtime_error("policy has an unterminated decision for " + std::string({stable_id}));`
 - `tslc/src/tslc/benchmark/render_cpp.py:233` — owner `_render_policy_read` — `throw` — `throw std::runtime_error("policy selects an unavailable candidate for " + std::string({stable_id}));`
 - `tslc/src/tslc/benchmark/render_cpp.py:226` — owner `_render_policy_read` — `throw` — `throw std::runtime_error("policy repeats a decision for " + std::string({stable_id}));`
@@ -280,10 +280,10 @@ Review: Packed, register-lane, axis-selected, and scalable mask representations 
 
 ### `selected_memory_contract` (2)
 
-- `expand_load v:=(m,cptr)`; attributes `aligned=true, op=expand`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 20; checked source status `declared`; preconditions `compacted_memory_extent`; coverage: source preconditions are available for backend check planning
-- `compress_store void:=(m,ptr,v)`; attributes `aligned=true, op=pack`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 22; checked source status `declared`; preconditions `compacted_memory_extent`; coverage: source preconditions are available for backend check planning
+- `expand_load v:=(m,cptr)`; attributes `aligned=true, op=expand`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 20; checked source status `declared`; preconditions `compacted_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
+- `compress_store void:=(m,ptr,v)`; attributes `aligned=true, op=pack`; result target `none`; reasons `intrinsic, raw_pointer`; caller-unsafe implementations 22; checked source status `declared`; preconditions `compacted_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
 
-Review: Validation must precede any compress-store output write.
+Review: Validation must precede any compress-store output write; an all-inactive operation accesses no memory and does not reject an empty unaligned view.
 
 ### `indexed_memory_contract` (6)
 
@@ -322,7 +322,7 @@ Review: The typed result-target relationship owns the exact required source exte
 
 ## Source safety-metadata completeness caveat
 
-The existing typed metadata audit finds additional direct body/signature facts whose source-owned safety metadata is incomplete. Applying those suggestions could change generated Rust safety and is therefore intentionally outside Slice 0. The exact gap set is locked in the JSON baseline.
+The existing typed metadata audit finds additional direct body/signature facts whose source-owned safety metadata is incomplete. Applying those suggestions can change generated Rust safety and remains a separately reviewed corpus-hardening task. The exact gap set is locked in the JSON baseline.
 
 The 26 caller-visible gaps are:
 
@@ -346,16 +346,16 @@ The 26 caller-visible gaps are:
 - `tsldata/primitives/load_store/pack_expand.tsl:971` — load_convert_up [avx2, avx2_vl]/si32/ToBase/si64
 - `tsldata/primitives/load_store/pack_expand.tsl:988` — load_convert_up [avx2, avx2_vl]/ui32/ToBase/ui64
 - `tsldata/primitives/load_store/pack_expand.tsl:1005` — load_convert_up [avx2, avx2_vl]/f32/ToBase/f64
-- `tsldata/primitives/load_store/rnd_access.tsl:437` — gather sve/arith
-- `tsldata/primitives/load_store/rnd_access.tsl:805` — gather_narrow_partial sve/[bword, dword]
-- `tsldata/primitives/load_store/rnd_access.tsl:996` — gather_narrow sve/[bword, dword]
-- `tsldata/primitives/load_store/rnd_access.tsl:1397` — gather sve/arith
-- `tsldata/primitives/load_store/rnd_access.tsl:1803` — scatter sve/arith
-- `tsldata/primitives/load_store/rnd_access.tsl:2322` — scatter sve/arith
+- `tsldata/primitives/load_store/rnd_access.tsl:438` — gather sve/arith
+- `tsldata/primitives/load_store/rnd_access.tsl:807` — gather_narrow_partial sve/[bword, dword]
+- `tsldata/primitives/load_store/rnd_access.tsl:998` — gather_narrow sve/[bword, dword]
+- `tsldata/primitives/load_store/rnd_access.tsl:1400` — gather sve/arith
+- `tsldata/primitives/load_store/rnd_access.tsl:1807` — scatter sve/arith
+- `tsldata/primitives/load_store/rnd_access.tsl:2327` — scatter sve/arith
 
-## Representative declaration snapshots
+## Reviewed declaration-shape examples
 
-These are contract snapshots, not current generated declarations. Later slices make the compiler emit them.
+These examples record reviewed C++ and Rust contract shapes. They are not an exhaustive serialization of the emitted public surface and therefore are not an exact compatibility ratchet.
 
 ### C++
 
@@ -405,7 +405,7 @@ The maintained probe is `tslc/tests/fixtures/checked_api/abi_probe.cpp`. It comp
 
 - Environment: x86-64 System V
 - Compilers observed: GCC 15.2.0; Clang 21.1.8
-- MSVC: not available in the Slice 0 Linux environment
+- MSVC: not available in the original Linux ABI-probe environment
 - Raw return: value returned in ymm0; no value-result memory output
 - Chosen value-plus-error-out: value returned in ymm0; scalar error written through rdi
 - Rejected value-owning aggregate: hidden result pointer in rdi; vector value written to memory

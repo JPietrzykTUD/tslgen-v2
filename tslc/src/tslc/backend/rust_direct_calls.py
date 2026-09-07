@@ -119,7 +119,7 @@ def checked_free_function(spec: LoweredSpecialization) -> str:
         spec,
         context="Rust checked free function",
         concrete=False,
-        checked=True,
+        checked_conditions=plan.conditions,
     )
     return (
         (f"{doc}\n" if doc else "")

@@ -30,7 +30,11 @@ from tslc.catalog.conversion import (
     numeric_conversion_mode_values,
 )
 from tslc.catalog.conversion_promotion import KNOWN_CONVERSION_FIELDS
-from tslc.catalog.memory import memory_access_values, memory_addressing_values
+from tslc.catalog.memory import (
+    memory_access_values,
+    memory_addressing_values,
+    memory_indexed_lane_extent_values,
+)
 from tslc.catalog.memory_promotion import KNOWN_MEMORY_FIELDS
 from tslc.catalog.model import (
     Catalog,
@@ -509,6 +513,9 @@ def _value_completions(
     elif field == "addressing" and context.block_path == ("primitive", "memory"):
         values = memory_addressing_values()
         detail = "memory addressing"
+    elif field == "indexed_lanes" and context.block_path == ("primitive", "memory"):
+        values = memory_indexed_lane_extent_values()
+        detail = "indexed memory lane extent"
     elif field == "kind" and context.block_path == ("primitive", "conversion"):
         values = conversion_kind_values()
         detail = "conversion kind"

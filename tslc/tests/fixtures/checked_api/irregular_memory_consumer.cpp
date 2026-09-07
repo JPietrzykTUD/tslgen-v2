@@ -64,6 +64,13 @@ int check_indexed() {
     }
   }
 
+  (void)tsl::gather_checked<Vec, Wide, 4>(
+      tsl::span<std::int32_t const>{input, Vec::lane_count()}, partial_indices,
+      error);
+  if (error != tsl::precondition_error::index_out_of_bounds) {
+    return 12;
+  }
+
   std::int32_t negative_values[Vec::lane_count()]{};
   negative_values[0] = -1;
   indices = register_from<Vec>(negative_values);
@@ -134,39 +141,54 @@ int check_compacted() {
   const std::int32_t values[] = {10, 11, 12, 13, 14, 15, 16, 17};
   const auto value = register_from<Vec>(values);
   const auto mask = two_lane_mask<Vec>();
-  std::int32_t output[4] = {-7, -7, -7, -7};
+  alignas(32) std::int32_t output[8];
+  std::fill_n(output, 8, -7);
 
   auto status = tsl::compress_store_checked<Vec>(
       mask, tsl::span<std::int32_t>{output + 1, 1}, value);
   if (status != tsl::precondition_error::insufficient_extent ||
-      std::any_of(output, output + 4,
+      std::any_of(output, output + 8,
                   [](std::int32_t lane) { return lane != -7; })) {
     return 1;
   }
   status = tsl::compress_store_checked<Vec>(
       mask, tsl::span<std::int32_t>{output + 1, 2}, value);
-  if (status != tsl::precondition_error::none || output[0] != -7 ||
-      output[1] != 11 || output[2] != 13 || output[3] != -7) {
+  if (status != tsl::precondition_error::misaligned ||
+      std::any_of(output, output + 8,
+                  [](std::int32_t lane) { return lane != -7; })) {
     return 2;
+  }
+  status = tsl::compress_store_checked<Vec>(
+      mask, tsl::span<std::int32_t>{output, 2}, value);
+  if (status != tsl::precondition_error::none || output[0] != 11 ||
+      output[1] != 13 ||
+      std::any_of(output + 2, output + 8,
+                  [](std::int32_t lane) { return lane != -7; })) {
+    return 3;
   }
 
   tsl::precondition_error error = tsl::precondition_error::none;
-  const std::int32_t packed[] = {31, 33};
+  alignas(32) const std::int32_t packed[8] = {31, 33};
   (void)tsl::expand_load_checked<Vec>(
       mask, tsl::span<std::int32_t const>{packed, 1}, error);
   if (error != tsl::precondition_error::insufficient_extent) {
-    return 3;
+    return 4;
+  }
+  (void)tsl::expand_load_checked<Vec>(
+      mask, tsl::span<std::int32_t const>{packed + 1, 2}, error);
+  if (error != tsl::precondition_error::misaligned) {
+    return 5;
   }
   const auto expanded = tsl::expand_load_checked<Vec>(
       mask, tsl::span<std::int32_t const>{packed, 2}, error);
   if (error != tsl::precondition_error::none) {
-    return 4;
+    return 6;
   }
   const auto expanded_lanes = tsl::to_array<Vec>(expanded);
   for (std::size_t lane = 0; lane < Vec::lane_count(); ++lane) {
     const auto expected = lane == 1 ? 31 : lane == 3 ? 33 : 0;
     if (expanded_lanes[lane] != expected) {
-      return 5;
+      return 7;
     }
   }
 
@@ -174,17 +196,17 @@ int check_compacted() {
   status = tsl::compress_store_checked<Vec>(
       inactive, tsl::span<std::int32_t>{nullptr, 0}, value);
   if (status != tsl::precondition_error::none) {
-    return 6;
+    return 8;
   }
   const auto zero = tsl::expand_load_checked<Vec>(
       inactive, tsl::span<std::int32_t const>{nullptr, 0}, error);
   if (error != tsl::precondition_error::none) {
-    return 7;
+    return 9;
   }
   const auto zero_lanes = tsl::to_array<Vec>(zero);
   if (std::any_of(zero_lanes._storage.begin(), zero_lanes._storage.end(),
                   [](std::int32_t lane) { return lane != 0; })) {
-    return 8;
+    return 10;
   }
   return 0;
 }

@@ -28,11 +28,11 @@ from tslc.catalog.memory import (
     MemoryPayloadExtent,
 )
 from tslc.catalog.model import PrimitiveMaskMode, VectorBitsKind
-from tslc.catalog.preconditions import PreconditionErrorKind, PreconditionKind
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
 from tslc.documentation import PrimitiveDocumentation
 
 if TYPE_CHECKING:
+    from tslc.backend.checked_api import CheckedConditionPlan
     from tslc.backend.rust_api_arms import (
         RustComprehensivePrivateImplementationArm,
         RustCuratedMethodImplementationArm,
@@ -532,7 +532,7 @@ class RustComprehensiveMethod:
     caller_unsafe_type_tags: tuple[str, ...]
     safety_requirements: tuple[str, ...]
     panic_conditions: tuple[str, ...]
-    checked_conditions: tuple["RustFacadeCheckedCondition", ...]
+    checked_conditions: tuple[CheckedConditionPlan, ...]
     must_use: bool
     suppress_should_implement_trait_lint: bool
     documentation: PrimitiveDocumentation
@@ -542,69 +542,6 @@ class RustComprehensiveMethod:
     implementation_arms: tuple[
         RustComprehensivePrivateImplementationArm, ...
     ] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class RustFacadeCheckedCondition:
-    kind: PreconditionKind
-    parameter_name: str
-    error: PreconditionErrorKind
-    mask_parameter_name: str | None
-    applicable_type_tags: tuple[str, ...]
-    memory_access: MemoryAccess | None
-    memory_payload_extents: tuple[MemoryPayloadExtent, ...]
-    memory_alignment_axis_name: str | None
-    additional_errors: tuple[PreconditionErrorKind, ...] = ()
-    memory_addressing: MemoryAddressing | None = None
-
-    @property
-    def errors(self) -> tuple[PreconditionErrorKind, ...]:
-        return (self.error, *self.additional_errors)
-
-    def __post_init__(self) -> None:
-        if not self.applicable_type_tags:
-            raise ValueError(
-                "Rust facade checked conditions require an applicable type domain"
-            )
-        is_memory = self.kind in {
-            PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
-            PreconditionKind.SELECTED_MEMORY_ALIGNMENT,
-            PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID,
-            PreconditionKind.COMPACTED_MEMORY_EXTENT,
-        }
-        has_any_memory = (
-            self.memory_access is not None
-            or self.memory_addressing is not None
-            or bool(self.memory_payload_extents)
-            or self.memory_alignment_axis_name is not None
-        )
-        has_complete_memory = (
-            self.memory_access is not None
-            and self.memory_addressing is not None
-            and bool(self.memory_payload_extents)
-        )
-        if has_any_memory and not has_complete_memory:
-            raise ValueError(
-                "Rust facade checked conditions cannot retain partial memory facts"
-            )
-        if is_memory != has_complete_memory:
-            raise ValueError(
-                "Rust facade checked memory conditions require complete memory facts"
-            )
-        if (
-            self.kind is PreconditionKind.SELECTED_MEMORY_ALIGNMENT
-            and self.memory_alignment_axis_name is None
-        ):
-            raise ValueError(
-                "Rust facade checked alignment conditions require an alignment axis"
-            )
-        if len(set(self.memory_payload_extents)) != len(
-            self.memory_payload_extents
-        ):
-            raise ValueError(
-                "Rust facade checked memory payload extents must be unique"
-            )
-
 
 @dataclass(frozen=True, slots=True)
 class RustCuratedMethod:

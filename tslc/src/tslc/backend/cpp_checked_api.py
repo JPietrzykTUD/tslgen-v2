@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from tslc.backend.checked_api import (
     CheckedConditionPlan,
     applicable_checked_api_plan,
+    checked_memory_condition,
 )
 from tslc.catalog.arithmetic import ArithmeticNumericDomain
 from tslc.catalog.memory import MemoryAccess, MemoryAddressing, MemoryPayloadExtent
@@ -34,6 +35,7 @@ class CppCheckedApiPlan:
     required_extent_expression: str | None
     required_alignment_expression: str | None
     alignment_parameter_name: str | None
+    index_type_parameter_name: str | None
 
 
 def _template_constraint(
@@ -74,29 +76,16 @@ def plan_cpp_checked_api(
     if plan is None:
         return None
     has_value_result = result_kind != "void"
-    memory_conditions = tuple(
-        condition for condition in plan.conditions if condition.memory_access is not None
-    )
+    memory_condition = checked_memory_condition(plan.conditions)
     memory_parameter_name: str | None = None
     memory_parameter_index: int | None = None
     memory_access: MemoryAccess | None = None
+    memory_addressing: MemoryAddressing | None = None
     required_extent_expression: str | None = None
     required_alignment_expression: str | None = None
     alignment_parameter_name: str | None = None
-    if memory_conditions:
-        memory_identities = {
-            (
-                condition.parameter_name,
-                condition.parameter_index,
-                condition.memory_access,
-                condition.memory_addressing,
-                condition.memory_payload_extents,
-                condition.memory_alignment_axis_name,
-            )
-            for condition in memory_conditions
-        }
-        if len(memory_identities) != 1:
-            raise ValueError("C++ checked memory conditions disagree on their binding")
+    index_type_parameter_name: str | None = None
+    if memory_condition is not None:
         (
             memory_parameter_name,
             memory_parameter_index,
@@ -104,15 +93,29 @@ def plan_cpp_checked_api(
             memory_addressing,
             payload_extents,
             alignment_axis_name,
-        ) = next(iter(memory_identities))
+        ) = (
+            memory_condition.parameter_name,
+            memory_condition.parameter_index,
+            memory_condition.memory_access,
+            memory_condition.memory_addressing,
+            memory_condition.memory_payload_extents,
+            memory_condition.memory_alignment_axis_name,
+        )
         alignment_parameter_name = (
             alignment_axis_name[:1].upper() + alignment_axis_name[1:]
             if alignment_axis_name is not None
             else None
         )
-        if memory_addressing is not MemoryAddressing.CONTIGUOUS:
+        if memory_addressing is MemoryAddressing.INDEXED:
             required_extent_expression = None
             required_alignment_expression = None
+        elif memory_addressing is MemoryAddressing.COMPACTED:
+            if payload_extents != (MemoryPayloadExtent.ACTIVE_LANES,):
+                raise ValueError(
+                    "compacted C++ checked memory requires active-lane extent"
+                )
+            required_extent_expression = None
+            required_alignment_expression = "Vec::vector_alignment"
         elif payload_extents == (MemoryPayloadExtent.SCALAR,):
             required_extent_expression = "std::size_t{1}"
             required_alignment_expression = "alignof(typename Vec::base_type)"
@@ -156,6 +159,19 @@ def plan_cpp_checked_api(
             )
         else:
             raise ValueError("unsupported C++ checked memory payload extent")
+        if memory_addressing is MemoryAddressing.INDEXED:
+            index_type_names = {
+                spec.type_params[0].name
+                for spec in specializations
+                if spec.type_params
+            }
+            if len(index_type_names) != 1 or any(
+                len(spec.type_params) != 1 for spec in specializations
+            ):
+                raise ValueError(
+                    "checked indexed memory requires one consistent index type parameter"
+                )
+            index_type_parameter_name = next(iter(index_type_names))
     return CppCheckedApiPlan(
         conditions=plan.conditions,
         error_parameter_name="error",
@@ -175,12 +191,11 @@ def plan_cpp_checked_api(
         memory_parameter_name=memory_parameter_name,
         memory_parameter_index=memory_parameter_index,
         memory_access=memory_access,
-        memory_addressing=(
-            memory_conditions[0].memory_addressing if memory_conditions else None
-        ),
+        memory_addressing=memory_addressing,
         required_extent_expression=required_extent_expression,
         required_alignment_expression=required_alignment_expression,
         alignment_parameter_name=alignment_parameter_name,
+        index_type_parameter_name=index_type_parameter_name,
     )
 
 

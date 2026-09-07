@@ -9,6 +9,7 @@ from tslc.backend.algorithm_contracts import (
     ALGORITHM_CONTRACTS,
     AlgorithmContract,
     AlgorithmMaskStorageKind,
+    AlgorithmRangeBinding,
     AlgorithmRangeCondition,
     AlgorithmRangeConditionKind,
     AlgorithmRangeRole,
@@ -17,16 +18,16 @@ from tslc.backend.algorithm_contracts import (
 from tslc.backend.precondition_error_rendering import cpp_precondition_error
 
 
-_RANGE_TYPES = {
-    "input": "InputRange",
-    "left": "LeftRange",
-    "right": "RightRange",
-    "masks": "MaskRange",
-    "indices": "IndexRange",
-    "input_indices": "InputIndexRange",
-    "output_indices": "OutputIndexRange",
-    "output": "OutputRange",
-}
+def _range_type(binding: AlgorithmRangeBinding) -> str:
+    """Derive a C++ template spelling without assigning semantics by name."""
+
+    words = binding.name.split("_")
+    if words[-1] == "indices":
+        words[-1] = "index"
+    elif words[-1] == "masks":
+        words[-1] = "mask"
+    return "".join(word.capitalize() for word in words) + "Range"
+
 
 def _driving_name(contract: AlgorithmContract) -> str:
     return next(
@@ -165,19 +166,19 @@ def _template_parameters(
     return (
         *prefix,
         "class Op",
-        *(f"class {_RANGE_TYPES[binding.name]}" for binding in contract.ranges),
+        *(f"class {_range_type(binding)}" for binding in contract.ranges),
     )
 
 
-def _parameter(binding_name: str, role: AlgorithmRangeRole) -> str:
-    range_type = _RANGE_TYPES[binding_name]
-    mutable = role in {
+def _parameter(binding: AlgorithmRangeBinding) -> str:
+    range_type = _range_type(binding)
+    mutable = binding.role in {
         AlgorithmRangeRole.MASK_OUTPUT,
         AlgorithmRangeRole.VALUE_OUTPUT,
         AlgorithmRangeRole.INDEX_OUTPUT,
     }
     qualifier = "" if mutable else "const "
-    return f"    {qualifier}{range_type}& {binding_name}"
+    return f"    {qualifier}{range_type}& {binding.name}"
 
 
 def _call_template_arguments(
@@ -268,20 +269,23 @@ def _cpp_algorithm_documentation(
 
 def _render_primary_wrapper(contract: AlgorithmContract) -> str:
     template_lines = ",\n    ".join(_template_parameters(contract, fixed=False))
-    parameters = ["    Op&& op", *(_parameter(binding.name, binding.role) for binding in contract.ranges)]
+    parameters = [
+        "    Op&& op",
+        *(_parameter(binding) for binding in contract.ranges),
+    ]
     if contract.result_kind is not AlgorithmResultKind.VOID:
         parameters.append("    ::tsl::precondition_error& error")
     parameter_lines = ",\n".join(parameters)
     ordinary_call = _call_expression(contract, checked=False)
     prologue: list[str] = []
     if _has_mask(contract):
-        driver_type = _RANGE_TYPES[
+        driver_type = _range_type(
             next(
-                binding.name
+                binding
                 for binding in contract.ranges
                 if binding.role is AlgorithmRangeRole.DRIVING_INPUT
             )
-        ]
+        )
         prologue.extend(
             (
                 "    using value_type =",
@@ -326,7 +330,10 @@ template <
 
 def _render_fixed_forwarder(contract: AlgorithmContract) -> str:
     template_lines = ",\n    ".join(_template_parameters(contract, fixed=True))
-    parameters = ["    Op&& op", *(_parameter(binding.name, binding.role) for binding in contract.ranges)]
+    parameters = [
+        "    Op&& op",
+        *(_parameter(binding) for binding in contract.ranges),
+    ]
     if contract.result_kind is not AlgorithmResultKind.VOID:
         parameters.append("    ::tsl::precondition_error& error")
     parameter_lines = ",\n".join(parameters)
@@ -353,11 +360,18 @@ def _cpp_contracts() -> tuple[AlgorithmContract, ...]:
 
 
 def render_cpp_checked_algorithm_definitions() -> str:
-    definitions: list[str] = []
-    for contract in _cpp_contracts():
-        definitions.append(_render_primary_wrapper(contract))
-        if not _is_selected(contract):
-            definitions.append(_render_fixed_forwarder(contract))
+    return "\n\n".join(
+        render_cpp_checked_algorithm_definition(contract)
+        for contract in _cpp_contracts()
+    )
+
+
+def render_cpp_checked_algorithm_definition(contract: AlgorithmContract) -> str:
+    """Render the checked C++ definitions owned by one typed contract."""
+
+    definitions = [_render_primary_wrapper(contract)]
+    if not _is_selected(contract):
+        definitions.append(_render_fixed_forwarder(contract))
     return "\n\n".join(definitions)
 
 
@@ -383,5 +397,6 @@ __all__ = (
     "cpp_checked_algorithm_families",
     "cpp_algorithm_contract_holes",
     "render_cpp_algorithm_check",
+    "render_cpp_checked_algorithm_definition",
     "render_cpp_checked_algorithm_definitions",
 )

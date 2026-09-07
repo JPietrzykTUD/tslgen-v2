@@ -30,7 +30,12 @@ from tslc.catalog.preconditions import (
     PreconditionErrorKind,
     PreconditionKind,
 )
-from tslc.catalog.memory import MemoryAccess, MemoryPayloadExtent
+from tslc.catalog.memory import (
+    MemoryAccess,
+    MemoryAddressing,
+    MemoryIndexedLaneExtent,
+    MemoryPayloadExtent,
+)
 from tslc.lower.lowerer import (
     LoweredArithmeticPrecondition,
     LoweredArithmeticPreconditionKind,
@@ -138,9 +143,24 @@ def _cpp_checked_condition(
                 or plan.alignment_parameter_name is None
             ):
                 raise ValueError("C++ checked alignment has no finalized range plan")
+            active_guard = (
+                ""
+                if condition.memory_addressing is not MemoryAddressing.COMPACTED
+                else (
+                    f"(::tsl::mask_population_count<Vec>("
+                    f"{condition.mask_parameter_name}) != 0) && "
+                )
+            )
+            if (
+                condition.memory_addressing is MemoryAddressing.COMPACTED
+                and condition.mask_parameter_name is None
+            ):
+                raise ValueError(
+                    "C++ checked compacted alignment has no mask binding"
+                )
             return (
                 f"    if constexpr ({plan.alignment_parameter_name}) {{\n"
-                f"        if ((reinterpret_cast<std::uintptr_t>("
+                f"        if ({active_guard}(reinterpret_cast<std::uintptr_t>("
                 f"{plan.memory_parameter_name}.data()) % "
                 f"{plan.required_alignment_expression}) != 0) {{\n"
                 f"{_cpp_checked_failure(condition, plan, indent='            ')}\n"
@@ -150,8 +170,10 @@ def _cpp_checked_condition(
         if condition.kind is PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID:
             if (
                 plan.memory_parameter_name is None
+                or plan.index_type_parameter_name is None
                 or condition.index_parameter_name is None
                 or condition.scale_parameter_name is None
+                or condition.memory_indexed_lane_extent is None
             ):
                 raise ValueError("C++ checked indexed memory plan is incomplete")
             if (
@@ -159,6 +181,25 @@ def _cpp_checked_condition(
                 not in condition.check_primitives
             ):
                 raise ValueError("indexed-memory check plan has no to-array primitive")
+            index_type = plan.index_type_parameter_name
+            if (
+                condition.memory_indexed_lane_extent
+                is MemoryIndexedLaneExtent.VECTOR
+            ):
+                invalid_lane_extent = (
+                    f"{index_type}::lane_count() < Vec::lane_count()"
+                )
+                accessed_lanes = "Vec::lane_count()"
+            elif (
+                condition.memory_indexed_lane_extent
+                is MemoryIndexedLaneExtent.INDEX_VECTOR
+            ):
+                invalid_lane_extent = (
+                    f"{index_type}::lane_count() > Vec::lane_count()"
+                )
+                accessed_lanes = f"{index_type}::lane_count()"
+            else:  # pragma: no cover - closed enum, guarded above
+                raise AssertionError("unknown indexed memory lane extent")
             active = "true"
             active_setup: tuple[str, ...] = ()
             if condition.mask_parameter_name is not None:
@@ -187,10 +228,18 @@ def _cpp_checked_condition(
             return "\n".join(
                 (
                     "    {",
+                    f"        if ({invalid_lane_extent}) {{",
+                    _cpp_checked_failure(
+                        condition,
+                        plan,
+                        indent="            ",
+                    ),
+                    "        }",
                     "        auto const __tsl_indices = "
-                    f"::tsl::to_array<IndicesType>({condition.index_parameter_name});",
+                    f"::tsl::to_array<{index_type}>("
+                    f"{condition.index_parameter_name});",
                     "        for (std::size_t __tsl_lane = 0; "
-                    "__tsl_lane < IndicesType::lane_count(); ++__tsl_lane) {",
+                    f"__tsl_lane < {accessed_lanes}; ++__tsl_lane) {{",
                     *active_setup,
                     f"            if ({active}) {{",
                     "                auto const __tsl_error = "
@@ -553,7 +602,7 @@ class CppBackend:
             specializations[0],
             context="C++ checked wrapper",
             concrete=False,
-            checked=True,
+            checked_conditions=plan.conditions,
             specializations=specializations,
         )
         params = _cpp_checked_parameters(specializations[0], signature, plan)
@@ -593,6 +642,7 @@ class CppBackend:
 
     def documentation_target_register_type(self, spec: LoweredSpecialization) -> str:
         return _cpp_target_register_doc(spec)
+
     def _specialization(
         self,
         group: list[LoweredSpecialization],
@@ -1103,7 +1153,7 @@ def _checked_free_function(
         spec,
         context="C++ checked free function",
         concrete=False,
-        checked=True,
+        checked_conditions=plan.conditions,
     )
     prefix = f"{doc}\n" if doc and not define else ""
     if not define:

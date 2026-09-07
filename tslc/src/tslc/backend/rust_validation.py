@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from tslc.backend.checked_api import checked_api_plan
+from tslc.backend.checked_api import applicable_checked_api_plan
 from tslc.backend.rust_benchmark_detection import (
     RUST_BENCHMARK_DETECTION_KINDS,
 )
@@ -137,7 +137,7 @@ def _validate_checked_names(
             primitive_specializations.items()
         ):
             if (
-                checked_api_plan(specializations) is not None
+                applicable_checked_api_plan(specializations) is not None
                 and f"{primitive_name}_checked" in emitted_names
             ):
                 diagnostics.append(

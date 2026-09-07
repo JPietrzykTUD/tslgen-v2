@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from tslc.backend.checked_api import applicable_checked_api_plan
+from tslc.backend.checked_api import (
+    applicable_checked_api_plan,
+    checked_memory_condition,
+)
 from tslc.backend.rust_documentation import rust_doc
 from tslc.backend.rust_signatures import (
     checked_params,
@@ -97,7 +100,7 @@ def documentation_checked_wrapper(
         shape,
         context="Rust checked documentation facade",
         concrete=False,
-        checked=True,
+        checked_conditions=plan.conditions,
         specializations=specializations,
     )
     where_clause = checked_type_where(plan, "S")
@@ -163,20 +166,14 @@ def documentation_overloaded_checked_wrapper(
         return ""
     shape = specs[0]
     varying_index = varying_positions(specs)[0]
-    memory_bindings = {
-        (
-            condition.parameter_index,
-            condition.parameter_name,
-            condition.memory_access,
-        )
-        for condition in plan.conditions
-        if condition.memory_access is not None
-    }
-    if len(memory_bindings) != 1:
+    memory = checked_memory_condition(plan.conditions)
+    if memory is None:
         raise ValueError(
             "checked Rust documentation overload requires one memory binding"
         )
-    memory_index, memory_name, memory_access = next(iter(memory_bindings))
+    memory_index = memory.parameter_index
+    memory_name = memory.parameter_name
+    memory_access = memory.memory_access
     declarations = ["S: StaticSimdVector", *generic_decls(shape), "V"]
     rendered_params = ", ".join(
         (
@@ -196,7 +193,7 @@ def documentation_overloaded_checked_wrapper(
         shape,
         context="Rust checked documentation facade",
         concrete=False,
-        checked=True,
+        checked_conditions=plan.conditions,
         specializations=specs,
     )
     return (
