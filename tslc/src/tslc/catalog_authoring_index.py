@@ -37,9 +37,12 @@ from tslc.catalog.validation._schema_primitives import (
     KNOWN_PRIMITIVE_ATTRIBUTES,
 )
 from tslc.catalog.validation._schema_tests import KNOWN_TEST_ROLES
-from tslc.diagnostics import SourceSpan
+from tslc.diagnostics import SourceSpan, source_subspan as _subspan
 from tslc.ir.region_registry import DEFAULT_TSIL_REGION_DESCRIPTORS
-from tslc.ir.region_syntax import parse_call_selector
+from tslc.ir.region_syntax import (
+    call_precondition_syntax_occurrences,
+    parse_call_selector,
+)
 from tslc.ir.scan import scan
 from tslc.ir.segments import Region, Segment
 from tslc.lower.query_authoring import DEFAULT_QUERY_AUTHORING_INDEX
@@ -596,6 +599,22 @@ def _region_semantic_tokens(region: Region) -> tuple[IndexedSemanticToken, ...]:
             span = _region_selector_name_span(region, call.primitive_ref)
             if span is not None:
                 tokens.append(IndexedSemanticToken("function", span))
+            selector_offset = region.full_text.find(region.selector_text)
+            if selector_offset >= 0:
+                tokens.extend(
+                    IndexedSemanticToken(
+                        "enumMember",
+                        _subspan(
+                            region.source,
+                            region.full_text,
+                            selector_offset + item.start,
+                            selector_offset + item.end,
+                        ),
+                    )
+                    for item in call_precondition_syntax_occurrences(
+                        region.selector_text, call
+                    )
+                )
     return tuple(tokens)
 
 
@@ -763,20 +782,6 @@ def _name_in_source(source: ParsedTslSourceSpan, name: str) -> SourceSpan:
     if offset < 0:
         return _source_span(source)
     return _subspan(_source_span(source), source.text, offset, offset + len(name))
-
-
-def _subspan(source: SourceSpan, text: str, start: int, end: int) -> SourceSpan:
-    start_line, start_column = _offset_position(source, text, start)
-    end_line, end_column = _offset_position(source, text, end)
-    return SourceSpan(source.path, start_line, start_column, end_line, end_column)
-
-
-def _offset_position(source: SourceSpan, text: str, offset: int) -> tuple[int, int]:
-    before = text[:offset]
-    line_offset = before.count("\n")
-    if line_offset == 0:
-        return source.line, source.column + offset
-    return source.line + line_offset, len(before.rsplit("\n", 1)[-1]) + 1
 
 
 def _source_span(source: ParsedTslSourceSpan) -> SourceSpan:

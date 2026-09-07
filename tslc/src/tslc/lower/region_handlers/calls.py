@@ -4,10 +4,23 @@ from __future__ import annotations
 
 import re
 
+from tslc.catalog.call_preconditions import (
+    CallArgumentBinding,
+    CallPreconditionDisposition,
+    CallPreconditionDispositionKind,
+    CallPreconditionObligationStatus,
+    call_precondition_candidates,
+    resolve_call_preconditions,
+)
 from tslc.catalog.model import Extension, PrimitiveMaskMode
+from tslc.catalog.preconditions import PreconditionKind
+from tslc.diagnostics import source_subspan
 from tslc.ir.region_syntax import (
+    ParsedCallSelector,
+    call_precondition_syntax_occurrences,
     parse_call_selector,
     parse_generic_param_reference,
+    segments_text,
     split_arg_groups,
 )
 from tslc.ir.segments import Region
@@ -115,6 +128,57 @@ class CallLowerer:
                 source=region.source,
             )
             return region.full_text
+        dispositions = self._precondition_dispositions(parsed, region, context)
+        if dispositions is None:
+            return region.full_text
+        argument_bindings = self._argument_bindings(region, context)
+        candidates = call_precondition_candidates(
+            context.env.catalog,
+            name,
+            mask_policy=mask_mode,
+            attributes=attrs,
+            argument_count=len(split_arg_groups(region.body)),
+        )
+        caller = context.env.current_primitive_contract
+        resolution = (
+            resolve_call_preconditions(
+                caller,
+                candidates,
+                dispositions,
+                argument_bindings,
+                same_vector=(
+                    source_identity
+                    == VectorIdentity(
+                        context.env.type_tag,
+                        context.env.extension.isa_name,
+                    )
+                ),
+                type_tag=source_identity.base_tag or context.env.type_tag,
+                attributes=attrs,
+                source=region.source,
+            )
+            if caller is not None
+            else None
+        )
+        if resolution is not None:
+            for obligation in resolution.unresolved:
+                code = (
+                    "TSL-LOWER-MISSING-CALL-PRECONDITION"
+                    if obligation.status is CallPreconditionObligationStatus.MISSING
+                    else "TSL-LOWER-INVALID-CALL-PRECONDITION-FORWARD"
+                )
+                context.effects.error(
+                    code,
+                    f"call to {name!r}: {obligation.reason}",
+                    source=obligation.source,
+                )
+            for stale in resolution.stale_dispositions:
+                context.effects.error(
+                    "TSL-LOWER-STALE-CALL-PRECONDITION",
+                    f"call to {name!r}: {stale.kind.value} disposition for "
+                    f"{stale.condition.value!r} matches no callee condition",
+                    source=stale.source,
+                )
         context.effects.record_call_dependency(
             CallDependencyOrigin(
                 resolve_lowered_call_dependency(
@@ -124,6 +188,11 @@ class CallLowerer:
                     mask_policy=mask_mode,
                 ),
                 context.env.dependency_origin,
+                source=region.source,
+                argument_bindings=argument_bindings,
+                precondition_obligations=(
+                    () if resolution is None else resolution.obligations
+                ),
             )
         )
 
@@ -151,6 +220,88 @@ class CallLowerer:
         if context.env.primitive_caller_unsafe.get(name, False):
             return unsafe_block(call)
         return call
+
+    @staticmethod
+    def _precondition_dispositions(
+        parsed: ParsedCallSelector,
+        region: Region,
+        context: LoweringSession,
+    ) -> tuple[CallPreconditionDisposition, ...] | None:
+        records: list[CallPreconditionDisposition] = []
+        seen: set[PreconditionKind] = set()
+        selector_offset = region.full_text.find(region.selector_text)
+        sources = {
+            (item.disposition, item.condition): (
+                source_subspan(
+                    region.source,
+                    region.full_text,
+                    selector_offset + item.start,
+                    selector_offset + item.end,
+                )
+                if region.source is not None and selector_offset >= 0
+                else region.source
+            )
+            for item in call_precondition_syntax_occurrences(
+                region.selector_text, parsed
+            )
+        }
+        for mode, values in (
+            (
+                CallPreconditionDispositionKind.FORWARD,
+                parsed.forwarded_preconditions,
+            ),
+            (
+                CallPreconditionDispositionKind.DISCHARGE,
+                parsed.discharged_preconditions,
+            ),
+        ):
+            for value in values:
+                try:
+                    condition = PreconditionKind(value)
+                except ValueError:
+                    context.effects.error(
+                        "TSL-LOWER-UNKNOWN-CALL-PRECONDITION",
+                        f"unknown call precondition {value!r}",
+                        source=region.source,
+                    )
+                    return None
+                if condition in seen:
+                    context.effects.error(
+                        "TSL-LOWER-DUPLICATE-CALL-PRECONDITION",
+                        f"call precondition {value!r} has more than one disposition",
+                        source=region.source,
+                    )
+                    return None
+                seen.add(condition)
+                records.append(
+                    CallPreconditionDisposition(
+                        condition=condition,
+                        kind=mode,
+                        source=sources.get((mode.value, value), region.source),
+                        forwarded_root=(
+                            condition
+                            if mode is CallPreconditionDispositionKind.FORWARD
+                            else None
+                        ),
+                    )
+                )
+        return tuple(records)
+
+    @staticmethod
+    def _argument_bindings(
+        region: Region,
+        context: LoweringSession,
+    ) -> tuple[CallArgumentBinding, ...]:
+        positions = {
+            name: index for index, name in enumerate(context.env.current_parameters)
+        }
+        bindings: list[CallArgumentBinding] = []
+        for callee_index, group in enumerate(split_arg_groups(region.body)):
+            expression = segments_text(group)
+            caller_index = positions.get(expression)
+            if caller_index is not None:
+                bindings.append(CallArgumentBinding(callee_index, caller_index))
+        return tuple(bindings)
 
     def _render_call_args(
         self,

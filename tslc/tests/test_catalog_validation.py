@@ -2100,6 +2100,39 @@ def test_unknown_call_mask_mode_is_diagnosed() -> None:
     )
     assert "unknown call mask mode 'merge'" in diagnostic.message
 
+
+@pytest.mark.parametrize(
+    ("selector", "code"),
+    (
+        (
+            "primitive=id, forward[future_condition]",
+            "TSL-BODY-BAD-CALL-PRECONDITION",
+        ),
+        (
+            "primitive=id, forward[active_divisor_nonzero, "
+            "active_divisor_nonzero]",
+            "TSL-BODY-DUPLICATE-CALL-PRECONDITION",
+        ),
+        (
+            "primitive=id, forward[active_divisor_nonzero], "
+            "discharge[active_divisor_nonzero]",
+            "TSL-BODY-DUPLICATE-CALL-PRECONDITION",
+        ),
+    ),
+)
+def test_invalid_call_precondition_dispositions_are_diagnosed(
+    selector: str,
+    code: str,
+) -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            '          tsil "complete(data);"\n',
+            f'          tsil "complete(call<{selector}>(data));"\n',
+        )
+    )
+
+    assert code in {diagnostic.code for diagnostic in diagnostics}
+
 def test_malformed_let_body_region_is_diagnosed() -> None:
     diagnostics = _diagnostics(
         "types:\n"

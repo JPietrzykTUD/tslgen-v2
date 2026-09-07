@@ -74,6 +74,32 @@ def source_location(source: SourceSpan | None) -> SourceLocation | None:
     return source.start if source is not None else None
 
 
+def source_subspan(
+    source: SourceSpan,
+    text: str,
+    start: int,
+    end: int,
+) -> SourceSpan:
+    """Project zero-based text offsets into a child span of ``source``."""
+
+    def position(offset: int) -> tuple[int, int]:
+        before = text[:offset]
+        line_offset = before.count("\n")
+        if line_offset == 0:
+            return source.line, source.column + offset
+        return source.line + line_offset, len(before.rsplit("\n", 1)[-1]) + 1
+
+    start_line, start_column = position(start)
+    end_line, end_column = position(end)
+    return SourceSpan(
+        source.path,
+        start_line,
+        start_column,
+        end_line,
+        end_column,
+    )
+
+
 def diagnostic_at(
     *,
     severity: Severity,

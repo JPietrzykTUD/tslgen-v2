@@ -106,6 +106,8 @@ _REGION_FACTS = (
         (
             "call<primitive=name>(args)",
             "call<primitive=name[VecOrTypeArgs], attrs[key=value, ...]>(args)",
+            "call<primitive=name[...], forward[precondition, ...]>(args)",
+            "call<primitive=name[...], discharge[precondition, ...]>(args)",
             "call<primitive=@self[...], attrs[key=value, ...]>(args)",
         ),
     ),

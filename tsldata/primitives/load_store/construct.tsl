@@ -846,7 +846,7 @@ prim<v:=(lanes<s>)> set(values):
                loop<backend>(i, 0, value(vector::length), 1)  {
                 data[i] = cast<static>(base::in, values[value(vector::length) - 1 - i]);
               }
-               complete(call<primitive=load[Vec], attrs[aligned=false]>(data.as_ptr())) ;
+               complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(data.as_ptr())) ;
             """
     [generic, oneapi_fpga]:
       arith:

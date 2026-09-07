@@ -393,6 +393,41 @@ def test_semantic_tokens_cover_typed_sites_but_not_raw_target_text(
     assert semantic_tokens(index, _PATH, _SOURCE).data
 
 
+def test_call_precondition_dispositions_are_indexed_as_compiler_owned_facts(
+    catalog: Catalog,
+) -> None:
+    source = _SOURCE.replace(
+        "attrs[aligned=false]",
+        "attrs[aligned=false], forward[active_divisor_nonzero]",
+    )
+    index, _ = _index(catalog, source)
+    records = index.primitive_call_preconditions["sample"]
+
+    assert tuple(
+        (item.callee, item.condition, item.disposition) for item in records
+    ) == (("sample", "active_divisor_nonzero", "forward"),)
+    occurrence = next(
+        item
+        for item in index.occurrences_by_path[_PATH]
+        if item.kind == "precondition"
+        and item.name == "active_divisor_nonzero"
+        and not item.definition
+    )
+    assert _span_text(
+        source,
+        occurrence.span.line,
+        occurrence.span.column,
+        occurrence.span.end_column,
+    ) == "active_divisor_nonzero"
+    token = next(
+        item
+        for item in index.semantic_tokens_by_path[_PATH]
+        if item.span == occurrence.span
+    )
+    assert token.kind == "enumMember"
+    assert "Every participating integer divisor" in (index.hover(occurrence) or "")
+
+
 def test_semantic_tokens_retain_partial_declaration_facts(catalog: Catalog) -> None:
     source = '''prim<v:=v> partial(data):
   brief_description "in progress"

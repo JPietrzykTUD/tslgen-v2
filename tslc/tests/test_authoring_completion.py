@@ -582,6 +582,16 @@ def test_every_registered_region_completes_at_a_valid_tsil_boundary(
         ("call<primitive=add, attrs[m", {"mask"}),
         ("call<primitive=add, attrs[mask=p", {"pass_through"}),
         ("call<primitive=add, attrs[aligned=t", {"true"}),
+        ("call<primitive=div, f", {"forward"}),
+        ("call<primitive=div, d", {"discharge"}),
+        (
+            "call<primitive=div, forward[active_divisor_",
+            {"active_divisor_nonzero"},
+        ),
+        (
+            "call<primitive=div, discharge[contiguous_",
+            {"contiguous_memory_extent"},
+        ),
         ("if<g", {"generation"}),
         ("loop<b", {"backend"}),
         ("loop<backend, u", {"unroll"}),

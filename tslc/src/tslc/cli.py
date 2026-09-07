@@ -117,7 +117,7 @@ def _root_parser() -> argparse.ArgumentParser:
         "inspect": "dump a compiler pipeline stage",
         "list": "list catalog entries",
         "show": "describe one catalog entry",
-        "audit": "run source metadata audits",
+        "audit": "run source-contract audits",
         "coverage": "run coverage maintenance tools",
         "doctor": "probe configured toolchains and runners",
         "lsp": "run the editor-neutral language server",
@@ -390,7 +390,11 @@ def _catalog_arguments(command: str, arguments: list[str]) -> list[str]:
     return [command, *arguments]
 
 
-def _configured_maintenance_arguments(arguments: list[str]) -> list[str]:
+def _configured_maintenance_arguments(
+    arguments: list[str],
+    *,
+    include_machine_profiles: bool = True,
+) -> list[str]:
     if "-h" in arguments or "--help" in arguments:
         return arguments
     values = list(arguments)
@@ -413,7 +417,7 @@ def _configured_maintenance_arguments(arguments: list[str]) -> list[str]:
                 "this inspector accepts one --sources root; pass it explicitly"
             )
         values.extend(("--sources", str(project.sources[0])))
-    if "--machine-profiles" not in values:
+    if include_machine_profiles and "--machine-profiles" not in values:
         values.extend(("--machine-profiles", str(project.machine_profiles)))
     return values
 
@@ -421,9 +425,14 @@ def _configured_maintenance_arguments(arguments: list[str]) -> list[str]:
 def _run_configured_maintenance(
     command: Callable[[list[str] | None], int],
     arguments: list[str],
+    *,
+    include_machine_profiles: bool = True,
 ) -> int:
     try:
-        configured = _configured_maintenance_arguments(arguments)
+        configured = _configured_maintenance_arguments(
+            arguments,
+            include_machine_profiles=include_machine_profiles,
+        )
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -432,7 +441,11 @@ def _run_configured_maintenance(
 
 def _maintenance_group(group: str, arguments: list[str]) -> int:
     if not arguments or arguments[0] in ("-h", "--help"):
-        choices = "metadata" if group == "audit" else "ratchet, inventory"
+        choices = (
+            "metadata, call-preconditions"
+            if group == "audit"
+            else "ratchet, inventory"
+        )
         print(f"usage: tslc {group} {{{choices.replace(', ', ',')}}} [options]")
         return 0
     action, rest = arguments[0], arguments[1:]
@@ -440,6 +453,16 @@ def _maintenance_group(group: str, arguments: list[str]) -> int:
         from tslc.maintenance.metadata_audit import main as metadata_main
 
         return _run_configured_maintenance(metadata_main, rest)
+    if group == "audit" and action == "call-preconditions":
+        from tslc.maintenance.call_precondition_audit import (
+            main as call_preconditions_main,
+        )
+
+        return _run_configured_maintenance(
+            call_preconditions_main,
+            rest,
+            include_machine_profiles=False,
+        )
     if group == "coverage" and action == "ratchet":
         from tslc.maintenance.coverage_ratchet import main as ratchet_main
 

@@ -484,11 +484,11 @@ prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
             var<const_infer>(index_lanes, value(generic::runtime_length(IndicesType)));
             var<runtime_array>(IndexBase, idx_array, index_lanes);
             var<runtime_array>(Base, result, lanes);
-            call<primitive=store[IndicesType], attrs[aligned=false]>(idx_array, index);
+            call<primitive=store[IndicesType], attrs[aligned=false], discharge[contiguous_memory_extent]>(idx_array, index);
             loop<backend>(i, 0, lanes, 1) {
               result[i] = *(cast<reinterpret, type=const_ptr>(Base, ptr_add(cast<reinterpret, type=const_ptr>(scalar::ui8, base_ptr), idx_offset(idx_array[i], scale))));
             }
-            var<const_infer>(loaded, call<primitive=load[Vec], attrs[aligned=false]>(result));
+            var<const_infer>(loaded, call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
             complete(loaded);
           """
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
@@ -818,14 +818,14 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
             var<const_infer>(index_lanes, value(generic::runtime_length(IndicesType)));
             var<runtime_array>(IndexBase, idx_array, index_lanes);
             var<runtime_array>(Base, result, lanes);
-            call<primitive=store[IndicesType], attrs[aligned=false]>(idx_array, index);
+            call<primitive=store[IndicesType], attrs[aligned=false], discharge[contiguous_memory_extent]>(idx_array, index);
             loop<backend>(i, 0, lanes, 1) {
               result[i] = cast<static>(Base, 0);
             }
             loop<backend>(i, 0, index_lanes, 1) {
               result[i] = *(cast<reinterpret, type=const_ptr>(Base, ptr_add(cast<reinterpret, type=const_ptr>(scalar::ui8, base_ptr), idx_offset(idx_array[i], scale))));
             }
-            var<const_infer>(loaded, call<primitive=load[Vec], attrs[aligned=false]>(result));
+            var<const_infer>(loaded, call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
             complete(loaded);
           """
     scalar:
@@ -1009,7 +1009,7 @@ prim<v:=(cptr,cptr,sImm)> gather_narrow(base_ptr, index_ptr, scale):
             loop<backend>(i, 0, lanes, 1) {
               result[i] = *(cast<reinterpret, type=const_ptr>(Base, ptr_add(cast<reinterpret, type=const_ptr>(scalar::ui8, base_ptr), idx_offset(*(ptr_add(index_ptr, i)), scale))));
             }
-            complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
           """
     scalar:
       [bword, dword]:
@@ -1441,20 +1441,20 @@ prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, s
             var<runtime_array>(IndexBase, idx_array, index_lanes);
             var<runtime_array>(Base, result, lanes);
             var<runtime_array>(Base, active_array, lanes);
-            call<primitive=store[IndicesType], attrs[aligned=false]>(idx_array, index);
-            call<primitive=store[Vec], attrs[aligned=false]>(result, source);
+            call<primitive=store[IndicesType], attrs[aligned=false], discharge[contiguous_memory_extent]>(idx_array, index);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result, source);
             var<const_infer>(active, call<primitive=select[Vec]>(
               mask,
               call<primitive=set1[Vec]>(cast<static>(Base, 1)),
               call<primitive=set_zero[Vec]>()
             ));
-            call<primitive=store[Vec], attrs[aligned=false]>(active_array, active);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(active_array, active);
             loop<backend>(i, 0, lanes, 1) {
               if (active_array[i] != cast<static>(Base, 0)) {
                 result[i] = *(cast<reinterpret, type=const_ptr>(Base, ptr_add(cast<reinterpret, type=const_ptr>(scalar::ui8, base_ptr), idx_offset(idx_array[i], scale))));
               }
             }
-            complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
           """
     [avx512, avx2, avx2_vl, sse, sse_vl]:
       arith:
@@ -1857,8 +1857,8 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
             var<const_infer>(index_lanes, value(generic::runtime_length(IndicesType)));
             var<runtime_array>(Base, val_array, lanes);
             var<runtime_array>(IndexBase, idx_array, index_lanes);
-            call<primitive=store[Vec], attrs[aligned=false]>(val_array, a);
-            call<primitive=store[IndicesType], attrs[aligned=false]>(idx_array, index);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(val_array, a);
+            call<primitive=store[IndicesType], attrs[aligned=false], discharge[contiguous_memory_extent]>(idx_array, index);
             loop<backend>(i, 0, lanes, 1) {
               *(cast<reinterpret, type=ptr>(Base, ptr_add_mut(cast<reinterpret, type=ptr>(scalar::ui8, base_ptr), idx_offset(idx_array[i], scale)))) = val_array[i];
             }
@@ -1876,8 +1876,8 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
               var<const_infer>(index_lanes, value(generic::runtime_length(IndicesType)));
               var<runtime_array>(Base, val_array, lanes);
               var<runtime_array>(IndexBase, idx_array, index_lanes);
-              call<primitive=store[Vec], attrs[aligned=false]>(val_array, a);
-              call<primitive=store[IndicesType], attrs[aligned=false]>(idx_array, index);
+              call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(val_array, a);
+              call<primitive=store[IndicesType], attrs[aligned=false], discharge[contiguous_memory_extent]>(idx_array, index);
               loop<backend>(i, 0, lanes, 1) {
                 *(cast<reinterpret, type=ptr>(Base, ptr_add_mut(cast<reinterpret, type=ptr>(scalar::ui8, base_ptr), idx_offset(idx_array[i], scale)))) = val_array[i];
               }
@@ -2368,14 +2368,14 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
             var<runtime_array>(Base, val_array, lanes);
             var<runtime_array>(IndexBase, idx_array, index_lanes);
             var<runtime_array>(Base, active_array, lanes);
-            call<primitive=store[Vec], attrs[aligned=false]>(val_array, a);
-            call<primitive=store[IndicesType], attrs[aligned=false]>(idx_array, index);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(val_array, a);
+            call<primitive=store[IndicesType], attrs[aligned=false], discharge[contiguous_memory_extent]>(idx_array, index);
             var<const_infer>(active, call<primitive=select[Vec]>(
               mask,
               call<primitive=set1[Vec]>(cast<static>(Base, 1)),
               call<primitive=set_zero[Vec]>()
             ));
-            call<primitive=store[Vec], attrs[aligned=false]>(active_array, active);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(active_array, active);
             loop<backend>(i, 0, lanes, 1) {
               if (active_array[i] != cast<static>(Base, 0)) {
                 *(cast<reinterpret, type=ptr>(Base, ptr_add_mut(cast<reinterpret, type=ptr>(scalar::ui8, base_ptr), idx_offset(idx_array[i], scale)))) = val_array[i];
@@ -2396,14 +2396,14 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
               var<runtime_array>(Base, val_array, lanes);
               var<runtime_array>(IndexBase, idx_array, index_lanes);
               var<runtime_array>(Base, active_array, lanes);
-              call<primitive=store[Vec], attrs[aligned=false]>(val_array, a);
-              call<primitive=store[IndicesType], attrs[aligned=false]>(idx_array, index);
+              call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(val_array, a);
+              call<primitive=store[IndicesType], attrs[aligned=false], discharge[contiguous_memory_extent]>(idx_array, index);
               var<const_infer>(active, call<primitive=select[Vec]>(
                 mask,
                 call<primitive=set1[Vec]>(cast<static>(Base, 1)),
                 call<primitive=set_zero[Vec]>()
               ));
-              call<primitive=store[Vec], attrs[aligned=false]>(active_array, active);
+              call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(active_array, active);
               loop<backend>(i, 0, lanes, 1) {
                 if (active_array[i] != cast<static>(Base, 0)) {
                   *(cast<reinterpret, type=ptr>(Base, ptr_add_mut(cast<reinterpret, type=ptr>(scalar::ui8, base_ptr), idx_offset(idx_array[i], scale)))) = val_array[i];

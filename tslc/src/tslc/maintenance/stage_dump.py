@@ -591,6 +591,21 @@ def _lowered_text(header: str, spec: LoweredSpecialization) -> list[str]:
             f"      safety=internal:{spec.safety.internal_unsafe} "
             f"caller:{spec.safety.caller_unsafe}"
         )
+    for origin in spec.call_dependency_origins:
+        for obligation in origin.precondition_obligations:
+            disposition = obligation.disposition
+            mode = "missing" if disposition is None else disposition.kind.value
+            lines.append(
+                "      call_precondition="
+                f"{origin.dependency.primitive}:{obligation.callee_condition.value}:"
+                f"{mode}:{obligation.status.value}  src={_src(obligation.source)}"
+            )
+    for obligation in spec.unresolved_call_preconditions:
+        lines.append(
+            "      unresolved_call_precondition="
+            f"{obligation.callee_condition.value}:{obligation.status.value} "
+            f"src={_src(obligation.source)}"
+        )
     body = spec.body_text.strip()
     lines.append("      body:")
     lines.extend(f"        {line}" for line in (body.splitlines() or [""]))
@@ -612,6 +627,44 @@ def _lowered_json(spec: LoweredSpecialization) -> dict:
             spec.required_compiler_capabilities
         ),
         "caller_unsafe": spec.safety.caller_unsafe,
+        "unresolved_call_preconditions": [
+            {
+                "condition": obligation.callee_condition.value,
+                "status": obligation.status.value,
+                "reason": obligation.reason,
+                "source": _src(obligation.source),
+            }
+            for obligation in spec.unresolved_call_preconditions
+        ],
+        "call_dependencies": [
+            {
+                "primitive": origin.dependency.primitive,
+                "origin": origin.origin,
+                "origin_kind": origin.kind.value,
+                "source": _src(origin.source),
+                "preconditions": [
+                    {
+                        "condition": obligation.callee_condition.value,
+                        "disposition": (
+                            None
+                            if obligation.disposition is None
+                            else obligation.disposition.kind.value
+                        ),
+                        "forwarded_root": (
+                            None
+                            if obligation.disposition is None
+                            or obligation.disposition.forwarded_root is None
+                            else obligation.disposition.forwarded_root.value
+                        ),
+                        "status": obligation.status.value,
+                        "reason": obligation.reason,
+                        "source": _src(obligation.source),
+                    }
+                    for obligation in origin.precondition_obligations
+                ],
+            }
+            for origin in spec.call_dependency_origins
+        ],
         "body": spec.body_text.strip(),
     }
 

@@ -528,7 +528,7 @@ prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
             complete(
               call<primitive=mov, attrs[mask=zero]>(
                 mask,
-                call<primitive=load, attrs[aligned=primitive::attribute(aligned)]>(
+                call<primitive=load, attrs[aligned=primitive::attribute(aligned)], forward[contiguous_memory_extent, selected_memory_alignment]>(
                   ptr
                 )
               )
@@ -901,7 +901,7 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
             complete(
               call<primitive=select, attrs[mask=pass_through]>(
                 mask,
-                call<primitive=load, attrs[aligned=primitive::attribute(aligned)]>(
+                call<primitive=load, attrs[aligned=primitive::attribute(aligned)], forward[contiguous_memory_extent, selected_memory_alignment]>(
                   ptr
                 ),
                 data
@@ -920,7 +920,7 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
             complete(
               call<primitive=select, attrs[mask=pass_through]>(
                 mask,
-                call<primitive=load, attrs[aligned=primitive::attribute(aligned)]>(
+                call<primitive=load, attrs[aligned=primitive::attribute(aligned)], forward[contiguous_memory_extent, selected_memory_alignment]>(
                   ptr
                 ),
                 data
@@ -1101,7 +1101,7 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
             } else<generation> {
               let<type>(MaskWord, base::unsigned_of(base::in));
               let<type>(MaskVec, vector::as_base(MaskWord));
-              var<const_infer>(words, call<primitive=load[MaskVec], attrs[aligned=value(primitive::attribute(aligned))]>(
+              var<const_infer>(words, call<primitive=load[MaskVec], attrs[aligned=value(primitive::attribute(aligned))], discharge[contiguous_memory_extent, selected_memory_alignment]>(
                 cast<reinterpret, type=const_ptr>(MaskWord, ptr)
               ));
               complete(call<primitive=nequal[MaskVec]>(
@@ -1155,7 +1155,7 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
               let<type>(MaskVec, vector::as_base(MaskBase));
               complete(
                 call<primitive=nequal[MaskVec]>(
-                  call<primitive=load[MaskVec], attrs[aligned=value(primitive::attribute(aligned))]>(
+                  call<primitive=load[MaskVec], attrs[aligned=value(primitive::attribute(aligned))], discharge[contiguous_memory_extent, selected_memory_alignment]>(
                     cast<reinterpret, type=const_ptr>(MaskBase, ptr)
                   ),
                   call<primitive=set_zero[MaskVec]>()
@@ -1186,7 +1186,7 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
               var<const_infer>(
                 loaded_mask,
                 call<primitive=nequal[MaskVec]>(
-                  call<primitive=load[MaskVec], attrs[aligned=value(primitive::attribute(aligned))]>(
+                  call<primitive=load[MaskVec], attrs[aligned=value(primitive::attribute(aligned))], discharge[contiguous_memory_extent, selected_memory_alignment]>(
                     cast<reinterpret, type=const_ptr>(MaskBase, ptr)
                   ),
                   call<primitive=set_zero[MaskVec]>()
@@ -1235,9 +1235,9 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
               let<type>(UVec, vector::as_base(base::unsigned_of(base::in)));
               var<infer>(vec, call<primitive=set_zero[UVec]>());
               if<generation>(value(primitive::attribute(aligned))) {
-                vec = call<primitive=load[UVec], attrs[aligned=true]>(cast<reinterpret, type=const_ptr>(UnsignedT, ptr));
+                vec = call<primitive=load[UVec], attrs[aligned=true], discharge[contiguous_memory_extent, selected_memory_alignment]>(cast<reinterpret, type=const_ptr>(UnsignedT, ptr));
               } else<generation> {
-                vec = call<primitive=load[UVec], attrs[aligned=false]>(cast<reinterpret, type=const_ptr>(UnsignedT, ptr));
+                vec = call<primitive=load[UVec], attrs[aligned=false], discharge[contiguous_memory_extent]>(cast<reinterpret, type=const_ptr>(UnsignedT, ptr));
               }
               complete(call<primitive=nequal[UVec]>(
                 vec,

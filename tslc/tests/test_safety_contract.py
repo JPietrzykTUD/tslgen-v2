@@ -17,8 +17,13 @@ from tslc.backend.cpp import CppBackend
 from tslc.backend.rust import RustBackend
 from tslc.backend.registry import create_backend_dialect
 from tslc.catalog.builder import CatalogBuilder
+from tslc.catalog.call_preconditions import (
+    CallPreconditionObligation,
+    CallPreconditionObligationStatus,
+)
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog, ImplementationSafety
+from tslc.catalog.preconditions import PreconditionKind
 from tslc.catalog.signatures import parse_signature
 from tslc.catalog.validation import validate_catalog
 from tslc.compiler_assets import load_default_tsl_grammar
@@ -136,6 +141,43 @@ def test_caller_unsafe_callees_transitively_require_internal_unsafe() -> None:
     assert "raw_pointer" in caller.spec.safety.reasons
     assert caller.spec.body.requires_unsafe is False
     assert caller.spec.body_text == "return callee::<Self>(data);"
+
+
+def test_unresolved_call_preconditions_propagate_through_recursive_closure() -> None:
+    obligation = CallPreconditionObligation(
+        callee_condition=PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
+        disposition=None,
+        status=CallPreconditionObligationStatus.MISSING,
+        reason="fixture missing disposition",
+    )
+    leaf = _slot("leaf")
+    leaf.spec = replace(
+        leaf.spec,
+        unresolved_call_preconditions=(obligation,),
+    )
+    equivalent_leaf = _slot("leaf")
+    middle_dependency = CallDependency(
+        primitive="leaf",
+        mask_policy=None,
+        source=VectorIdentity("si32", "scalar"),
+    )
+    middle = _slot("middle", callees=frozenset({middle_dependency}))
+    root_dependency = CallDependency(
+        primitive="middle",
+        mask_policy=None,
+        source=VectorIdentity("si32", "scalar"),
+    )
+    root = _slot("root", callees=frozenset({root_dependency}))
+
+    _propagate_transitive_call_facts(
+        [root, middle, leaf, equivalent_leaf],
+        frozenset(),
+    )
+
+    assert leaf.spec.unresolved_call_preconditions == (obligation,)
+    assert equivalent_leaf.spec.unresolved_call_preconditions == (obligation,)
+    assert middle.spec.unresolved_call_preconditions == (obligation,)
+    assert root.spec.unresolved_call_preconditions == (obligation,)
 
 
 def test_transitive_safety_keeps_runtime_and_immediate_overloads_distinct() -> None:

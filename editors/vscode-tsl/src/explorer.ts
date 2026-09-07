@@ -1217,6 +1217,19 @@ function primitiveTooltip(
     `Calls: ${primitive.calls.length ? primitive.calls.map(code).join(", ") : "none"}\n\n`,
   );
   value.appendMarkdown(
+    `Call preconditions: ${
+      primitive.callPreconditions.length
+        ? primitive.callPreconditions
+            .map(
+              (item) =>
+                `${code(item.callee)}.${code(item.condition)} → ${code(item.disposition)}` +
+                (item.sites === 1 ? "" : ` (${String(item.sites)} sites)`),
+            )
+            .join(", ")
+        : "none"
+    }\n\n`,
+  );
+  value.appendMarkdown(
     `Called by: ${primitive.calledBy.length ? primitive.calledBy.map(code).join(", ") : "none"}`,
   );
   return value;

@@ -269,6 +269,8 @@ tslc analyze --primitive add --profile avx2 --extension avx2 --type si32 --backe
 tslc explain --primitive add --profile avx2 --type si32 --backend cpp
 tslc inspect --stage lowered --primitive add --profile avx2 --type si32 --backend cpp
 tslc audit metadata
+tslc audit call-preconditions
+tslc audit call-preconditions --format json
 tslc coverage ratchet
 tslc coverage inventory
 tslc coverage inventory --profiles scalar,avx2 --backends cpp,rust
@@ -282,6 +284,11 @@ automatic compiler-capability frontier as ordinary generation. Pass
 `--compiler-capabilities elementwise_clzg` to inspect a known toolchain, or
 `--compiler-capabilities ''` to inspect the exact no-capabilities fallback.
 Target-feature selection remains profile-owned in every mode.
+
+`audit call-preconditions` validates the complete corpus and emits the exact,
+source-located `forward`/`discharge` inventory. A successful report always has
+zero unresolved obligations because missing, invalid, or stale dispositions
+are catalog errors; JSON output is deterministic and schema-versioned.
 
 
 `preview` normally renders every emitted callable matching the concrete name

@@ -13,6 +13,9 @@ from tslc.catalog.signatures import (
     parse_signature,
 )
 from tslc.catalog.validation._invariants_arithmetic import validate_arithmetic_contracts
+from tslc.catalog.validation._invariants_calls import (
+    validate_call_precondition_dispositions,
+)
 from tslc.catalog.validation._invariants_semantics import validate_semantic_contracts
 from tslc.catalog.validation._invariants_overloads import validate_overload_families
 from tslc.diagnostics import Diagnostic, RelatedLocation, SourceSpan, diagnostic_at

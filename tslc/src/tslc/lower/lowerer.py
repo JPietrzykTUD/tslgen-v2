@@ -59,6 +59,7 @@ from tslc.lower._diagnostics import (
 from tslc.lower.dependencies import (
     CallDependency,
     CallDependencyOrigin,
+    CallDependencyOriginKind,
     VectorIdentity,
     origin_sort_key,
     symbolic_call_dependency_error,
@@ -268,6 +269,8 @@ class Lowerer:
             ),
             immediate_split_names=catalog_facts.immediate_split_names,
             current_primitive=selected.primitive.name,
+            current_primitive_contract=selected.primitive,
+            current_parameters=parameters,
             immediate_name=immediate_name,
             immediate_dispatch=immediate_dispatch,
             immediate_range=immediate_range,
@@ -535,6 +538,11 @@ class Lowerer:
                 selected.required_compiler_capabilities
             ),
             call_dependency_origins=ordered_dependency_origins,
+            unresolved_call_preconditions=tuple(
+                obligation
+                for origin in ordered_dependency_origins
+                for obligation in origin.unresolved_preconditions
+            ),
             implementation_state=default_body.implementation_state,
             safety=effective_safety,
             variant_bodies=tuple(variant_bodies),
@@ -605,6 +613,8 @@ def _checked_precondition_dependencies(
                     source=current,
                 ),
                 origin=f"checked precondition {precondition.kind.value!r}",
+                kind=CallDependencyOriginKind.CHECKED_GUARD,
+                source=precondition.source,
             )
             for primitive in check_primitives
         )

@@ -438,15 +438,15 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
               var<runtime_array>(Base, left_lanes, lanes);
               var<runtime_array>(Base, right_lanes, lanes);
               var<runtime_array>(Base, result, lanes);
-              call<primitive=store[Vec], attrs[aligned=false]>(left_lanes, left);
-              call<primitive=store[Vec], attrs[aligned=false]>(right_lanes, right);
+              call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(left_lanes, left);
+              call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(right_lanes, right);
               var<const_infer>(offset, cast<static>(scalar::size, count) % lanes);
               loop<backend>(i, 0, lanes, 1) {
                 var<const_infer>(source, i + offset);
                 if (source < lanes) { result[i] = right_lanes[source]; }
                 else { result[i] = left_lanes[source - lanes]; }
               }
-              complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
+              complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
             """
 
 prim<v:=(v,v)> interleave_lo(left, right):
@@ -1282,7 +1282,7 @@ prim<v:=(v,sImm)> permute_lanes(data, control):
             var<const_infer>(lanes, value(vector::runtime_length));
             var<runtime_array>(Base, input, lanes);
             var<runtime_array>(Base, result, lanes);
-            call<primitive=store[Vec], attrs[aligned=false]>(input, data);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(input, data);
             loop<backend>(i, 0, lanes, 1) {
               var<const_infer>(group_start, (i / 4) * 4);
               var<infer>(group_length, lanes - group_start);
@@ -1290,7 +1290,7 @@ prim<v:=(v,sImm)> permute_lanes(data, control):
               var<const_infer>(selector, (cast<static>(scalar::size, control) >> (2 * (i % 4))) & 3);
               result[i] = input[group_start + selector % group_length];
             }
-            complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
           """
 
 prim<v:=(v,vidx)> permute_lanes(data, indexes):
@@ -1586,13 +1586,13 @@ prim<v:=(v,vidx)> permute_lanes(data, indexes):
               var<runtime_array>(Base, input, lanes);
               var<runtime_array>(IndexBase, index_lanes, lanes);
               var<runtime_array>(Base, result, lanes);
-              call<primitive=store[Vec], attrs[aligned=false]>(input, data);
-              call<primitive=store[IndicesType], attrs[aligned=false]>(index_lanes, indexes);
+              call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(input, data);
+              call<primitive=store[IndicesType], attrs[aligned=false], discharge[contiguous_memory_extent]>(index_lanes, indexes);
               loop<backend>(i, 0, lanes, 1) {
                 var<const_infer>(source, idx_offset(index_lanes[i], 1) % lanes);
                 result[i] = input[source];
               }
-              complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
+              complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
             """
     [avx2, sse, neon, wasm128]:
       arith:
@@ -1673,13 +1673,13 @@ prim<v:=(v,vidx)> permute_lanes(data, indexes):
             var<runtime_array>(Base, input, lanes);
             var<runtime_array>(IndexBase, index_lanes, lanes);
             var<runtime_array>(Base, result, lanes);
-            call<primitive=store[Vec], attrs[aligned=false]>(input, data);
-            call<primitive=store[IndicesType], attrs[aligned=false]>(index_lanes, indexes);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(input, data);
+            call<primitive=store[IndicesType], attrs[aligned=false], discharge[contiguous_memory_extent]>(index_lanes, indexes);
             loop<backend>(i, 0, lanes, 1) {
               var<const_infer>(source, idx_offset(index_lanes[i], 1) % lanes);
               result[i] = input[source];
             }
-            complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
           """
 
 prim<v:=(m,v,v,vidx)>[mask=pass_through] permute_lanes(mask, src, data, indexes):
@@ -2205,15 +2205,15 @@ prim<v:=(v,vidx,v)> table_lookup(left, indexes, right):
               var<runtime_array>(Base, right_lanes, lanes);
               var<runtime_array>(IndexBase, index_lanes, lanes);
               var<runtime_array>(Base, result, lanes);
-              call<primitive=store[Vec], attrs[aligned=false]>(left_lanes, left);
-              call<primitive=store[Vec], attrs[aligned=false]>(right_lanes, right);
-              call<primitive=store[IndicesType], attrs[aligned=false]>(index_lanes, indexes);
+              call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(left_lanes, left);
+              call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(right_lanes, right);
+              call<primitive=store[IndicesType], attrs[aligned=false], discharge[contiguous_memory_extent]>(index_lanes, indexes);
               loop<backend>(i, 0, lanes, 1) {
                 var<const_infer>(source, idx_offset(index_lanes[i], 1) % (2 * lanes));
                 if (source < lanes) { result[i] = left_lanes[source]; }
                 else { result[i] = right_lanes[source - lanes]; }
               }
-              complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
+              complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
             """
     [avx2, sse, neon, wasm128]:
       arith:
@@ -2299,13 +2299,13 @@ prim<v:=(v,vidx,v)> table_lookup(left, indexes, right):
             var<runtime_array>(Base, right_lanes, lanes);
             var<runtime_array>(IndexBase, index_lanes, lanes);
             var<runtime_array>(Base, result, lanes);
-            call<primitive=store[Vec], attrs[aligned=false]>(left_lanes, left);
-            call<primitive=store[Vec], attrs[aligned=false]>(right_lanes, right);
-            call<primitive=store[IndicesType], attrs[aligned=false]>(index_lanes, indexes);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(left_lanes, left);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(right_lanes, right);
+            call<primitive=store[IndicesType], attrs[aligned=false], discharge[contiguous_memory_extent]>(index_lanes, indexes);
             loop<backend>(i, 0, lanes, 1) {
               var<const_infer>(source, idx_offset(index_lanes[i], 1) % (2 * lanes));
               if (source < lanes) { result[i] = left_lanes[source]; }
               else { result[i] = right_lanes[source - lanes]; }
             }
-            complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
           """

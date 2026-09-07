@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from typing import Literal
 
 from tslc.catalog_index_model import IndexedOccurrence, SymbolKind, sorted_spans
-from tslc.diagnostics import SourceSpan
+from tslc.diagnostics import SourceSpan, source_subspan as subspan
 from tslc.ir.segments import Region, Segment
 from tslc.syntax.ast import (
     ParsedPrimitiveDeclaration,
@@ -111,22 +111,6 @@ def parameter_spans(
         )
         cursor = offset + len(parameter)
     return tuple(spans)
-
-
-def subspan(source: SourceSpan, text: str, start: int, end: int) -> SourceSpan:
-    start_line, start_column = _offset_position(source, text, start)
-    end_line, end_column = _offset_position(source, text, end)
-    return SourceSpan(source.path, start_line, start_column, end_line, end_column)
-
-
-def _offset_position(
-    source: SourceSpan, text: str, offset: int
-) -> tuple[int, int]:
-    before = text[:offset]
-    line_offset = before.count("\n")
-    if line_offset == 0:
-        return source.line, source.column + offset
-    return source.line + line_offset, len(before.rsplit("\n", 1)[-1]) + 1
 
 
 def source_span(source: ParsedTslSourceSpan) -> SourceSpan:

@@ -1060,7 +1060,7 @@ prim<v:=(v,v)> div(dividend, divisor):
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
               var<const_infer>(lane_dividend, call<primitive=extract_value[Vec, i]>(dividend));
               var<const_infer>(lane_divisor, call<primitive=extract_value[Vec, i]>(divisor));
-              var<const_infer>(quotient, call<primitive=@self[ScalarVec]>(
+              var<const_infer>(quotient, call<primitive=@self[ScalarVec], discharge[active_divisor_nonzero]>(
                 lane_dividend,
                 lane_divisor
               ));
@@ -1079,7 +1079,7 @@ prim<v:=(v,v)> div(dividend, divisor):
                 call<primitive=to_array[Vec]>(divisor)
               ));
               complete(call<primitive=from_array[Vec]>(
-                call<primitive=@self[GenericVec]>(generic_dividend, generic_divisor)
+                call<primitive=@self[GenericVec], discharge[active_divisor_nonzero]>(generic_dividend, generic_divisor)
               ));
             """
     avx512:
@@ -1139,7 +1139,7 @@ prim<v:=(v,v)> div(dividend, divisor):
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
               var<const_infer>(lane_dividend, call<primitive=extract_value[Vec, i]>(dividend));
               var<const_infer>(lane_divisor, call<primitive=extract_value[Vec, i]>(divisor));
-              var<const_infer>(quotient, call<primitive=@self[ScalarVec]>(lane_dividend, lane_divisor));
+              var<const_infer>(quotient, call<primitive=@self[ScalarVec], discharge[active_divisor_nonzero]>(lane_dividend, lane_divisor));
               result = call<primitive=insert_value[Vec, i]>(result, quotient);
             }
             complete(result);
@@ -1154,7 +1154,7 @@ prim<v:=(v,v)> div(dividend, divisor):
               var<const_infer>(generic_divisor, call<primitive=from_array[GenericVec]>(
                 call<primitive=to_array[Vec]>(divisor)
               ));
-              var<const_infer>(generic_result, call<primitive=@self[GenericVec]>(
+              var<const_infer>(generic_result, call<primitive=@self[GenericVec], discharge[active_divisor_nonzero]>(
                 generic_dividend,
                 generic_divisor
               ));
@@ -1184,7 +1184,7 @@ prim<v:=(v,v)> div(dividend, divisor):
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
               var<const_infer>(lane_dividend, call<primitive=extract_value[Vec, i]>(dividend));
               var<const_infer>(lane_divisor, call<primitive=extract_value[Vec, i]>(divisor));
-              var<const_infer>(quotient, call<primitive=@self[ScalarVec]>(lane_dividend, lane_divisor));
+              var<const_infer>(quotient, call<primitive=@self[ScalarVec], discharge[active_divisor_nonzero]>(lane_dividend, lane_divisor));
               result = call<primitive=insert_value[Vec, i]>(result, quotient);
             }
             complete(result);
@@ -1199,7 +1199,7 @@ prim<v:=(v,v)> div(dividend, divisor):
               var<const_infer>(generic_divisor, call<primitive=from_array[GenericVec]>(
                 call<primitive=to_array[Vec]>(divisor)
               ));
-              var<const_infer>(generic_result, call<primitive=@self[GenericVec]>(
+              var<const_infer>(generic_result, call<primitive=@self[GenericVec], discharge[active_divisor_nonzero]>(
                 generic_dividend,
                 generic_divisor
               ));
@@ -1322,7 +1322,7 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, dividend, divisor):
         implementation:
           tsil """
             if (mask) {
-              complete(call<primitive=div>(dividend, divisor));
+              complete(call<primitive=div, discharge[active_divisor_nonzero]>(dividend, divisor));
             }
             complete(call<primitive=set_zero[Vec]>());
           """
@@ -1359,7 +1359,7 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, dividend, divisor):
               call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 call<primitive=set_zero[Vec]>(),
-                call<primitive=div>(safe_dividend, safe_divisor)
+                call<primitive=div, discharge[active_divisor_nonzero]>(safe_dividend, safe_divisor)
               )
             );
           """
@@ -1403,7 +1403,7 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, dividend, divisor):
               call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 call<primitive=set_zero[Vec]>(),
-                call<primitive=div>(safe_dividend, safe_divisor)
+                call<primitive=div, discharge[active_divisor_nonzero]>(safe_dividend, safe_divisor)
               )
             );
           """
@@ -1430,7 +1430,7 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, dividend, divisor):
               call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 call<primitive=set_zero[Vec]>(),
-                call<primitive=div>(safe_dividend, safe_divisor)
+                call<primitive=div, discharge[active_divisor_nonzero]>(safe_dividend, safe_divisor)
               )
             );
           """
@@ -1466,7 +1466,7 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, dividend, divisor):
             ));
             complete(call<primitive=select[Vec], attrs[mask=pass_through]>(
               mask,
-              call<primitive=div>(safe_dividend, safe_divisor),
+              call<primitive=div, discharge[active_divisor_nonzero]>(safe_dividend, safe_divisor),
               call<primitive=set_zero[Vec]>()
             ));
           """
@@ -1539,7 +1539,7 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, dividend, divisor):
         implementation:
           tsil """
             if (mask) {
-              complete(call<primitive=div>(dividend, divisor));
+              complete(call<primitive=div, discharge[active_divisor_nonzero]>(dividend, divisor));
             }
             complete(dividend);
           """
@@ -1576,7 +1576,7 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, dividend, divisor):
               call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 dividend,
-                call<primitive=div>(safe_dividend, safe_divisor)
+                call<primitive=div, discharge[active_divisor_nonzero]>(safe_dividend, safe_divisor)
               )
             );
           """
@@ -1620,7 +1620,7 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, dividend, divisor):
               call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 dividend,
-                call<primitive=div>(safe_dividend, safe_divisor)
+                call<primitive=div, discharge[active_divisor_nonzero]>(safe_dividend, safe_divisor)
               )
             );
           """
@@ -1647,7 +1647,7 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, dividend, divisor):
               call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 dividend,
-                call<primitive=div>(safe_dividend, safe_divisor)
+                call<primitive=div, discharge[active_divisor_nonzero]>(safe_dividend, safe_divisor)
               )
             );
           """
@@ -1683,7 +1683,7 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, dividend, divisor):
             ));
             complete(call<primitive=select[Vec], attrs[mask=pass_through]>(
               mask,
-              call<primitive=div>(safe_dividend, safe_divisor),
+              call<primitive=div, discharge[active_divisor_nonzero]>(safe_dividend, safe_divisor),
               dividend
             ));
           """
@@ -1942,7 +1942,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
               var<const_infer>(lane_dividend, call<primitive=extract_value[Vec, i]>(dividend));
               var<const_infer>(lane_divisor, call<primitive=extract_value[Vec, i]>(divisor));
-              var<const_infer>(remainder, call<primitive=@self[ScalarVec]>(lane_dividend, lane_divisor));
+              var<const_infer>(remainder, call<primitive=@self[ScalarVec], discharge[active_divisor_nonzero]>(lane_dividend, lane_divisor));
               result = call<primitive=insert_value[Vec, i]>(result, remainder);
             }
             complete(result);
@@ -1958,7 +1958,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
                 call<primitive=to_array[Vec]>(divisor)
               ));
               complete(call<primitive=from_array[Vec]>(
-                call<primitive=@self[GenericVec]>(generic_dividend, generic_divisor)
+                call<primitive=@self[GenericVec], discharge[active_divisor_nonzero]>(generic_dividend, generic_divisor)
               ));
             """
       f32:
@@ -1974,7 +1974,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
               var<const_infer>(lane_dividend, call<primitive=extract_value[Vec, i]>(dividend));
               var<const_infer>(lane_divisor, call<primitive=extract_value[Vec, i]>(divisor));
-              var<const_infer>(remainder, call<primitive=@self[ScalarVec]>(lane_dividend, lane_divisor));
+              var<const_infer>(remainder, call<primitive=@self[ScalarVec], discharge[active_divisor_nonzero]>(lane_dividend, lane_divisor));
               result = call<primitive=insert_value[Vec, i]>(result, remainder);
             }
             complete(result);
@@ -1990,7 +1990,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
                 call<primitive=to_array[Vec]>(divisor)
               ));
               complete(call<primitive=from_array[Vec]>(
-                call<primitive=@self[GenericVec]>(generic_dividend, generic_divisor)
+                call<primitive=@self[GenericVec], discharge[active_divisor_nonzero]>(generic_dividend, generic_divisor)
               ));
             """
     avx2:
@@ -2003,11 +2003,11 @@ prim<v:=(v,v)> mod(dividend, divisor):
         implementation:
           tsil """
             let<type>(HalfVec, vector::as(sse, base::in));
-            var<const_infer>(low, call<primitive=@self[HalfVec]>(
+            var<const_infer>(low, call<primitive=@self[HalfVec], discharge[active_divisor_nonzero]>(
               call<primitive=extract[Vec, sse, 0]>(dividend),
               call<primitive=extract[Vec, sse, 0]>(divisor)
             ));
-            var<const_infer>(high, call<primitive=@self[HalfVec]>(
+            var<const_infer>(high, call<primitive=@self[HalfVec], discharge[active_divisor_nonzero]>(
               call<primitive=extract[Vec, sse, 1]>(dividend),
               call<primitive=extract[Vec, sse, 1]>(divisor)
             ));
@@ -2027,7 +2027,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
                 call<primitive=to_array[Vec]>(divisor)
               ));
               complete(call<primitive=from_array[Vec]>(
-                call<primitive=@self[GenericVec]>(generic_dividend, generic_divisor)
+                call<primitive=@self[GenericVec], discharge[active_divisor_nonzero]>(generic_dividend, generic_divisor)
               ));
             """
     avx512:
@@ -2040,11 +2040,11 @@ prim<v:=(v,v)> mod(dividend, divisor):
         implementation:
           tsil """
             let<type>(HalfVec, vector::as(avx2, base::in));
-            var<const_infer>(low, call<primitive=@self[HalfVec]>(
+            var<const_infer>(low, call<primitive=@self[HalfVec], discharge[active_divisor_nonzero]>(
               call<primitive=extract[Vec, avx2, 0]>(dividend),
               call<primitive=extract[Vec, avx2, 0]>(divisor)
             ));
-            var<const_infer>(high, call<primitive=@self[HalfVec]>(
+            var<const_infer>(high, call<primitive=@self[HalfVec], discharge[active_divisor_nonzero]>(
               call<primitive=extract[Vec, avx2, 1]>(dividend),
               call<primitive=extract[Vec, avx2, 1]>(divisor)
             ));
@@ -2064,7 +2064,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
                 call<primitive=to_array[Vec]>(divisor)
               ));
               complete(call<primitive=from_array[Vec]>(
-                call<primitive=@self[GenericVec]>(generic_dividend, generic_divisor)
+                call<primitive=@self[GenericVec], discharge[active_divisor_nonzero]>(generic_dividend, generic_divisor)
               ));
             """
     avx512:
@@ -2094,19 +2094,19 @@ prim<v:=(v,v)> mod(dividend, divisor):
             var<const_infer>(b1_bits, call<primitive=extract[BitVec, sse, 1]>(divisor_bits));
             var<const_infer>(b2_bits, call<primitive=extract[BitVec, sse, 2]>(divisor_bits));
             var<const_infer>(b3_bits, call<primitive=extract[BitVec, sse, 3]>(divisor_bits));
-            var<const_infer>(r0, call<primitive=@self[QuarterVec]>(
+            var<const_infer>(r0, call<primitive=@self[QuarterVec], discharge[active_divisor_nonzero]>(
               call<primitive=reinterpret[QuarterBitVec, QuarterVec]>(a0_bits),
               call<primitive=reinterpret[QuarterBitVec, QuarterVec]>(b0_bits)
             ));
-            var<const_infer>(r1, call<primitive=@self[QuarterVec]>(
+            var<const_infer>(r1, call<primitive=@self[QuarterVec], discharge[active_divisor_nonzero]>(
               call<primitive=reinterpret[QuarterBitVec, QuarterVec]>(a1_bits),
               call<primitive=reinterpret[QuarterBitVec, QuarterVec]>(b1_bits)
             ));
-            var<const_infer>(r2, call<primitive=@self[QuarterVec]>(
+            var<const_infer>(r2, call<primitive=@self[QuarterVec], discharge[active_divisor_nonzero]>(
               call<primitive=reinterpret[QuarterBitVec, QuarterVec]>(a2_bits),
               call<primitive=reinterpret[QuarterBitVec, QuarterVec]>(b2_bits)
             ));
-            var<const_infer>(r3, call<primitive=@self[QuarterVec]>(
+            var<const_infer>(r3, call<primitive=@self[QuarterVec], discharge[active_divisor_nonzero]>(
               call<primitive=reinterpret[QuarterBitVec, QuarterVec]>(a3_bits),
               call<primitive=reinterpret[QuarterBitVec, QuarterVec]>(b3_bits)
             ));
@@ -2133,7 +2133,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
                 call<primitive=to_array[Vec]>(divisor)
               ));
               complete(call<primitive=from_array[Vec]>(
-                call<primitive=@self[GenericVec]>(generic_dividend, generic_divisor)
+                call<primitive=@self[GenericVec], discharge[active_divisor_nonzero]>(generic_dividend, generic_divisor)
               ));
             """
     [avx512, avx2, sse]:
@@ -2153,7 +2153,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
             var<const_infer>(generic_divisor, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(divisor)));
             complete(
               call<primitive=from_array[Vec]>(
-                call<primitive=@self[GenericVec]>(generic_dividend, generic_divisor)
+                call<primitive=@self[GenericVec], discharge[active_divisor_nonzero]>(generic_dividend, generic_divisor)
               )
             );
           """
@@ -2173,7 +2173,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
               var<const_infer>(lane_dividend, call<primitive=extract_value[Vec, i]>(dividend));
               var<const_infer>(lane_divisor, call<primitive=extract_value[Vec, i]>(divisor));
-              var<const_infer>(remainder, call<primitive=@self[ScalarVec]>(lane_dividend, lane_divisor));
+              var<const_infer>(remainder, call<primitive=@self[ScalarVec], discharge[active_divisor_nonzero]>(lane_dividend, lane_divisor));
               result = call<primitive=insert_value[Vec, i]>(result, remainder);
             }
             complete(result);
@@ -2189,7 +2189,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
                 call<primitive=to_array[Vec]>(divisor)
               ));
               complete(call<primitive=from_array[Vec]>(
-                call<primitive=@self[GenericVec]>(generic_dividend, generic_divisor)
+                call<primitive=@self[GenericVec], discharge[active_divisor_nonzero]>(generic_dividend, generic_divisor)
               ));
             """
     sve:
@@ -2263,7 +2263,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
               call<primitive=sub>(
                 dividend,
                 call<primitive=mul>(
-                  call<primitive=div>(dividend, divisor),
+                  call<primitive=div, forward[active_divisor_nonzero]>(dividend, divisor),
                   divisor
                 )
               )
@@ -2339,15 +2339,15 @@ prim<v:=(v,v)> mod(dividend, divisor):
             var<runtime_array>(Base, dividends, lanes);
             var<runtime_array>(Base, divisors, lanes);
             var<runtime_array>(Base, result, lanes);
-            call<primitive=store[Vec], attrs[aligned=false]>(dividends, dividend);
-            call<primitive=store[Vec], attrs[aligned=false]>(divisors, divisor);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(dividends, dividend);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(divisors, divisor);
             loop<backend>(i, 0, lanes, 1) {
-              result[i] = call<primitive=@self[vector::as_extension(scalar)]>(
+              result[i] = call<primitive=@self[vector::as_extension(scalar)], discharge[active_divisor_nonzero]>(
                 dividends[i],
                 divisors[i]
               );
             }
-            complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
           """
     scalar:
       arith:
@@ -2481,7 +2481,7 @@ prim<v:=(m,v,v)>[mask=zero] mod(mask, dividend, divisor):
         implementation:
           tsil """
             if (mask) {
-              complete(call<primitive=mod>(dividend, divisor));
+              complete(call<primitive=mod, discharge[active_divisor_nonzero]>(dividend, divisor));
             }
             complete(call<primitive=set_zero[Vec]>());
           """
@@ -2521,7 +2521,7 @@ prim<v:=(m,v,v)>[mask=zero] mod(mask, dividend, divisor):
               call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 call<primitive=set_zero[Vec]>(),
-                call<primitive=mod>(safe_dividend, safe_divisor)
+                call<primitive=mod, discharge[active_divisor_nonzero]>(safe_dividend, safe_divisor)
               )
             );
           """
@@ -2546,7 +2546,7 @@ prim<v:=(m,v,v)>[mask=zero] mod(mask, dividend, divisor):
             ));
             complete(call<primitive=select[Vec], attrs[mask=pass_through]>(
               mask,
-              call<primitive=mod>(safe_dividend, safe_divisor),
+              call<primitive=mod, discharge[active_divisor_nonzero]>(safe_dividend, safe_divisor),
               call<primitive=set_zero[Vec]>()
             ));
           """
@@ -2600,7 +2600,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mod(mask, dividend, divisor):
         implementation:
           tsil """
             if (mask) {
-              complete(call<primitive=mod>(dividend, divisor));
+              complete(call<primitive=mod, discharge[active_divisor_nonzero]>(dividend, divisor));
             }
             complete(dividend);
           """
@@ -2640,7 +2640,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mod(mask, dividend, divisor):
               call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 dividend,
-                call<primitive=mod>(safe_dividend, safe_divisor)
+                call<primitive=mod, discharge[active_divisor_nonzero]>(safe_dividend, safe_divisor)
               )
             );
           """
@@ -2665,7 +2665,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mod(mask, dividend, divisor):
             ));
             complete(call<primitive=select[Vec], attrs[mask=pass_through]>(
               mask,
-              call<primitive=mod>(safe_dividend, safe_divisor),
+              call<primitive=mod, discharge[active_divisor_nonzero]>(safe_dividend, safe_divisor),
               dividend
             ));
           """
@@ -2739,7 +2739,7 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
         implementation:
           tsil """
             complete(
-              call<primitive=mod>(
+              call<primitive=mod, discharge[active_divisor_nonzero]>(
                 dividend,
                 call<primitive=set1>(cast<static>(base::in, divisor))
               )
@@ -2812,7 +2812,7 @@ prim<v:=(m,v,sImm)>[mask=zero] mod_imm(mask, dividend, divisor):
         implementation:
           tsil """
             complete(
-              call<primitive=mod, attrs[mask=zero]>(
+              call<primitive=mod, attrs[mask=zero], discharge[active_divisor_nonzero]>(
                 mask,
                 dividend,
                 call<primitive=set1>(cast<static>(base::in, divisor))
@@ -2886,7 +2886,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mod_imm(mask, dividend, divisor):
         implementation:
           tsil """
             complete(
-              call<primitive=mod, attrs[mask=pass_through]>(
+              call<primitive=mod, attrs[mask=pass_through], discharge[active_divisor_nonzero]>(
                 mask,
                 dividend,
                 call<primitive=set1>(cast<static>(base::in, divisor))

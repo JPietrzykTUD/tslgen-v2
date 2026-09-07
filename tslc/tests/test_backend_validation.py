@@ -23,6 +23,7 @@ from tslc.catalog.arithmetic import (
     ArithmeticOperandBinding,
     ArithmeticOperandRole,
 )
+from tslc.catalog.call_preconditions import CallPreconditionObligation
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import (
     BackendExtensionMetadata,
@@ -57,6 +58,7 @@ class _Specialization:
     source: SourceSpan | None = None
     safety: ImplementationSafety = ImplementationSafety()
     primitive_semantics: LoweredPrimitiveSemantics = LoweredPrimitiveSemantics()
+    unresolved_call_preconditions: tuple[CallPreconditionObligation, ...] = ()
 
 
 def test_cpp_checked_twin_rejects_an_authored_name_collision() -> None:

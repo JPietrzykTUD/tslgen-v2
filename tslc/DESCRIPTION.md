@@ -444,6 +444,17 @@ lowering never parses C++ `&` or Rust `&mut` tokens from `RawText`.
 
 Successful `call<...>` lowering records typed dependency origins using the same
 query evaluator and live generation-time control flow that produced the body.
+An edge to a callee with an applicable catastrophic precondition also carries
+one source-located typed obligation per condition. Source authors either
+`forward[...]` the condition through an unchanged vector identity and exact
+caller/callee parameter and condition-context identities to the caller's
+matching root precondition, or make an explicit
+`discharge[...]` implementation assertion. This proof model never interprets
+raw target-language expressions or treats an unsafe render frame as proof.
+Catalog validation rejects missing, stale, ambiguous, or mismatched
+dispositions; lowering retains unresolved obligations so checked-wrapper
+admission can fail closed, including after transitive closure.
+
 The pipeline then runs a **profile-scoped dependency closure**: from the
 requested primitives it resolves those lowered call facts
 ([lower/dependencies.py](src/tslc/lower/dependencies.py)), lowers callees, and

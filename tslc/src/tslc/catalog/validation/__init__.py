@@ -14,6 +14,7 @@ from tslc.catalog.model import Catalog
 from tslc.catalog.validation.body_validation import validate_body_regions
 from tslc.catalog.validation.invariants import (
     validate_backend_type_spellings,
+    validate_call_precondition_dispositions,
     validate_extension_inheritance,
     validate_generic_param_base_constraints,
     validate_primitive_signatures,
@@ -56,6 +57,7 @@ def validate_catalog(
     validate_primitive_arithmetic_contracts(catalog, diagnostics)
     validate_primitive_semantic_contracts(catalog, diagnostics)
     validate_primitive_overload_families(catalog, diagnostics)
+    validate_call_precondition_dispositions(catalog, diagnostics)
     validate_generic_param_base_constraints(catalog, diagnostics)
     validate_extension_inheritance(catalog, diagnostics, parsed)
     validate_backend_type_spellings(

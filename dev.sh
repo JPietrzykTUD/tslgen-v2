@@ -26,7 +26,7 @@ Modes:
   ./${self} doctor     probe selected backend/profile toolchains and runners
   ./${self} list       list catalog entries
   ./${self} show       describe one catalog entry
-  ./${self} audit      audit source metadata
+  ./${self} audit      audit source metadata or call preconditions
   ./${self} ratchet    coverage regression gate vs the committed baseline   (no compiler needed)
   ./${self} benchmark-ratchet
                        reject new variant benchmark coverage gaps             (no compiler needed)
@@ -161,7 +161,14 @@ case "$mode" in
     ;;
   list)    exec python -m tslc list "${extra_args[@]}" ;;
   show)    exec python -m tslc show "${extra_args[@]}" ;;
-  audit)   exec python -m tslc audit metadata "${extra_args[@]}" ;;
+  audit)
+    audit_action="metadata"
+    if (( ${#extra_args[@]} > 0 )) && [[ "${extra_args[0]}" != -* ]]; then
+      audit_action="${extra_args[0]}"
+      extra_args=("${extra_args[@]:1}")
+    fi
+    exec python -m tslc audit "$audit_action" "${extra_args[@]}"
+    ;;
   ratchet) exec python -m tslc coverage ratchet "${extra_args[@]}" ;;
   benchmark-ratchet) exec python -m tslc.maintenance.benchmark_coverage "${extra_args[@]}" ;;
   dump)    exec python -m tslc inspect "${extra_args[@]}" ;;

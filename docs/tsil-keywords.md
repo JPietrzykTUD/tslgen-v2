@@ -593,6 +593,8 @@ Accepted forms:
 ```tsil
 call<primitive=name>(args)
 call<primitive=name[VecOrTypeArgs], attrs[key=value, ...]>(args)
+call<primitive=name[...], forward[precondition, ...]>(args)
+call<primitive=name[...], discharge[precondition, ...]>(args)
 call<primitive=@self[...], attrs[key=value, ...]>(args)
 ```
 
@@ -619,6 +621,25 @@ Lowering also forwards data-driven boolean axes.
 Rust borrows arguments when the callee expects references.
 
 Unsafe callees produce an unsafe render field.
+
+A call to a primitive with an applicable catastrophic precondition must account
+for that condition. Use `forward[...]` when the callee's bound operands are the
+exact matching caller parameters, the call preserves the vector identity and
+condition context, and the caller declares the same root precondition. The
+compiler validates parameter identities, including a mask-sensitive
+condition's control mask and memory addressing/payload facts; it does not
+interpret raw C++ or Rust expressions.
+
+Use `discharge[...]` when the implementation itself establishes the condition,
+for example by using compiler-sized local storage, sanitizing an inactive
+divisor, or relying on an already-validated compile-time immediate. A discharge
+is an explicit implementation-author assertion and remains visible in audit
+and editor tooling. It is not inferred from an `unsafe` block.
+
+When several selector bags are present, their canonical order is `attrs[...]`,
+then `forward[...]`, then `discharge[...]`. A condition may have exactly one
+disposition. Unknown, duplicate, missing, stale, ambiguous, and operand-mismatched
+dispositions are errors.
 
 <details>
 <summary>Example: current vector</summary>

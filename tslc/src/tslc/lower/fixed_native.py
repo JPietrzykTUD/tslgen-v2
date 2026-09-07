@@ -4,11 +4,23 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+from tslc.catalog.call_preconditions import (
+    CallPreconditionDisposition,
+    CallPreconditionDispositionKind,
+    CallPreconditionObligation,
+    CallPreconditionObligationStatus,
+)
 from tslc.catalog.model import (
     RESULT_DIM_BASE,
     RESULT_DIM_VECTOR,
     Extension,
     PrimitiveMaskMode,
+)
+from tslc.catalog.preconditions import (
+    PRECONDITION_DESCRIPTORS,
+    PreconditionHazard,
+    PreconditionKind,
+    precondition_applies_to_type,
 )
 from tslc.catalog.signatures import SignatureShape
 from tslc.lower.body_rendering import RenderedBodyResult
@@ -16,6 +28,7 @@ from tslc.lower.context import LoweringSession
 from tslc.lower.dependencies import (
     CallDependency,
     CallDependencyOrigin,
+    CallDependencyOriginKind,
     VectorIdentity,
 )
 from tslc.lower.target_vectors import TargetVector
@@ -420,6 +433,7 @@ def _render_self_call(
         explicit_mask_args=has_explicit_mask_arg,
         immediate_forwarded=context.env.immediate_name is not None,
         extra_args=tuple(extra_args),
+        precondition_obligations=_fixed_native_precondition_obligations(selected),
     )
 
 
@@ -436,11 +450,19 @@ def _render_primitive_call(
     explicit_mask_args: bool = False,
     immediate_forwarded: bool = False,
     extra_args: tuple[RenderField, ...] = (),
+    precondition_obligations: tuple[CallPreconditionObligation, ...] = (),
 ) -> RenderField:
     context.effects.record_call_dependency(
         CallDependencyOrigin(
             CallDependency(primitive_name, mask_policy, source, target),
             context.env.dependency_origin,
+            kind=CallDependencyOriginKind.FIXED_NATIVE,
+            source=(
+                None
+                if context.env.current_primitive_contract is None
+                else context.env.current_primitive_contract.source
+            ),
+            precondition_obligations=precondition_obligations,
         )
     )
     call_name = primitive_name
@@ -469,6 +491,42 @@ def _render_primitive_call(
     if context.env.primitive_caller_unsafe.get(primitive_name, False):
         return unsafe_block(call)
     return call
+
+
+def _fixed_native_precondition_obligations(
+    selected: SelectedImplementation,
+) -> tuple[CallPreconditionObligation, ...]:
+    """Record compiler-proven forwarding through typed native ABI adaptation."""
+
+    obligations: list[CallPreconditionObligation] = []
+    for condition in selected.primitive.preconditions:
+        if (
+            PRECONDITION_DESCRIPTORS[condition.kind].hazard
+            is not PreconditionHazard.CATASTROPHIC
+        ):
+            continue
+        if not precondition_applies_to_type(condition, selected.type_tag):
+            continue
+        if (
+            condition.kind is PreconditionKind.SELECTED_MEMORY_ALIGNMENT
+            and selected.primitive.attributes.get("aligned", "false") == "false"
+        ):
+            continue
+        disposition = CallPreconditionDisposition(
+            condition=condition.kind,
+            kind=CallPreconditionDispositionKind.FORWARD,
+            source=condition.source,
+            forwarded_root=condition.kind,
+        )
+        obligations.append(
+            CallPreconditionObligation(
+                callee_condition=condition.kind,
+                disposition=disposition,
+                status=CallPreconditionObligationStatus.RESOLVED,
+                source=condition.source,
+            )
+        )
+    return tuple(obligations)
 
 
 def _vector_spelling(identity: VectorIdentity, context: LoweringSession) -> str:

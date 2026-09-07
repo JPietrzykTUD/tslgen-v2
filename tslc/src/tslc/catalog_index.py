@@ -48,6 +48,7 @@ from tslc.catalog_index_model import (
     CatalogIndex,
     ENUM_SYMBOL_KINDS as _ENUM_SYMBOL_KINDS,
     IndexedOccurrence,
+    IndexedCallPreconditionDisposition,
     SymbolKind,
     definitions_for as _definitions,
     references_for as _references,
@@ -68,7 +69,10 @@ from tslc.catalog_occurrences import (
     subspan as _subspan,
 )
 from tslc.diagnostics import SourceSpan
-from tslc.ir.region_syntax import parse_call_selector
+from tslc.ir.region_syntax import (
+    call_precondition_syntax_occurrences,
+    parse_call_selector,
+)
 from tslc.ir.region_registry import DEFAULT_TSIL_REGION_DESCRIPTORS
 from tslc.ir.scan import scan
 from tslc.ir.segments import Region
@@ -97,6 +101,7 @@ class _DocumentIndex:
     semantic_operand_references: Mapping[tuple[str, str], tuple[SourceSpan, ...]]
     occurrences: tuple[IndexedOccurrence, ...]
     primitive_calls: tuple[tuple[str, str], ...]
+    primitive_call_preconditions: tuple[IndexedCallPreconditionDisposition, ...]
     symbols: tuple[IndexedDocumentSymbol, ...]
     semantic_tokens: tuple[IndexedSemanticToken, ...]
 
@@ -201,6 +206,7 @@ def build_catalog_index(
     semantic_operand_references: dict[tuple[str, str], list[SourceSpan]] = {}
     occurrences: list[IndexedOccurrence] = []
     primitive_calls: set[tuple[str, str]] = set()
+    call_preconditions: list[IndexedCallPreconditionDisposition] = []
     symbols_by_path: dict[Path, tuple[IndexedDocumentSymbol, ...]] = {}
     semantic_tokens_by_path: dict[Path, tuple[IndexedSemanticToken, ...]] = {}
 
@@ -234,6 +240,7 @@ def build_catalog_index(
             semantic_operand_references.setdefault(key, []).extend(spans)
         occurrences.extend(fragment.occurrences)
         primitive_calls.update(fragment.primitive_calls)
+        call_preconditions.extend(fragment.primitive_call_preconditions)
         if fragment.symbols:
             path = fragment.symbols[0].span.path.resolve()
             symbols_by_path[path] = fragment.symbols
@@ -246,6 +253,11 @@ def build_catalog_index(
     for caller, callee in sorted(primitive_calls):
         calls.setdefault(caller, set()).add(callee)
         callers.setdefault(callee, set()).add(caller)
+    preconditions_by_caller: dict[
+        str, set[IndexedCallPreconditionDisposition]
+    ] = {}
+    for item in call_preconditions:
+        preconditions_by_caller.setdefault(item.caller, set()).add(item)
 
     by_path: dict[Path, list[IndexedOccurrence]] = {}
     for occurrence in occurrences:
@@ -285,6 +297,22 @@ def build_catalog_index(
         },
         primitive_callers={
             name: tuple(sorted(values)) for name, values in sorted(callers.items())
+        },
+        primitive_call_preconditions={
+            name: tuple(
+                sorted(
+                    values,
+                    key=lambda item: (
+                        item.callee,
+                        item.condition,
+                        item.disposition,
+                        item.span.path.as_posix(),
+                        item.span.line,
+                        item.span.column,
+                    ),
+                )
+            )
+            for name, values in sorted(preconditions_by_caller.items())
         },
         occurrences_by_path={
             path: tuple(sorted(items, key=_occurrence_key))
@@ -360,6 +388,7 @@ def _build_document_index(document: ParsedOuterTslDocument) -> _DocumentIndex:
     semantic_operand_references: dict[tuple[str, str], list[SourceSpan]] = {}
     occurrences: list[IndexedOccurrence] = []
     primitive_calls: set[tuple[str, str]] = set()
+    call_preconditions: list[IndexedCallPreconditionDisposition] = []
     _index_document(
         document,
         definitions,
@@ -374,6 +403,7 @@ def _build_document_index(document: ParsedOuterTslDocument) -> _DocumentIndex:
         semantic_operand_references,
         occurrences,
         primitive_calls,
+        call_preconditions,
     )
     authoring = build_document_authoring_index(document)
     return _DocumentIndex(
@@ -401,6 +431,7 @@ def _build_document_index(document: ParsedOuterTslDocument) -> _DocumentIndex:
         ),
         occurrences=tuple(sorted(occurrences, key=_occurrence_key)),
         primitive_calls=tuple(sorted(primitive_calls)),
+        primitive_call_preconditions=tuple(call_preconditions),
         symbols=authoring.symbols,
         semantic_tokens=authoring.semantic_tokens,
     )
@@ -420,6 +451,7 @@ def _index_document(
     semantic_operand_references: dict[tuple[str, str], list[SourceSpan]],
     occurrences: list[IndexedOccurrence],
     primitive_calls: set[tuple[str, str]],
+    call_preconditions: list[IndexedCallPreconditionDisposition],
 ) -> None:
     for primitive in document.primitives:
         scope = _primitive_scope(primitive)
@@ -480,6 +512,7 @@ def _index_document(
                     references,
                     occurrences,
                     primitive_calls,
+                    call_preconditions,
                 )
 
     for block in document.blocks:
@@ -785,6 +818,7 @@ def _index_region(
     references: dict[SymbolKind, dict[str, list[SourceSpan]]],
     occurrences: list[IndexedOccurrence],
     primitive_calls: set[tuple[str, str]],
+    call_preconditions: list[IndexedCallPreconditionDisposition],
 ) -> None:
     if region.source is None:
         return
@@ -805,6 +839,33 @@ def _index_region(
     reference_span = _region_selector_name_span(region, call.primitive_ref)
     if reference_span is not None:
         _record(references, occurrences, "primitive", name, reference_span, False)
+    selector_offset = region.full_text.find(region.selector_text)
+    if selector_offset < 0:
+        return
+    for item in call_precondition_syntax_occurrences(region.selector_text, call):
+        span = _subspan(
+            region.source,
+            region.full_text,
+            selector_offset + item.start,
+            selector_offset + item.end,
+        )
+        _record(
+            references,
+            occurrences,
+            "precondition",
+            item.condition,
+            span,
+            False,
+        )
+        call_preconditions.append(
+            IndexedCallPreconditionDisposition(
+                caller=primitive.name,
+                callee=name,
+                condition=item.condition,
+                disposition=item.disposition,
+                span=span,
+            )
+        )
 
 
 def _result_target(

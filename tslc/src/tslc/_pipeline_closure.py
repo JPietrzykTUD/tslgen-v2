@@ -7,6 +7,10 @@ from dataclasses import dataclass, replace
 
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import ImplementationSafety
+from tslc.catalog.call_preconditions import (
+    CallPreconditionObligation,
+    call_precondition_obligation_sort_key,
+)
 from tslc.diagnostics import SourceSpan
 from tslc.lower.dependencies import (
     CallDependency,
@@ -421,13 +425,14 @@ def _propagate_transitive_call_facts(
     slots: list[_LoweredSlot],
     split_names: frozenset[str],
 ) -> None:
-    """Propagate callee safety, required features, and implementation state.
+    """Propagate callee safety, proof gaps, features, and implementation state.
 
     A caller that reaches unsafe callee metadata records an internal unsafe
-    dependency for review/diagnostics. Required target features propagate
-    bottom-up as well, so a profile gets every feature needed by the bodies that
-    remain live after dependency pruning. Implementation state joins through the
-    same live dependency graph so query APIs report composed/fallback callees.
+    dependency for review/diagnostics. Unresolved call-precondition obligations
+    propagate fail-closed through that same live graph. Required target features
+    propagate bottom-up as well, so a profile gets every feature needed by the
+    bodies that remain live after dependency pruning. Implementation state joins
+    through the graph so query APIs report composed/fallback callees.
     """
 
     slot_keys = tuple(_slot_key(slot, split_names) for slot in slots)
@@ -438,6 +443,7 @@ def _propagate_transitive_call_facts(
     fact_ids: dict[_CallFactKey, int] = {}
     slot_fact_ids: list[int] = []
     safety: list[ImplementationSafety] = []
+    unresolved_preconditions: list[frozenset[CallPreconditionObligation]] = []
     features: list[frozenset[str]] = []
     states = []
     for slot, fact_key in zip(slots, fact_keys, strict=True):
@@ -446,18 +452,31 @@ def _propagate_transitive_call_facts(
             fact_id = len(fact_ids)
             fact_ids[fact_key] = fact_id
             safety.append(slot.spec.safety)
+            unresolved_preconditions.append(
+                frozenset(slot.spec.unresolved_call_preconditions)
+            )
             features.append(slot.spec.required_features)
             states.append(slot.spec.implementation_state)
         elif slot.compiler_alternative_rank is None:
             # Preserve established last-body facts for ordinary duplicate
-            # lowered identities such as scalar overload collapses.
+            # lowered identities such as scalar overload collapses. Proof gaps
+            # are different: hiding one on an equivalent body would make
+            # checked admission unsound, so they merge conservatively.
             safety[fact_id] = slot.spec.safety
+            unresolved_preconditions[fact_id] = (
+                unresolved_preconditions[fact_id]
+                | frozenset(slot.spec.unresolved_call_preconditions)
+            )
             features[fact_id] = slot.spec.required_features
             states[fact_id] = slot.spec.implementation_state
         else:
             # Compiler alternatives are one logical callable for conservative
             # safety, target-feature, and implementation-state propagation.
             safety[fact_id] = safety[fact_id].merge(slot.spec.safety)
+            unresolved_preconditions[fact_id] = (
+                unresolved_preconditions[fact_id]
+                | frozenset(slot.spec.unresolved_call_preconditions)
+            )
             features[fact_id] = (
                 features[fact_id] | slot.spec.required_features
             )
@@ -495,10 +514,12 @@ def _propagate_transitive_call_facts(
         callee_id = queue.popleft()
         queued[callee_id] = False
         callee_safety = safety[callee_id]
+        callee_unresolved_preconditions = unresolved_preconditions[callee_id]
         callee_features = features[callee_id]
         callee_state = states[callee_id]
         for caller_id in callers_by_callee.get(callee_id, ()):
             caller_safety = safety[caller_id]
+            caller_unresolved_preconditions = unresolved_preconditions[caller_id]
             propagated_safety = caller_safety
             if callee_safety.internal_unsafe or callee_safety.caller_unsafe:
                 propagated_safety = caller_safety.merge(
@@ -510,17 +531,23 @@ def _propagate_transitive_call_facts(
                 )
             caller_features = features[caller_id]
             propagated_features = caller_features | callee_features
+            propagated_unresolved_preconditions = (
+                caller_unresolved_preconditions | callee_unresolved_preconditions
+            )
             caller_state = states[caller_id]
             propagated_state = combine_implementation_states(
                 (caller_state, callee_state)
             )
             if (
                 propagated_safety == caller_safety
+                and propagated_unresolved_preconditions
+                == caller_unresolved_preconditions
                 and propagated_features == caller_features
                 and propagated_state == caller_state
             ):
                 continue
             safety[caller_id] = propagated_safety
+            unresolved_preconditions[caller_id] = propagated_unresolved_preconditions
             features[caller_id] = propagated_features
             states[caller_id] = propagated_state
             if not queued[caller_id]:
@@ -531,10 +558,13 @@ def _propagate_transitive_call_facts(
         slots, slot_fact_ids, branch_compiler_capabilities, strict=True
     ):
         propagated_safety = safety[fact_id]
+        propagated_unresolved_preconditions = unresolved_preconditions[fact_id]
         propagated_features = features[fact_id]
         propagated_state = states[fact_id]
         if (
             propagated_safety == slot.spec.safety
+            and propagated_unresolved_preconditions
+            == frozenset(slot.spec.unresolved_call_preconditions)
             and propagated_features == slot.spec.required_features
             and propagated_compiler_capabilities
             == slot.spec.required_compiler_capabilities
@@ -544,6 +574,12 @@ def _propagate_transitive_call_facts(
         slot.spec = replace(
             slot.spec,
             safety=propagated_safety,
+            unresolved_call_preconditions=tuple(
+                sorted(
+                    propagated_unresolved_preconditions,
+                    key=call_precondition_obligation_sort_key,
+                )
+            ),
             required_features=propagated_features,
             required_compiler_capabilities=(
                 propagated_compiler_capabilities

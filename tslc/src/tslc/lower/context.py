@@ -22,7 +22,7 @@ from types import TracebackType
 from typing import TYPE_CHECKING, TypeVar
 
 from tslc.backend.translation import BackendDialect
-from tslc.catalog.model import Catalog, Extension, ImplementationSafety
+from tslc.catalog.model import Catalog, Extension, ImplementationSafety, Primitive
 from tslc.diagnostics import Diagnostic, SourceSpan, diagnostic_at
 from tslc.lower.implementation_facts import (
     ImplementationState,
@@ -105,6 +105,8 @@ class LoweringEnv:
     # the name of the primitive currently being lowered, so a `@self[...]` call can recurse
     # into it for a different vector (e.g. generic delegating per-lane to scalar).
     current_primitive: str = ""
+    current_primitive_contract: Primitive | None = None
+    current_parameters: tuple[str, ...] = ()
     # Human-readable provenance for call edges recorded while this body is
     # lowered. Variants replace this with their authored variant name.
     dependency_origin: str = "implementation"

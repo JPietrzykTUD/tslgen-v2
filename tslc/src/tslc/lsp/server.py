@@ -701,6 +701,15 @@ def _primitive_explorer_payload(
                 "totalSlots": primitive.total_slots,
                 "calls": list(primitive.calls),
                 "calledBy": list(primitive.called_by),
+                "callPreconditions": [
+                    {
+                        "callee": item.callee,
+                        "condition": item.condition,
+                        "disposition": item.disposition,
+                        "sites": item.sites,
+                    }
+                    for item in primitive.call_preconditions
+                ],
             }
             for primitive in explorer.primitives
         ],

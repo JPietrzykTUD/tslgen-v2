@@ -45,6 +45,7 @@ from tslc.maintenance import _repo_context
 from tslc.maintenance._segments_view import format_segment_tree
 from tslc.lower.dependencies import (
     CallDependency,
+    CallDependencyOrigin,
     VectorIdentity,
     dependency_sort_key,
     is_concrete_call_dependency,
@@ -311,15 +312,14 @@ def _explain_selected_slot(
 
     # 4. DEPENDENCIES & PRUNING ---------------------------------------------------
     out.line("[4] DEPENDENCIES & VERDICT")
-    callees = frozenset(
-        origin.dependency
-        for origin in (
-            lowered.specialization.call_dependency_origins
-            if lowered.specialization is not None
-            else ()
-        )
+    origins = (
+        lowered.specialization.call_dependency_origins
+        if lowered.specialization is not None
+        else ()
     )
+    callees = frozenset(origin.dependency for origin in origins)
     _print_dependencies(out, callees, verdicts)
+    _print_call_preconditions(out, origins)
     out.blank()
     _print_verdict(out, verdicts, extension_tag, slot.type_tag)
 
@@ -516,6 +516,32 @@ def _print_dependencies(
         out.line(
             "    missing callees (would dangle this slot at link time -> prune): "
             + ", ".join(missing)
+        )
+
+
+def _print_call_preconditions(
+    out: "_Writer",
+    origins: tuple[CallDependencyOrigin, ...],
+) -> None:
+    obligations = tuple(
+        (origin, obligation)
+        for origin in origins
+        for obligation in origin.precondition_obligations
+    )
+    if not obligations:
+        return
+    out.line("    callee precondition dispositions:")
+    for origin, obligation in obligations:
+        disposition = obligation.disposition
+        mode = "missing" if disposition is None else disposition.kind.value
+        root = (
+            ""
+            if disposition is None or disposition.forwarded_root is None
+            else f" -> root {disposition.forwarded_root.value}"
+        )
+        out.line(
+            f"      {origin.dependency.primitive}.{obligation.callee_condition.value}: "
+            f"{mode}{root} [{obligation.status.value}]"
         )
 
 

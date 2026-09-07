@@ -9,6 +9,8 @@ from _select_lower_core_support import (
     pytest,
     Selector,
 )
+from tslc.catalog.memory import MemoryAccess
+from tslc.catalog.semantics import PrimitiveOperation
 
 
 @pytest.mark.parametrize("profile", ("scalar", "skylake"))
@@ -304,7 +306,7 @@ def test_sve_runtime_lane_counts_use_typed_query(catalog: Catalog) -> None:
     assert typed_query_bodies > 0
     assert offenders == []
 
-def test_sve_plain_load_store_intrinsics_stay_in_owning_primitives(
+def test_sve_plain_load_store_intrinsics_stay_in_typed_memory_owners(
     catalog: Catalog,
 ) -> None:
     offenders: list[str] = []
@@ -319,8 +321,20 @@ def test_sve_plain_load_store_intrinsics_stay_in_owning_primitives(
                 has_plain_store = any(
                     token in body for token in ("intrin<svst1>", "intrin<svst1,")
                 )
-                if (has_plain_load and primitive.name != "load") or (
-                    has_plain_store and primitive.name != "store"
+                owns_load = (
+                    primitive.operation is not None
+                    and primitive.operation.kind is PrimitiveOperation.LOAD
+                    and primitive.memory is not None
+                    and primitive.memory.access is MemoryAccess.READ
+                )
+                owns_store = (
+                    primitive.operation is not None
+                    and primitive.operation.kind is PrimitiveOperation.STORE
+                    and primitive.memory is not None
+                    and primitive.memory.access is MemoryAccess.WRITE
+                )
+                if (has_plain_load and not owns_load) or (
+                    has_plain_store and not owns_store
                 ):
                     offenders.append(
                         f"{primitive.name}:{'/'.join(implementation.selector_path)}"

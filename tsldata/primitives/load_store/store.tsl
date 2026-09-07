@@ -415,7 +415,7 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask_repr(ptr, mask):
             } else<generation> {
               let<type>(MaskBase, base::unsigned_of(base::in));
               let<type>(MaskVec, vector::as_base(MaskBase));
-              call<primitive=store[MaskVec], attrs[aligned=value(primitive::attribute(aligned))]>(
+              call<primitive=store[MaskVec], attrs[aligned=value(primitive::attribute(aligned))], discharge[contiguous_memory_extent, selected_memory_alignment]>(
                 cast<reinterpret, type=ptr>(MaskBase, ptr),
                 call<primitive=mov[MaskVec], attrs[mask=zero]>(
                   mask,
@@ -442,7 +442,7 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask_repr(ptr, mask):
             } else<generation> {
               let<type>(MaskBase, base::unsigned_of(base::in));
               let<type>(MaskVec, vector::as_base(MaskBase));
-              call<primitive=store[MaskVec], attrs[aligned=value(primitive::attribute(aligned))]>(
+              call<primitive=store[MaskVec], attrs[aligned=value(primitive::attribute(aligned))], discharge[contiguous_memory_extent, selected_memory_alignment]>(
                 cast<reinterpret, type=ptr>(MaskBase, ptr),
                 call<primitive=mov[MaskVec], attrs[mask=zero]>(
                   mask,
@@ -493,7 +493,7 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask_repr(ptr, mask):
             } else<generation> {
               let<type>(MaskVec, vector::as_base(base::unsigned_of(base::in)));
               var<const_infer>(mask_vec, call<primitive=reinterpret[Vec, MaskVec]>(mask));
-              call<primitive=store[MaskVec], attrs[aligned=value(primitive::attribute(aligned))]>(
+              call<primitive=store[MaskVec], attrs[aligned=value(primitive::attribute(aligned))], discharge[contiguous_memory_extent, selected_memory_alignment]>(
                 cast<reinterpret, type=ptr>(base::unsigned_of(base::in), ptr),
                 mask_vec
               );
@@ -536,7 +536,7 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask_repr(ptr, mask):
             } else<generation> {
               let<type>(MaskWord, base::unsigned_of(base::in));
               let<type>(MaskVec, vector::as_base(MaskWord));
-              call<primitive=store[MaskVec], attrs[aligned=value(primitive::attribute(aligned))]>(
+              call<primitive=store[MaskVec], attrs[aligned=value(primitive::attribute(aligned))], discharge[contiguous_memory_extent, selected_memory_alignment]>(
                 cast<reinterpret, type=ptr>(MaskWord, ptr),
                 call<primitive=to_vector[MaskVec]>(mask)
               );
@@ -859,9 +859,9 @@ prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
           reasons [raw_pointer]
         implementation:
           tsil """
-              var<const_infer>(mem_vec, call<primitive=load[Vec], attrs[aligned=value(primitive::attribute(aligned))]>(ptr));
+              var<const_infer>(mem_vec, call<primitive=load[Vec], attrs[aligned=value(primitive::attribute(aligned))], forward[contiguous_memory_extent, selected_memory_alignment]>(ptr));
               var<const_infer>(selected_vec, call<primitive=select>(mask, data, mem_vec));
-              call<primitive=store, attrs[aligned=primitive::attribute(aligned)]>(
+              call<primitive=store, attrs[aligned=primitive::attribute(aligned)], discharge[contiguous_memory_extent, selected_memory_alignment]>(
                 ptr,
                 selected_vec
               );

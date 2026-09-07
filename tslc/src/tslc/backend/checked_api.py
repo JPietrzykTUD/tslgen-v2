@@ -33,10 +33,9 @@ from tslc.lower.lowerer import LoweredSpecialization
 # are included because the current lowerer adds them as internal-only effects;
 # neither label itself declares a new public caller obligation.
 # Labels such as ``unchecked_index`` and ``unsafe_operation`` are deliberately
-# not accepted here: without a typed caller-obligation model the checked
-# planner cannot prove that a range check discharges them. Slice 9 still has to
-# prove that each unsafe callee's own dynamic conditions were forwarded or
-# discharged; admitting its internal framing label is not that proof.
+# not accepted here: an internal framing label is not proof of a public caller
+# obligation. Typed call-precondition dispositions and transitive closure own
+# that proof independently, and checked admission fails on any unresolved gap.
 _RANGE_COMPATIBLE_IMPLEMENTATION_REASONS = frozenset(
     {
         "compiler_builtin",
@@ -204,6 +203,8 @@ def checked_api_plan(
     """Plan a checked twin only when every catastrophic condition is checkable."""
 
     if not specializations:
+        return None
+    if any(spec.unresolved_call_preconditions for spec in specializations):
         return None
     first = specializations[0]
     declared = first.primitive_semantics.preconditions

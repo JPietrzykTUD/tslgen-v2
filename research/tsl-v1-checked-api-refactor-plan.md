@@ -2,9 +2,9 @@
 
 Date: 2026-09-02
 
-Status: post-implementation review; Slices 0 through 8 are implemented, but
-TSL v1 release readiness remains blocked on explicit transitive-precondition
-accounting and the exact public-declaration manifest in Slices 9 and 10
+Status: post-implementation review; Slices 0 through 9 are implemented, but
+TSL v1 release readiness remains blocked on the exact public-declaration
+manifest in Slice 10
 
 Related evidence: [TSL v1.0.0 generated API and documentation audit](tsl-v1-generated-api-docs-audit.md)
 
@@ -1321,6 +1321,46 @@ Stop release if the implementation requires parsing raw target-language text,
 silently treats a local `unsafe` block as proof, or propagates caller unsafety
 through every abstraction regardless of an explicit discharge.
 
+Implementation and review evidence:
+
+- `call<...>` now accepts canonical `forward[...]` and `discharge[...]` bags.
+  The parser retains their exact source occurrences, catalog validation resolves
+  them against typed callee contracts, and lowering attaches the resulting
+  obligations to typed dependency origins. Compiler-created checked-guard and
+  fixed-native edges carry distinct typed origins rather than pretending to be
+  source assertions.
+- Exact forwarding requires an unchanged vector identity, exact caller/callee
+  parameter identities, the same mask identity for mask-sensitive conditions,
+  and the same typed memory addressing, payload, and indexed-lane context.
+  Calls that transform any of those facts require an explicit author
+  `discharge[...]`; no raw target text is parsed to infer a proof.
+- Closure propagates unresolved obligations conservatively across alternatives
+  and duplicate lowered identities, and checked-wrapper planning refuses any
+  specialization group containing such a gap. Invalid source claims also fail
+  lowering at their exact condition span.
+- The validated corpus contains 127 dispositions: 9 exact forwards and 118
+  explicit discharges, with zero unresolved obligations. The deterministic,
+  schema-versioned inventory is available through
+  `tslc audit call-preconditions --format json` and is ratcheted by an exact
+  corpus test.
+- Compiler-owned completion, diagnostics, hover/references, semantic tokens,
+  explorer records, explain output, and lowered-stage dumps expose the same
+  facts. The TypeScript client renders opaque compiler-provided strings and
+  contains no condition vocabulary or proof rules.
+- The design-review/fix loop rejected forwarding across changed vector and
+  memory-payload identities. That review exposed an SVE `f32`-to-`f64`
+  widening implementation whose internal full-width load could require more
+  input than the public target-vector extent. It now uses a predicate-limited
+  load owned by a typed read/load primitive contract; the ownership regression
+  test keys off those semantic facts rather than a primitive-name allowlist.
+- Validation passes: 2,731 ordinary compiler tests with 122 expected skips;
+  all 84 generated build/value tests; 453 focused compiler/authoring tests with
+  16 expected skips; 23 VS Code unit tests plus both grammar tests; complete
+  scalar/AVX2 C++ and Rust generation (50,984 specializations, 91 artifacts);
+  and focused SVE C++ cross-build/value execution under QEMU (3,363 generated
+  specializations and six successful build/test commands). `compileall`, mypy,
+  corpus check, shell syntax, and diff-whitespace gates also pass.
+
 ### Slice 10 — Exact backend public-declaration manifest
 
 Goal: make public compatibility exact without parsing or hashing rendered target
@@ -1531,17 +1571,12 @@ analysis plan. The TypeScript client owns presentation only, and
 
 ### Transitive calls leak or lose obligations
 
-Current limitation: lowering records callee identities and inserts local Rust
-`unsafe` blocks, while dependency closure propagates internal unsafety only. A
-review of the current call sites found matching root conditions, compile-time
-nonzero immediates, sanitized divisors, raw-pointer roots that remain unsafe, or
-compiler-sized local/fixed-array storage, but those discharge facts are not yet
-represented or validated by the compiler.
-
-Control: Slice 9 adds an explicit typed forwarded/discharged disposition for
-every applicable catastrophic callee condition. Checked-wrapper admission must
-reject unresolved closure obligations. Do not infer proofs from raw target text
-and do not make every sound abstraction caller-unsafe by blind propagation.
+Resolved control: Slice 9 adds an explicit typed forwarded/discharged
+disposition for every applicable catastrophic callee condition. Exact
+forwarding is compiler-validated from typed identities; transformed and local
+proofs remain visible author discharges. Dependency closure propagates any
+unresolved obligation and checked-wrapper admission fails closed. No proof is
+inferred from raw target text or from a local unsafe frame.
 
 ### Masked operations reject irrelevant lanes
 
@@ -1603,9 +1638,9 @@ The refactor is complete when:
     and TSIL grammar contain no copied precondition semantics.
 
 Post-implementation review validates items 2, 3, 5 through 8, and 10 through 13
-for directly declared operations after the corrections recorded above. Items 1,
-4, and 9 are not yet release-complete: Slice 9 must turn the reviewed current
-transitive-call assumptions into compiler-validated obligations, and Slice 10
-must add the exact backend declaration manifest. The typed source-family and
-checked-coverage baselines remain strong semantic ratchets, but they are not a
-substitute for either gate.
+for directly declared operations after the corrections recorded above. Slice 9
+also validates transitive catastrophic-precondition accounting. Items 1, 4,
+and 9 are not yet release-complete because Slice 10 must classify and ratchet
+every backend public declaration exactly. The typed source-family,
+checked-coverage, and call-precondition baselines remain strong semantic
+ratchets, but they are not a substitute for that final gate.

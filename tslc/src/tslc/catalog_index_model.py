@@ -67,6 +67,17 @@ class IndexedOccurrence:
 
 
 @dataclass(frozen=True, slots=True)
+class IndexedCallPreconditionDisposition:
+    """One authored call-site proof retained for explorer projections."""
+
+    caller: str
+    callee: str
+    condition: str
+    disposition: Literal["forward", "discharge"]
+    span: SourceSpan
+
+
+@dataclass(frozen=True, slots=True)
 class CatalogIndex:
     primitive_definitions: Mapping[str, tuple[SourceSpan, ...]] = field(default_factory=dict)
     extension_definitions: Mapping[str, tuple[SourceSpan, ...]] = field(default_factory=dict)
@@ -87,6 +98,9 @@ class CatalogIndex:
     enum_references: Mapping[tuple[SymbolKind, str], tuple[SourceSpan, ...]] = field(default_factory=dict)
     primitive_calls: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     primitive_callers: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    primitive_call_preconditions: Mapping[
+        str, tuple[IndexedCallPreconditionDisposition, ...]
+    ] = field(default_factory=dict)
     occurrences_by_path: Mapping[Path, tuple[IndexedOccurrence, ...]] = field(default_factory=dict)
     document_symbols_by_path: Mapping[Path, tuple[IndexedDocumentSymbol, ...]] = field(default_factory=dict)
     semantic_tokens_by_path: Mapping[Path, tuple[IndexedSemanticToken, ...]] = field(default_factory=dict)
@@ -116,6 +130,7 @@ class CatalogIndex:
             "enum_references",
             "primitive_calls",
             "primitive_callers",
+            "primitive_call_preconditions",
             "occurrences_by_path",
             "document_symbols_by_path",
             "semantic_tokens_by_path",
@@ -247,6 +262,7 @@ __all__ = (
     "CatalogIndex",
     "ENUM_SYMBOL_KINDS",
     "IndexedOccurrence",
+    "IndexedCallPreconditionDisposition",
     "SymbolKind",
     "definitions_for",
     "references_for",

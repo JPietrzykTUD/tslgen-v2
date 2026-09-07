@@ -24,6 +24,10 @@ from tslc.backend.cpp import CppBackend
 from tslc.backend.cpp_checked_api import plan_cpp_checked_api
 from tslc.backend.rust import RustBackend
 from tslc.backend.registry import create_backend_dialect
+from tslc.catalog.call_preconditions import (
+    CallPreconditionObligation,
+    CallPreconditionObligationStatus,
+)
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.memory import (
     MemoryAccess,
@@ -223,6 +227,23 @@ def test_total_integral_mask_test_gets_no_checked_twin_or_unsafe_surface(
 def test_empty_specialization_group_has_no_checked_or_unsafe_api() -> None:
     assert checked_api_plan(()) is None
     assert not public_call_requires_unsafe(())
+
+
+def test_unresolved_transitive_obligation_fails_checked_admission_closed(
+    catalog: Catalog,
+    machine_profiles: Mapping[str, MachineProfile],
+) -> None:
+    spec = _lowered(catalog, machine_profiles, "extract_value_at", "cpp")
+    unresolved = CallPreconditionObligation(
+        callee_condition=PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
+        disposition=None,
+        status=CallPreconditionObligationStatus.MISSING,
+        reason="fixture transitive obligation",
+    )
+
+    assert checked_api_plan(
+        (replace(spec, unresolved_call_preconditions=(unresolved,)),)
+    ) is None
 
 
 def test_insert_and_mask_set_follow_the_same_declared_lane_contract(

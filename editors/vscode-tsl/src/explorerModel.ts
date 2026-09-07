@@ -64,6 +64,14 @@ export interface ExplorerPrimitive {
   readonly totalSlots: number;
   readonly calls: readonly string[];
   readonly calledBy: readonly string[];
+  readonly callPreconditions: readonly ExplorerCallPrecondition[];
+}
+
+export interface ExplorerCallPrecondition {
+  readonly callee: string;
+  readonly condition: string;
+  readonly disposition: string;
+  readonly sites: number;
 }
 
 export interface PrimitiveExplorerResponse {

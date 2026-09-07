@@ -10,9 +10,17 @@ import pytest
 
 from tslc.api import generate_project
 from tslc.backend.registry import create_backend_dialect
+from tslc.catalog.call_preconditions import (
+    CallPreconditionDispositionKind,
+    CallPreconditionObligationStatus,
+)
 from tslc.catalog.model import Catalog, GenericParam
 from tslc.diagnostics import has_errors
-from tslc.ir.region_syntax import ParsedCallSelector, parse_call_selector
+from tslc.ir.region_syntax import (
+    ParsedCallSelector,
+    call_precondition_syntax_occurrences,
+    parse_call_selector,
+)
 from tslc.lower.dependencies import (
     CallDependency,
     GenericVectorReference,
@@ -387,6 +395,116 @@ def test_call_selector_parser_keeps_syntax_only_shape() -> None:
     )
     assert parse_call_selector("primitive=@self[Vec] attrs[mask=zero]") is None
     assert parse_call_selector("primitive=set_zero trailing") is None
+
+
+def test_call_selector_parses_canonical_precondition_dispositions() -> None:
+    text = (
+        "primitive=load[Vec], attrs[aligned=true], "
+        "forward[contiguous_memory_extent], "
+        "discharge[selected_memory_alignment]"
+    )
+
+    parsed = parse_call_selector(text)
+
+    assert parsed == ParsedCallSelector(
+        primitive_ref="load",
+        type_args=("Vec",),
+        attrs=(("aligned", "true"),),
+        forwarded_preconditions=("contiguous_memory_extent",),
+        discharged_preconditions=("selected_memory_alignment",),
+    )
+    assert tuple(
+        (item.disposition, item.condition, text[item.start : item.end])
+        for item in call_precondition_syntax_occurrences(text, parsed)
+    ) == (
+        ("forward", "contiguous_memory_extent", "contiguous_memory_extent"),
+        ("discharge", "selected_memory_alignment", "selected_memory_alignment"),
+    )
+
+
+@pytest.mark.parametrize(
+    "selector",
+    (
+        "primitive=load, discharge[contiguous_memory_extent], "
+        "forward[selected_memory_alignment]",
+        "primitive=load, forward[contiguous_memory_extent], "
+        "attrs[aligned=false]",
+        "primitive=load, forward[contiguous_memory_extent], "
+        "forward[selected_memory_alignment]",
+        "primitive=load, forward[]",
+    ),
+)
+def test_call_selector_rejects_noncanonical_disposition_bags(selector: str) -> None:
+    assert parse_call_selector(selector) is None
+
+
+def test_lowering_rejects_an_unresolved_typed_disposition(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    lowered = _lowering_for_body(
+        catalog,
+        machine_profiles,
+        "complete(call<primitive=div, forward[active_divisor_nonzero]>("
+        "left, right));",
+    )
+
+    assert lowered.specialization is None
+    diagnostic = next(
+        item
+        for item in lowered.diagnostics
+        if item.code == "TSL-LOWER-INVALID-CALL-PRECONDITION-FORWARD"
+    )
+    assert diagnostic.span is not None
+    assert diagnostic.span.end_column - diagnostic.span.column == len(
+        "active_divisor_nonzero"
+    )
+
+
+def test_lowered_call_edge_retains_a_resolved_typed_disposition(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    selected = next(
+        item
+        for item in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["sve"],
+            "mod",
+            ("si32",),
+            backend_id="cpp",
+        )
+        .selected
+        if item.extension.name == "sve"
+        and item.primitive.mask_mode is None
+    )
+    lowered = Lowerer().lower(
+        selected,
+        catalog,
+        create_backend_dialect(catalog, "cpp"),
+    )
+
+    assert lowered.specialization is not None, lowered.diagnostics
+    origin = next(
+        item
+        for item in lowered.specialization.call_dependency_origins
+        if item.dependency.primitive == "div"
+    )
+    assert tuple(
+        (binding.callee_parameter_index, binding.caller_parameter_index)
+        for binding in origin.argument_bindings
+    ) == ((0, 0), (1, 1))
+    assert len(origin.precondition_obligations) == 1
+    obligation = origin.precondition_obligations[0]
+    assert obligation.status is CallPreconditionObligationStatus.RESOLVED
+    assert obligation.disposition is not None
+    assert (
+        obligation.disposition.kind
+        is CallPreconditionDispositionKind.FORWARD
+    )
+    assert obligation.source is not None
+    assert lowered.specialization.unresolved_call_preconditions == ()
 
 
 def test_call_bracket_args_require_exact_generic_param_references(

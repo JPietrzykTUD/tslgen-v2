@@ -109,7 +109,7 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
             var<const_infer>(indices, call<primitive=sequence[IndexVec]>());
             var<const_infer>(limit, call<primitive=set1[IndexVec]>(cast<static>(IndexBase, active_count)));
             var<const_infer>(store_mask, call<primitive=less_than[IndexVec]>(indices, limit));
-            call<primitive=store[Vec], attrs[aligned=false, mask=pass_through]>(store_mask, ptr, packed);
+            call<primitive=store[Vec], attrs[aligned=false, mask=pass_through], discharge[contiguous_memory_extent]>(store_mask, ptr, packed);
           """
       ?i8:
         requires [sve]
@@ -608,7 +608,7 @@ prim<v:=cptr+> load_convert_up(ptr):
               tsil """
                    let<type>(InVec, vector::as(avx2, base::in));
                    let<type>(OutVec, vector::as_base(ToBase));
-                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false]>(ptr));
+                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false], discharge[contiguous_memory_extent]>(ptr));
                    complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm512_cvtepi8_epi16>(loaded)));
                 """
           si32:
@@ -620,7 +620,7 @@ prim<v:=cptr+> load_convert_up(ptr):
               tsil """
                    let<type>(InVec, vector::as(sse, base::in));
                    let<type>(OutVec, vector::as_base(ToBase));
-                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false]>(ptr));
+                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false], discharge[contiguous_memory_extent]>(ptr));
                    complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm512_cvtepi8_epi32>(loaded)));
                 """
           si64:
@@ -653,7 +653,7 @@ prim<v:=cptr+> load_convert_up(ptr):
               tsil """
                    let<type>(InVec, vector::as(avx2, base::in));
                    let<type>(OutVec, vector::as_base(ToBase));
-                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false]>(ptr));
+                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false], discharge[contiguous_memory_extent]>(ptr));
                    complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm512_cvtepu8_epi16>(loaded)));
                 """
           ui32:
@@ -665,7 +665,7 @@ prim<v:=cptr+> load_convert_up(ptr):
               tsil """
                    let<type>(InVec, vector::as(sse, base::in));
                    let<type>(OutVec, vector::as_base(ToBase));
-                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false]>(ptr));
+                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false], discharge[contiguous_memory_extent]>(ptr));
                    complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm512_cvtepu8_epi32>(loaded)));
                 """
           ui64:
@@ -697,7 +697,7 @@ prim<v:=cptr+> load_convert_up(ptr):
               tsil """
                    let<type>(InVec, vector::as(avx2, base::in));
                    let<type>(OutVec, vector::as_base(ToBase));
-                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false]>(ptr));
+                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false], discharge[contiguous_memory_extent]>(ptr));
                    complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm512_cvtepi16_epi32>(loaded)));
                 """
           si64:
@@ -709,7 +709,7 @@ prim<v:=cptr+> load_convert_up(ptr):
               tsil """
                    let<type>(InVec, vector::as(sse, base::in));
                    let<type>(OutVec, vector::as_base(ToBase));
-                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false]>(ptr));
+                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false], discharge[contiguous_memory_extent]>(ptr));
                    complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm512_cvtepi16_epi64>(loaded)));
                 """
       ui16:
@@ -724,7 +724,7 @@ prim<v:=cptr+> load_convert_up(ptr):
               tsil """
                    let<type>(InVec, vector::as(avx2, base::in));
                    let<type>(OutVec, vector::as_base(ToBase));
-                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false]>(ptr));
+                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false], discharge[contiguous_memory_extent]>(ptr));
                    complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm512_cvtepu16_epi32>(loaded)));
                 """
           ui64:
@@ -736,7 +736,7 @@ prim<v:=cptr+> load_convert_up(ptr):
               tsil """
                    let<type>(InVec, vector::as(sse, base::in));
                    let<type>(OutVec, vector::as_base(ToBase));
-                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false]>(ptr));
+                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false], discharge[contiguous_memory_extent]>(ptr));
                    complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm512_cvtepu16_epi64>(loaded)));
                 """
       si32:
@@ -751,7 +751,7 @@ prim<v:=cptr+> load_convert_up(ptr):
               tsil """
                    let<type>(InVec, vector::as(avx2, base::in));
                    let<type>(OutVec, vector::as_base(ToBase));
-                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false]>(ptr));
+                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false], discharge[contiguous_memory_extent]>(ptr));
                    complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm512_cvtepi32_epi64>(loaded)));
                 """
       ui32:
@@ -766,7 +766,7 @@ prim<v:=cptr+> load_convert_up(ptr):
               tsil """
                    let<type>(InVec, vector::as(avx2, base::in));
                    let<type>(OutVec, vector::as_base(ToBase));
-                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false]>(ptr));
+                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false], discharge[contiguous_memory_extent]>(ptr));
                    complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm512_cvtepu32_epi64>(loaded)));
                 """
       f32:
@@ -781,7 +781,7 @@ prim<v:=cptr+> load_convert_up(ptr):
               tsil """
                    let<type>(InVec, vector::as(avx2, base::in));
                    let<type>(OutVec, vector::as_base(ToBase));
-                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false]>(ptr));
+                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false], discharge[contiguous_memory_extent]>(ptr));
                    complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm512_cvtps_pd>(loaded)));
                 """
       si8:
@@ -797,8 +797,8 @@ prim<v:=cptr+> load_convert_up(ptr):
                    let<type>(HalfInVec, vector::as(avx2, base::in));
                    let<type>(HalfOutVec, vector::as(avx2, ToBase));
                    let<type>(OutVec, vector::as_base(ToBase));
-                   var<const_infer>(low, call<primitive=@self[HalfInVec, ToBase]>(ptr));
-                   var<const_infer>(high, call<primitive=@self[HalfInVec, ToBase]>(
+                   var<const_infer>(low, call<primitive=@self[HalfInVec, ToBase], discharge[contiguous_memory_extent]>(ptr));
+                   var<const_infer>(high, call<primitive=@self[HalfInVec, ToBase], discharge[contiguous_memory_extent]>(
                      ptr_add(ptr, value(generic::length(HalfOutVec)))
                    ));
                    var<infer>(result, call<primitive=insert[HalfOutVec, OutVec, 0]>(
@@ -820,8 +820,8 @@ prim<v:=cptr+> load_convert_up(ptr):
                    let<type>(HalfInVec, vector::as(avx2, base::in));
                    let<type>(HalfOutVec, vector::as(avx2, ToBase));
                    let<type>(OutVec, vector::as_base(ToBase));
-                   var<const_infer>(low, call<primitive=@self[HalfInVec, ToBase]>(ptr));
-                   var<const_infer>(high, call<primitive=@self[HalfInVec, ToBase]>(
+                   var<const_infer>(low, call<primitive=@self[HalfInVec, ToBase], discharge[contiguous_memory_extent]>(ptr));
+                   var<const_infer>(high, call<primitive=@self[HalfInVec, ToBase], discharge[contiguous_memory_extent]>(
                      ptr_add(ptr, value(generic::length(HalfOutVec)))
                    ));
                    var<infer>(result, call<primitive=insert[HalfOutVec, OutVec, 0]>(
@@ -845,7 +845,7 @@ prim<v:=cptr+> load_convert_up(ptr):
               tsil """
                    let<type>(InVec, vector::as(sse, base::in));
                    let<type>(OutVec, vector::as_base(ToBase));
-                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false]>(ptr));
+                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false], discharge[contiguous_memory_extent]>(ptr));
                    complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm256_cvtepi8_epi16>(loaded)));
                 """
           [si32, si64]:
@@ -878,7 +878,7 @@ prim<v:=cptr+> load_convert_up(ptr):
               tsil """
                    let<type>(InVec, vector::as(sse, base::in));
                    let<type>(OutVec, vector::as_base(ToBase));
-                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false]>(ptr));
+                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false], discharge[contiguous_memory_extent]>(ptr));
                    complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm256_cvtepu8_epi16>(loaded)));
                 """
           [ui32, ui64]:
@@ -911,7 +911,7 @@ prim<v:=cptr+> load_convert_up(ptr):
               tsil """
                    let<type>(InVec, vector::as(sse, base::in));
                    let<type>(OutVec, vector::as_base(ToBase));
-                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false]>(ptr));
+                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false], discharge[contiguous_memory_extent]>(ptr));
                    complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm256_cvtepi16_epi32>(loaded)));
                 """
           si64:
@@ -944,7 +944,7 @@ prim<v:=cptr+> load_convert_up(ptr):
               tsil """
                    let<type>(InVec, vector::as(sse, base::in));
                    let<type>(OutVec, vector::as_base(ToBase));
-                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false]>(ptr));
+                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false], discharge[contiguous_memory_extent]>(ptr));
                    complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm256_cvtepu16_epi32>(loaded)));
                 """
           ui64:
@@ -977,7 +977,7 @@ prim<v:=cptr+> load_convert_up(ptr):
               tsil """
                    let<type>(InVec, vector::as(sse, base::in));
                    let<type>(OutVec, vector::as_base(ToBase));
-                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false]>(ptr));
+                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false], discharge[contiguous_memory_extent]>(ptr));
                    complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm256_cvtepi32_epi64>(loaded)));
                 """
       ui32:
@@ -994,7 +994,7 @@ prim<v:=cptr+> load_convert_up(ptr):
               tsil """
                    let<type>(InVec, vector::as(sse, base::in));
                    let<type>(OutVec, vector::as_base(ToBase));
-                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false]>(ptr));
+                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false], discharge[contiguous_memory_extent]>(ptr));
                    complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm256_cvtepu32_epi64>(loaded)));
                 """
       f32:
@@ -1011,7 +1011,7 @@ prim<v:=cptr+> load_convert_up(ptr):
               tsil """
                    let<type>(InVec, vector::as(sse, base::in));
                    let<type>(OutVec, vector::as_base(ToBase));
-                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false]>(ptr));
+                   var<const_infer>(loaded, call<primitive=load[InVec], attrs[aligned=false], discharge[contiguous_memory_extent]>(ptr));
                    complete(cast<reinterpret>(register::generic(OutVec), intrin<_mm256_cvtps_pd>(loaded)));
                 """
     neon:
@@ -1299,7 +1299,10 @@ prim<v:=cptr+> load_convert_up(ptr):
             implementation:
               tsil """
                    let<type>(OutVec, vector::as_base(ToBase));
-                   var<const_infer>(loaded, call<primitive=load[Vec], attrs[aligned=false]>(ptr));
+                   var<const_infer>(loaded, intrin<svld1, build>(
+                     call<primitive=mask_true[OutVec]>(),
+                     ptr
+                   ));
                    complete(intrin<svcvt_, build[infix=ToBase, suffix=base::in, post=x]>(call<primitive=mask_true[OutVec]>(), loaded));
                 """
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:

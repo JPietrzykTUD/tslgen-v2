@@ -10,6 +10,7 @@ from tslc.authoring_completion_model import (
     completion_key as _completion_key,
 )
 from tslc.catalog.model import Catalog, RESULT_DIM_VECTOR
+from tslc.catalog.preconditions import precondition_values
 from tslc.ir.region_registry import (
     TSIL_REGION_BY_KEYWORD,
     TsilDynamicValueSource,
@@ -310,7 +311,14 @@ def _selector_bag_completions(
         return ()
     inner = current[bracket + 1 :]
     terms, starts = _selector_cursor_terms(inner)
-    if not all(_selector_option_matches(term, spec.options) for term in terms[:-1]):
+    if not all(
+        _selector_option_matches(
+            term,
+            spec.options,
+            dynamic_bare_values=spec.dynamic_bare_values,
+        )
+        for term in terms[:-1]
+    ):
         return ()
     option_current = terms[-1]
     option_leading = len(option_current) - len(option_current.lstrip())
@@ -319,6 +327,19 @@ def _selector_bag_completions(
     key, separator, value = option.partition("=")
     if not separator:
         records: list[AuthoringCompletion] = []
+        dynamic_values, dynamic_kind, dynamic_detail = _dynamic_selector_values(
+            spec.dynamic_bare_values,
+            catalog,
+        )
+        records.extend(
+            _shell_values(
+                dynamic_values,
+                prefix=option,
+                replacement=AuthoringTextRange(option_start, context.offset),
+                kind=dynamic_kind,
+                detail=dynamic_detail or f"value for {spec.name}",
+            )
+        )
         for candidate in spec.options:
             records.extend(
                 _shell_key(
@@ -390,7 +411,11 @@ def _selector_term_matches(raw: str, spec: TsilSelectorTermDescriptor) -> bool:
         return False
     inner = term[len(spec.name) + 1 : -1]
     return all(
-        _selector_option_matches(option, spec.options)
+        _selector_option_matches(
+            option,
+            spec.options,
+            dynamic_bare_values=spec.dynamic_bare_values,
+        )
         for option in _selector_cursor_terms(inner)[0]
     )
 
@@ -398,8 +423,12 @@ def _selector_term_matches(raw: str, spec: TsilSelectorTermDescriptor) -> bool:
 def _selector_option_matches(
     raw: str,
     options: tuple[TsilSelectorOptionDescriptor, ...],
+    *,
+    dynamic_bare_values: TsilDynamicValueSource | None = None,
 ) -> bool:
     key, separator, value = raw.strip().partition("=")
+    if not separator:
+        return dynamic_bare_values is not None and bool(key)
     if not separator or not value.strip():
         return False
     descriptor = next(
@@ -471,6 +500,8 @@ def _dynamic_selector_values(
             "function",
             "TSL primitive",
         )
+    if source == "precondition":
+        return precondition_values(), "value", "primitive precondition"
     if source is None:
         return (), "value", None
     prefix = {

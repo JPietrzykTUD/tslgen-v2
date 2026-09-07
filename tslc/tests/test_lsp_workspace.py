@@ -598,6 +598,14 @@ def test_primitive_explorer_projects_file_slots_counts_and_dependencies(
     )
     allocate = next(item for item in corpus.primitives if item.name == "allocate")
     assert (allocate.available_slots, allocate.total_slots) == (1, 1)
+    div = next(item for item in corpus.primitives if item.name == "div")
+    assert any(
+        item.callee == "div"
+        and item.condition == "active_divisor_nonzero"
+        and item.disposition == "discharge"
+        and item.sites > 1
+        for item in div.call_preconditions
+    )
     assert any(slot.status == "missing" for slot in corpus.slots)
 
     def unexpected_selection(*args, **kwargs):

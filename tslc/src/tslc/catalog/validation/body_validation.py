@@ -6,6 +6,7 @@ import re
 from collections.abc import Callable
 
 from tslc.catalog.model import PrimitiveMaskMode
+from tslc.catalog.preconditions import PreconditionKind
 from tslc.diagnostics import Diagnostic, diagnostic_at
 from tslc.ir.region_registry import DEFAULT_TSIL_REGION_DESCRIPTORS, region_shell_validator
 from tslc.ir.query_syntax import is_tsil_type_expression_syntax
@@ -122,6 +123,52 @@ def _validate_call_region(
             None,
         )
         if invalid_mask is None:
+            dispositions = (
+                *parsed.forwarded_preconditions,
+                *parsed.discharged_preconditions,
+            )
+            invalid_precondition = next(
+                (
+                    value
+                    for value in dispositions
+                    if value not in {kind.value for kind in PreconditionKind}
+                ),
+                None,
+            )
+            if invalid_precondition is not None:
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-BODY-BAD-CALL-PRECONDITION",
+                        message=(
+                            f"primitive {primitive_name!r}: unknown call "
+                            f"precondition {invalid_precondition!r}"
+                        ),
+                        source=region.source,
+                    )
+                )
+                return
+            duplicate = next(
+                (
+                    value
+                    for value in dispositions
+                    if dispositions.count(value) > 1
+                ),
+                None,
+            )
+            if duplicate is not None:
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-BODY-DUPLICATE-CALL-PRECONDITION",
+                        message=(
+                            f"primitive {primitive_name!r}: call precondition "
+                            f"{duplicate!r} has more than one disposition"
+                        ),
+                        source=region.source,
+                    )
+                )
+                return
             return
         diagnostics.append(
             diagnostic_at(

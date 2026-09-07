@@ -1805,11 +1805,11 @@ prim<v:=(v)> abs(data):
               var<const_infer>(lanes, value(vector::runtime_length));
               var<runtime_array>(Base, input, lanes);
               var<runtime_array>(Base, result, lanes);
-              call<primitive=store[Vec], attrs[aligned=false]>(input, data);
+              call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(input, data);
               loop<backend>(i, 0, lanes, 1) {
                 result[i] = call<primitive=@self[vector::as_extension(scalar)]>(input[i]);
               }
-              complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
+              complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
             """
     rvv:
       ui?:

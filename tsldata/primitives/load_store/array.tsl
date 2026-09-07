@@ -44,7 +44,7 @@ prim<s[]:=v> to_array(a):
         implementation:
           tsil """
                var<typed>(array_type<type(base::in), value(vector::length)>, tmp, value(uninit::array));
-              call<primitive=store>(tmp.data(), a);
+              call<primitive=store, discharge[contiguous_memory_extent]>(tmp.data(), a);
                complete(tmp) ;
             """
       f?:
@@ -56,7 +56,7 @@ prim<s[]:=v> to_array(a):
         implementation:
           tsil """
                var<typed>(array_type<type(base::in), value(vector::length)>, tmp, value(uninit::array));
-              call<primitive=store>(tmp.data(), a);
+              call<primitive=store, discharge[contiguous_memory_extent]>(tmp.data(), a);
                complete(tmp) ;
             """
     avx2:
@@ -69,7 +69,7 @@ prim<s[]:=v> to_array(a):
         implementation:
           tsil """
                var<typed>(array_type<type(base::in), value(vector::length)>, tmp, value(uninit::array));
-              call<primitive=store>(tmp.data(), a);
+              call<primitive=store, discharge[contiguous_memory_extent]>(tmp.data(), a);
                complete(tmp) ;
             """
       f?:
@@ -81,7 +81,7 @@ prim<s[]:=v> to_array(a):
         implementation:
           tsil """
                var<typed>(array_type<type(base::in), value(vector::length)>, tmp, value(uninit::array));
-              call<primitive=store>(tmp.data(), a);
+              call<primitive=store, discharge[contiguous_memory_extent]>(tmp.data(), a);
                complete(tmp) ;
             """
     sse:
@@ -110,7 +110,7 @@ prim<s[]:=v> to_array(a):
         implementation:
           tsil """
                var<typed>(array_type<type(base::in), value(vector::length)>, tmp, value(uninit::array));
-              call<primitive=store>(tmp.data(), a);
+              call<primitive=store, discharge[contiguous_memory_extent]>(tmp.data(), a);
                complete(tmp) ;
             """
     neon:
@@ -123,7 +123,7 @@ prim<s[]:=v> to_array(a):
         implementation:
           tsil """
                var<typed>(array_type<type(base::in), value(vector::length)>, tmp, value(uninit::array));
-              call<primitive=store>(tmp.data(), a);
+              call<primitive=store, discharge[contiguous_memory_extent]>(tmp.data(), a);
                complete(tmp) ;
             """
       f?:
@@ -135,7 +135,7 @@ prim<s[]:=v> to_array(a):
         implementation:
           tsil """
                var<typed>(array_type<type(base::in), value(vector::length)>, tmp, value(uninit::array));
-              call<primitive=store>(tmp.data(), a);
+              call<primitive=store, discharge[contiguous_memory_extent]>(tmp.data(), a);
                complete(tmp) ;
             """
     wasm128:
@@ -148,7 +148,7 @@ prim<s[]:=v> to_array(a):
         implementation:
           tsil """
                var<typed>(array_type<type(base::in), value(vector::length)>, tmp, value(uninit::array));
-              call<primitive=store>(tmp.data(), a);
+              call<primitive=store, discharge[contiguous_memory_extent]>(tmp.data(), a);
                complete(tmp) ;
             """
     sve:
@@ -161,7 +161,7 @@ prim<s[]:=v> to_array(a):
         implementation:
           tsil """
                var<typed>(array_type<type(base::in), value(vector::length)>, tmp, value(uninit::array));
-              call<primitive=store[Vec], attrs[aligned=false]>(tmp.data(), a);
+              call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(tmp.data(), a);
                complete(tmp) ;
             """
     [generic, oneapi_fpga]:
@@ -253,7 +253,7 @@ prim<v:=s[]> from_array(data):
           reasons []
         implementation:
           tsil """
-            complete(call<primitive=load[Vec], attrs[aligned=false]>(data.as_ptr()));
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(data.as_ptr()));
           """
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
@@ -278,7 +278,7 @@ prim<v:=s[]> from_array(data):
           reasons []
         implementation:
           tsil """
-            complete(call<primitive=load[Vec], attrs[aligned=false]>(data.as_ptr()));
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(data.as_ptr()));
           """
     sse:
       ?i?:
@@ -305,7 +305,7 @@ prim<v:=s[]> from_array(data):
           reasons []
         implementation:
           tsil """
-            complete(call<primitive=load[Vec], attrs[aligned=false]>(data.as_ptr()));
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(data.as_ptr()));
           """
     [avx2, avx512, neon, wasm128]:
       arith:
@@ -320,7 +320,7 @@ prim<v:=s[]> from_array(data):
           reasons []
         implementation:
           tsil """
-            complete(call<primitive=load[Vec], attrs[aligned=false]>(data.as_ptr()));
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(data.as_ptr()));
           """
 prim<s:=v[idx]> extract_value(a):
   operation extract_lane
