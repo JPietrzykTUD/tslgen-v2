@@ -38,6 +38,8 @@ from tslc.backend.cpp_profile import (
     _cpp_native_registration,
     _cpp_registration,
     _cpp_sized_registration,
+    cpp_native_registration_extensions,
+    cpp_sized_registration_extensions,
     cpp_compiler_capability_condition,
     cpp_compiler_capability_diagnostic,
     cpp_extension_availability_condition,
@@ -52,6 +54,7 @@ from tslc.lower.lowerer import (
     LoweredTypeParam,
     varying_positions,
 )
+from tslc.names import identifier_slug
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 
@@ -109,6 +112,25 @@ class CppSmokeInstantiation:
 
 
 @dataclass(frozen=True, slots=True)
+class CppProfilePublicSupport:
+    """Non-stable public support declarations emitted in one profile header."""
+
+    extension_names: tuple[str, ...]
+    sized_reg_param_extensions: tuple[str, ...]
+    has_dataparallel_mappings: bool
+    dataparallel_policy_name: str | None = None
+    dataparallel_mask_namespace: str | None = None
+
+    def __post_init__(self) -> None:
+        if not set(self.sized_reg_param_extensions) <= set(self.extension_names):
+            raise ValueError("sized reg_param registrations require extension tags")
+        if (self.dataparallel_policy_name is None) != (
+            self.dataparallel_mask_namespace is None
+        ):
+            raise ValueError("overlay policy and mask namespace must be planned together")
+
+
+@dataclass(frozen=True, slots=True)
 class CppProfileHeader:
     """Decided content of one generated profile header and its smoke test."""
 
@@ -121,6 +143,7 @@ class CppProfileHeader:
     definition_groups: tuple[CppDefinitionGroup, ...]
     guard: CppProfileCompileGuard | None
     smoke: tuple[CppSmokeInstantiation, ...]
+    public_support: CppProfilePublicSupport
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,6 +151,7 @@ class CppProfileRenderModel:
     """One profile's decided C++ headers: the base header, then overlay groups."""
 
     profile_name: str
+    profile_namespace: str
     profile_family: str
     headers: tuple[CppProfileHeader, ...]
     compile_options: tuple[CppCompilerOption, ...]
@@ -228,6 +252,7 @@ def _cpp_profile_model(emitted_profile: EmittedProfile) -> CppProfileRenderModel
         headers.append(_cpp_overlay_header(emitted_profile, base, grouped, header_group))
     return CppProfileRenderModel(
         profile_name=emitted_profile.profile.name,
+        profile_namespace=identifier_slug(emitted_profile.profile.name),
         profile_family=emitted_profile.profile.family,
         headers=tuple(headers),
         compile_options=cpp_profile_compile_options(
@@ -247,15 +272,22 @@ def _cpp_base_header(
         for ext in emitted_exts
         if is_width_indexed_register_extension(emitted_profile.extensions.get(ext))
     ]
+    sized_exts = cpp_sized_registration_extensions(
+        emitted_exts, emitted_profile.extensions
+    )
+    native_exts = cpp_native_registration_extensions(
+        base, emitted_profile.extensions
+    )
     registrations = "".join(
         _cpp_registration(ext, emitted_profile.extensions.get(ext))
         for ext in x86_exts
     )
-    registrations += _cpp_sized_registration(emitted_exts, emitted_profile.extensions)
+    registrations += _cpp_sized_registration(sized_exts, emitted_profile.extensions)
     registrations += _cpp_native_registration(base, emitted_profile.extensions)
-    registrations += _cpp_inferred_simd_registrations(
+    inferred_registrations = _cpp_inferred_simd_registrations(
         base, emitted_profile.extensions
     )
+    registrations += inferred_registrations
     return CppProfileHeader(
         header_group=None,
         compiler_ids=(),
@@ -275,6 +307,11 @@ def _cpp_base_header(
             header_group=None,
         ),
         smoke=_cpp_smoke_instantiations(emitted_profile, base),
+        public_support=CppProfilePublicSupport(
+            extension_names=tuple(sorted({*x86_exts, *sized_exts, *native_exts})),
+            sized_reg_param_extensions=sized_exts,
+            has_dataparallel_mappings=bool(inferred_registrations),
+        ),
     )
 
 
@@ -284,12 +321,16 @@ def _cpp_overlay_header(
     grouped: Mapping[str, tuple[LoweredSpecialization, ...]],
     header_group: str,
 ) -> CppProfileHeader:
+    native_exts = cpp_native_registration_extensions(
+        grouped, emitted_profile.extensions
+    )
     registrations = _cpp_native_registration(grouped, emitted_profile.extensions)
-    registrations += _cpp_overlay_fixed_registrations(
+    overlay_registrations = _cpp_overlay_fixed_registrations(
         grouped,
         emitted_profile.extensions,
         header_group,
     )
+    registrations += overlay_registrations
     return CppProfileHeader(
         header_group=header_group,
         compiler_ids=tuple(
@@ -320,6 +361,17 @@ def _cpp_overlay_header(
             header_group=header_group,
         ),
         smoke=_cpp_smoke_instantiations(emitted_profile, grouped),
+        public_support=CppProfilePublicSupport(
+            extension_names=native_exts,
+            sized_reg_param_extensions=(),
+            has_dataparallel_mappings=bool(overlay_registrations),
+            dataparallel_policy_name=(
+                f"{header_group}_fixed" if overlay_registrations else None
+            ),
+            dataparallel_mask_namespace=(
+                f"{header_group}_mask" if overlay_registrations else None
+            ),
+        ),
     )
 
 

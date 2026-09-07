@@ -68,7 +68,36 @@ def test_public_api_matches_reviewed_v1_baseline() -> None:
         ],
     }
     assert baseline["cpp_checked_algorithm_families"]
-    assert baseline["version"] == 2
+    assert baseline["version"] == 3
+    exact = baseline["exact_backend_declarations"]
+    assert exact["profiles"] == ["scalar", "avx2"]
+    assert exact["cpp"]["schema_version"] == 1
+    assert exact["rust"]["schema_version"] == 1
+    for backend in ("cpp", "rust"):
+        declarations = exact[backend]["declarations"]
+        assert {item["stability"] for item in declarations} == {
+            "stable",
+            "unstable",
+            "implementation_detail",
+        }
+        assert not any(
+            item["stability"] == "stable" and item["kind"] == "overload_set"
+            for item in declarations
+        )
+    cpp_declarations = exact["cpp"]["declarations"]
+    span_data = next(
+        item for item in cpp_declarations if item["identity"] == "tsl::span<T>::data"
+    )
+    assert span_data["qualifiers"] == ["const"]
+    assert span_data["noexcept"] is True
+    rust_declarations = exact["rust"]["declarations"]
+    checked_root = next(
+        item
+        for item in rust_declarations
+        if item["identity"] == "crate::load_masked_checked#v:=(m,cptr,v)"
+    )
+    assert checked_root["kind"] == "reexport"
+    assert checked_root["checked_of"] == "crate::load_masked#v:=(m,cptr,v)"
     primitive_families = baseline["primitive_callable_families"]
     assert isinstance(primitive_families, list)
     gather = next(

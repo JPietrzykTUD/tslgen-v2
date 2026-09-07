@@ -6,17 +6,24 @@ import json
 
 from tslc.backend.cpp import CppBackend
 from tslc.backend.cpp_algorithm_contracts import cpp_algorithm_contract_holes
+from tslc.backend.cpp_algorithm_public_declarations import (
+    cpp_algorithm_declaration_holes,
+)
 from tslc.backend.cpp_profile_model import (
     CppProfileHeader,
     CppProjectRenderModel,
     CppSmokeInstantiation,
     cpp_project_render_model,
 )
+from tslc.backend.cpp_public_api import cpp_public_api_manifest
+from tslc.backend.cpp_static_public_declarations import (
+    cpp_static_declaration_holes,
+)
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.compiler_assets import RenderAssets
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact
-from tslc.render._common import slug, text
+from tslc.render._common import text
 from tslc.render.cpp_build import _cpp_cmakelists
 from tslc.value_tests.model import ValueTestProjectPlan
 
@@ -45,11 +52,7 @@ def cpp_artifacts(
     artifacts = [
         text(
             f"cpp/include/{header}",
-            (
-                assets.fill(header, **cpp_algorithm_contract_holes())
-                if header == "tsl_algorithm_checked.hpp"
-                else assets.text(header)
-            ),
+            _cpp_static_header(header, assets),
             media_type=media_type,
         )
         for header in _CPP_STATIC_HEADERS
@@ -70,10 +73,15 @@ def cpp_artifacts(
         # Ship the formatter config at the C++ project root so `clang-format` (ascending from
         # include/ and tests/) finds it and the generated project is self-contained.
         text("cpp/.clang-format", assets.text(".clang-format"), media_type=media_type),
+        text(
+            "cpp/public-api.json",
+            cpp_public_api_manifest(profiles, model=model).serialize(),
+            media_type="application/json",
+        ),
     ]
     for profile_model in model.profiles:
         base = profile_model.base_header
-        profile_slug = slug(profile_model.profile_name)
+        profile_slug = profile_model.profile_namespace
         profile_metadata = assets.fill(
             "cpp_profile_metadata.hpp.tmpl",
             profile_namespace=profile_slug,
@@ -149,6 +157,15 @@ def cpp_artifacts(
         )
     )
     return artifacts
+
+
+def _cpp_static_header(header: str, assets: RenderAssets) -> str:
+    if header == "tsl_algorithm_checked.hpp":
+        return assets.fill(header, **cpp_algorithm_contract_holes())
+    if header == "tsl_algorithm.hpp":
+        return assets.fill(header, **cpp_algorithm_declaration_holes())
+    holes = cpp_static_declaration_holes(header)
+    return assets.fill(header, **holes) if holes else assets.text(header)
 
 
 def _cpp_profile_header(
@@ -234,7 +251,7 @@ def _cpp_conditioned_definitions(backend: CppBackend, header: CppProfileHeader) 
 def _cpp_dispatch(model: CppProjectRenderModel, assets: RenderAssets) -> str:
     profile_cases: list[str] = []
     for index, profile_model in enumerate(model.profiles):
-        profile_slug = slug(profile_model.profile_name)
+        profile_slug = profile_model.profile_namespace
         profile_cases.append(
             assets.fill(
                 "cpp_dispatch_case.hpp.tmpl",
@@ -247,7 +264,7 @@ def _cpp_dispatch(model: CppProjectRenderModel, assets: RenderAssets) -> str:
     for group in model.dispatch_header_groups:
         group_profile_cases: list[str] = []
         for index, profile_model in enumerate(model.profiles):
-            profile_slug = slug(profile_model.profile_name)
+            profile_slug = profile_model.profile_namespace
             group_profile_cases.append(
                 assets.fill(
                     "cpp_dispatch_case.hpp.tmpl",

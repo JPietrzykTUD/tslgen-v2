@@ -333,7 +333,8 @@ def test_current_lowered_families_plan_without_reopening_the_catalog(
     assert "div_checked" not in float_div_block
     assert "pub fn convert_lanes<U>(self)" in facade
     assert "pub unsafe fn store<T, const N: usize, const ALIGNED: bool>" in facade
-    assert "load_masked, load_masked_zero" in library
+    assert "pub use tsl_facade::load_masked;" in library
+    assert "pub use tsl_facade::load_masked_zero;" in library
     assert "macro_rules! impl_mask_binary_operator" not in facade
 
 

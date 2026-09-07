@@ -16,6 +16,20 @@ from tslc.backend.algorithm_contracts import (
     AlgorithmResultKind,
 )
 from tslc.backend.precondition_error_rendering import rust_precondition_error
+from tslc.backend.public_declarations import (
+    PublicDeclarationKind,
+    PublicDeclarationStability,
+)
+from tslc.backend.rust_algorithm_public_declarations import (
+    rust_profile_algorithm_aliases,
+    rust_profile_algorithm_declaration_holes,
+)
+from tslc.backend.rust_public_declarations import (
+    RustPublicDeclaration,
+    RustPublicParameter,
+    rust_const_parameter,
+    rust_type_parameter,
+)
 from tslc.catalog.preconditions import PreconditionErrorKind
 
 
@@ -168,6 +182,20 @@ def _rust_range_parameter(name: str, role: AlgorithmRangeRole) -> str:
     raise ValueError(f"unsupported selected Rust range {name!r} ({role!r})")
 
 
+def _rust_range_public_parameter(
+    name: str, role: AlgorithmRangeRole
+) -> RustPublicParameter:
+    rendered = _rust_range_parameter(name, role).strip().removesuffix(",")
+    rendered_name, separator, type_spelling = rendered.partition(":")
+    if not separator or rendered_name != name:
+        raise ValueError("selected Rust range parameter rendering is incomplete")
+    return RustPublicParameter(
+        name=name,
+        type_spelling=type_spelling.strip(),
+        role=f"range:{role.value}",
+    )
+
+
 def _rust_selected_result(contract: AlgorithmContract, trait: str) -> str:
     if contract.result_kind is AlgorithmResultKind.VOID:
         return "()"
@@ -198,20 +226,11 @@ def _selected_extra_profile_bounds(contract: AlgorithmContract) -> tuple[str, ..
 def render_rust_scaled_checked_algorithm(contract: AlgorithmContract) -> str:
     """Render one checked selected-row algorithm from typed range roles."""
 
-    trait = _selected_kernel_trait(contract)
-    parameters = "\n".join(
-        _rust_range_parameter(binding.name, binding.role)
-        for binding in contract.ranges
+    declaration = rust_scaled_checked_algorithm_declaration(
+        contract,
+        reachability=("tsl_algorithm",),
+        profile_wrapper=False,
     )
-    result = _rust_selected_result(contract, trait)
-    profile_bounds = "\n".join(_selected_extra_profile_bounds(contract))
-    if profile_bounds:
-        profile_bounds = "\n" + profile_bounds
-    mask_bounds = ""
-    if contract.result_kind is AlgorithmResultKind.COUNT:
-        mask_bounds = """
-    <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
-    <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,"""
     driver = _driving_range(contract)
     raw_arguments = ["policy", "op"]
     for binding in contract.ranges:
@@ -248,20 +267,7 @@ def render_rust_scaled_checked_algorithm(contract: AlgorithmContract) -> str:
 /// Address multiplication, alignment, bounds, and output capacity are checked
 /// before the operation is invoked.
 {error_docs}
-pub fn {contract.name}_scaled_checked<Profile, const SCALE: u32, Policy, Op, T>(
-    policy: Policy,
-    op: &mut Op,
-{parameters}
-) -> Result<{result}, crate::PreconditionError>
-where
-    Policy: VectorFor<Profile, T>,
-    <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
-    Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
-    Profile: SelectedLoad<<Policy as VectorFor<Profile, T>>::Vec, SCALE>
-        + SelectedLoad<Simd<T, Scalar>, SCALE>{profile_bounds},
-    Op: {trait}<<Policy as VectorFor<Profile, T>>::Vec>
-        + {trait}<Simd<T, Scalar>>,{mask_bounds}
-{{
+{declaration.render_definition_head()}
 {check}
 {invocation}
 }}"""
@@ -277,22 +283,11 @@ def _driving_range(contract: AlgorithmContract) -> str:
 
 
 def _render_rust_profile_scaled_checked(contract: AlgorithmContract) -> str:
-    trait = _selected_kernel_trait(contract)
-    parameters = "\n".join(
-        "    " + _rust_range_parameter(binding.name, binding.role)
-        for binding in contract.ranges
+    declaration = rust_scaled_checked_algorithm_declaration(
+        contract,
+        reachability=("profile", "algo"),
+        profile_wrapper=True,
     )
-    result = _rust_selected_result(contract, trait)
-    profile_bounds = "\n".join(
-        "    " + line for line in _selected_extra_profile_bounds(contract)
-    )
-    if profile_bounds:
-        profile_bounds = "\n" + profile_bounds
-    mask_bounds = ""
-    if contract.result_kind is AlgorithmResultKind.COUNT:
-        mask_bounds = """
-        <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord,
-        <Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord,"""
     arguments = ", ".join(
         ("policy", "op", *(binding.name for binding in contract.ranges))
     )
@@ -303,24 +298,101 @@ def _render_rust_profile_scaled_checked(contract: AlgorithmContract) -> str:
         ).splitlines()
     )
     return f"""{docs}
-    pub fn {contract.name}_scaled_checked<const SCALE: u32, Policy, Op, T>(
-        policy: Policy,
-        op: &mut Op,
-{parameters}
-    ) -> Result<{result}, crate::PreconditionError>
-    where
-        Policy: VectorFor<Profile, T>,
-        <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
-        Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
-        Profile: SelectedLoad<<Policy as VectorFor<Profile, T>>::Vec, SCALE>
-            + SelectedLoad<Simd<T, Scalar>, SCALE>{profile_bounds},
-        Op: {trait}<<Policy as VectorFor<Profile, T>>::Vec>
-            + {trait}<Simd<T, Scalar>>,{mask_bounds}
-    {{
+{_indent(declaration.render_definition_head(), 4)}
         crate::tsl_algorithm::{contract.name}_scaled_checked::<
             Profile, SCALE, Policy, Op, T,
         >({arguments})
     }}"""
+
+
+def rust_scaled_checked_algorithm_declaration(
+    contract: AlgorithmContract,
+    *,
+    reachability: tuple[str, ...],
+    profile_wrapper: bool,
+) -> RustPublicDeclaration:
+    """Finalize one selected-row checked signature for rendering and manifesting."""
+
+    trait = _selected_kernel_trait(contract)
+    profile_bound = (
+        "Profile: SelectedLoad<<Policy as VectorFor<Profile, T>>::Vec, SCALE> "
+        "+ SelectedLoad<Simd<T, Scalar>, SCALE>"
+        + "".join(f" {item.strip()}" for item in _selected_extra_profile_bounds(contract))
+    )
+    where_predicates = [
+        "Policy: VectorFor<Profile, T>",
+        "<Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>",
+        "Simd<T, Scalar>: StaticSimdVector<BaseType = T>",
+        profile_bound,
+        (
+            f"Op: {trait}<<Policy as VectorFor<Profile, T>>::Vec> "
+            f"+ {trait}<Simd<T, Scalar>>"
+        ),
+    ]
+    if contract.result_kind is AlgorithmResultKind.COUNT:
+        where_predicates.extend(
+            (
+                "<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord",
+                "<Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord",
+            )
+        )
+    name = f"{contract.name}_scaled_checked"
+    owner = "crate::profile::algo" if profile_wrapper else "crate::tsl_algorithm"
+    return RustPublicDeclaration(
+        identity=f"{owner}::{name}#algorithm",
+        name=name,
+        owner=owner,
+        reachability=reachability,
+        stability=(
+            PublicDeclarationStability.STABLE
+            if profile_wrapper
+            else PublicDeclarationStability.UNSTABLE
+        ),
+        kind=PublicDeclarationKind.FUNCTION,
+        overload="selected-row-scaled-checked",
+        visibility="pub",
+        generic_parameters=(
+            *((rust_type_parameter("Profile"),) if not profile_wrapper else ()),
+            rust_const_parameter("SCALE", "u32"),
+            rust_type_parameter("Policy"),
+            rust_type_parameter("Op"),
+            rust_type_parameter("T"),
+        ),
+        parameters=(
+            RustPublicParameter("policy", "Policy", "policy"),
+            RustPublicParameter("op", "&mut Op", "operation"),
+            *(
+                _rust_range_public_parameter(binding.name, binding.role)
+                for binding in contract.ranges
+            ),
+        ),
+        where_predicates=tuple(where_predicates),
+        result_type=(
+            f"Result<{_rust_selected_result(contract, trait)}, "
+            "crate::PreconditionError>"
+        ),
+        result_form="result",
+        checked_of=f"{owner}::{contract.name}_scaled_raw#algorithm",
+        error_form="result",
+    )
+
+
+def rust_profile_scaled_checked_algorithm_declarations(
+    reachability: tuple[str, ...],
+) -> tuple[RustPublicDeclaration, ...]:
+    return tuple(
+        rust_scaled_checked_algorithm_declaration(
+            contract,
+            reachability=reachability,
+            profile_wrapper=True,
+        )
+        for contract in _selected_contracts()
+    )
+
+
+def _indent(text: str, spaces: int) -> str:
+    prefix = " " * spaces
+    return "\n".join(f"{prefix}{line}" if line else "" for line in text.splitlines())
 
 
 def _selected_contracts() -> tuple[AlgorithmContract, ...]:
@@ -341,20 +413,17 @@ def rust_algorithm_contract_holes() -> Mapping[str, str]:
         f"check_{contract.name}": render_rust_algorithm_check(contract)
         for contract in ALGORITHM_CONTRACTS.values()
     }
-    aliases = "\n".join(
-        (
-            "/// Unchecked raw-pointer form. The caller must uphold the "
-            "documented safety contract.\n"
-            "#[allow(unused_imports)]\n"
-            f"pub use self::{contract.name}_raw as {contract.name};"
-        )
-        for contract in ALGORITHM_CONTRACTS.values()
+    aliases = rust_profile_algorithm_aliases(
+        ("tsl_algorithm",),
+        owner="crate::tsl_algorithm",
     )
-    profile_aliases = "\n".join(
-        f"    {line}" if line else ""
-        for line in aliases.splitlines()
+    profile_aliases = rust_profile_algorithm_aliases(
+        ("profile", "algo"),
+        owner="crate::profile::algo",
+        indent=4,
     )
     return {
+        **rust_profile_algorithm_declaration_holes(),
         **checks,
         **{
             f"docs_{contract.name}": render_rust_algorithm_error_docs(contract)
@@ -383,5 +452,7 @@ __all__ = (
     "render_rust_algorithm_check",
     "render_rust_algorithm_error_docs",
     "render_rust_scaled_checked_algorithm",
+    "rust_profile_scaled_checked_algorithm_declarations",
+    "rust_scaled_checked_algorithm_declaration",
     "rust_algorithm_contract_holes",
 )

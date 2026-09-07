@@ -14,6 +14,10 @@ from tslc.backend.primitive_facade import (
 )
 from tslc.backend.rust_algorithm_manifest import RUST_ALGORITHM_RESERVED_NAMES
 from tslc.backend.rust_algorithm_contracts import rust_algorithm_contract_holes
+from tslc.backend.rust_algorithm_public_declarations import (
+    rust_profile_algorithm_module_declaration,
+    rust_profile_algorithm_support_reexports,
+)
 from tslc.backend.rust_facades import (
     rust_algorithm_primitive_facades,
     rust_algorithm_primitive_facades_require_rebind,
@@ -51,16 +55,18 @@ def rust_algorithm_module(
         )
         else ""
     )
+    support_reexports = "\n".join(
+        "    " + declaration.render_head() + ";"
+        for declaration in rust_profile_algorithm_support_reexports(
+            ("profile", "algo")
+        )
+    )
+    module_head = rust_profile_algorithm_module_declaration(
+        ("profile",),
+    ).render_head()
     parts = [
-        "pub mod algo {\n"
-        "    pub use crate::tsl_algorithm::{\n"
-        "        mask_layout, BinaryAggregateKernel, BinaryConsumeKernel, BinaryKernel,\n"
-        "        BinaryPredicateKernel, ChunkKernel, IntegralMaskWord,\n"
-        "        MaskedBinaryAggregateKernel, MaskedBinaryConsumeKernel,\n"
-        "        MaskedBinaryKernel, MaskedUnaryAggregateKernel,\n"
-        "        MaskedUnaryConsumeKernel, MaskedUnaryKernel, UnaryAggregateKernel,\n"
-        "        UnaryConsumeKernel, UnaryKernel, UnaryPredicateKernel, MaskLayout,\n"
-        "    };\n\n"
+        f"{module_head} {{\n"
+        f"{support_reexports}\n\n"
         "    use crate::tsl_algorithm::{\n"
         "        CompressStore, IntegralMask, LoadStore, MaskFromIntegral, MaskedStore,\n"
         f"        MaskPopulationCount, SelectedLoad, VectorFor{rebind_imports},\n"

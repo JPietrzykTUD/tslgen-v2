@@ -32,13 +32,11 @@ pub mod tsl_core;
 pub mod tsl_algorithm;
 #[doc(hidden)]
 pub mod tsl_test_core;
-pub use tsl_core::PreconditionError;
-pub use tsl_algorithm::dataparallel;
+@{precondition_error_export}
+@{dataparallel_export}
 
 mod tsl_facade;
-pub use tsl_facade::{
-    Mask, NativeMask, NativeSimd, Simd, SimdElement, SupportedSimd,
-};
+@{facade_type_exports}
 @{facade_function_exports}
 
 #[cfg(any(feature = "std", tsl_variant_benchmarks))]
@@ -66,7 +64,7 @@ pub mod tsl_documentation;
 #[cfg(doc)]
 #[doc = "Profile-neutral union of generated primitive APIs."]
 #[doc(inline)]
-pub use crate::tsl_documentation as profile;
+@{documentation_profile_export}
 
 @{runtime_dispatch_module}
 

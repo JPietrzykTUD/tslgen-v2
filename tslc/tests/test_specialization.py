@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from hashlib import sha256
+import json
 import re
 from pathlib import Path
 
@@ -16,7 +16,17 @@ from tslc.backend.primitive_facade import (
     contiguous_memory_primitive_facades,
 )
 from tslc.backend.cpp import CppBackend
+from tslc.backend.cpp_algorithm_public_declarations import (
+    cpp_algorithm_public_declarations,
+)
+from tslc.backend.cpp_public_api import cpp_public_api_manifest
+from tslc.backend.public_declarations import PublicDeclarationStability
 from tslc.backend.rust import RustBackend
+from tslc.backend.rust_api_planner import plan_rust_facade
+from tslc.backend.rust_dispatch import plan_rust_dispatch
+from tslc.backend.rust_names import rust_profile_module_name
+from tslc.backend.rust_public_api import rust_public_api_manifest
+from tslc.backend.rust_static_selection import plan_rust_static_selection
 from tslc.backend.rust_algorithm import (
     _RustAlgorithmImplTarget,
     _rust_algorithm_load_store_impl,
@@ -616,56 +626,26 @@ def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
     assert "has_same_alignment_residue" in helper
     assert "range_data" in helper
     assert "std::size(range)" in helper
-    assert "void for_each_chunk(Op&& op" in helper
-    assert "void for_each_chunk(Op&& op, Range& data)" in helper
-    assert "void transform_unary(Op&& op" in helper
-    assert "void transform_unary(Op&& op, const InputRange& input" in helper
+    assert all(
+        declaration.render_head(multiline=True) in umbrella
+        for declaration in cpp_algorithm_public_declarations()
+    )
     assert "transform_unary_loop_peel_to_aligned" in helper
     assert "alignment::assume_inputs_aligned" in helper
     assert "alignment::assume_output_aligned" in helper
-    assert "std::size_t ParallelN" in helper
     assert "transform_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment>" in helper
-    assert "void transform_binary(" in helper
     assert "transform_binary_loop" in helper
     assert "transform_binary_loop_peel_to_aligned" in helper
     assert "transform_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment>" in helper
     assert "namespace mask_layout" in helper
     for mask_layout in ("integral", "native", "bytes", "bits"):
         assert f"struct {mask_layout} {{}};" in helper
-    assert "fixed_native_mask_type" in helper
-    assert "native_mask_chunk_count" in helper
-    assert "fixed_byte_mask_type" in helper
-    assert "byte_mask_count" in helper
-    assert "fixed_bit_mask_type" in helper
-    assert "bit_mask_count" in helper
-    assert "std::size_t predicate_unary(" in helper
-    assert "std::size_t predicate_binary(" in helper
-    assert "void transform_where_unary(" in helper
-    assert "void transform_where_binary(" in helper
-    assert "void transform_masked_unary(" in helper
-    assert "void transform_masked_binary(" in helper
-    assert "std::size_t select_unary(" in helper
-    assert "std::size_t select_binary(" in helper
-    assert "std::size_t select_masked_unary(" in helper
-    assert "std::size_t select_masked_binary(" in helper
-    assert "std::size_t select_indices_unary(" in helper
-    assert "std::size_t select_indices_binary(" in helper
-    assert "std::size_t select_masked_indices_unary(" in helper
-    assert "std::size_t select_masked_indices_binary(" in helper
     assert "is_selection_index" in helper
     assert (
         "selection-vector output indices must use an unsigned integral row-id type"
         in helper
     )
-    assert "std::size_t select_selected_indices_unary(" in helper
-    assert "std::size_t select_selected_indices_binary(" in helper
     assert "append_selected_indices_from_mask" in helper
-    assert "void transform_selected_unary(" in helper
-    assert "void transform_selected_binary(" in helper
-    assert "auto aggregate_selected_unary(" in helper
-    assert "auto aggregate_selected_binary(" in helper
-    assert "void consume_selected_unary(" in helper
-    assert "void consume_selected_binary(" in helper
     assert (
         "selection-vector input indices must use an unsigned integral row-id type"
         in helper
@@ -673,21 +653,6 @@ def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
     assert "vector_for_selected_rows" in helper
     assert "load_selected_vector" in helper
     assert "gather_narrow" in helper
-    assert "std::size_t Scale = 0" in helper
-    assert "std::size_t count_unary(" in helper
-    assert "std::size_t count_binary(" in helper
-    assert "std::size_t count_masked_unary(" in helper
-    assert "std::size_t count_masked_binary(" in helper
-    assert "std::size_t count_selected_unary(" in helper
-    assert "std::size_t count_selected_binary(" in helper
-    assert "auto aggregate_unary(" in helper
-    assert "auto aggregate_binary(" in helper
-    assert "auto aggregate_masked_unary(" in helper
-    assert "auto aggregate_masked_binary(" in helper
-    assert "void consume_unary(" in helper
-    assert "void consume_binary(" in helper
-    assert "void consume_masked_unary(" in helper
-    assert "void consume_masked_binary(" in helper
     assert '#include "tsl_algorithm.hpp"' in dispatch
     assert "inline typename Vec::register_type load(" in avx2
     assert "inline void store(" in avx2
@@ -711,11 +676,8 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     facade = specialization_artifacts["rust/src/tsl_facade.rs"]
     documentation = specialization_artifacts["rust/src/tsl_documentation.rs"]
 
-    assert sha256(avx2.encode()).hexdigest() == (
-        "d0b200cb8a235d531314361fd333ca7f4becd3a93206571f97bf5ba61e41fb88"
-    )
-
     assert 'name = "tsl"' in cargo
+    assert '"backend": "rust"' in specialization_artifacts["rust/public-api.json"]
     assert "default = []" in cargo
     assert "avx2 = []" not in cargo
     assert "pub mod tsl_algorithm;" in lib
@@ -999,8 +961,9 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     assert "pub fn aggregate_binary_checked<Policy, Op, T>" in avx2
     assert "pub fn aggregate_masked_unary_checked<Policy, Op, T>" in avx2
     assert "pub fn aggregate_masked_binary_checked<Policy, Op, T>" in avx2
-    assert "pub use crate::tsl_algorithm::{" in avx2
-    assert "mask_layout, BinaryAggregateKernel" in avx2
+    assert "pub use crate::tsl_algorithm::BinaryKernel;" in avx2
+    assert "pub use crate::tsl_algorithm::mask_layout;" in avx2
+    assert "pub use crate::tsl_algorithm::BinaryAggregateKernel;" in avx2
     assert "parallelism" not in avx2
     assert "impl VectorFor<Profile, i32> for dataparallel::Fixed<1>" in avx2
     assert "type Vec = Simd<i32, Scalar>;" in avx2
@@ -1172,6 +1135,140 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
         "super::gather_narrow::<Simd<i32, super::Avx2>, Simd<usize, Generic<8>>, SCALE, 1>"
         in avx2
     )
+
+
+def test_generated_public_manifests_match_the_finalized_backend_plans(
+    specialization_result,
+    specialization_artifacts: dict[str, str],
+) -> None:
+    profiles = specialization_result.emitted_profiles
+    static_selection = plan_rust_static_selection(profiles)
+    facade = plan_rust_facade(profiles, static_selection)
+    dispatch = plan_rust_dispatch(profiles, static_selection, facade)
+    cpp_manifest = cpp_public_api_manifest(profiles)
+    rust_manifest_plan = rust_public_api_manifest(
+        profiles, static_selection, facade, dispatch
+    )
+
+    assert json.loads(specialization_artifacts["cpp/public-api.json"]) == (
+        cpp_manifest.payload()
+    )
+    assert json.loads(specialization_artifacts["rust/public-api.json"]) == (
+        rust_manifest_plan.payload()
+    )
+    assert all(
+        declaration.render_head()
+        for manifest in (cpp_manifest, rust_manifest_plan)
+        for declaration in manifest.declarations
+        if declaration.stability is PublicDeclarationStability.STABLE
+    )
+    reversed_profiles = tuple(reversed(profiles))
+    reversed_selection = plan_rust_static_selection(reversed_profiles)
+    reversed_facade = plan_rust_facade(reversed_profiles, reversed_selection)
+    reversed_dispatch = plan_rust_dispatch(
+        reversed_profiles,
+        reversed_selection,
+        reversed_facade,
+    )
+    assert cpp_public_api_manifest(reversed_profiles).serialize() == (
+        cpp_public_api_manifest(profiles).serialize()
+    )
+    assert rust_public_api_manifest(
+        reversed_profiles,
+        reversed_selection,
+        reversed_facade,
+        reversed_dispatch,
+    ).serialize() == rust_public_api_manifest(
+        profiles,
+        static_selection,
+        facade,
+        dispatch,
+    ).serialize()
+    rust_manifest = json.loads(
+        specialization_artifacts["rust/public-api.json"]
+    )
+    assert rust_manifest["scope"] == sorted(
+        [
+            *(selection.profile_name for selection in static_selection.profiles),
+            "fallback",
+        ]
+    )
+    assert "scalar" not in rust_manifest["scope"]
+    rust_records = {
+        (item["identity"], tuple(item["reachability"])): item
+        for item in rust_manifest["declarations"]
+    }
+    checked_export = rust_records[
+        ("crate::load_masked_checked#v:=(m,cptr,v)", ("crate",))
+    ]
+    assert checked_export["kind"] == "reexport"
+    assert checked_export["reexport_of"] == (
+        "crate::tsl_facade::load_masked_checked#v:=(m,cptr,v)"
+    )
+    assert checked_export["checked_of"] == "crate::load_masked#v:=(m,cptr,v)"
+    avx2_tags = [
+        item
+        for item in rust_manifest["declarations"]
+        if item["identity"] == "crate::profile::Avx2#avx2"
+    ]
+    assert len(avx2_tags) == 1
+    assert avx2_tags[0]["kind"] == "type"
+    assert avx2_tags[0]["stability"] == "unstable"
+    assert avx2_tags[0]["type_form"] == "struct"
+    assert "pub struct Avx2;" in specialization_artifacts["rust/src/tsl_avx2.rs"]
+    identities = {item["identity"] for item in rust_manifest["declarations"]}
+    assert "crate::runtime_dispatch#surface" not in identities
+    assert "crate::benchmark#modules" not in identities
+    assert {
+        "crate::Dispatcher#runtime-dispatch",
+        "crate::algorithms#runtime-dispatch",
+        "crate::ops#runtime-dispatch",
+        "crate::tsl_benchmark_core#module",
+        "crate::tsl_variant_bench_avx2#module",
+    } <= identities
+    profile_exports = [
+        item
+        for item in rust_manifest["declarations"]
+        if item["identity"] == "crate::profile"
+        and item["stability"] == "stable"
+    ]
+    expected_profile_targets = {
+        *(
+            f"crate::{rust_profile_module_name(selection.profile_name)}"
+            for selection in static_selection.profiles
+        ),
+        "crate::tsl_target_fallback",
+    }
+    assert len(profile_exports) == len(expected_profile_targets)
+    assert {item["kind"] for item in profile_exports} == {"reexport"}
+    assert {item["reexport_target"] for item in profile_exports} == (
+        expected_profile_targets
+    )
+    assert all(
+        item["reexport_of"] == f'{item["reexport_target"]}#module'
+        for item in profile_exports
+    )
+    assert all(
+        f"pub use {target} as profile;"
+        in specialization_artifacts["rust/src/lib.rs"]
+        for target in expected_profile_targets
+    )
+    algorithm_modules = [
+        item
+        for item in rust_manifest["declarations"]
+        if item["identity"] == "crate::profile::algo#module"
+    ]
+    assert len(algorithm_modules) == len(expected_profile_targets)
+    assert {item["kind"] for item in algorithm_modules} == {"module"}
+    assert {item["stability"] for item in algorithm_modules} == {"stable"}
+    assert all(
+        item["reachability"][-1] != "algo"
+        for item in algorithm_modules
+    )
+    assert "pub mod algo {" in specialization_artifacts["rust/src/tsl_avx2.rs"]
+    assert "pub use tsl_facade::load_masked_checked;" in specialization_artifacts[
+        "rust/src/lib.rs"
+    ]
 
 
 def test_cpp_specialization_structure(specialization_artifacts: dict[str, str]) -> None:

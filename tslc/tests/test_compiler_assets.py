@@ -8,6 +8,13 @@ import pytest
 
 from rust_project_test_support import render_rust_artifacts_for_test
 from tslc.backend.algorithm_contracts import ALGORITHM_PUBLIC_FAMILIES
+from tslc.backend.cpp_algorithm_public_declarations import (
+    cpp_algorithm_declaration_holes,
+    cpp_algorithm_public_declarations,
+)
+from tslc.backend.cpp_static_public_declarations import (
+    cpp_static_declaration_holes,
+)
 from tslc.backend.precondition_error_rendering import (
     cpp_precondition_error,
     rust_precondition_error,
@@ -17,8 +24,19 @@ from tslc.backend.rust_package import RustPackageConfig
 from tslc.backend.rust_policy_manifest import load_rust_policy_manifest
 from tslc.backend.rust_policy_selection import plan_rust_policy_selection
 from tslc.backend.rust_static_selection import plan_rust_static_selection
+from tslc.backend.rust_static_public_declarations import (
+    rust_static_declaration_holes,
+)
 from tslc.backend.rust_algorithm_manifest import RUST_ALGORITHM_RESERVED_NAMES
 from tslc.backend.rust_algorithm_contracts import rust_algorithm_contract_holes
+from tslc.backend.rust_algorithm_contracts import (
+    rust_profile_scaled_checked_algorithm_declarations,
+)
+from tslc.backend.rust_algorithm_public_declarations import (
+    rust_profile_algorithm_declaration_holes,
+    rust_profile_algorithm_public_declarations,
+)
+from tslc.backend.public_declarations import PublicDeclarationKind
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.preconditions import PreconditionErrorKind
 from tslc.compiler_assets import (
@@ -35,8 +53,10 @@ RUST_POLICY_MANIFEST = load_rust_policy_manifest()
 
 def test_checked_error_assets_match_the_typed_error_registry() -> None:
     assets = load_default_render_assets()
-    cpp = assets.text("tsl_core.hpp")
-    rust = assets.text("tsl_core.rs")
+    cpp = assets.fill(
+        "tsl_core.hpp", **cpp_static_declaration_holes("tsl_core.hpp")
+    )
+    rust = assets.fill("tsl_core.rs", **rust_static_declaration_holes())
 
     cpp_start = cpp.index("enum class precondition_error")
     cpp_end = cpp.index("};", cpp_start)
@@ -240,6 +260,7 @@ def test_rust_project_renderer_uses_typed_release_metadata() -> None:
             "LICENSE",
             "CRATE.md",
             "rustfmt.toml",
+            "public-api.json",
             "build.rs",
             "*.rs",
             "src/**",
@@ -352,50 +373,49 @@ def test_rust_algorithm_facade_wrappers_are_static_render_asset() -> None:
     assets = load_default_render_assets()
 
     wrappers = assets.text("rust_algo_wrappers.rs")
+    holes = rust_profile_algorithm_declaration_holes()
 
-    assert "pub fn transform_unary_checked<Policy, Op, T>" in wrappers
+    assert "@{profile_algorithm_declaration_transform_unary_checked}" in wrappers
+    assert (
+        "pub fn transform_unary_checked<Policy, Op, T>"
+        in holes["profile_algorithm_declaration_transform_unary_checked"]
+    )
     assert (
         "crate::tsl_algorithm::transform_unary_checked::<Profile, Policy, Op, T>"
         in wrappers
     )
 
 def test_rust_algorithm_reserved_name_manifest_matches_static_asset() -> None:
-    assets = load_default_render_assets()
-    wrappers = assets.fill(
-        "rust_algo_wrappers.rs",
-        **rust_algorithm_contract_holes(),
+    reachability = ("profile", "algo")
+    declarations = (
+        *rust_profile_algorithm_public_declarations(reachability),
+        *rust_profile_scaled_checked_algorithm_declarations(reachability),
     )
-    function_names = set(
-        re.findall(
-            r"^\s+pub (?:unsafe )?fn ([A-Za-z_][A-Za-z0-9_]*)",
-            wrappers,
-            flags=re.MULTILINE,
-        )
-    )
-    alias_names = set(
-        re.findall(
-            r"^\s*pub use self::[A-Za-z_][A-Za-z0-9_]* as "
-            r"([A-Za-z_][A-Za-z0-9_]*);",
-            wrappers,
-            flags=re.MULTILINE,
-        )
-    )
-    public_names = frozenset(function_names | alias_names)
+    public_names = frozenset(declaration.name for declaration in declarations)
 
     assert public_names == RUST_ALGORITHM_RESERVED_NAMES
 
 
 def test_cpp_algorithm_name_manifest_matches_static_asset() -> None:
-    algorithms = load_default_render_assets().text("tsl_algorithm.hpp")
+    declarations = cpp_algorithm_public_declarations()
     public_names = frozenset(
-        re.findall(
-            r"^inline [^({]+ ([A-Za-z_][A-Za-z0-9_]*)\(",
-            algorithms,
-            flags=re.MULTILINE,
-        )
+        declaration.name
+        for declaration in declarations
+        if declaration.kind is PublicDeclarationKind.FUNCTION
     )
 
     assert public_names == ALGORITHM_PUBLIC_FAMILIES
+
+
+def test_algorithm_assets_have_one_typed_declaration_hole_per_record() -> None:
+    assets = load_default_render_assets()
+    cpp_holes = cpp_algorithm_declaration_holes()
+    rust_holes = rust_profile_algorithm_declaration_holes()
+
+    cpp_asset = assets.text("tsl_algorithm.hpp")
+    rust_asset = assets.text("rust_algo_wrappers.rs")
+    assert all(cpp_asset.count(f"@{{{name}}}") == 1 for name in cpp_holes)
+    assert all(rust_asset.count(f"@{{{name}}}") == 1 for name in rust_holes)
 
 
 def test_rust_algorithm_names_cover_shared_public_families() -> None:

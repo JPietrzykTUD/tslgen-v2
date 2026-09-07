@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from hashlib import sha256
+import json
 from pathlib import Path
 
 import pytest
@@ -273,15 +274,15 @@ def test_representative_project_shape_is_byte_stable(
     )
     expected = {
         "cpp/CMakeLists.txt": "604faf64cad28a98bf597e66bea58661a544ab13f0ffe8815aae360018a3ba6c",
-        "cpp/docs/input/tsl_api_docs.hpp": "b5f7bd57bd54fe1ca020ac5227922626a65d012754887b0b4000bd9ee9602b76",
+        "cpp/docs/input/tsl_api_docs.hpp": "351742bbf68e9946e533d29acdf8982a7fd49b10899fd45e53e46ce8c2ca1a94",
         "cpp/include/tsl.hpp": "fdebd390b5777e6806b13f994ec33e3289bbf163cd91f9a3a6b183bbbc5ae5cb",
         "cpp/include/tsl_primitives.hpp": "11bd34e5b49a236979c11f696478ff627fae56fe113f95ef988b17f74e933d8b",
         "cpp/include/tsl_scalar.hpp": "b1e470ee9caa150f4d2c85d034630019a7eaaebbed2186cb002c4946d57c935d",
         "cpp/tests/smoke_scalar.cpp": "43046adfe06468b6eb75f351dc8883cb1e35635e66f40fc3f033d41651554a1e",
-        "rust/Cargo.toml": "44fcd424585840191e1da5694a114db0e601d54f7766c1cadaed38575a8de8d9",
-        "rust/src/lib.rs": "7ff8af46f987a1d0c242c950b2afeddac049354affaaeefd459046ba41cdd158",
+        "rust/Cargo.toml": "994e9d912db23d0ba8d6f4763b54bdea83c838f6b8427af8e038be42b2f5f860",
+        "rust/src/lib.rs": "0a57fa83b8458be54a2313e7ffc3b77c798accc546089acfda6c41f1421e25ad",
         "rust/src/tsl_documentation.rs": "c5bba386d00bcde0e2cff0da9788ba66f88d21dec502cc57acdae1b069bb7916",
-        "rust/src/tsl_scalar.rs": "59e27fb2d340cb91ed1fc8865ef9705a0a2011dd5b34013c03f8eef770596ee3",
+        "rust/src/tsl_scalar.rs": "a1f23461d757bf92f3748c896d63963656f452165de45149e3e1a0a353a2aa7f",
         "rust/tests/smoke.rs": "a4d108f502689e7f29ba5259e22779e8ef0afa36ab83c239022e2772d68d6b44",
     }
     actual = {
@@ -312,7 +313,18 @@ def test_clang_vector_overlay_is_split_guarded_and_uses_hardware_facade(
     cmake = by["cpp/CMakeLists.txt"]
     base_smoke = by["cpp/tests/smoke_avx2.cpp"]
     overlay_smoke = by["cpp/tests/smoke_avx2_clang.cpp"]
+    manifest_records = json.loads(by["cpp/public-api.json"])["declarations"]
+    clang_policy = next(
+        record
+        for record in manifest_records
+        if record["identity"] == "tsl::dataparallel::clang_fixed#avx2"
+    )
 
+    assert "enable-macro:TSL_ENABLE_CLANG" in clang_policy["reachability"]
+    assert "compiler-ids:AppleClang,Clang" in clang_policy["reachability"]
+    assert any(
+        fact.startswith("guard:") for fact in clang_policy["reachability"]
+    )
     assert "clang_v128" not in base
     assert "clang_v256" not in base
     assert "clang_v512" not in base
@@ -438,6 +450,18 @@ def test_profile_name_sanitized_to_valid_identifiers(
     assert "pub mod tsl_icelake_rockerlake_oneapi;" in by["rust/src/lib.rs"]
     assert "icelake_rockerlake_oneapi = []" not in by["rust/Cargo.toml"]
     assert "default = []" in by["rust/Cargo.toml"]
+    cpp_manifest = json.loads(by["cpp/public-api.json"])
+    cpp_identities = {
+        record["identity"] for record in cpp_manifest["declarations"]
+    }
+    assert (
+        "tsl::profiles::icelake_rockerlake_oneapi#namespace"
+        in cpp_identities
+    )
+    assert (
+        "tsl::profiles::icelake_rockerlake-oneapi#namespace"
+        not in cpp_identities
+    )
 
 
 def test_oneapi_sized_vector_is_distinct_from_generic(
@@ -461,11 +485,33 @@ def test_oneapi_sized_vector_is_distinct_from_generic(
     assert "struct add_impl<tsl::simd<int32_t, tsl::oneapi_fpga<LANES>>>" in cpp
     assert cpp.count("struct add_impl<tsl::simd<int32_t, tsl::generic<LANES>>>") == 1
     assert cpp.count("struct add_impl<tsl::simd<int32_t, tsl::oneapi_fpga<LANES>>>") == 1
+    cpp_records = json.loads(by["cpp/public-api.json"])["declarations"]
+    cpp_by_identity = {record["identity"]: record for record in cpp_records}
+    assert cpp_by_identity[
+        "tsl::reg_param#oneapi_fpga-registration"
+    ]["classification_scope"] == "descendants"
 
     rust = by["rust/src/tsl_cascadelake_oneapi.rs"]
     assert "pub struct OneapiFpga<const LANES: usize>;" in rust
     assert "impl<const LANES: usize> AddImpl for Simd<i32, Generic<LANES>>" in rust
     assert "impl<const LANES: usize> AddImpl for Simd<i32, OneapiFpga<LANES>>" in rust
+    rust_records = json.loads(by["rust/public-api.json"])["declarations"]
+    rust_tag = next(
+        record
+        for record in rust_records
+        if record["identity"]
+        == "crate::profile::OneapiFpga#cascadelake-oneapi"
+    )
+    assert rust_tag["generic_parameters"] == [
+        {
+            "name": "LANES",
+            "kind": "const",
+            "declaration": "const LANES: usize",
+            "bounds": [],
+            "type": "usize",
+            "default": None,
+        }
+    ]
     rust_fallback = by["rust/src/tsl_target_fallback.rs"]
     assert "OneapiFpga" not in rust_fallback
     assert "impl<const LANES: usize> AddImpl for Simd<i32, Generic<LANES>>" in (

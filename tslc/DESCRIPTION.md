@@ -633,9 +633,20 @@ obligations. The repository maintenance projections
 and [maintenance/checked_api_census.py](src/tslc/maintenance/checked_api_census.py)
 ratchet the typed v1 callable-family contract and exact checked coverage
 separately; both load the typed corpus through one maintenance-only catalog
-boundary. They do not yet serialize every backend-emitted declaration. Exact
-C++ and Rust declaration compatibility therefore remains a release gate rather
-than being inferred from representative target-text examples.
+boundary. Each generated C++ and Rust project also carries `public-api.json`,
+serialized from backend-owned frozen declaration records. Those records own
+names, owners, reachability, overload identities, generic/template bounds,
+parameters and roles, qualifiers or safety, results, checked twins, reexports,
+stable type members, and stability classification. Static assets contain named
+holes for stable declarations and retain implementation bodies; renderers and
+the manifest consume the same records. A non-stable module/type may provide the
+default classification for otherwise-unrecorded descendants, while every
+stable exception remains an exact record. Rust reachability records include the
+typed target architecture,
+features, stronger-profile exclusions, and fallback selection. No compiler or
+maintenance path parses or hashes generated target text to reconstruct this
+contract. The schema-v3 release baseline ratchets the reviewed scalar/AVX2
+records in addition to the per-project scope-exact manifests.
 
 A static substrate ships as assets
 ([backend/assets/tsl_core.hpp](src/tslc/backend/assets/tsl_core.hpp),

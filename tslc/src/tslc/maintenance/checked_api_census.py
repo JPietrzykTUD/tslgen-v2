@@ -19,6 +19,9 @@ from pathlib import Path
 import re
 import sys
 
+from tslc.backend.rust_facade_public_declarations import (
+    rust_facade_core_declaration_owners,
+)
 from tslc.catalog.model import Catalog, Primitive
 from tslc.diagnostics import format_diagnostic, has_errors
 from tslc.maintenance import _repo_context
@@ -147,6 +150,7 @@ def _runtime_sites(context: RepoContext) -> tuple[RuntimeSite, ...]:
     )
     sites: list[RuntimeSite] = []
     ordinals: Counter[tuple[str, str, str, str]] = Counter()
+    rust_facade_owners = dict(rust_facade_core_declaration_owners())
     for path in paths:
         text = path.read_text(encoding="utf-8")
         relative = path.relative_to(context.root).as_posix()
@@ -156,7 +160,16 @@ def _runtime_sites(context: RepoContext) -> tuple[RuntimeSite, ...]:
                 raise AssertionError("runtime evidence token has no kind")
             statement = _runtime_statement(text, match, python_source=path.suffix == ".py")
             normalized = " ".join(statement.split())
-            owner = _nearest_owner(text, match.start(), python_source=path.suffix == ".py")
+            owner = _nearest_owner(
+                text,
+                match.start(),
+                python_source=path.suffix == ".py",
+                template_owners=(
+                    rust_facade_owners
+                    if relative.endswith("backend/assets/rust_facade.rs.tmpl")
+                    else None
+                ),
+            )
             context_start = max(0, match.start() - 320)
             context_end = min(len(text), match.end() + 320)
             classification_context = " ".join(
@@ -187,11 +200,19 @@ def _runtime_sites(context: RepoContext) -> tuple[RuntimeSite, ...]:
     return tuple(sorted(sites, key=lambda site: site.identity))
 
 
-def _nearest_owner(text: str, position: int, *, python_source: bool) -> str:
+def _nearest_owner(
+    text: str,
+    position: int,
+    *,
+    python_source: bool,
+    template_owners: Mapping[str, str] | None = None,
+) -> str:
     prefix = text[:position]
     if python_source:
         pattern = re.compile(r"(?m)^\s*(?:async\s+)?def\s+([A-Za-z_]\w*)\s*\(")
-        matches = tuple(pattern.finditer(prefix))
+        candidates = [
+            (match.start(), match.group(1)) for match in pattern.finditer(prefix)
+        ]
     else:
         rust_pattern = re.compile(
             r"(?m)^\s*(?:pub(?:\([^)]*\))?\s+)?(?:unsafe\s+)?"
@@ -203,13 +224,18 @@ def _nearest_owner(text: str, position: int, *, python_source: bool) -> str:
             r"(?:auto|void|bool|int|std::[A-Za-z_]\w*|[A-Za-z_]\w*(?:::\w+)*(?:<[^\n>]+>)?)"
             r"(?:\s*[*&])?\s+([A-Za-z_]\w*)\s*\("
         )
-        matches = tuple(
-            sorted(
-                (*rust_pattern.finditer(prefix), *cpp_pattern.finditer(prefix)),
-                key=lambda item: item.start(),
+        candidates = [
+            (match.start(), match.group(1))
+            for match in (*rust_pattern.finditer(prefix), *cpp_pattern.finditer(prefix))
+        ]
+        if template_owners:
+            hole_pattern = re.compile(r"@\{([A-Za-z_]\w*)\}")
+            candidates.extend(
+                (match.start(), template_owners[match.group(1)])
+                for match in hole_pattern.finditer(prefix)
+                if match.group(1) in template_owners
             )
-        )
-    return matches[-1].group(1) if matches else "file_scope"
+    return max(candidates, default=(-1, "file_scope"))[1]
 
 
 def _runtime_statement(text: str, match: re.Match[str], *, python_source: bool) -> str:

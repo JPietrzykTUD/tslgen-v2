@@ -2,8 +2,8 @@
 
 Date: 2026-09-07
 
-Reviewed range: `08954770` through Slice 8 (`cb32a29e`), including the
-post-implementation corrections in the current review.
+Reviewed range: `08954770` through Slices 9 and 10, including the
+post-implementation review/fix loops for both final slices.
 
 Related documents:
 
@@ -14,47 +14,38 @@ Related documents:
 
 ## Verdict
 
-No known current-corpus checked wrapper invokes its ordinary operation after a
-failed check, and no additional architecture-boundary violation was found in
-Slices 0 through 8 beyond the two explicit release-proof gaps below. Source data
-owns public preconditions, the catalog validates and types them, lowering
-transports them, backends decide language-specific APIs and checks, renderers
-format finalized facts, and the editor consumes compiler projections.
-
-TSL must nevertheless **not be tagged v1.0.0 yet**. Two high-severity release
-proofs remain absent:
-
-1. call dependencies do not state how catastrophic callee preconditions are
-   forwarded or discharged; and
-2. the compatibility baseline does not enumerate every exact emitted C++ and
-   Rust public declaration.
-
-Those are Slices 9 and 10 of the refactor plan. Passing the current corpus is
-evidence, but it is not a substitute for either typed proof.
+No blocking design defect remains in the checked-API refactor. Source data owns
+public preconditions, the catalog validates and types them, lowering transports
+them with explicit call-site dispositions, backends decide language-specific
+APIs and exact declaration records, renderers format finalized facts, and the
+editor consumes compiler projections. The two former high-severity proof gaps
+are closed by Slices 9 and 10. This verdict does not close the separate
+full-header warning debt or unsupported-platform work from the broader v1 audit.
 
 ## Findings
 
-### R-01 — High, open: transitive callee preconditions have no typed disposition
+### R-01 — High, fixed: transitive callee preconditions have typed dispositions
 
-[`CallDependency`](../tslc/src/tslc/lower/dependencies.py#L38) records the
-callee, mask policy, source vector, and optional target vector. It does not
-record an applicable catastrophic callee condition, the caller condition that
-forwards it, or an implementation-author assertion that discharges it.
+Before Slice 9, [`CallDependency`](../tslc/src/tslc/lower/dependencies.py#L38)
+recorded the callee, mask policy, source vector, and optional target vector, but
+not an applicable catastrophic callee condition, the caller condition that
+forwarded it, or an implementation-author assertion that discharged it.
 
-The call lowerer records that edge and locally frames a caller-unsafe Rust call
-in `unsafe` at
+The old call lowerer recorded that edge and locally framed a caller-unsafe Rust
+call in `unsafe` at
 [`calls.py`](../tslc/src/tslc/lower/region_handlers/calls.py#L118). Dependency
-closure then propagates an internal `unsafe_callee` reason, but deliberately
-does not make every caller publicly unsafe, at
+closure then propagated an internal `unsafe_callee` reason, but deliberately
+did not make every caller publicly unsafe, at
 [`_pipeline_closure.py`](../tslc/src/tslc/_pipeline_closure.py#L480). That is the
 right behavior for compiler-sized local arrays and sanitized operands, but the
-compiler cannot currently distinguish those sound abstractions from an
-accidentally lost caller obligation.
+compiler could not distinguish those sound abstractions from an accidentally
+lost caller obligation.
 
-The direct checked-memory admission guard is intentionally conservative in
-[`checked_api.py`](../tslc/src/tslc/backend/checked_api.py#L468), but admits the
-compiler-derived internal `unsafe_callee` framing label so existing sound
-masked/composed wrappers are not deleted. That label is not a transitive proof.
+The direct checked-memory admission guard was intentionally conservative in
+[`checked_api.py`](../tslc/src/tslc/backend/checked_api.py#L468), but had admitted
+the compiler-derived internal `unsafe_callee` framing label so existing sound
+masked/composed wrappers would not be deleted. That label was not a transitive
+proof.
 
 Current-corpus call sites were reviewed and fall into matching root
 preconditions, compile-time nonzero immediates, sanitized divisors, raw-pointer
@@ -63,13 +54,13 @@ unsound public path was found. The remaining risk is architectural: a future
 implementation can lose a callee obligation without a structured diagnostic or
 checked-coverage failure.
 
-Required correction: implement Slice 9. Add a source-visible typed call-site
-disposition, validate exact forwarding from operand identities, require an
-explicit author proof for discharge, propagate unresolved obligations through
-closure, and make checked-wrapper admission reject them. Do not infer this from
-raw C++ or Rust text and do not blindly make every abstraction caller-unsafe.
+Correction: Slice 9 added source-visible `forward[...]` and `discharge[...]`
+call-site dispositions, exact operand-identity validation, typed dependency
+origins, conservative unresolved-obligation closure, fail-closed checked
+admission, authoring/LSP projections, and a deterministic zero-gap corpus
+inventory. No proof is inferred from raw target text or a local unsafe frame.
 
-### R-02 — High, open: compatibility stops at typed families, not declarations
+### R-02 — High, fixed: compatibility reaches exact backend declarations
 
 The v2 baseline correctly freezes source signatures, operand roles, memory and
 arithmetic semantics, precondition descriptors, error spellings, algorithm
@@ -78,18 +69,24 @@ per-profile safety and exact emitted declarations are outside its identity level
 in
 [`public_api_baseline.py`](../tslc/src/tslc/maintenance/public_api_baseline.py#L298).
 
-Consequently, a renderer can change `noexcept`, `[[nodiscard]]`, `unsafe`,
+Consequently, before Slice 10 a renderer could change `noexcept`,
+`[[nodiscard]]`, `unsafe`,
 visibility, generic bounds, parameter/reference types, result form, overload
 identity, or module reachability without necessarily changing the baseline.
 The declaration snapshots are useful examples, not exhaustive compatibility
 evidence. This falls short of the repository rule that public-output coverage
 must ratchet exact identities and relevant content rather than aggregate counts.
 
-Required correction: implement Slice 10. Each backend must own frozen public
-declaration records; renderers and the manifest serializer must consume those
-same records; every exported item must be classified; and parity tests must
-prove one record per stable rendered declaration without parsing generated
-target text.
+Correction: Slice 10 added backend-owned frozen declaration records, render
+holes driven from those records, exact ordinary/checked and definition/reexport
+relationships, typed Rust selection reachability, deterministic per-project
+manifests, and the schema-v3 scalar/AVX2 baseline. Every exported named surface
+is stable, unstable, or implementation detail; stable overload sets are
+rejected. Parity tests use record/hole inventories and generated manifest
+equality without parsing or hashing target text. Its review/fix loop also caught
+and corrected a missing stable `crate::profile::algo` module, incomplete C++
+static-support classifications and reachability, and duplicate renderer-side
+signature reconstruction.
 
 ### R-03 — Medium, open and outside this refactor: full C++ headers are not warning-clean
 
@@ -247,11 +244,11 @@ warnings as errors.
 | --- | --- | --- |
 | Source | `tsldata` declares catastrophic preconditions and the otherwise non-derivable indexed-lane extent | Correct; no backend spelling or check code in source metadata |
 | Parse/catalog | parser nodes preserve syntax; frozen catalog enums/dataclasses validate roles, applicability, memory shape, and source locations | Correct; loose mappings stop at input/maintenance serialization boundaries |
-| Lowering | `LoweredPrimitiveSemantics` transports typed catalog facts; dependency edges carry selected callee identities | Correct for direct facts; R-01 is the explicit missing transitive fact |
+| Lowering | `LoweredPrimitiveSemantics` transports typed catalog facts; dependency edges carry selected callee identities and explicit forwarded/discharged obligations | Correct after Slice 9 |
 | Backend-neutral policy | checked-condition and algorithm-contract records own eligibility and language-neutral relations | Correct; deterministic, typed, and independent of target text |
 | C++ backend | owns span/error ABI, direct-result/error-output convention, constraints, guards, and C++ documentation facts | Correct for implemented families |
 | Rust backend | owns `unsafe`/`Result`, slice adaptation, trait bounds, representation alignment, and facade admission | Correct after C-04 |
-| Render | formats finalized backend/project records and assets | Correct for checked facade logic; exact declaration records remain R-02 |
+| Render | formats finalized backend/project records and declaration holes; emits per-project manifests from the same records | Correct after Slice 10 |
 | Authoring/LSP | projects parser and catalog registries, including current source spans | Correct; no second semantic registry |
 | VS Code | displays protocol facts and owns UI text only | Correct; no copied TSL semantics |
 | Maintenance | serializes typed baselines and scans text only as explicitly labeled evidence | Correct; no maintenance result feeds compilation |
@@ -272,7 +269,9 @@ tests/reports, and it has no path back into selection, lowering, or generation.
 | 5 — algorithms | Typed range roles drive capacity/address/alias checks and raw forwarding; name coupling was removed |
 | 6 — irregular/compacted memory | Indexed lane domains and compacted conditional alignment were corrected; pointer-index narrow gather remains an honest omission |
 | 7 — remaining memory | Random output and widening-load twins are checkable; mask-layout, deallocation-provenance, and raw-copy gaps remain explicit rather than receiving dishonest twins |
-| 8 — docs/editor/release evidence | Documentation, package reproducibility, editor projection, typed baseline, census, and showcase gates are present; R-01 and R-02 prevent release completion |
+| 8 — docs/editor/release evidence | Documentation, package reproducibility, editor projection, typed baseline, census, and showcase gates are present; Slices 9 and 10 close the two proof gaps identified by its first review |
+| 9 — transitive preconditions | Exact forwarding and explicit author discharge are typed, source-visible, projected to authoring tools, and ratcheted with zero unresolved current-corpus obligations |
+| 10 — exact declarations | Backend-owned exact records drive stable declarations and deterministic manifests; non-stable surfaces are explicitly classified |
 
 ## Coverage and validation
 
@@ -290,21 +289,21 @@ Completed validation on the corrected tree:
 | Gate | Result |
 | --- | --- |
 | Python byte compilation | Passed |
-| Mypy | Passed: 341 source files |
+| Mypy | Passed: 355 source files |
 | Full corpus `tslc check` | Passed: 43 source documents |
-| Typed public baseline | Passed: 181 primitive families |
+| Typed public baseline | Passed: 181 primitive families; 797 exact C++ and 4,937 exact Rust declaration records |
 | Checked census baseline | Passed: 154 runtime sites, 33 caller-unsafe identities, 138 metadata suggestions |
 | Focused architecture/backend suite | Passed: 221; skipped: 18 |
 | Checked generated/ABI suite | Passed: 59; skipped: 1 |
-| Full generated C++/Rust build and value matrix | Passed: 84 in 49m18s |
+| Full generated C++/Rust build and value matrix | Passed: 84 in 51m08s |
 | Python LSP suite | Passed: 29 |
 | VS Code unit and grammar suites | Passed: 23 + 2 |
 | VS Code integration suite | Passed: 2 |
-| Linux x64 bundled-runtime smoke/package verification | Passed: 193-file, 15.14 MB VSIX |
-| Strict Doxygen, Rustdoc, Sphinx, and site build | Passed |
+| Linux x64 bundled-runtime smoke/package verification | Passed: 192-file, 15.26 MB VSIX |
+| Strict Doxygen, Rustdoc, Sphinx, and site build | Passed: 50,984 specializations and 93 artifacts |
 | Rust doctests | Passed: 2 executed; 205 deliberately ignored comprehensive snippets |
 | Checked C++ documentation example | Passed with GCC and Clang under strict consumer warnings, generated headers as system includes |
-| Full ordinary Python suite | Passed: 2,703; skipped: 122 (15m52s) |
+| Full ordinary Python suite | Passed on the final frozen tree |
 
 The generated full-matrix run covers all repository-supported build/value gates;
 unavailable hardware and emulator paths remain gated rather than becoming hidden
@@ -314,11 +313,10 @@ host dependencies. MSVC and non-x86 hardware were not available on this host.
 
 Release work, in order:
 
-1. implement and ratchet Slice 9's typed call-site precondition dispositions;
-2. implement Slice 10's backend-owned exact declaration records and manifest;
-3. re-run the complete release matrix, including native supported platforms and
+1. re-run the complete release matrix on each supported release platform,
+   including native supported platforms and
    MSVC where available; and
-4. address the broader full-corpus C++ warning debt before claiming normal
+2. address the broader full-corpus C++ warning debt before claiming normal
    include-path warning cleanliness.
 
 Non-blocking implementation-quality observations remain:
@@ -338,4 +336,5 @@ Non-blocking implementation-quality observations remain:
   enough that focused per-slice gates must remain the normal development path.
 
 These observations do not justify hidden fallback behavior or weaker checks.
-They are optimization/extensibility work after the two release proofs above.
+They are optimization/extensibility work after the two now-complete release
+proofs above.

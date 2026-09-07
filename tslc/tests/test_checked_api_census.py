@@ -7,12 +7,24 @@ from dataclasses import replace
 from tslc.maintenance import _repo_context
 from tslc.maintenance.checked_api_census import (
     _classify_runtime_site,
+    _nearest_owner,
     build_census,
     canonical_baseline_path,
     canonical_report_path,
     render_markdown,
     serialize,
 )
+
+
+def test_runtime_site_owner_uses_typed_template_hole_identity() -> None:
+    source = "@{core_simd_lane}\n    assert!(index < N);"
+
+    assert _nearest_owner(
+        source,
+        source.index("assert!"),
+        python_source=False,
+        template_owners={"core_simd_lane": "lane"},
+    ) == "lane"
 
 
 def test_runtime_site_classification_does_not_leak_from_adjacent_context() -> None:

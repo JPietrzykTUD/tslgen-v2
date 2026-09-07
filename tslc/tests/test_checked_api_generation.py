@@ -22,7 +22,13 @@ from tslc.backend.checked_api import (
 )
 from tslc.backend.cpp import CppBackend
 from tslc.backend.cpp_checked_api import plan_cpp_checked_api
+from tslc.backend.cpp_static_public_declarations import (
+    cpp_static_declaration_holes,
+)
 from tslc.backend.rust import RustBackend
+from tslc.backend.rust_static_public_declarations import (
+    rust_static_declaration_holes,
+)
 from tslc.backend.registry import create_backend_dialect
 from tslc.catalog.call_preconditions import (
     CallPreconditionObligation,
@@ -417,8 +423,10 @@ def test_runtime_immediate_divisor_keeps_static_rejection_without_checked_twin(
 def test_checked_error_assets_are_evolution_safe_and_debug_inline_is_portable(
     render_assets,
 ) -> None:
-    cpp = render_assets.text("tsl_core.hpp")
-    rust = render_assets.text("tsl_core.rs")
+    cpp = render_assets.fill(
+        "tsl_core.hpp", **cpp_static_declaration_holes("tsl_core.hpp")
+    )
+    rust = render_assets.fill("tsl_core.rs", **rust_static_declaration_holes())
 
     assert "#if defined(__OPTIMIZE__)" in cpp
     assert "#if defined(_DEBUG)" in cpp
@@ -567,8 +575,10 @@ def test_rust_contiguous_memory_checked_twins_use_slices_and_overload_facts(
 
 
 def test_checked_memory_assets_expose_range_and_error_contracts(render_assets) -> None:
-    cpp = render_assets.text("tsl_core.hpp")
-    rust = render_assets.text("tsl_core.rs")
+    cpp = render_assets.fill(
+        "tsl_core.hpp", **cpp_static_declaration_holes("tsl_core.hpp")
+    )
+    rust = render_assets.fill("tsl_core.rs", **rust_static_declaration_holes())
 
     assert "class span" in cpp
     assert "constexpr span(T* data, std::size_t size) noexcept" in cpp

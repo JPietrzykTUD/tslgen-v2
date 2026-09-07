@@ -303,6 +303,8 @@ def test_cpp_profile_render_model_decides_smoke_and_guard_facts(
     assert base.header_group is None
     assert base.includes is not None
     assert base.registrations
+    assert "avx2" in base.public_support.extension_names
+    assert base.public_support.has_dataparallel_mappings
 
     templated = [entry for entry in base.smoke if entry.template_arguments]
     assert templated
@@ -325,6 +327,11 @@ def test_cpp_profile_render_model_decides_smoke_and_guard_facts(
     ]
     assert sized
     assert all(entry.lane_count == 16 for entry in sized)
+    sve_support = by_name["sve"].base_header.public_support
+    assert set(sve_support.sized_reg_param_extensions) <= set(
+        sve_support.extension_names
+    )
+    assert "generic" not in sve_support.sized_reg_param_extensions
 
     # Definitions arrive pre-grouped under their availability condition.
     assert base.definition_groups

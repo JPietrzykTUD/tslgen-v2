@@ -3,7 +3,7 @@
 #include "tsl_algorithm_detail_loops.hpp"
 
 /**
- * @file
+ * @@file
  * Public unchecked data-parallel algorithms.
  *
  * Pointer/count overloads require every pointer to denote its complete live
@@ -17,72 +17,51 @@
 
 namespace tsl::algo {
 
-template <class Parallelism, class T>
-using vector_type = typename detail::vector_for_parallelism<Parallelism, T>::type;
+@{algorithm_alias_vector_type}
 
-template <class Parallelism, class T>
-using integral_mask_type = typename detail::integral_mask_for<Parallelism, T>::type;
+@{algorithm_alias_integral_mask_type}
 
-template <class Parallelism, class T>
-using native_mask_type = typename detail::native_mask_for<Parallelism, T>::type;
+@{algorithm_alias_native_mask_type}
 
-template <class MaskLayout, class Parallelism, class T>
-using mask_storage_type = typename detail::mask_for<MaskLayout, Parallelism, T>::type;
+@{algorithm_alias_mask_storage_type}
 
-template <class Parallelism, class T>
-using byte_mask_type = mask_storage_type<mask_layout::bytes, Parallelism, T>;
+@{algorithm_alias_byte_mask_type}
 
-template <class Parallelism, class T>
-using bit_mask_type = mask_storage_type<mask_layout::bits, Parallelism, T>;
+@{algorithm_alias_bit_mask_type}
 
-template <std::size_t ParallelN, class T>
-using fixed_integral_mask_type =
-    integral_mask_type<::tsl::dataparallel::fixed<ParallelN>, T>;
+@{algorithm_alias_fixed_integral_mask_type}
 
-template <std::size_t ParallelN, class T>
-using fixed_native_mask_type =
-    native_mask_type<::tsl::dataparallel::fixed<ParallelN>, T>;
+@{algorithm_alias_fixed_native_mask_type}
 
-template <class MaskLayout, std::size_t ParallelN, class T>
-using fixed_mask_storage_type =
-    mask_storage_type<MaskLayout, ::tsl::dataparallel::fixed<ParallelN>, T>;
+@{algorithm_alias_fixed_mask_storage_type}
 
-template <std::size_t ParallelN, class T>
-using fixed_byte_mask_type =
-    fixed_mask_storage_type<mask_layout::bytes, ParallelN, T>;
+@{algorithm_alias_fixed_byte_mask_type}
 
-template <std::size_t ParallelN, class T>
-using fixed_bit_mask_type =
-    fixed_mask_storage_type<mask_layout::bits, ParallelN, T>;
+@{algorithm_alias_fixed_bit_mask_type}
 
-template <class Parallelism, class T>
-inline std::size_t integral_mask_chunk_count(std::size_t count) {
+@{algorithm_declaration_integral_mask_chunk_count_2}
     using vec = vector_type<Parallelism, T>;
     detail::validate_integral_mask_layout<vec>();
     const std::size_t lanes = detail::lane_count<vec>();
     return (count + lanes - 1) / lanes;
 }
 
-template <std::size_t ParallelN, class T>
-inline std::size_t integral_mask_chunk_count(std::size_t count) {
+@{algorithm_declaration_integral_mask_chunk_count_1}
     return integral_mask_chunk_count<::tsl::dataparallel::fixed<ParallelN>, T>(count);
 }
 
-template <class Parallelism, class T>
-inline std::size_t native_mask_chunk_count(std::size_t count) {
+@{algorithm_declaration_native_mask_chunk_count_2}
     using vec = vector_type<Parallelism, T>;
     detail::validate_native_mask_layout<vec>();
     const std::size_t lanes = detail::lane_count<vec>();
     return (count + lanes - 1) / lanes;
 }
 
-template <std::size_t ParallelN, class T>
-inline std::size_t native_mask_chunk_count(std::size_t count) {
+@{algorithm_declaration_native_mask_chunk_count_1}
     return native_mask_chunk_count<::tsl::dataparallel::fixed<ParallelN>, T>(count);
 }
 
-template <class MaskLayout, class Parallelism, class T>
-inline std::size_t mask_chunk_count(std::size_t count) {
+@{algorithm_declaration_mask_chunk_count_2}
     using vec = vector_type<Parallelism, T>;
     detail::validate_mask_layout<MaskLayout, vec>();
     if constexpr (std::is_same<MaskLayout, mask_layout::bytes>::value) {
@@ -94,36 +73,27 @@ inline std::size_t mask_chunk_count(std::size_t count) {
     return (count + lanes - 1) / lanes;
 }
 
-template <class MaskLayout, std::size_t ParallelN, class T>
-inline std::size_t mask_chunk_count(std::size_t count) {
+@{algorithm_declaration_mask_chunk_count_1}
     return mask_chunk_count<MaskLayout, ::tsl::dataparallel::fixed<ParallelN>, T>(count);
 }
 
-template <class Parallelism, class T>
-inline std::size_t byte_mask_count(std::size_t count) {
+@{algorithm_declaration_byte_mask_count_2}
     return mask_chunk_count<mask_layout::bytes, Parallelism, T>(count);
 }
 
-template <std::size_t ParallelN, class T>
-inline std::size_t byte_mask_count(std::size_t count) {
+@{algorithm_declaration_byte_mask_count_1}
     return byte_mask_count<::tsl::dataparallel::fixed<ParallelN>, T>(count);
 }
 
-template <class Parallelism, class T>
-inline std::size_t bit_mask_count(std::size_t count) {
+@{algorithm_declaration_bit_mask_count_2}
     return mask_chunk_count<mask_layout::bits, Parallelism, T>(count);
 }
 
-template <std::size_t ParallelN, class T>
-inline std::size_t bit_mask_count(std::size_t count) {
+@{algorithm_declaration_bit_mask_count_1}
     return bit_mask_count<::tsl::dataparallel::fixed<ParallelN>, T>(count);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Op,
-    class T>
-inline void for_each_chunk(Op&& op, T* data, std::size_t count) {
+@{algorithm_declaration_for_each_chunk_4}
     using value_type = typename std::remove_cv<T>::type;
     using vec = typename detail::vector_for_parallelism<Parallelism, value_type>::type;
 
@@ -131,40 +101,23 @@ inline void for_each_chunk(Op&& op, T* data, std::size_t count) {
     detail::for_each_chunk_loop<vec>(op, data, count);
 }
 
-template <
-    std::size_t ParallelN,
-    class Op,
-    class T>
-inline void for_each_chunk(Op&& op, T* data, std::size_t count) {
+@{algorithm_declaration_for_each_chunk_2}
     for_each_chunk<::tsl::dataparallel::fixed<ParallelN>>(
         std::forward<Op>(op), data, count);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Op,
-    class Range>
-inline void for_each_chunk(Op&& op, Range& data) {
+@{algorithm_declaration_for_each_chunk_3}
     for_each_chunk<Parallelism>(
         std::forward<Op>(op),
         detail::range_data(data),
         detail::range_size(data));
 }
 
-template <
-    std::size_t ParallelN,
-    class Op,
-    class Range>
-inline void for_each_chunk(Op&& op, Range& data) {
+@{algorithm_declaration_for_each_chunk_1}
     for_each_chunk<::tsl::dataparallel::fixed<ParallelN>>(std::forward<Op>(op), data);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class Op,
-    class T>
-inline void transform_unary(Op&& op, const T* input, T* output, std::size_t count) {
+@{algorithm_declaration_transform_unary_4}
     using vec = typename detail::vector_for_parallelism<Parallelism, T>::type;
 
     static_assert(
@@ -228,13 +181,7 @@ inline void transform_unary(Op&& op, const T* input, T* output, std::size_t coun
     }
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class Op,
-    class InputRange,
-    class OutputRange>
-inline void transform_unary(Op&& op, const InputRange& input, OutputRange& output) {
+@{algorithm_declaration_transform_unary_3}
     transform_unary<Parallelism, Alignment>(
         std::forward<Op>(op),
         detail::range_data(input),
@@ -242,38 +189,17 @@ inline void transform_unary(Op&& op, const InputRange& input, OutputRange& outpu
         detail::range_size(input));
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class Op,
-    class T>
-inline void transform_unary(Op&& op, const T* input, T* output, std::size_t count) {
+@{algorithm_declaration_transform_unary_2}
     transform_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(op), input, output, count);
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class Op,
-    class InputRange,
-    class OutputRange>
-inline void transform_unary(Op&& op, const InputRange& input, OutputRange& output) {
+@{algorithm_declaration_transform_unary_1}
     transform_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(op), input, output);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class Op,
-    class T>
-inline void transform_binary(
-    Op&& op,
-    const T* left,
-    const T* right,
-    T* output,
-    std::size_t count) {
+@{algorithm_declaration_transform_binary_4}
     using vec = typename detail::vector_for_parallelism<Parallelism, T>::type;
 
     static_assert(
@@ -316,18 +242,7 @@ inline void transform_binary(
     }
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class Op,
-    class LeftRange,
-    class RightRange,
-    class OutputRange>
-inline void transform_binary(
-    Op&& op,
-    const LeftRange& left,
-    const RightRange& right,
-    OutputRange& output) {
+@{algorithm_declaration_transform_binary_3}
     transform_binary<Parallelism, Alignment>(
         std::forward<Op>(op),
         detail::range_data(left),
@@ -336,48 +251,17 @@ inline void transform_binary(
         detail::range_size(left));
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class Op,
-    class T>
-inline void transform_binary(
-    Op&& op,
-    const T* left,
-    const T* right,
-    T* output,
-    std::size_t count) {
+@{algorithm_declaration_transform_binary_2}
     transform_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(op), left, right, output, count);
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class Op,
-    class LeftRange,
-    class RightRange,
-    class OutputRange>
-inline void transform_binary(
-    Op&& op,
-    const LeftRange& left,
-    const RightRange& right,
-    OutputRange& output) {
+@{algorithm_declaration_transform_binary_1}
     transform_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(op), left, right, output);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T>
-inline std::size_t predicate_unary(
-    Op&& op,
-    const T* input,
-    typename detail::mask_for<MaskLayout, Parallelism, T>::type* masks,
-    std::size_t count) {
+@{algorithm_declaration_predicate_unary_4}
     using vec = typename detail::vector_for_parallelism<Parallelism, T>::type;
 
     static_assert(
@@ -418,32 +302,12 @@ inline std::size_t predicate_unary(
     }
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T>
-inline std::size_t predicate_unary(
-    Op&& op,
-    const T* input,
-    fixed_mask_storage_type<MaskLayout, ParallelN, T>* masks,
-    std::size_t count) {
+@{algorithm_declaration_predicate_unary_2}
     return predicate_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment, MaskLayout>(
         std::forward<Op>(op), input, masks, count);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class InputRange,
-    class MaskRange>
-inline std::size_t predicate_unary(
-    Op&& op,
-    const InputRange& input,
-    MaskRange& masks) {
+@{algorithm_declaration_predicate_unary_3}
     return predicate_unary<Parallelism, Alignment, MaskLayout>(
         std::forward<Op>(op),
         detail::range_data(input),
@@ -451,17 +315,7 @@ inline std::size_t predicate_unary(
         detail::range_size(input));
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class InputRange,
-    class MaskRange>
-inline std::size_t predicate_unary(
-    Op&& op,
-    const InputRange& input,
-    MaskRange& masks) {
+@{algorithm_declaration_predicate_unary_1}
     return predicate_unary<
         ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
@@ -469,18 +323,7 @@ inline std::size_t predicate_unary(
         std::forward<Op>(op), input, masks);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T>
-inline std::size_t predicate_binary(
-    Op&& op,
-    const T* left,
-    const T* right,
-    typename detail::mask_for<MaskLayout, Parallelism, T>::type* masks,
-    std::size_t count) {
+@{algorithm_declaration_predicate_binary_4}
     using vec = typename detail::vector_for_parallelism<Parallelism, T>::type;
 
     static_assert(
@@ -511,35 +354,12 @@ inline std::size_t predicate_binary(
     }
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T>
-inline std::size_t predicate_binary(
-    Op&& op,
-    const T* left,
-    const T* right,
-    fixed_mask_storage_type<MaskLayout, ParallelN, T>* masks,
-    std::size_t count) {
+@{algorithm_declaration_predicate_binary_2}
     return predicate_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment, MaskLayout>(
         std::forward<Op>(op), left, right, masks, count);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class LeftRange,
-    class RightRange,
-    class MaskRange>
-inline std::size_t predicate_binary(
-    Op&& op,
-    const LeftRange& left,
-    const RightRange& right,
-    MaskRange& masks) {
+@{algorithm_declaration_predicate_binary_3}
     return predicate_binary<Parallelism, Alignment, MaskLayout>(
         std::forward<Op>(op),
         detail::range_data(left),
@@ -548,19 +368,7 @@ inline std::size_t predicate_binary(
         detail::range_size(left));
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class LeftRange,
-    class RightRange,
-    class MaskRange>
-inline std::size_t predicate_binary(
-    Op&& op,
-    const LeftRange& left,
-    const RightRange& right,
-    MaskRange& masks) {
+@{algorithm_declaration_predicate_binary_1}
     return predicate_binary<
         ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
@@ -568,18 +376,7 @@ inline std::size_t predicate_binary(
         std::forward<Op>(op), left, right, masks);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T>
-inline void transform_where_unary(
-    Op&& op,
-    const T* input,
-    const typename detail::mask_for<MaskLayout, Parallelism, T>::type* masks,
-    T* output,
-    std::size_t count) {
+@{algorithm_declaration_transform_where_unary_4}
     using vec = typename detail::vector_for_parallelism<Parallelism, T>::type;
 
     static_assert(
@@ -639,35 +436,12 @@ inline void transform_where_unary(
     }
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T>
-inline void transform_where_unary(
-    Op&& op,
-    const T* input,
-    const fixed_mask_storage_type<MaskLayout, ParallelN, T>* masks,
-    T* output,
-    std::size_t count) {
+@{algorithm_declaration_transform_where_unary_2}
     transform_where_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment, MaskLayout>(
         std::forward<Op>(op), input, masks, output, count);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class InputRange,
-    class MaskRange,
-    class OutputRange>
-inline void transform_where_unary(
-    Op&& op,
-    const InputRange& input,
-    const MaskRange& masks,
-    OutputRange& output) {
+@{algorithm_declaration_transform_where_unary_3}
     transform_where_unary<Parallelism, Alignment, MaskLayout>(
         std::forward<Op>(op),
         detail::range_data(input),
@@ -676,19 +450,7 @@ inline void transform_where_unary(
         detail::range_size(input));
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class InputRange,
-    class MaskRange,
-    class OutputRange>
-inline void transform_where_unary(
-    Op&& op,
-    const InputRange& input,
-    const MaskRange& masks,
-    OutputRange& output) {
+@{algorithm_declaration_transform_where_unary_1}
     transform_where_unary<
         ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
@@ -696,19 +458,7 @@ inline void transform_where_unary(
         std::forward<Op>(op), input, masks, output);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T>
-inline void transform_where_binary(
-    Op&& op,
-    const T* left,
-    const T* right,
-    const typename detail::mask_for<MaskLayout, Parallelism, T>::type* masks,
-    T* output,
-    std::size_t count) {
+@{algorithm_declaration_transform_where_binary_4}
     using vec = typename detail::vector_for_parallelism<Parallelism, T>::type;
 
     static_assert(
@@ -741,38 +491,12 @@ inline void transform_where_binary(
     }
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T>
-inline void transform_where_binary(
-    Op&& op,
-    const T* left,
-    const T* right,
-    const fixed_mask_storage_type<MaskLayout, ParallelN, T>* masks,
-    T* output,
-    std::size_t count) {
+@{algorithm_declaration_transform_where_binary_2}
     transform_where_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment, MaskLayout>(
         std::forward<Op>(op), left, right, masks, output, count);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class LeftRange,
-    class RightRange,
-    class MaskRange,
-    class OutputRange>
-inline void transform_where_binary(
-    Op&& op,
-    const LeftRange& left,
-    const RightRange& right,
-    const MaskRange& masks,
-    OutputRange& output) {
+@{algorithm_declaration_transform_where_binary_3}
     transform_where_binary<Parallelism, Alignment, MaskLayout>(
         std::forward<Op>(op),
         detail::range_data(left),
@@ -782,21 +506,7 @@ inline void transform_where_binary(
         detail::range_size(left));
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class LeftRange,
-    class RightRange,
-    class MaskRange,
-    class OutputRange>
-inline void transform_where_binary(
-    Op&& op,
-    const LeftRange& left,
-    const RightRange& right,
-    const MaskRange& masks,
-    OutputRange& output) {
+@{algorithm_declaration_transform_where_binary_1}
     transform_where_binary<
         ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
@@ -804,18 +514,7 @@ inline void transform_where_binary(
         std::forward<Op>(op), left, right, masks, output);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T>
-inline void transform_masked_unary(
-    Op&& op,
-    const T* input,
-    const typename detail::mask_for<MaskLayout, Parallelism, T>::type* masks,
-    T* output,
-    std::size_t count) {
+@{algorithm_declaration_transform_masked_unary_4}
     using vec = typename detail::vector_for_parallelism<Parallelism, T>::type;
 
     static_assert(
@@ -875,35 +574,12 @@ inline void transform_masked_unary(
     }
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T>
-inline void transform_masked_unary(
-    Op&& op,
-    const T* input,
-    const fixed_mask_storage_type<MaskLayout, ParallelN, T>* masks,
-    T* output,
-    std::size_t count) {
+@{algorithm_declaration_transform_masked_unary_2}
     transform_masked_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment, MaskLayout>(
         std::forward<Op>(op), input, masks, output, count);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class InputRange,
-    class MaskRange,
-    class OutputRange>
-inline void transform_masked_unary(
-    Op&& op,
-    const InputRange& input,
-    const MaskRange& masks,
-    OutputRange& output) {
+@{algorithm_declaration_transform_masked_unary_3}
     transform_masked_unary<Parallelism, Alignment, MaskLayout>(
         std::forward<Op>(op),
         detail::range_data(input),
@@ -912,19 +588,7 @@ inline void transform_masked_unary(
         detail::range_size(input));
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class InputRange,
-    class MaskRange,
-    class OutputRange>
-inline void transform_masked_unary(
-    Op&& op,
-    const InputRange& input,
-    const MaskRange& masks,
-    OutputRange& output) {
+@{algorithm_declaration_transform_masked_unary_1}
     transform_masked_unary<
         ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
@@ -932,19 +596,7 @@ inline void transform_masked_unary(
         std::forward<Op>(op), input, masks, output);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T>
-inline void transform_masked_binary(
-    Op&& op,
-    const T* left,
-    const T* right,
-    const typename detail::mask_for<MaskLayout, Parallelism, T>::type* masks,
-    T* output,
-    std::size_t count) {
+@{algorithm_declaration_transform_masked_binary_4}
     using vec = typename detail::vector_for_parallelism<Parallelism, T>::type;
 
     static_assert(
@@ -977,38 +629,12 @@ inline void transform_masked_binary(
     }
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T>
-inline void transform_masked_binary(
-    Op&& op,
-    const T* left,
-    const T* right,
-    const fixed_mask_storage_type<MaskLayout, ParallelN, T>* masks,
-    T* output,
-    std::size_t count) {
+@{algorithm_declaration_transform_masked_binary_2}
     transform_masked_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment, MaskLayout>(
         std::forward<Op>(op), left, right, masks, output, count);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class LeftRange,
-    class RightRange,
-    class MaskRange,
-    class OutputRange>
-inline void transform_masked_binary(
-    Op&& op,
-    const LeftRange& left,
-    const RightRange& right,
-    const MaskRange& masks,
-    OutputRange& output) {
+@{algorithm_declaration_transform_masked_binary_3}
     transform_masked_binary<Parallelism, Alignment, MaskLayout>(
         std::forward<Op>(op),
         detail::range_data(left),
@@ -1018,21 +644,7 @@ inline void transform_masked_binary(
         detail::range_size(left));
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class LeftRange,
-    class RightRange,
-    class MaskRange,
-    class OutputRange>
-inline void transform_masked_binary(
-    Op&& op,
-    const LeftRange& left,
-    const RightRange& right,
-    const MaskRange& masks,
-    OutputRange& output) {
+@{algorithm_declaration_transform_masked_binary_1}
     transform_masked_binary<
         ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
@@ -1040,15 +652,7 @@ inline void transform_masked_binary(
         std::forward<Op>(op), left, right, masks, output);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class Op,
-    class T>
-inline std::size_t count_unary(
-    Op&& predicate,
-    const T* input,
-    std::size_t count) {
+@{algorithm_declaration_count_unary_4}
     using vec = typename detail::vector_for_parallelism<Parallelism, T>::type;
 
     static_assert(
@@ -1073,51 +677,24 @@ inline std::size_t count_unary(
     }
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class Op,
-    class T>
-inline std::size_t count_unary(
-    Op&& predicate,
-    const T* input,
-    std::size_t count) {
+@{algorithm_declaration_count_unary_2}
     return count_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(predicate), input, count);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class Op,
-    class InputRange>
-inline std::size_t count_unary(Op&& predicate, const InputRange& input) {
+@{algorithm_declaration_count_unary_3}
     return count_unary<Parallelism, Alignment>(
         std::forward<Op>(predicate),
         detail::range_data(input),
         detail::range_size(input));
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class Op,
-    class InputRange>
-inline std::size_t count_unary(Op&& predicate, const InputRange& input) {
+@{algorithm_declaration_count_unary_1}
     return count_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(predicate), input);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class Op,
-    class T>
-inline std::size_t count_binary(
-    Op&& predicate,
-    const T* left,
-    const T* right,
-    std::size_t count) {
+@{algorithm_declaration_count_binary_4}
     using vec = typename detail::vector_for_parallelism<Parallelism, T>::type;
 
     static_assert(
@@ -1144,30 +721,12 @@ inline std::size_t count_binary(
     }
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class Op,
-    class T>
-inline std::size_t count_binary(
-    Op&& predicate,
-    const T* left,
-    const T* right,
-    std::size_t count) {
+@{algorithm_declaration_count_binary_2}
     return count_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(predicate), left, right, count);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class Op,
-    class LeftRange,
-    class RightRange>
-inline std::size_t count_binary(
-    Op&& predicate,
-    const LeftRange& left,
-    const RightRange& right) {
+@{algorithm_declaration_count_binary_3}
     return count_binary<Parallelism, Alignment>(
         std::forward<Op>(predicate),
         detail::range_data(left),
@@ -1175,31 +734,12 @@ inline std::size_t count_binary(
         detail::range_size(left));
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class Op,
-    class LeftRange,
-    class RightRange>
-inline std::size_t count_binary(
-    Op&& predicate,
-    const LeftRange& left,
-    const RightRange& right) {
+@{algorithm_declaration_count_binary_1}
     return count_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(predicate), left, right);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T>
-inline std::size_t count_masked_unary(
-    Op&& predicate,
-    const T* input,
-    const typename detail::mask_for<MaskLayout, Parallelism, T>::type* masks,
-    std::size_t count) {
+@{algorithm_declaration_count_masked_unary_4}
     using vec = typename detail::vector_for_parallelism<Parallelism, T>::type;
 
     static_assert(
@@ -1241,17 +781,7 @@ inline std::size_t count_masked_unary(
     }
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T>
-inline std::size_t count_masked_unary(
-    Op&& predicate,
-    const T* input,
-    const fixed_mask_storage_type<MaskLayout, ParallelN, T>* masks,
-    std::size_t count) {
+@{algorithm_declaration_count_masked_unary_2}
     return count_masked_unary<
         ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
@@ -1259,17 +789,7 @@ inline std::size_t count_masked_unary(
         std::forward<Op>(predicate), input, masks, count);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class InputRange,
-    class MaskRange>
-inline std::size_t count_masked_unary(
-    Op&& predicate,
-    const InputRange& input,
-    const MaskRange& masks) {
+@{algorithm_declaration_count_masked_unary_3}
     return count_masked_unary<Parallelism, Alignment, MaskLayout>(
         std::forward<Op>(predicate),
         detail::range_data(input),
@@ -1277,17 +797,7 @@ inline std::size_t count_masked_unary(
         detail::range_size(input));
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class InputRange,
-    class MaskRange>
-inline std::size_t count_masked_unary(
-    Op&& predicate,
-    const InputRange& input,
-    const MaskRange& masks) {
+@{algorithm_declaration_count_masked_unary_1}
     return count_masked_unary<
         ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
@@ -1295,18 +805,7 @@ inline std::size_t count_masked_unary(
         std::forward<Op>(predicate), input, masks);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T>
-inline std::size_t count_masked_binary(
-    Op&& predicate,
-    const T* left,
-    const T* right,
-    const typename detail::mask_for<MaskLayout, Parallelism, T>::type* masks,
-    std::size_t count) {
+@{algorithm_declaration_count_masked_binary_4}
     using vec = typename detail::vector_for_parallelism<Parallelism, T>::type;
 
     static_assert(
@@ -1340,18 +839,7 @@ inline std::size_t count_masked_binary(
     }
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T>
-inline std::size_t count_masked_binary(
-    Op&& predicate,
-    const T* left,
-    const T* right,
-    const fixed_mask_storage_type<MaskLayout, ParallelN, T>* masks,
-    std::size_t count) {
+@{algorithm_declaration_count_masked_binary_2}
     return count_masked_binary<
         ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
@@ -1359,19 +847,7 @@ inline std::size_t count_masked_binary(
         std::forward<Op>(predicate), left, right, masks, count);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class LeftRange,
-    class RightRange,
-    class MaskRange>
-inline std::size_t count_masked_binary(
-    Op&& predicate,
-    const LeftRange& left,
-    const RightRange& right,
-    const MaskRange& masks) {
+@{algorithm_declaration_count_masked_binary_3}
     return count_masked_binary<Parallelism, Alignment, MaskLayout>(
         std::forward<Op>(predicate),
         detail::range_data(left),
@@ -1380,19 +856,7 @@ inline std::size_t count_masked_binary(
         detail::range_size(left));
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class LeftRange,
-    class RightRange,
-    class MaskRange>
-inline std::size_t count_masked_binary(
-    Op&& predicate,
-    const LeftRange& left,
-    const RightRange& right,
-    const MaskRange& masks) {
+@{algorithm_declaration_count_masked_binary_1}
     return count_masked_binary<
         ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
@@ -1400,16 +864,7 @@ inline std::size_t count_masked_binary(
         std::forward<Op>(predicate), left, right, masks);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class Op,
-    class T>
-inline std::size_t select_unary(
-    Op&& predicate,
-    const T* input,
-    T* output,
-    std::size_t count) {
+@{algorithm_declaration_select_unary_4}
     using vec = typename detail::vector_for_parallelism<Parallelism, T>::type;
 
     static_assert(
@@ -1433,30 +888,12 @@ inline std::size_t select_unary(
     }
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class Op,
-    class T>
-inline std::size_t select_unary(
-    Op&& predicate,
-    const T* input,
-    T* output,
-    std::size_t count) {
+@{algorithm_declaration_select_unary_2}
     return select_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(predicate), input, output, count);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class Op,
-    class InputRange,
-    class OutputRange>
-inline std::size_t select_unary(
-    Op&& predicate,
-    const InputRange& input,
-    OutputRange& output) {
+@{algorithm_declaration_select_unary_3}
     return select_unary<Parallelism, Alignment>(
         std::forward<Op>(predicate),
         detail::range_data(input),
@@ -1464,31 +901,12 @@ inline std::size_t select_unary(
         detail::range_size(input));
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class Op,
-    class InputRange,
-    class OutputRange>
-inline std::size_t select_unary(
-    Op&& predicate,
-    const InputRange& input,
-    OutputRange& output) {
+@{algorithm_declaration_select_unary_1}
     return select_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(predicate), input, output);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class Op,
-    class T>
-inline std::size_t select_binary(
-    Op&& predicate,
-    const T* left,
-    const T* right,
-    T* output,
-    std::size_t count) {
+@{algorithm_declaration_select_binary_4}
     using vec = typename detail::vector_for_parallelism<Parallelism, T>::type;
 
     static_assert(
@@ -1514,33 +932,12 @@ inline std::size_t select_binary(
     }
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class Op,
-    class T>
-inline std::size_t select_binary(
-    Op&& predicate,
-    const T* left,
-    const T* right,
-    T* output,
-    std::size_t count) {
+@{algorithm_declaration_select_binary_2}
     return select_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(predicate), left, right, output, count);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class Op,
-    class LeftRange,
-    class RightRange,
-    class OutputRange>
-inline std::size_t select_binary(
-    Op&& predicate,
-    const LeftRange& left,
-    const RightRange& right,
-    OutputRange& output) {
+@{algorithm_declaration_select_binary_3}
     return select_binary<Parallelism, Alignment>(
         std::forward<Op>(predicate),
         detail::range_data(left),
@@ -1549,34 +946,12 @@ inline std::size_t select_binary(
         detail::range_size(left));
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class Op,
-    class LeftRange,
-    class RightRange,
-    class OutputRange>
-inline std::size_t select_binary(
-    Op&& predicate,
-    const LeftRange& left,
-    const RightRange& right,
-    OutputRange& output) {
+@{algorithm_declaration_select_binary_1}
     return select_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(predicate), left, right, output);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T>
-inline std::size_t select_masked_unary(
-    Op&& predicate,
-    const T* input,
-    const typename detail::mask_for<MaskLayout, Parallelism, T>::type* masks,
-    T* output,
-    std::size_t count) {
+@{algorithm_declaration_select_masked_unary_4}
     using vec = typename detail::vector_for_parallelism<Parallelism, T>::type;
 
     static_assert(
@@ -1617,18 +992,7 @@ inline std::size_t select_masked_unary(
     }
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T>
-inline std::size_t select_masked_unary(
-    Op&& predicate,
-    const T* input,
-    const fixed_mask_storage_type<MaskLayout, ParallelN, T>* masks,
-    T* output,
-    std::size_t count) {
+@{algorithm_declaration_select_masked_unary_2}
     return select_masked_unary<
         ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
@@ -1636,19 +1000,7 @@ inline std::size_t select_masked_unary(
         std::forward<Op>(predicate), input, masks, output, count);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class InputRange,
-    class MaskRange,
-    class OutputRange>
-inline std::size_t select_masked_unary(
-    Op&& predicate,
-    const InputRange& input,
-    const MaskRange& masks,
-    OutputRange& output) {
+@{algorithm_declaration_select_masked_unary_3}
     return select_masked_unary<Parallelism, Alignment, MaskLayout>(
         std::forward<Op>(predicate),
         detail::range_data(input),
@@ -1657,19 +1009,7 @@ inline std::size_t select_masked_unary(
         detail::range_size(input));
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class InputRange,
-    class MaskRange,
-    class OutputRange>
-inline std::size_t select_masked_unary(
-    Op&& predicate,
-    const InputRange& input,
-    const MaskRange& masks,
-    OutputRange& output) {
+@{algorithm_declaration_select_masked_unary_1}
     return select_masked_unary<
         ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
@@ -1677,19 +1017,7 @@ inline std::size_t select_masked_unary(
         std::forward<Op>(predicate), input, masks, output);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T>
-inline std::size_t select_masked_binary(
-    Op&& predicate,
-    const T* left,
-    const T* right,
-    const typename detail::mask_for<MaskLayout, Parallelism, T>::type* masks,
-    T* output,
-    std::size_t count) {
+@{algorithm_declaration_select_masked_binary_4}
     using vec = typename detail::vector_for_parallelism<Parallelism, T>::type;
 
     static_assert(
@@ -1722,19 +1050,7 @@ inline std::size_t select_masked_binary(
     }
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T>
-inline std::size_t select_masked_binary(
-    Op&& predicate,
-    const T* left,
-    const T* right,
-    const fixed_mask_storage_type<MaskLayout, ParallelN, T>* masks,
-    T* output,
-    std::size_t count) {
+@{algorithm_declaration_select_masked_binary_2}
     return select_masked_binary<
         ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
@@ -1742,21 +1058,7 @@ inline std::size_t select_masked_binary(
         std::forward<Op>(predicate), left, right, masks, output, count);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class LeftRange,
-    class RightRange,
-    class MaskRange,
-    class OutputRange>
-inline std::size_t select_masked_binary(
-    Op&& predicate,
-    const LeftRange& left,
-    const RightRange& right,
-    const MaskRange& masks,
-    OutputRange& output) {
+@{algorithm_declaration_select_masked_binary_3}
     return select_masked_binary<Parallelism, Alignment, MaskLayout>(
         std::forward<Op>(predicate),
         detail::range_data(left),
@@ -1766,21 +1068,7 @@ inline std::size_t select_masked_binary(
         detail::range_size(left));
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class LeftRange,
-    class RightRange,
-    class MaskRange,
-    class OutputRange>
-inline std::size_t select_masked_binary(
-    Op&& predicate,
-    const LeftRange& left,
-    const RightRange& right,
-    const MaskRange& masks,
-    OutputRange& output) {
+@{algorithm_declaration_select_masked_binary_1}
     return select_masked_binary<
         ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
@@ -1788,17 +1076,7 @@ inline std::size_t select_masked_binary(
         std::forward<Op>(predicate), left, right, masks, output);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class Op,
-    class T,
-    class IndexT>
-inline std::size_t select_indices_unary(
-    Op&& predicate,
-    const T* input,
-    IndexT* indices,
-    std::size_t count) {
+@{algorithm_declaration_select_indices_unary_4}
     using vec = typename detail::vector_for_parallelism<Parallelism, T>::type;
 
     static_assert(
@@ -1825,31 +1103,12 @@ inline std::size_t select_indices_unary(
     }
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class Op,
-    class T,
-    class IndexT>
-inline std::size_t select_indices_unary(
-    Op&& predicate,
-    const T* input,
-    IndexT* indices,
-    std::size_t count) {
+@{algorithm_declaration_select_indices_unary_2}
     return select_indices_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(predicate), input, indices, count);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class Op,
-    class InputRange,
-    class IndexRange>
-inline std::size_t select_indices_unary(
-    Op&& predicate,
-    const InputRange& input,
-    IndexRange& indices) {
+@{algorithm_declaration_select_indices_unary_3}
     return select_indices_unary<Parallelism, Alignment>(
         std::forward<Op>(predicate),
         detail::range_data(input),
@@ -1857,32 +1116,12 @@ inline std::size_t select_indices_unary(
         detail::range_size(input));
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class Op,
-    class InputRange,
-    class IndexRange>
-inline std::size_t select_indices_unary(
-    Op&& predicate,
-    const InputRange& input,
-    IndexRange& indices) {
+@{algorithm_declaration_select_indices_unary_1}
     return select_indices_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(predicate), input, indices);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class Op,
-    class T,
-    class IndexT>
-inline std::size_t select_indices_binary(
-    Op&& predicate,
-    const T* left,
-    const T* right,
-    IndexT* indices,
-    std::size_t count) {
+@{algorithm_declaration_select_indices_binary_4}
     using vec = typename detail::vector_for_parallelism<Parallelism, T>::type;
 
     static_assert(
@@ -1909,34 +1148,12 @@ inline std::size_t select_indices_binary(
     }
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class Op,
-    class T,
-    class IndexT>
-inline std::size_t select_indices_binary(
-    Op&& predicate,
-    const T* left,
-    const T* right,
-    IndexT* indices,
-    std::size_t count) {
+@{algorithm_declaration_select_indices_binary_2}
     return select_indices_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(predicate), left, right, indices, count);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class Op,
-    class LeftRange,
-    class RightRange,
-    class IndexRange>
-inline std::size_t select_indices_binary(
-    Op&& predicate,
-    const LeftRange& left,
-    const RightRange& right,
-    IndexRange& indices) {
+@{algorithm_declaration_select_indices_binary_3}
     return select_indices_binary<Parallelism, Alignment>(
         std::forward<Op>(predicate),
         detail::range_data(left),
@@ -1945,35 +1162,12 @@ inline std::size_t select_indices_binary(
         detail::range_size(left));
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class Op,
-    class LeftRange,
-    class RightRange,
-    class IndexRange>
-inline std::size_t select_indices_binary(
-    Op&& predicate,
-    const LeftRange& left,
-    const RightRange& right,
-    IndexRange& indices) {
+@{algorithm_declaration_select_indices_binary_1}
     return select_indices_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(predicate), left, right, indices);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T,
-    class IndexT>
-inline std::size_t select_masked_indices_unary(
-    Op&& predicate,
-    const T* input,
-    const typename detail::mask_for<MaskLayout, Parallelism, T>::type* masks,
-    IndexT* indices,
-    std::size_t count) {
+@{algorithm_declaration_select_masked_indices_unary_4}
     using vec = typename detail::vector_for_parallelism<Parallelism, T>::type;
 
     static_assert(
@@ -2015,19 +1209,7 @@ inline std::size_t select_masked_indices_unary(
     }
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T,
-    class IndexT>
-inline std::size_t select_masked_indices_unary(
-    Op&& predicate,
-    const T* input,
-    const fixed_mask_storage_type<MaskLayout, ParallelN, T>* masks,
-    IndexT* indices,
-    std::size_t count) {
+@{algorithm_declaration_select_masked_indices_unary_2}
     return select_masked_indices_unary<
         ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
@@ -2035,19 +1217,7 @@ inline std::size_t select_masked_indices_unary(
         std::forward<Op>(predicate), input, masks, indices, count);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class InputRange,
-    class MaskRange,
-    class IndexRange>
-inline std::size_t select_masked_indices_unary(
-    Op&& predicate,
-    const InputRange& input,
-    const MaskRange& masks,
-    IndexRange& indices) {
+@{algorithm_declaration_select_masked_indices_unary_3}
     return select_masked_indices_unary<Parallelism, Alignment, MaskLayout>(
         std::forward<Op>(predicate),
         detail::range_data(input),
@@ -2056,19 +1226,7 @@ inline std::size_t select_masked_indices_unary(
         detail::range_size(input));
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class InputRange,
-    class MaskRange,
-    class IndexRange>
-inline std::size_t select_masked_indices_unary(
-    Op&& predicate,
-    const InputRange& input,
-    const MaskRange& masks,
-    IndexRange& indices) {
+@{algorithm_declaration_select_masked_indices_unary_1}
     return select_masked_indices_unary<
         ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
@@ -2076,20 +1234,7 @@ inline std::size_t select_masked_indices_unary(
         std::forward<Op>(predicate), input, masks, indices);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T,
-    class IndexT>
-inline std::size_t select_masked_indices_binary(
-    Op&& predicate,
-    const T* left,
-    const T* right,
-    const typename detail::mask_for<MaskLayout, Parallelism, T>::type* masks,
-    IndexT* indices,
-    std::size_t count) {
+@{algorithm_declaration_select_masked_indices_binary_4}
     using vec = typename detail::vector_for_parallelism<Parallelism, T>::type;
 
     static_assert(
@@ -2123,20 +1268,7 @@ inline std::size_t select_masked_indices_binary(
     }
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T,
-    class IndexT>
-inline std::size_t select_masked_indices_binary(
-    Op&& predicate,
-    const T* left,
-    const T* right,
-    const fixed_mask_storage_type<MaskLayout, ParallelN, T>* masks,
-    IndexT* indices,
-    std::size_t count) {
+@{algorithm_declaration_select_masked_indices_binary_2}
     return select_masked_indices_binary<
         ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
@@ -2144,21 +1276,7 @@ inline std::size_t select_masked_indices_binary(
         std::forward<Op>(predicate), left, right, masks, indices, count);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class LeftRange,
-    class RightRange,
-    class MaskRange,
-    class IndexRange>
-inline std::size_t select_masked_indices_binary(
-    Op&& predicate,
-    const LeftRange& left,
-    const RightRange& right,
-    const MaskRange& masks,
-    IndexRange& indices) {
+@{algorithm_declaration_select_masked_indices_binary_3}
     return select_masked_indices_binary<Parallelism, Alignment, MaskLayout>(
         std::forward<Op>(predicate),
         detail::range_data(left),
@@ -2168,21 +1286,7 @@ inline std::size_t select_masked_indices_binary(
         detail::range_size(left));
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class LeftRange,
-    class RightRange,
-    class MaskRange,
-    class IndexRange>
-inline std::size_t select_masked_indices_binary(
-    Op&& predicate,
-    const LeftRange& left,
-    const RightRange& right,
-    const MaskRange& masks,
-    IndexRange& indices) {
+@{algorithm_declaration_select_masked_indices_binary_1}
     return select_masked_indices_binary<
         ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
@@ -2190,19 +1294,7 @@ inline std::size_t select_masked_indices_binary(
         std::forward<Op>(predicate), left, right, masks, indices);
 }
 
-template <
-    std::size_t ParallelN,
-    std::size_t Scale = 0,
-    class Op,
-    class T,
-    class InputIndexT,
-    class OutputIndexT>
-inline std::size_t select_selected_indices_unary(
-    Op&& predicate,
-    const T* input,
-    const InputIndexT* input_indices,
-    OutputIndexT* output_indices,
-    std::size_t selected_count) {
+@{algorithm_declaration_select_selected_indices_unary_2}
     static_assert(ParallelN > 0, "select_selected_indices_unary<ParallelN> requires ParallelN > 0");
     using vec = typename detail::vector_for_selected_rows<ParallelN, T>::type;
 
@@ -2217,18 +1309,7 @@ inline std::size_t select_selected_indices_unary(
         predicate, input, input_indices, output_indices, selected_count);
 }
 
-template <
-    std::size_t ParallelN,
-    std::size_t Scale = 0,
-    class Op,
-    class InputRange,
-    class InputIndexRange,
-    class OutputIndexRange>
-inline std::size_t select_selected_indices_unary(
-    Op&& predicate,
-    const InputRange& input,
-    const InputIndexRange& input_indices,
-    OutputIndexRange& output_indices) {
+@{algorithm_declaration_select_selected_indices_unary_1}
     return select_selected_indices_unary<ParallelN, Scale>(
         std::forward<Op>(predicate),
         detail::range_data(input),
@@ -2237,20 +1318,7 @@ inline std::size_t select_selected_indices_unary(
         detail::range_size(input_indices));
 }
 
-template <
-    std::size_t ParallelN,
-    std::size_t Scale = 0,
-    class Op,
-    class T,
-    class InputIndexT,
-    class OutputIndexT>
-inline std::size_t select_selected_indices_binary(
-    Op&& predicate,
-    const T* left,
-    const T* right,
-    const InputIndexT* input_indices,
-    OutputIndexT* output_indices,
-    std::size_t selected_count) {
+@{algorithm_declaration_select_selected_indices_binary_2}
     static_assert(ParallelN > 0, "select_selected_indices_binary<ParallelN> requires ParallelN > 0");
     using vec = typename detail::vector_for_selected_rows<ParallelN, T>::type;
 
@@ -2265,20 +1333,7 @@ inline std::size_t select_selected_indices_binary(
         predicate, left, right, input_indices, output_indices, selected_count);
 }
 
-template <
-    std::size_t ParallelN,
-    std::size_t Scale = 0,
-    class Op,
-    class LeftRange,
-    class RightRange,
-    class InputIndexRange,
-    class OutputIndexRange>
-inline std::size_t select_selected_indices_binary(
-    Op&& predicate,
-    const LeftRange& left,
-    const RightRange& right,
-    const InputIndexRange& input_indices,
-    OutputIndexRange& output_indices) {
+@{algorithm_declaration_select_selected_indices_binary_1}
     return select_selected_indices_binary<ParallelN, Scale>(
         std::forward<Op>(predicate),
         detail::range_data(left),
@@ -2288,17 +1343,7 @@ inline std::size_t select_selected_indices_binary(
         detail::range_size(input_indices));
 }
 
-template <
-    std::size_t ParallelN,
-    std::size_t Scale = 0,
-    class Op,
-    class T,
-    class IndexT>
-inline std::size_t count_selected_unary(
-    Op&& predicate,
-    const T* input,
-    const IndexT* indices,
-    std::size_t selected_count) {
+@{algorithm_declaration_count_selected_unary_2}
     static_assert(ParallelN > 0, "count_selected_unary<ParallelN> requires ParallelN > 0");
     using vec = typename detail::vector_for_selected_rows<ParallelN, T>::type;
 
@@ -2313,16 +1358,7 @@ inline std::size_t count_selected_unary(
         predicate, input, indices, selected_count);
 }
 
-template <
-    std::size_t ParallelN,
-    std::size_t Scale = 0,
-    class Op,
-    class InputRange,
-    class IndexRange>
-inline std::size_t count_selected_unary(
-    Op&& predicate,
-    const InputRange& input,
-    const IndexRange& indices) {
+@{algorithm_declaration_count_selected_unary_1}
     return count_selected_unary<ParallelN, Scale>(
         std::forward<Op>(predicate),
         detail::range_data(input),
@@ -2330,18 +1366,7 @@ inline std::size_t count_selected_unary(
         detail::range_size(indices));
 }
 
-template <
-    std::size_t ParallelN,
-    std::size_t Scale = 0,
-    class Op,
-    class T,
-    class IndexT>
-inline std::size_t count_selected_binary(
-    Op&& predicate,
-    const T* left,
-    const T* right,
-    const IndexT* indices,
-    std::size_t selected_count) {
+@{algorithm_declaration_count_selected_binary_2}
     static_assert(ParallelN > 0, "count_selected_binary<ParallelN> requires ParallelN > 0");
     using vec = typename detail::vector_for_selected_rows<ParallelN, T>::type;
 
@@ -2356,18 +1381,7 @@ inline std::size_t count_selected_binary(
         predicate, left, right, indices, selected_count);
 }
 
-template <
-    std::size_t ParallelN,
-    std::size_t Scale = 0,
-    class Op,
-    class LeftRange,
-    class RightRange,
-    class IndexRange>
-inline std::size_t count_selected_binary(
-    Op&& predicate,
-    const LeftRange& left,
-    const RightRange& right,
-    const IndexRange& indices) {
+@{algorithm_declaration_count_selected_binary_1}
     return count_selected_binary<ParallelN, Scale>(
         std::forward<Op>(predicate),
         detail::range_data(left),
@@ -2376,18 +1390,7 @@ inline std::size_t count_selected_binary(
         detail::range_size(indices));
 }
 
-template <
-    std::size_t ParallelN,
-    std::size_t Scale = 0,
-    class Op,
-    class T,
-    class IndexT>
-inline void transform_selected_unary(
-    Op&& op,
-    const T* input,
-    const IndexT* indices,
-    T* output,
-    std::size_t selected_count) {
+@{algorithm_declaration_transform_selected_unary_2}
     static_assert(ParallelN > 0, "transform_selected_unary<ParallelN> requires ParallelN > 0");
     using vec = typename detail::vector_for_selected_rows<ParallelN, T>::type;
 
@@ -2402,18 +1405,7 @@ inline void transform_selected_unary(
         op, input, indices, output, selected_count);
 }
 
-template <
-    std::size_t ParallelN,
-    std::size_t Scale = 0,
-    class Op,
-    class InputRange,
-    class IndexRange,
-    class OutputRange>
-inline void transform_selected_unary(
-    Op&& op,
-    const InputRange& input,
-    const IndexRange& indices,
-    OutputRange& output) {
+@{algorithm_declaration_transform_selected_unary_1}
     transform_selected_unary<ParallelN, Scale>(
         std::forward<Op>(op),
         detail::range_data(input),
@@ -2422,19 +1414,7 @@ inline void transform_selected_unary(
         detail::range_size(indices));
 }
 
-template <
-    std::size_t ParallelN,
-    std::size_t Scale = 0,
-    class Op,
-    class T,
-    class IndexT>
-inline void transform_selected_binary(
-    Op&& op,
-    const T* left,
-    const T* right,
-    const IndexT* indices,
-    T* output,
-    std::size_t selected_count) {
+@{algorithm_declaration_transform_selected_binary_2}
     static_assert(ParallelN > 0, "transform_selected_binary<ParallelN> requires ParallelN > 0");
     using vec = typename detail::vector_for_selected_rows<ParallelN, T>::type;
 
@@ -2449,20 +1429,7 @@ inline void transform_selected_binary(
         op, left, right, indices, output, selected_count);
 }
 
-template <
-    std::size_t ParallelN,
-    std::size_t Scale = 0,
-    class Op,
-    class LeftRange,
-    class RightRange,
-    class IndexRange,
-    class OutputRange>
-inline void transform_selected_binary(
-    Op&& op,
-    const LeftRange& left,
-    const RightRange& right,
-    const IndexRange& indices,
-    OutputRange& output) {
+@{algorithm_declaration_transform_selected_binary_1}
     transform_selected_binary<ParallelN, Scale>(
         std::forward<Op>(op),
         detail::range_data(left),
@@ -2472,17 +1439,7 @@ inline void transform_selected_binary(
         detail::range_size(indices));
 }
 
-template <
-    std::size_t ParallelN,
-    std::size_t Scale = 0,
-    class Op,
-    class T,
-    class IndexT>
-inline auto aggregate_selected_unary(
-    Op&& op,
-    const T* input,
-    const IndexT* indices,
-    std::size_t selected_count) {
+@{algorithm_declaration_aggregate_selected_unary_2}
     static_assert(ParallelN > 0, "aggregate_selected_unary<ParallelN> requires ParallelN > 0");
     using vec = typename detail::vector_for_selected_rows<ParallelN, T>::type;
 
@@ -2497,16 +1454,7 @@ inline auto aggregate_selected_unary(
         op, input, indices, selected_count);
 }
 
-template <
-    std::size_t ParallelN,
-    std::size_t Scale = 0,
-    class Op,
-    class InputRange,
-    class IndexRange>
-inline auto aggregate_selected_unary(
-    Op&& op,
-    const InputRange& input,
-    const IndexRange& indices) {
+@{algorithm_declaration_aggregate_selected_unary_1}
     return aggregate_selected_unary<ParallelN, Scale>(
         std::forward<Op>(op),
         detail::range_data(input),
@@ -2514,18 +1462,7 @@ inline auto aggregate_selected_unary(
         detail::range_size(indices));
 }
 
-template <
-    std::size_t ParallelN,
-    std::size_t Scale = 0,
-    class Op,
-    class T,
-    class IndexT>
-inline auto aggregate_selected_binary(
-    Op&& op,
-    const T* left,
-    const T* right,
-    const IndexT* indices,
-    std::size_t selected_count) {
+@{algorithm_declaration_aggregate_selected_binary_2}
     static_assert(ParallelN > 0, "aggregate_selected_binary<ParallelN> requires ParallelN > 0");
     using vec = typename detail::vector_for_selected_rows<ParallelN, T>::type;
 
@@ -2540,18 +1477,7 @@ inline auto aggregate_selected_binary(
         op, left, right, indices, selected_count);
 }
 
-template <
-    std::size_t ParallelN,
-    std::size_t Scale = 0,
-    class Op,
-    class LeftRange,
-    class RightRange,
-    class IndexRange>
-inline auto aggregate_selected_binary(
-    Op&& op,
-    const LeftRange& left,
-    const RightRange& right,
-    const IndexRange& indices) {
+@{algorithm_declaration_aggregate_selected_binary_1}
     return aggregate_selected_binary<ParallelN, Scale>(
         std::forward<Op>(op),
         detail::range_data(left),
@@ -2560,17 +1486,7 @@ inline auto aggregate_selected_binary(
         detail::range_size(indices));
 }
 
-template <
-    std::size_t ParallelN,
-    std::size_t Scale = 0,
-    class Op,
-    class T,
-    class IndexT>
-inline void consume_selected_unary(
-    Op&& op,
-    const T* input,
-    const IndexT* indices,
-    std::size_t selected_count) {
+@{algorithm_declaration_consume_selected_unary_2}
     static_assert(ParallelN > 0, "consume_selected_unary<ParallelN> requires ParallelN > 0");
     using vec = typename detail::vector_for_selected_rows<ParallelN, T>::type;
 
@@ -2585,16 +1501,7 @@ inline void consume_selected_unary(
         op, input, indices, selected_count);
 }
 
-template <
-    std::size_t ParallelN,
-    std::size_t Scale = 0,
-    class Op,
-    class InputRange,
-    class IndexRange>
-inline void consume_selected_unary(
-    Op&& op,
-    const InputRange& input,
-    const IndexRange& indices) {
+@{algorithm_declaration_consume_selected_unary_1}
     consume_selected_unary<ParallelN, Scale>(
         std::forward<Op>(op),
         detail::range_data(input),
@@ -2602,18 +1509,7 @@ inline void consume_selected_unary(
         detail::range_size(indices));
 }
 
-template <
-    std::size_t ParallelN,
-    std::size_t Scale = 0,
-    class Op,
-    class T,
-    class IndexT>
-inline void consume_selected_binary(
-    Op&& op,
-    const T* left,
-    const T* right,
-    const IndexT* indices,
-    std::size_t selected_count) {
+@{algorithm_declaration_consume_selected_binary_2}
     static_assert(ParallelN > 0, "consume_selected_binary<ParallelN> requires ParallelN > 0");
     using vec = typename detail::vector_for_selected_rows<ParallelN, T>::type;
 
@@ -2628,18 +1524,7 @@ inline void consume_selected_binary(
         op, left, right, indices, selected_count);
 }
 
-template <
-    std::size_t ParallelN,
-    std::size_t Scale = 0,
-    class Op,
-    class LeftRange,
-    class RightRange,
-    class IndexRange>
-inline void consume_selected_binary(
-    Op&& op,
-    const LeftRange& left,
-    const RightRange& right,
-    const IndexRange& indices) {
+@{algorithm_declaration_consume_selected_binary_1}
     consume_selected_binary<ParallelN, Scale>(
         std::forward<Op>(op),
         detail::range_data(left),
@@ -2648,15 +1533,7 @@ inline void consume_selected_binary(
         detail::range_size(indices));
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class Op,
-    class T>
-inline auto aggregate_unary(
-    Op&& op,
-    const T* input,
-    std::size_t count) {
+@{algorithm_declaration_aggregate_unary_4}
     using vec = typename detail::vector_for_parallelism<Parallelism, T>::type;
 
     static_assert(
@@ -2680,51 +1557,24 @@ inline auto aggregate_unary(
     }
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class Op,
-    class T>
-inline auto aggregate_unary(
-    Op&& op,
-    const T* input,
-    std::size_t count) {
+@{algorithm_declaration_aggregate_unary_2}
     return aggregate_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(op), input, count);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class Op,
-    class InputRange>
-inline auto aggregate_unary(Op&& op, const InputRange& input) {
+@{algorithm_declaration_aggregate_unary_3}
     return aggregate_unary<Parallelism, Alignment>(
         std::forward<Op>(op),
         detail::range_data(input),
         detail::range_size(input));
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class Op,
-    class InputRange>
-inline auto aggregate_unary(Op&& op, const InputRange& input) {
+@{algorithm_declaration_aggregate_unary_1}
     return aggregate_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(op), input);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class Op,
-    class T>
-inline auto aggregate_binary(
-    Op&& op,
-    const T* left,
-    const T* right,
-    std::size_t count) {
+@{algorithm_declaration_aggregate_binary_4}
     using vec = typename detail::vector_for_parallelism<Parallelism, T>::type;
 
     static_assert(
@@ -2748,30 +1598,12 @@ inline auto aggregate_binary(
     }
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class Op,
-    class T>
-inline auto aggregate_binary(
-    Op&& op,
-    const T* left,
-    const T* right,
-    std::size_t count) {
+@{algorithm_declaration_aggregate_binary_2}
     return aggregate_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(op), left, right, count);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class Op,
-    class LeftRange,
-    class RightRange>
-inline auto aggregate_binary(
-    Op&& op,
-    const LeftRange& left,
-    const RightRange& right) {
+@{algorithm_declaration_aggregate_binary_3}
     return aggregate_binary<Parallelism, Alignment>(
         std::forward<Op>(op),
         detail::range_data(left),
@@ -2779,31 +1611,12 @@ inline auto aggregate_binary(
         detail::range_size(left));
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class Op,
-    class LeftRange,
-    class RightRange>
-inline auto aggregate_binary(
-    Op&& op,
-    const LeftRange& left,
-    const RightRange& right) {
+@{algorithm_declaration_aggregate_binary_1}
     return aggregate_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(op), left, right);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T>
-inline auto aggregate_masked_unary(
-    Op&& op,
-    const T* input,
-    const typename detail::mask_for<MaskLayout, Parallelism, T>::type* masks,
-    std::size_t count) {
+@{algorithm_declaration_aggregate_masked_unary_4}
     using vec = typename detail::vector_for_parallelism<Parallelism, T>::type;
 
     static_assert(
@@ -2840,17 +1653,7 @@ inline auto aggregate_masked_unary(
     }
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T>
-inline auto aggregate_masked_unary(
-    Op&& op,
-    const T* input,
-    const fixed_mask_storage_type<MaskLayout, ParallelN, T>* masks,
-    std::size_t count) {
+@{algorithm_declaration_aggregate_masked_unary_2}
     return aggregate_masked_unary<
         ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
@@ -2858,17 +1661,7 @@ inline auto aggregate_masked_unary(
         std::forward<Op>(op), input, masks, count);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class InputRange,
-    class MaskRange>
-inline auto aggregate_masked_unary(
-    Op&& op,
-    const InputRange& input,
-    const MaskRange& masks) {
+@{algorithm_declaration_aggregate_masked_unary_3}
     return aggregate_masked_unary<Parallelism, Alignment, MaskLayout>(
         std::forward<Op>(op),
         detail::range_data(input),
@@ -2876,17 +1669,7 @@ inline auto aggregate_masked_unary(
         detail::range_size(input));
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class InputRange,
-    class MaskRange>
-inline auto aggregate_masked_unary(
-    Op&& op,
-    const InputRange& input,
-    const MaskRange& masks) {
+@{algorithm_declaration_aggregate_masked_unary_1}
     return aggregate_masked_unary<
         ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
@@ -2894,18 +1677,7 @@ inline auto aggregate_masked_unary(
         std::forward<Op>(op), input, masks);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T>
-inline auto aggregate_masked_binary(
-    Op&& op,
-    const T* left,
-    const T* right,
-    const typename detail::mask_for<MaskLayout, Parallelism, T>::type* masks,
-    std::size_t count) {
+@{algorithm_declaration_aggregate_masked_binary_4}
     using vec = typename detail::vector_for_parallelism<Parallelism, T>::type;
 
     static_assert(
@@ -2936,18 +1708,7 @@ inline auto aggregate_masked_binary(
     }
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T>
-inline auto aggregate_masked_binary(
-    Op&& op,
-    const T* left,
-    const T* right,
-    const fixed_mask_storage_type<MaskLayout, ParallelN, T>* masks,
-    std::size_t count) {
+@{algorithm_declaration_aggregate_masked_binary_2}
     return aggregate_masked_binary<
         ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
@@ -2955,19 +1716,7 @@ inline auto aggregate_masked_binary(
         std::forward<Op>(op), left, right, masks, count);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class LeftRange,
-    class RightRange,
-    class MaskRange>
-inline auto aggregate_masked_binary(
-    Op&& op,
-    const LeftRange& left,
-    const RightRange& right,
-    const MaskRange& masks) {
+@{algorithm_declaration_aggregate_masked_binary_3}
     return aggregate_masked_binary<Parallelism, Alignment, MaskLayout>(
         std::forward<Op>(op),
         detail::range_data(left),
@@ -2976,19 +1725,7 @@ inline auto aggregate_masked_binary(
         detail::range_size(left));
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class LeftRange,
-    class RightRange,
-    class MaskRange>
-inline auto aggregate_masked_binary(
-    Op&& op,
-    const LeftRange& left,
-    const RightRange& right,
-    const MaskRange& masks) {
+@{algorithm_declaration_aggregate_masked_binary_1}
     return aggregate_masked_binary<
         ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
@@ -2996,15 +1733,7 @@ inline auto aggregate_masked_binary(
         std::forward<Op>(op), left, right, masks);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class Op,
-    class T>
-inline void consume_unary(
-    Op&& op,
-    const T* input,
-    std::size_t count) {
+@{algorithm_declaration_consume_unary_4}
     using vec = typename detail::vector_for_parallelism<Parallelism, T>::type;
 
     static_assert(
@@ -3029,51 +1758,24 @@ inline void consume_unary(
     }
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class Op,
-    class T>
-inline void consume_unary(
-    Op&& op,
-    const T* input,
-    std::size_t count) {
+@{algorithm_declaration_consume_unary_2}
     consume_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(op), input, count);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class Op,
-    class InputRange>
-inline void consume_unary(Op&& op, const InputRange& input) {
+@{algorithm_declaration_consume_unary_3}
     consume_unary<Parallelism, Alignment>(
         std::forward<Op>(op),
         detail::range_data(input),
         detail::range_size(input));
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class Op,
-    class InputRange>
-inline void consume_unary(Op&& op, const InputRange& input) {
+@{algorithm_declaration_consume_unary_1}
     consume_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(op), input);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class Op,
-    class T>
-inline void consume_binary(
-    Op&& op,
-    const T* left,
-    const T* right,
-    std::size_t count) {
+@{algorithm_declaration_consume_binary_4}
     using vec = typename detail::vector_for_parallelism<Parallelism, T>::type;
 
     static_assert(
@@ -3096,30 +1798,12 @@ inline void consume_binary(
     }
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class Op,
-    class T>
-inline void consume_binary(
-    Op&& op,
-    const T* left,
-    const T* right,
-    std::size_t count) {
+@{algorithm_declaration_consume_binary_2}
     consume_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(op), left, right, count);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class Op,
-    class LeftRange,
-    class RightRange>
-inline void consume_binary(
-    Op&& op,
-    const LeftRange& left,
-    const RightRange& right) {
+@{algorithm_declaration_consume_binary_3}
     consume_binary<Parallelism, Alignment>(
         std::forward<Op>(op),
         detail::range_data(left),
@@ -3127,31 +1811,12 @@ inline void consume_binary(
         detail::range_size(left));
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class Op,
-    class LeftRange,
-    class RightRange>
-inline void consume_binary(
-    Op&& op,
-    const LeftRange& left,
-    const RightRange& right) {
+@{algorithm_declaration_consume_binary_1}
     consume_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(op), left, right);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T>
-inline void consume_masked_unary(
-    Op&& op,
-    const T* input,
-    const typename detail::mask_for<MaskLayout, Parallelism, T>::type* masks,
-    std::size_t count) {
+@{algorithm_declaration_consume_masked_unary_4}
     using vec = typename detail::vector_for_parallelism<Parallelism, T>::type;
 
     static_assert(
@@ -3189,32 +1854,12 @@ inline void consume_masked_unary(
     }
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T>
-inline void consume_masked_unary(
-    Op&& op,
-    const T* input,
-    const fixed_mask_storage_type<MaskLayout, ParallelN, T>* masks,
-    std::size_t count) {
+@{algorithm_declaration_consume_masked_unary_2}
     consume_masked_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment, MaskLayout>(
         std::forward<Op>(op), input, masks, count);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class InputRange,
-    class MaskRange>
-inline void consume_masked_unary(
-    Op&& op,
-    const InputRange& input,
-    const MaskRange& masks) {
+@{algorithm_declaration_consume_masked_unary_3}
     consume_masked_unary<Parallelism, Alignment, MaskLayout>(
         std::forward<Op>(op),
         detail::range_data(input),
@@ -3222,17 +1867,7 @@ inline void consume_masked_unary(
         detail::range_size(input));
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class InputRange,
-    class MaskRange>
-inline void consume_masked_unary(
-    Op&& op,
-    const InputRange& input,
-    const MaskRange& masks) {
+@{algorithm_declaration_consume_masked_unary_1}
     consume_masked_unary<
         ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
@@ -3240,18 +1875,7 @@ inline void consume_masked_unary(
         std::forward<Op>(op), input, masks);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T>
-inline void consume_masked_binary(
-    Op&& op,
-    const T* left,
-    const T* right,
-    const typename detail::mask_for<MaskLayout, Parallelism, T>::type* masks,
-    std::size_t count) {
+@{algorithm_declaration_consume_masked_binary_4}
     using vec = typename detail::vector_for_parallelism<Parallelism, T>::type;
 
     static_assert(
@@ -3282,35 +1906,12 @@ inline void consume_masked_binary(
     }
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class T>
-inline void consume_masked_binary(
-    Op&& op,
-    const T* left,
-    const T* right,
-    const fixed_mask_storage_type<MaskLayout, ParallelN, T>* masks,
-    std::size_t count) {
+@{algorithm_declaration_consume_masked_binary_2}
     consume_masked_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment, MaskLayout>(
         std::forward<Op>(op), left, right, masks, count);
 }
 
-template <
-    class Parallelism = ::tsl::dataparallel::native,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class LeftRange,
-    class RightRange,
-    class MaskRange>
-inline void consume_masked_binary(
-    Op&& op,
-    const LeftRange& left,
-    const RightRange& right,
-    const MaskRange& masks) {
+@{algorithm_declaration_consume_masked_binary_3}
     consume_masked_binary<Parallelism, Alignment, MaskLayout>(
         std::forward<Op>(op),
         detail::range_data(left),
@@ -3319,19 +1920,7 @@ inline void consume_masked_binary(
         detail::range_size(left));
 }
 
-template <
-    std::size_t ParallelN,
-    class Alignment = alignment::detect,
-    class MaskLayout = mask_layout::integral,
-    class Op,
-    class LeftRange,
-    class RightRange,
-    class MaskRange>
-inline void consume_masked_binary(
-    Op&& op,
-    const LeftRange& left,
-    const RightRange& right,
-    const MaskRange& masks) {
+@{algorithm_declaration_consume_masked_binary_1}
     consume_masked_binary<
         ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,

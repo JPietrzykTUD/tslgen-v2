@@ -4,8 +4,13 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping, Sequence
+
+from tslc.backend.emitted_profile import (
+    EmittedProfile,
+    used_extensions,
+)
 from tslc.backend.rust import RustBackend
-from tslc.backend.rust_api_model import RustFacadePlan, RustFacadeReceiverKind
+from tslc.backend.rust_api_model import RustFacadePlan
 from tslc.backend.rust_dispatch import RustDispatchPlan
 from tslc.backend.rust_documentation import rust_checked_api_examples
 from tslc.backend.rust_benchmark_context import (
@@ -20,16 +25,20 @@ from tslc.backend.rust_package import (
     DEFAULT_RUST_PACKAGE_CONFIG,
     RustPackageConfig,
 )
+from tslc.backend.rust_public_api import (
+    rust_fallback_profile_reexport_declaration,
+    rust_public_api_manifest,
+    rust_root_declaration_holes,
+    rust_selected_profile_reexport_declaration,
+)
 from tslc.backend.rust_static_selection import (
     RustStaticProfileSelection,
     RustStaticSelectionPlan,
 )
-from tslc.backend.emitted_profile import (
-    EmittedProfile,
-    used_extensions,
+from tslc.backend.rust_static_public_declarations import (
+    rust_static_declaration_holes,
 )
 from tslc.backend.rust_names import rust_primitive_tag_name
-from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.backend.target_capability import rust_arch_module
 from tslc.catalog.model import Extension
 from tslc.catalog.target_families import ProfileFamilyCapability
@@ -164,6 +173,16 @@ def _rust_artifacts(
         # Ship the formatter config at the crate root so `rustfmt`/`cargo fmt` finds it and the
         # generated crate is self-contained.
         text("rust/rustfmt.toml", assets.text("rustfmt.toml"), media_type=media_type),
+        text(
+            "rust/public-api.json",
+            rust_public_api_manifest(
+                profiles,
+                static_selection_plan,
+                facade_plan,
+                dispatch_plan,
+            ).serialize(),
+            media_type="application/json",
+        ),
     ]
     dispatch = rust_dispatch_module(dispatch_plan, assets)
     if dispatch:
@@ -395,7 +414,9 @@ def _rust_artifacts(
 
 
 def _rust_core(profiles: Sequence[EmittedProfile], assets: RenderAssets) -> str:
-    core = assets.text("tsl_core.rs").rstrip()
+    core = assets.fill(
+        "tsl_core.rs", **rust_static_declaration_holes()
+    ).rstrip()
     register_impls = _rust_valid_bit_pattern_impls(profiles)
     return f"{core}\n\n{register_impls}\n" if register_impls else f"{core}\n"
 
@@ -476,6 +497,12 @@ def _rust_lib(
         profile_slug="target_fallback",
         module_cfg_attr="",
         selected_profile_cfg=rust_cfg_all("not(doc)", fallback_cfg),
+        profile_export=(
+            rust_fallback_profile_reexport_declaration(
+                static_selection_plan
+            ).render_head()
+            + ";"
+        ),
         runtime_private_module="",
     ).rstrip()
     profile_modules = "\n\n".join(
@@ -505,8 +532,8 @@ def _rust_lib(
     )
     return assets.fill(
         "rust_lib.rs.tmpl",
+        **rust_root_declaration_holes(facade_plan),
         checked_api_examples=rust_checked_api_examples(profiles),
-        facade_function_exports=_rust_facade_function_exports(facade_plan),
         primitive_tags=(f"{primitive_tags}\n\n" if primitive_tags else ""),
         profile_modules=profile_modules,
         benchmark_modules=benchmark_modules,
@@ -545,22 +572,12 @@ def _rust_lib_profile_module(
         profile_slug=profile_slug,
         module_cfg_attr=f"#[cfg({selected_cfg})]",
         selected_profile_cfg=rust_cfg_all("not(doc)", selected_cfg),
+        profile_export=(
+            rust_selected_profile_reexport_declaration(selection).render_head()
+            + ";"
+        ),
         runtime_private_module=runtime_private_module,
     ).rstrip()
-
-
-def _rust_facade_function_exports(plan: RustFacadePlan) -> str:
-    names = tuple(
-        sorted(
-            method.public_name
-            for method in plan.comprehensive_methods
-            if method.receiver_kind is RustFacadeReceiverKind.FREE
-        )
-    )
-    if not names:
-        return ""
-    rendered = ", ".join(rust_raw_identifier(name) for name in names)
-    return f"pub use tsl_facade::{{{rendered}}};"
 
 
 def _rust_documentation_module(

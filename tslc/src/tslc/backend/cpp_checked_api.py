@@ -24,7 +24,8 @@ class CppCheckedApiPlan:
     error_parameter_declaration: str | None
     success_error_expression: str
     failure_placeholder_expression: str | None
-    inline_specifier: str
+    attributes: tuple[str, ...]
+    specifiers: tuple[str, ...]
     template_constraint: str | None
     public_result_type: str
     has_value_result: bool
@@ -182,7 +183,8 @@ def plan_cpp_checked_api(
         failure_placeholder_expression=(
             f"{result_type}{{}}" if has_value_result else None
         ),
-        inline_specifier="[[nodiscard]] TSL_FORCE_INLINE",
+        attributes=("[[nodiscard]]",),
+        specifiers=("TSL_FORCE_INLINE",),
         template_constraint=_template_constraint(plan.conditions),
         public_result_type=(
             result_type if has_value_result else "::tsl::precondition_error"

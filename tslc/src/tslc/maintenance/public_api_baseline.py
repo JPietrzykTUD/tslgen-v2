@@ -8,16 +8,28 @@ import json
 from pathlib import Path
 import sys
 
+from tslc.api import _ARITH_TYPE_TAGS, generate_project
 from tslc.backend.algorithm_contracts import (
     ALGORITHM_CONTRACTS,
     ALGORITHM_PUBLIC_FAMILIES,
 )
 from tslc.backend.cpp_algorithm_contracts import cpp_checked_algorithm_families
+from tslc.backend.cpp_public_api import (
+    CPP_CORE_PUBLIC_IDENTITIES,
+    cpp_public_api_manifest,
+)
 from tslc.backend.precondition_error_rendering import (
     cpp_precondition_error,
     rust_precondition_error,
 )
 from tslc.backend.rust_algorithm_manifest import RUST_ALGORITHM_RESERVED_NAMES
+from tslc.backend.rust_api_planner import plan_rust_facade
+from tslc.backend.rust_dispatch import plan_rust_dispatch
+from tslc.backend.rust_public_api import (
+    RUST_ROOT_PUBLIC_IDENTITIES,
+    rust_public_api_manifest,
+)
+from tslc.backend.rust_static_selection import plan_rust_static_selection
 from tslc.catalog.arithmetic import ArithmeticOperandBinding
 from tslc.catalog.model import Primitive
 from tslc.catalog.preconditions import (
@@ -28,6 +40,9 @@ from tslc.catalog.semantics import OperandBinding
 from tslc.maintenance import _repo_context
 from tslc.maintenance._catalog import load_repository_catalog
 from tslc.maintenance._repo_context import RepoContext
+
+
+_EXACT_DECLARATION_PROFILES = ("scalar", "avx2")
 
 
 def canonical_baseline_path(context: RepoContext) -> Path:
@@ -295,6 +310,40 @@ def _checked_error_contract() -> dict[str, object]:
     }
 
 
+def _exact_backend_declarations(context: RepoContext) -> dict[str, object]:
+    """Build the reviewed exact declaration scope through normal lowering."""
+
+    result = generate_project(
+        (context.data_root,),
+        machine_profiles_path=context.machine_profiles_path,
+        profiles=_EXACT_DECLARATION_PROFILES,
+        type_tags=_ARITH_TYPE_TAGS,
+        backends=("cpp", "rust"),
+        render_artifacts=False,
+    )
+    errors = tuple(
+        diagnostic for diagnostic in result.diagnostics if diagnostic.severity == "error"
+    )
+    if errors:
+        raise RuntimeError(
+            "exact public declaration planning failed: "
+            + "; ".join(item.message for item in errors)
+        )
+    static_selection = plan_rust_static_selection(result.emitted_profiles)
+    facade = plan_rust_facade(result.emitted_profiles, static_selection)
+    dispatch = plan_rust_dispatch(result.emitted_profiles, static_selection, facade)
+    return {
+        "profiles": list(_EXACT_DECLARATION_PROFILES),
+        "cpp": cpp_public_api_manifest(result.emitted_profiles).payload(),
+        "rust": rust_public_api_manifest(
+            result.emitted_profiles,
+            static_selection,
+            facade,
+            dispatch,
+        ).payload(),
+    }
+
+
 def build_public_api_baseline(context: RepoContext) -> dict[str, object]:
     """Project public identities from typed catalog and backend manifests."""
 
@@ -308,7 +357,7 @@ def build_public_api_baseline(context: RepoContext) -> dict[str, object]:
         )
     )
     return {
-        "version": 2,
+        "version": 3,
         "compatibility": {
             "cpp": (
                 "names reachable through tsl.hpp, excluding detail namespaces, "
@@ -319,32 +368,15 @@ def build_public_api_baseline(context: RepoContext) -> dict[str, object]:
                 "algorithm substrate representations are not stable ABI"
             ),
             "identity_level": (
-                "typed source callable-family contracts and catalog-owned public "
-                "semantics; selected per-profile safety and exact emitted backend "
-                "declarations remain outside this baseline, while representative "
-                "spellings have focused compile and generation tests"
+                "typed source callable-family contracts plus backend-owned exact "
+                "declaration records for the reviewed scalar/AVX2 release scope; "
+                "each generated project also carries its scope-exact manifest"
             ),
         },
-        "cpp_core_identities": [
-            "tsl::array_type",
-            "tsl::dataparallel::fixed",
-            "tsl::dataparallel::generic",
-            "tsl::dataparallel::native",
-            "tsl::implementation_state",
-            "tsl::precondition_error",
-            "tsl::reg_param",
-            "tsl::simd",
-            "tsl::span",
-        ],
+        "cpp_core_identities": list(CPP_CORE_PUBLIC_IDENTITIES),
         "rust_root_identities": [
-            "tsl::Mask",
-            "tsl::NativeMask",
-            "tsl::NativeSimd",
-            "tsl::PreconditionError",
-            "tsl::Simd",
-            "tsl::SimdElement",
-            "tsl::SupportedSimd",
-            "tsl::profile",
+            identity.replace("crate::", "tsl::", 1)
+            for identity in RUST_ROOT_PUBLIC_IDENTITIES
         ],
         "primitive_callable_families": primitives,
         "checked_precondition_contracts": _checked_precondition_contracts(),
@@ -353,6 +385,7 @@ def build_public_api_baseline(context: RepoContext) -> dict[str, object]:
         "checked_algorithm_contracts": _checked_algorithm_contracts(),
         "cpp_checked_algorithm_families": sorted(cpp_checked_algorithm_families()),
         "rust_algorithm_callables": sorted(RUST_ALGORITHM_RESERVED_NAMES),
+        "exact_backend_declarations": _exact_backend_declarations(context),
     }
 
 

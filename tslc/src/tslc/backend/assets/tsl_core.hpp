@@ -46,25 +46,10 @@
 namespace tsl {
 
 /** Describes whether a selected specialization is native, composed, or a fallback. */
-enum class implementation_state {
-    native,
-    composed,
-    fallback,
-    unknown,
-};
+@{core_declaration_implementation_state}
 
 /** Error written or returned before a checked operation invokes its ordinary twin. */
-enum class precondition_error : std::uint8_t {
-    none,
-    index_out_of_bounds,
-    zero_divisor,
-    insufficient_extent,
-    insufficient_input,
-    insufficient_output,
-    misaligned,
-    overlapping_ranges,
-    address_overflow,
-};
+@{core_declaration_precondition_error}
 
 /**
  * A non-owning contiguous range used by checked memory APIs.
@@ -76,25 +61,20 @@ enum class precondition_error : std::uint8_t {
  * validate their own extent and selected alignment requirements after that
  * language-level range invariant has been established.
  */
-template <class T>
-class span {
+@{core_declaration_span} {
  public:
-  using element_type = T;
+@{core_span_alias_element_type};
 
-  constexpr span(T* data, std::size_t size) noexcept
+@{core_span_constructor_pointer}
       : data_(data), size_(size) {}
 
-  template <std::size_t Size>
-  constexpr span(T (&data)[Size]) noexcept : data_(data), size_(Size) {}
+@{core_span_constructor_array} : data_(data), size_(Size) {}
 
-  template <
-      class U,
-      std::enable_if_t<std::is_convertible_v<U (*)[], T (*)[]>, int> = 0>
-  constexpr span(span<U> other) noexcept
+@{core_span_constructor_conversion}
       : data_(other.data()), size_(other.size()) {}
 
-  [[nodiscard]] constexpr auto data() const noexcept -> T* { return data_; }
-  [[nodiscard]] constexpr auto size() const noexcept -> std::size_t { return size_; }
+@{core_span_method_data} { return data_; }
+@{core_span_method_size} { return size_; }
 
  private:
   T* data_;
@@ -263,8 +243,7 @@ inline T *assume_aligned(T *ptr) noexcept {
  * A specialization exposes its scalar, register, mask, integral-mask, lane,
  * and alignment types and constants. Register layout is backend-specific.
  */
-template <class T, class Ext>
-struct simd;
+@{core_declaration_simd};
 
 /** Scalar extension tag, always available. */
 struct scalar {};
@@ -294,9 +273,8 @@ struct simd<T, scalar> {
 };
 
 /** Parameter-passing type selected for a vector register. */
-template <class Vec>
-struct reg_param {
-    using type = typename Vec::register_type;
+@{core_declaration_reg_param} {
+@{core_reg_param_alias_type};
 };
 
 // Pointer-offset helpers used by the generic vector's element-wise load/store loops.
@@ -364,16 +342,15 @@ inline precondition_error indexed_memory_address_error(
 // over-aligns the storage so an aligned store into it (via `assume_aligned`) is valid.
 // `Align` defaults to the element alignment (the scalar case, length 1).
 /** Fixed-size owned lane buffer with explicit storage alignment. */
-template <class T, std::size_t N, std::size_t Align = alignof(T)>
-struct alignas(Align) array_type {
-    std::array<T, N> _storage;
-    T *data() { return _storage.data(); }
-    const T *data() const { return _storage.data(); }
-    const T *as_ptr() const { return _storage.data(); }
-    T *as_mut_ptr() { return _storage.data(); }
-    T &operator[](std::size_t i) { return _storage[i]; }
-    const T &operator[](std::size_t i) const { return _storage[i]; }
-    void fill(const T &value) { _storage.fill(value); }
+@{core_declaration_array_type} {
+@{core_array_field_storage};
+@{core_array_method_data_mut} { return _storage.data(); }
+@{core_array_method_data_const} { return _storage.data(); }
+@{core_array_method_as_ptr} { return _storage.data(); }
+@{core_array_method_as_mut_ptr} { return _storage.data(); }
+@{core_array_method_index_mut} { return _storage[i]; }
+@{core_array_method_index_const} { return _storage[i]; }
+@{core_array_method_fill} { _storage.fill(value); }
 };
 
 // The array type a vector lowers to (to_array's owned result / from_array's read-only

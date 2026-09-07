@@ -22,19 +22,42 @@ class RustVectorRegistration:
     type_bits: int
 
 
+@dataclass(frozen=True, slots=True)
+class RustExtensionTagRegistration:
+    """One public extension-tag declaration emitted by a profile module."""
+
+    extension_name: str
+    tag_name: str
+    sized: bool
+
+    def __post_init__(self) -> None:
+        if not self.extension_name or not self.tag_name:
+            raise ValueError("Rust extension-tag registrations require names")
+
+    def render_declaration(self) -> str:
+        if self.sized:
+            return f"pub struct {self.tag_name}<const LANES: usize>;"
+        return f"pub struct {self.tag_name};"
+
+
 def rust_registrations(
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
     extensions: Mapping[str, Extension],
 ) -> str:
     """Rust extension tag structs + vector trait impls for the used pairs."""
 
-    lines: list[str] = []
-    lines.extend(_rust_sized_registrations(by_primitive, extensions))
     registrations = rust_vector_registrations(by_primitive, extensions)
-    for ext in sorted({registration.extension_name for registration in registrations}):
-        extension = extensions.get(ext)
-        if extension is not None:
-            lines.append(f"pub struct {rust_extension_tag(extension)};")
+    tag_registrations = _rust_extension_tag_registrations(
+        by_primitive,
+        extensions,
+        registrations,
+    )
+    lines = _rust_sized_registrations(tag_registrations)
+    lines.extend(
+        registration.render_declaration()
+        for registration in tag_registrations
+        if not registration.sized
+    )
     for registration in registrations:
         extension = extensions.get(registration.extension_name)
         if extension is None:
@@ -76,15 +99,15 @@ def rust_registrations(
 
 
 def _rust_sized_registrations(
-    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
-    extensions: Mapping[str, Extension],
+    registrations: tuple[RustExtensionTagRegistration, ...],
 ) -> list[str]:
     lines: list[str] = []
-    for ext in _used_sized_extensions(by_primitive, extensions):
-        extension = extensions[ext]
-        tag = rust_extension_tag(extension)
+    for registration in registrations:
+        if not registration.sized:
+            continue
+        tag = registration.tag_name
         sized_tag = f"{tag}<LANES>"
-        lines.append(f"pub struct {tag}<const LANES: usize>;")
+        lines.append(registration.render_declaration())
         lines.append(
             "impl<T, const LANES: usize> "
             "crate::tsl_core::representation_sealed::SimdVector "
@@ -113,6 +136,48 @@ def _rust_sized_registrations(
             "const ELEMENT_COUNT: usize = LANES; }"
         )
     return lines
+
+
+def rust_extension_tag_registrations(
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
+    extensions: Mapping[str, Extension],
+) -> tuple[RustExtensionTagRegistration, ...]:
+    """Plan the public tag structs rendered for one physical profile module."""
+
+    return _rust_extension_tag_registrations(
+        by_primitive,
+        extensions,
+        rust_vector_registrations(by_primitive, extensions),
+    )
+
+
+def _rust_extension_tag_registrations(
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
+    extensions: Mapping[str, Extension],
+    vector_registrations: tuple[RustVectorRegistration, ...],
+) -> tuple[RustExtensionTagRegistration, ...]:
+    records: dict[str, RustExtensionTagRegistration] = {}
+    candidates = [
+        (name, True) for name in _used_sized_extensions(by_primitive, extensions)
+    ]
+    candidates.extend(
+        (name, False)
+        for name in sorted(
+            {registration.extension_name for registration in vector_registrations}
+        )
+    )
+    for extension_name, sized in candidates:
+        extension = extensions.get(extension_name)
+        if extension is None:
+            continue
+        tag_name = rust_extension_tag(extension)
+        record = RustExtensionTagRegistration(extension_name, tag_name, sized)
+        previous = records.setdefault(tag_name, record)
+        if previous.sized != record.sized:
+            raise ValueError(
+                f"Rust extension tag {tag_name!r} has conflicting declaration arity"
+            )
+    return tuple(records[name] for name in sorted(records))
 
 
 def _used_sized_extensions(
@@ -248,7 +313,9 @@ def rust_imask_width(lanes: int) -> int:
 
 
 __all__ = (
+    "RustExtensionTagRegistration",
     "RustVectorRegistration",
+    "rust_extension_tag_registrations",
     "rust_imask_type",
     "rust_imask_width",
     "rust_mask_type",

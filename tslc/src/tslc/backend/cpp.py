@@ -16,6 +16,14 @@ from tslc.backend.cpp_documentation import (
     cpp_register_doc as _cpp_register_doc,
     cpp_target_register_doc as _cpp_target_register_doc,
 )
+from tslc.backend.cpp_public_declarations import (
+    CppPublicDeclaration,
+    CppPublicParameter,
+    CppTemplateParameter,
+    cpp_constraint_parameter,
+    cpp_type_parameter,
+    cpp_value_parameter,
+)
 from tslc.backend.precondition_error_rendering import cpp_precondition_error
 from tslc.backend.primitive_facade import (
     DataparallelPrimitiveFacade,
@@ -24,6 +32,10 @@ from tslc.backend.primitive_facade import (
 )
 from tslc.backend.primitive_rendering import body_for as _body_for
 from tslc.backend.primitive_rendering import variant_names as _variant_names
+from tslc.backend.public_declarations import (
+    PublicDeclarationKind,
+    PublicDeclarationStability,
+)
 from tslc.backend.signature_types import CPP_SIGNATURE_TYPES
 from tslc.catalog.preconditions import (
     PreconditionCheckPrimitive,
@@ -583,6 +595,56 @@ class CppBackend:
         checked = self._checked_wrapper(primitive_name, specializations, define=False)
         return "\n\n".join(part for part in (ordinary, checked) if part)
 
+    def public_declarations(
+        self,
+        primitive_name: str,
+        specializations: tuple[LoweredSpecialization, ...],
+        *,
+        reachability: tuple[str, ...] = ("tsl.hpp",),
+    ) -> tuple[CppPublicDeclaration, ...]:
+        """Finalize the stable declarations emitted for one primitive group."""
+
+        shape = specializations[0]
+        if DEFAULT_SUPPORT_POLICY.is_free_function_signature(
+            shape.result_kind, shape.param_kinds
+        ):
+            ordinary = _cpp_free_function_declaration(shape, reachability=reachability)
+            checked = _cpp_checked_free_function_declaration(
+                shape, reachability=reachability
+            )
+            return (ordinary,) if checked is None else (ordinary, checked)
+        signature = _wrapper_signature(specializations)
+        records = [
+            _cpp_vector_wrapper_declaration(
+                primitive_name,
+                signature,
+                reachability=reachability,
+            )
+        ]
+        facade = _cpp_dataparallel_facade_declaration(
+            primitive_name,
+            specializations,
+            reachability=reachability,
+        )
+        if facade is not None:
+            records.append(facade)
+        checked_plan = plan_cpp_checked_api(
+            specializations,
+            result_kind=signature.result_kind,
+            result_type=signature.result_type,
+        )
+        if checked_plan is not None:
+            records.append(
+                _cpp_checked_wrapper_declaration(
+                    primitive_name,
+                    shape,
+                    signature,
+                    checked_plan,
+                    reachability=reachability,
+                )
+            )
+        return tuple(records)
+
     def _checked_wrapper(
         self,
         primitive_name: str,
@@ -605,15 +667,14 @@ class CppBackend:
             checked_conditions=plan.conditions,
             specializations=specializations,
         )
-        params = _cpp_checked_parameters(specializations[0], signature, plan)
-        template_params = signature.template_params + (
-            (plan.template_constraint,) if plan.template_constraint is not None else ()
+        declaration = _cpp_checked_wrapper_declaration(
+            primitive_name,
+            specializations[0],
+            signature,
+            plan,
+            reachability=("tsl.hpp",),
         )
-        head = (
-            f"template <{', '.join(template_params)}>\n"
-            f"{plan.inline_specifier} auto {primitive_name}_checked({params}) "
-            f"noexcept -> {plan.public_result_type}"
-        )
+        head = declaration.render_head()
         prefix = f"{doc}\n" if doc else ""
         if not define:
             return prefix + head + ";"
@@ -757,6 +818,11 @@ class CppBackend:
             specializations=specializations,
         )
         prefix = f"{doc}\n" if doc else ""
+        declaration = _cpp_vector_wrapper_declaration(
+            primitive_name,
+            signature,
+            reachability=("tsl.hpp",),
+        )
         variants = _cpp_variant_names(specializations)
         selector = (
             f"    using selector = ::tsl::detail::variants::"
@@ -774,8 +840,7 @@ class CppBackend:
         )
         vector_wrapper = (
             prefix
-            + f"template <{', '.join(signature.template_params)}>\n"
-            f"inline {signature.result_type} {primitive_name}({signature.params}) {{\n"
+            + f"{declaration.render_head()} {{\n"
             f"{selector}"
             f"{variant_dispatch}"
             f"    return ::tsl::detail::primitives::{_impl_name(primitive_name)}"
@@ -803,8 +868,12 @@ class CppBackend:
         prefix = f"{doc}\n" if doc else ""
         vector_declaration = (
             prefix
-            + f"template <{', '.join(signature.template_params)}>\n"
-            f"{signature.result_type} {primitive_name}({signature.params});"
+            + _cpp_vector_wrapper_declaration(
+                primitive_name,
+                signature,
+                reachability=("tsl.hpp",),
+            ).render_head()
+            + ";"
         )
         policy_declaration = _dataparallel_primitive_facade_wrapper(
             primitive_name, specializations, define=False
@@ -816,33 +885,32 @@ class CppBackend:
 
 @dataclass(frozen=True, slots=True)
 class _WrapperSignature:
-    template_params: tuple[str, ...]
-    params: str
+    template_params: tuple[CppTemplateParameter, ...]
+    parameters: tuple[CppPublicParameter, ...]
     argument_names: str
-    parameter_declarations: tuple[str, ...]
     runtime_argument_names: tuple[str, ...]
     impl_args: str
     selector_args: str
     result_type: str
     result_kind: str
+    overload_identity: str
 
-
-def _cpp_checked_parameters(
+def _cpp_checked_parameter_records(
     shape: LoweredSpecialization,
     signature: _WrapperSignature,
     plan: CppCheckedApiPlan,
-) -> str:
+) -> tuple[CppPublicParameter, ...]:
     runtime_indexes = tuple(
         index
         for index, kind in enumerate(shape.param_kinds)
         if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
     )
-    declarations: list[str] = []
-    for index, declaration in zip(
-        runtime_indexes, signature.parameter_declarations, strict=True
+    parameters: list[CppPublicParameter] = []
+    for index, parameter in zip(
+        runtime_indexes, signature.parameters, strict=True
     ):
         if index != plan.memory_parameter_index:
-            declarations.append(declaration)
+            parameters.append(parameter)
             continue
         if plan.memory_parameter_name is None or plan.memory_access is None:
             raise ValueError("C++ checked memory parameter is incomplete")
@@ -851,12 +919,22 @@ def _cpp_checked_parameters(
             if plan.memory_access is MemoryAccess.READ
             else "typename Vec::base_type"
         )
-        declarations.append(
-            f"::tsl::span<{element}> {plan.memory_parameter_name}"
+        parameters.append(
+            CppPublicParameter(
+                plan.memory_parameter_name,
+                f"::tsl::span<{element}>",
+                parameter.role,
+            )
         )
     if plan.error_parameter_declaration is not None:
-        declarations.append(plan.error_parameter_declaration)
-    return ", ".join(declarations)
+        parameters.append(
+            CppPublicParameter(
+                plan.error_parameter_name,
+                "::tsl::precondition_error &",
+                "error_output",
+            )
+        )
+    return tuple(parameters)
 
 
 def _cpp_checked_arguments(
@@ -884,11 +962,6 @@ def _wrapper_signature(
     # Positions whose parameter kind differs across signatures are the overload's
     # dispatch points: they become generic template params so C++ resolves the call.
     varying = varying_positions(specializations)
-    immediate_params = (
-        [f"{shape.immediate[1]} {shape.immediate[0]}"]
-        if shape.immediate is not None
-        else []
-    )
     has_target = shape.target is not None
     index_type = shape.type_params[0].name if shape.type_params else None
     axis_defaults = {
@@ -905,22 +978,35 @@ def _wrapper_signature(
         for key, value in shape.axis
     }
     template_params = (
-        ["class Vec"]
-        + (["class ToVec"] if has_target else [])
-        + [f"class {param.name}" for param in shape.type_params]
+        [cpp_type_parameter("Vec")]
+        + ([cpp_type_parameter("ToVec")] if has_target else [])
+        + [cpp_type_parameter(param.name) for param in shape.type_params]
         + [
-            f"bool {_axis_name(key)} = {axis_defaults[key]}"
+            cpp_value_parameter(
+                "bool", _axis_name(key), default=axis_defaults[key]
+            )
             for key, _ in shape.axis
         ]
-        + immediate_params
-        + [f"{typ} {name} = {default}" for name, typ, default in shape.generic_params]
-        + [f"class Arg{i}" for i in varying]
+        + (
+            [cpp_value_parameter(shape.immediate[1], shape.immediate[0])]
+            if shape.immediate is not None
+            else []
+        )
+        + [
+            cpp_value_parameter(typ, name, default=default)
+            for name, typ, default in shape.generic_params
+        ]
+        + [cpp_type_parameter(f"Arg{i}") for i in varying]
     )
-    parameter_declarations = tuple(
-        (
-            f"Arg{i} {name}"
-            if i in varying
-            else f"{_param_type_for(shape, i, kind, index_type)} {name}"
+    parameters = tuple(
+        CppPublicParameter(
+            name=name,
+            type_spelling=(
+                f"Arg{i}"
+                if i in varying
+                else _param_type_for(shape, i, kind, index_type)
+            ),
+            role=_cpp_public_parameter_role(shape, i, kind),
         )
         for i, (name, kind) in enumerate(zip(shape.param_names, shape.param_kinds))
         if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
@@ -930,7 +1016,6 @@ def _wrapper_signature(
         for name, kind in zip(shape.param_names, shape.param_kinds)
         if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
     )
-    params = ", ".join(parameter_declarations)
     names = ", ".join(runtime_argument_names)
     impl_args = (
         "Vec"
@@ -954,14 +1039,119 @@ def _wrapper_signature(
     )
     return _WrapperSignature(
         template_params=tuple(template_params),
-        params=params,
+        parameters=parameters,
         argument_names=names,
-        parameter_declarations=parameter_declarations,
         runtime_argument_names=runtime_argument_names,
         impl_args=impl_args,
         selector_args=selector_args,
         result_type=result_type,
         result_kind=shape.result_kind,
+        overload_identity=_cpp_overload_identity(specializations, "vector"),
+    )
+
+
+def _cpp_public_parameter_role(
+    shape: LoweredSpecialization,
+    parameter_index: int,
+    parameter_kind: str,
+) -> str:
+    operation = shape.primitive_semantics.operation
+    if operation is not None:
+        operation_binding = next(
+            (
+                item
+                for item in operation.operand_bindings
+                if item.parameter_index == parameter_index
+            ),
+            None,
+        )
+        if operation_binding is not None:
+            return f"operation:{operation_binding.role.value}"
+    arithmetic = shape.primitive_semantics.arithmetic
+    if arithmetic is not None:
+        arithmetic_binding = next(
+            (
+                item
+                for item in arithmetic.operand_bindings
+                if item.parameter_index == parameter_index
+            ),
+            None,
+        )
+        if arithmetic_binding is not None:
+            return f"arithmetic:{arithmetic_binding.role.value}"
+    return f"signature:{parameter_kind}"
+
+
+def _cpp_overload_identity(
+    specializations: tuple[LoweredSpecialization, ...],
+    surface: str,
+) -> str:
+    shapes = sorted(
+        {
+            f"{spec.result_kind}=({','.join(spec.param_kinds)})"
+            for spec in specializations
+        }
+    )
+    return f"{surface}:" + "|".join(shapes)
+
+
+def _cpp_vector_wrapper_declaration(
+    primitive_name: str,
+    signature: _WrapperSignature,
+    *,
+    reachability: tuple[str, ...],
+) -> CppPublicDeclaration:
+    return CppPublicDeclaration(
+        identity=f"tsl::{primitive_name}#vector",
+        name=primitive_name,
+        owner="tsl",
+        reachability=reachability,
+        stability=PublicDeclarationStability.STABLE,
+        kind=PublicDeclarationKind.FUNCTION,
+        overload=signature.overload_identity,
+        template_parameters=signature.template_params,
+        parameters=signature.parameters,
+        result_type=signature.result_type,
+        specifiers=("inline",),
+    )
+
+
+def _cpp_checked_wrapper_declaration(
+    primitive_name: str,
+    shape: LoweredSpecialization,
+    signature: _WrapperSignature,
+    plan: CppCheckedApiPlan,
+    *,
+    reachability: tuple[str, ...],
+) -> CppPublicDeclaration:
+    template_parameters = signature.template_params + (
+        (
+            cpp_constraint_parameter(plan.template_constraint),
+        )
+        if plan.template_constraint is not None
+        else ()
+    )
+    return CppPublicDeclaration(
+        identity=f"tsl::{primitive_name}_checked#vector",
+        name=f"{primitive_name}_checked",
+        owner="tsl",
+        reachability=reachability,
+        stability=PublicDeclarationStability.STABLE,
+        kind=PublicDeclarationKind.FUNCTION,
+        overload=signature.overload_identity.replace("vector:", "checked-vector:", 1),
+        template_parameters=template_parameters,
+        parameters=_cpp_checked_parameter_records(shape, signature, plan),
+        result_type=plan.public_result_type,
+        specifiers=plan.specifiers,
+        attributes=plan.attributes,
+        noexcept=True,
+        trailing_return=True,
+        checked_of=f"tsl::{primitive_name}#vector",
+        error_form=(
+            "result-plus-error-reference"
+            if plan.has_value_result
+            else "error-result"
+        ),
     )
 
 
@@ -990,8 +1180,14 @@ def _dataparallel_primitive_facade_wrapper(
     facade = classify_dataparallel_primitive_facade(primitive_name, specializations)
     if facade is None:
         return ""
+    declaration = _cpp_dataparallel_facade_declaration_for_facade(
+        facade,
+        reachability=("tsl.hpp",),
+    )
     if facade.kind is DataparallelPrimitiveFacadeKind.CONTIGUOUS_MEMORY:
-        return _dataparallel_memory_facade_wrapper(facade, define=define)
+        return _dataparallel_memory_facade_wrapper(
+            facade, declaration=declaration, define=define
+        )
 
     shape = facade.shape
     source_type = "FromT" if shape.target is not None else "T"
@@ -1001,24 +1197,9 @@ def _dataparallel_primitive_facade_wrapper(
         if shape.target is not None
         else None
     )
-    result_type = _dataparallel_facade_result_type(
-        shape.result_kind, target_vec or vec
-    )
-    params = ", ".join(
-        f"{_dataparallel_facade_param_type(kind, vec, target_vec)} {name}"
-        for name, kind in zip(shape.param_names, shape.param_kinds)
-    )
-    template_params = (
-        "class Policy, class FromT, class ToT"
-        if shape.target is not None
-        else "class Policy, class T"
-    )
     impl_args = vec + (f", {target_vec}" if target_vec is not None else "")
-    signature = (
-        f"template <{template_params}>\n"
-        f"inline {result_type} {primitive_name}({params})"
-    )
-    declaration = signature + ";"
+    signature = declaration.render_head()
+    prototype = signature + ";"
     definition = (
         signature
         + " {\n"
@@ -1026,12 +1207,13 @@ def _dataparallel_primitive_facade_wrapper(
         "}"
     )
     doc = cpp_dataparallel_facade_doc(facade)
-    return f"{doc}\n{definition if define else declaration}"
+    return f"{doc}\n{definition if define else prototype}"
 
 
 def _dataparallel_memory_facade_wrapper(
     facade: DataparallelPrimitiveFacade,
     *,
+    declaration: CppPublicDeclaration,
     define: bool,
 ) -> str:
     shape = facade.shape
@@ -1040,15 +1222,7 @@ def _dataparallel_memory_facade_wrapper(
     if facade.alignment_axis_name is None:
         raise ValueError("contiguous-memory facade has no alignment axis")
     axis_name = _axis_name(facade.alignment_axis_name)
-    result_type = _dataparallel_facade_result_type(shape.result_kind, vec)
-    params = ", ".join(
-        f"{_dataparallel_facade_param_type(kind, vec, None)} {name}"
-        for name, kind in zip(shape.param_names, shape.param_kinds)
-    )
-    signature = (
-        f"template <class Policy, class T, bool {axis_name} = false>\n"
-        f"inline {result_type} {primitive_name}({params})"
-    )
+    signature = declaration.render_head()
     doc = cpp_dataparallel_facade_doc(facade)
     if not define:
         return f"{doc}\n{signature};"
@@ -1061,6 +1235,82 @@ def _dataparallel_memory_facade_wrapper(
     else:
         definition = signature + " {\n" f"    return {call};\n" "}"
     return f"{doc}\n{definition}"
+
+
+def _cpp_dataparallel_facade_declaration(
+    primitive_name: str,
+    specializations: tuple[LoweredSpecialization, ...],
+    *,
+    reachability: tuple[str, ...],
+) -> CppPublicDeclaration | None:
+    facade = classify_dataparallel_primitive_facade(
+        primitive_name, specializations
+    )
+    if facade is None:
+        return None
+    return _cpp_dataparallel_facade_declaration_for_facade(
+        facade, reachability=reachability
+    )
+
+
+def _cpp_dataparallel_facade_declaration_for_facade(
+    facade: DataparallelPrimitiveFacade,
+    *,
+    reachability: tuple[str, ...],
+) -> CppPublicDeclaration:
+    shape = facade.shape
+    source_type = "FromT" if shape.target is not None else "T"
+    vec = f"::tsl::dataparallel::simd_for_t<Policy, {source_type}>"
+    target_vec = (
+        f"::tsl::dataparallel::rebind_base_t<{vec}, ToT>"
+        if shape.target is not None
+        else None
+    )
+    template_parameters: list[CppTemplateParameter] = [
+        cpp_type_parameter("Policy"),
+        cpp_type_parameter(source_type),
+    ]
+    if shape.target is not None:
+        template_parameters.append(cpp_type_parameter("ToT"))
+    if facade.kind is DataparallelPrimitiveFacadeKind.CONTIGUOUS_MEMORY:
+        if facade.alignment_axis_name is None:
+            raise ValueError("contiguous-memory facade has no alignment axis")
+        template_parameters.append(
+            cpp_value_parameter(
+                "bool",
+                _axis_name(facade.alignment_axis_name),
+                default="false",
+            )
+        )
+    parameters = tuple(
+        CppPublicParameter(
+            name,
+            _dataparallel_facade_param_type(kind, vec, target_vec),
+            _cpp_public_parameter_role(shape, index, kind),
+        )
+        for index, (name, kind) in enumerate(
+            zip(shape.param_names, shape.param_kinds)
+        )
+    )
+    return CppPublicDeclaration(
+        identity=f"tsl::{facade.primitive_name}#dataparallel-policy",
+        name=facade.primitive_name,
+        owner="tsl",
+        reachability=reachability,
+        stability=PublicDeclarationStability.STABLE,
+        kind=PublicDeclarationKind.FUNCTION,
+        overload=(
+            "dataparallel-memory"
+            if facade.kind is DataparallelPrimitiveFacadeKind.CONTIGUOUS_MEMORY
+            else "dataparallel-policy"
+        ),
+        template_parameters=tuple(template_parameters),
+        parameters=parameters,
+        result_type=_dataparallel_facade_result_type(
+            shape.result_kind, target_vec or vec
+        ),
+        specifiers=("inline",),
+    )
 
 
 def _dataparallel_facade_result_type(result_kind: str, vec: str) -> str:
@@ -1084,14 +1334,9 @@ def _free_function(spec: LoweredSpecialization, *, define: bool) -> str:
     namespace, not a `simd<>`-templated wrapper. `define=False` emits just the prototype (so a
     free function may call any wrapper regardless of emission order); `define=True` adds the body."""
 
-    params = ", ".join(
-        f"{_free_kind_type(kind, spec)} {name}"
-        for name, kind in zip(spec.param_names, spec.param_kinds)
-    )
-    signature = (
-        f"inline {_free_kind_type(spec.result_kind, spec)} "
-        f"{spec.primitive_name}({params})"
-    )
+    signature = _cpp_free_function_declaration(
+        spec, reachability=("tsl.hpp",)
+    ).render_head()
     doc = _cpp_doc(spec, context="C++ free function")
     if not define:
         prefix = f"{doc}\n" if doc else ""
@@ -1120,35 +1365,25 @@ def _checked_free_function(
         raise ValueError(
             "checked free functions currently require one scalar memory extent"
         )
+    declaration = _cpp_checked_free_function_declaration(
+        spec, reachability=("tsl.hpp",)
+    )
+    if declaration is None:
+        return ""
     memory_index = condition.parameter_index
-    parameters: list[str] = []
     arguments: list[str] = []
-    for index, (name, kind) in enumerate(
-        zip(spec.param_names, spec.param_kinds)
-    ):
+    for index, name in enumerate(spec.param_names):
         if index == memory_index:
-            element = spec.base_type_spelling
-            if condition.memory_access is MemoryAccess.READ:
-                element += " const"
-                arguments.append(f"{name}.data()")
-            else:
-                arguments.append(f"{name}.data()")
-            parameters.append(f"::tsl::span<{element}> {name}")
+            arguments.append(f"{name}.data()")
         else:
-            parameters.append(f"{_free_kind_type(kind, spec)} {name}")
             arguments.append(name)
     has_value_result = spec.result_kind != "void"
-    if has_value_result:
-        parameters.append("::tsl::precondition_error & error")
     result_type = (
         _free_kind_type(spec.result_kind, spec)
         if has_value_result
         else "::tsl::precondition_error"
     )
-    head = (
-        f"[[nodiscard]] TSL_FORCE_INLINE auto {spec.primitive_name}_checked("
-        f"{', '.join(parameters)}) noexcept -> {result_type}"
-    )
+    head = declaration.render_head()
     doc = _cpp_doc(
         spec,
         context="C++ checked free function",
@@ -1180,6 +1415,100 @@ def _checked_free_function(
         + "    }\n"
         + f"{success}\n"
         + "}"
+    )
+
+
+def _cpp_free_function_declaration(
+    spec: LoweredSpecialization,
+    *,
+    reachability: tuple[str, ...],
+) -> CppPublicDeclaration:
+    return CppPublicDeclaration(
+        identity=f"tsl::{spec.primitive_name}#free",
+        name=spec.primitive_name,
+        owner="tsl",
+        reachability=reachability,
+        stability=PublicDeclarationStability.STABLE,
+        kind=PublicDeclarationKind.FUNCTION,
+        overload=f"free:{spec.result_kind}=({','.join(spec.param_kinds)})",
+        parameters=tuple(
+            CppPublicParameter(
+                name,
+                _free_kind_type(kind, spec),
+                _cpp_public_parameter_role(spec, index, kind),
+            )
+            for index, (name, kind) in enumerate(
+                zip(spec.param_names, spec.param_kinds)
+            )
+        ),
+        result_type=_free_kind_type(spec.result_kind, spec),
+        specifiers=("inline",),
+    )
+
+
+def _cpp_checked_free_function_declaration(
+    spec: LoweredSpecialization,
+    *,
+    reachability: tuple[str, ...],
+) -> CppPublicDeclaration | None:
+    plan = applicable_checked_api_plan((spec,))
+    if plan is None:
+        return None
+    if len(plan.conditions) != 1:
+        raise ValueError("checked free functions require one complete condition")
+    condition = plan.conditions[0]
+    if (
+        condition.kind is not PreconditionKind.CONTIGUOUS_MEMORY_EXTENT
+        or condition.memory_access is None
+        or condition.memory_payload_extents != (MemoryPayloadExtent.SCALAR,)
+    ):
+        raise ValueError(
+            "checked free functions currently require one scalar memory extent"
+        )
+    parameters: list[CppPublicParameter] = []
+    for index, (name, kind) in enumerate(zip(spec.param_names, spec.param_kinds)):
+        type_spelling = _free_kind_type(kind, spec)
+        if index == condition.parameter_index:
+            element = spec.base_type_spelling
+            if condition.memory_access is MemoryAccess.READ:
+                element += " const"
+            type_spelling = f"::tsl::span<{element}>"
+        parameters.append(
+            CppPublicParameter(
+                name,
+                type_spelling,
+                _cpp_public_parameter_role(spec, index, kind),
+            )
+        )
+    has_value_result = spec.result_kind != "void"
+    if has_value_result:
+        parameters.append(
+            CppPublicParameter(
+                "error", "::tsl::precondition_error &", "error_output"
+            )
+        )
+    return CppPublicDeclaration(
+        identity=f"tsl::{spec.primitive_name}_checked#free",
+        name=f"{spec.primitive_name}_checked",
+        owner="tsl",
+        reachability=reachability,
+        stability=PublicDeclarationStability.STABLE,
+        kind=PublicDeclarationKind.FUNCTION,
+        overload=f"checked-free:{spec.result_kind}=({','.join(spec.param_kinds)})",
+        parameters=tuple(parameters),
+        result_type=(
+            _free_kind_type(spec.result_kind, spec)
+            if has_value_result
+            else "::tsl::precondition_error"
+        ),
+        attributes=("[[nodiscard]]",),
+        specifiers=("TSL_FORCE_INLINE",),
+        noexcept=True,
+        trailing_return=True,
+        checked_of=f"tsl::{spec.primitive_name}#free",
+        error_form=(
+            "result-plus-error-reference" if has_value_result else "error-result"
+        ),
     )
 
 

@@ -15,6 +15,20 @@ from tslc.backend.algorithm_contracts import (
     AlgorithmRangeRole,
     AlgorithmResultKind,
 )
+from tslc.backend.cpp_algorithm_public_declarations import (
+    cpp_algorithm_checked_twin_identity,
+)
+from tslc.backend.cpp_public_declarations import (
+    CppPublicDeclaration,
+    CppPublicParameter,
+    CppTemplateParameter,
+    cpp_type_parameter,
+    cpp_value_parameter,
+)
+from tslc.backend.public_declarations import (
+    PublicDeclarationKind,
+    PublicDeclarationStability,
+)
 from tslc.backend.precondition_error_rendering import cpp_precondition_error
 
 
@@ -151,22 +165,31 @@ def _template_parameters(
     contract: AlgorithmContract,
     *,
     fixed: bool,
-) -> tuple[str, ...]:
-    prefix: tuple[str, ...]
+) -> tuple[CppTemplateParameter, ...]:
+    prefix: tuple[CppTemplateParameter, ...]
     if _is_selected(contract):
-        prefix = ("std::size_t ParallelN", "std::size_t Scale = 0")
+        prefix = (
+            cpp_value_parameter("std::size_t", "ParallelN"),
+            cpp_value_parameter("std::size_t", "Scale", default="0"),
+        )
     else:
         prefix = (
-            "std::size_t ParallelN"
+            cpp_value_parameter("std::size_t", "ParallelN")
             if fixed
-            else "class Parallelism = ::tsl::dataparallel::native",
+            else cpp_type_parameter(
+                "Parallelism", default="::tsl::dataparallel::native"
+            ),
         )
         if _has_mask(contract):
-            prefix += ("class MaskLayout = mask_layout::integral",)
+            prefix += (
+                cpp_type_parameter(
+                    "MaskLayout", default="mask_layout::integral"
+                ),
+            )
     return (
         *prefix,
-        "class Op",
-        *(f"class {_range_type(binding)}" for binding in contract.ranges),
+        cpp_type_parameter("Op"),
+        *(cpp_type_parameter(_range_type(binding)) for binding in contract.ranges),
     )
 
 
@@ -268,14 +291,7 @@ def _cpp_algorithm_documentation(
 
 
 def _render_primary_wrapper(contract: AlgorithmContract) -> str:
-    template_lines = ",\n    ".join(_template_parameters(contract, fixed=False))
-    parameters = [
-        "    Op&& op",
-        *(_parameter(binding) for binding in contract.ranges),
-    ]
-    if contract.result_kind is not AlgorithmResultKind.VOID:
-        parameters.append("    ::tsl::precondition_error& error")
-    parameter_lines = ",\n".join(parameters)
+    declaration = cpp_checked_algorithm_declaration(contract, fixed=False)
     ordinary_call = _call_expression(contract, checked=False)
     prologue: list[str] = []
     if _has_mask(contract):
@@ -320,32 +336,88 @@ def _render_primary_wrapper(contract: AlgorithmContract) -> str:
     body = "\n".join((*prologue, check, *epilogue))
     documentation = _cpp_algorithm_documentation(contract)
     return f"""{documentation}
-template <
-    {template_lines}>
-[[nodiscard]] inline {_return_type(contract)} {contract.name}_checked(
-{parameter_lines}) {{
+{declaration.render_head(multiline=True)} {{
 {body}
 }}"""
 
 
 def _render_fixed_forwarder(contract: AlgorithmContract) -> str:
-    template_lines = ",\n    ".join(_template_parameters(contract, fixed=True))
-    parameters = [
-        "    Op&& op",
-        *(_parameter(binding) for binding in contract.ranges),
-    ]
-    if contract.result_kind is not AlgorithmResultKind.VOID:
-        parameters.append("    ::tsl::precondition_error& error")
-    parameter_lines = ",\n".join(parameters)
+    declaration = cpp_checked_algorithm_declaration(contract, fixed=True)
     call = _call_expression(contract, checked=True, fixed_forward=True)
     documentation = _cpp_algorithm_documentation(contract, fixed_forwarder=True)
     return f"""{documentation}
-template <
-    {template_lines}>
-[[nodiscard]] inline {_return_type(contract)} {contract.name}_checked(
-{parameter_lines}) {{
+{declaration.render_head(multiline=True)} {{
     return {call};
 }}"""
+
+
+def cpp_checked_algorithm_declaration(
+    contract: AlgorithmContract,
+    *,
+    fixed: bool,
+) -> CppPublicDeclaration:
+    parameters = [CppPublicParameter("op", "Op&&", "operation")]
+    parameters.extend(
+        CppPublicParameter(
+            binding.name,
+            (
+                f"const {_range_type(binding)}&"
+                if binding.role
+                not in {
+                    AlgorithmRangeRole.MASK_OUTPUT,
+                    AlgorithmRangeRole.VALUE_OUTPUT,
+                    AlgorithmRangeRole.INDEX_OUTPUT,
+                }
+                else f"{_range_type(binding)}&"
+            ),
+            f"range:{binding.role.value}",
+        )
+        for binding in contract.ranges
+    )
+    has_value_result = contract.result_kind is not AlgorithmResultKind.VOID
+    if has_value_result:
+        parameters.append(
+            CppPublicParameter(
+                "error", "::tsl::precondition_error&", "error_output"
+            )
+        )
+    form = "fixed" if fixed else "policy"
+    return CppPublicDeclaration(
+        identity=f"tsl::algo::{contract.name}_checked#{form}",
+        name=f"{contract.name}_checked",
+        owner="tsl::algo",
+        reachability=("tsl.hpp", "tsl_algorithm_checked.hpp"),
+        stability=PublicDeclarationStability.STABLE,
+        kind=PublicDeclarationKind.FUNCTION,
+        overload=f"checked-algorithm:{form}:{contract.result_kind.value}",
+        template_parameters=_template_parameters(contract, fixed=fixed),
+        parameters=tuple(parameters),
+        result_type=_return_type(contract),
+        specifiers=("inline",),
+        attributes=("[[nodiscard]]",),
+        checked_of=cpp_algorithm_checked_twin_identity(
+            contract.name,
+            fixed=fixed,
+        ),
+        error_form=(
+            "result-plus-error-reference" if has_value_result else "error-result"
+        ),
+    )
+
+
+def cpp_checked_algorithm_declarations() -> tuple[CppPublicDeclaration, ...]:
+    return tuple(
+        declaration
+        for contract in _cpp_contracts()
+        for declaration in (
+            cpp_checked_algorithm_declaration(contract, fixed=False),
+            *(
+                (cpp_checked_algorithm_declaration(contract, fixed=True),)
+                if not _is_selected(contract)
+                else ()
+            ),
+        )
+    )
 
 
 def _cpp_contracts() -> tuple[AlgorithmContract, ...]:
@@ -394,6 +466,8 @@ def cpp_algorithm_contract_holes() -> Mapping[str, str]:
 
 
 __all__ = (
+    "cpp_checked_algorithm_declaration",
+    "cpp_checked_algorithm_declarations",
     "cpp_checked_algorithm_families",
     "cpp_algorithm_contract_holes",
     "render_cpp_algorithm_check",

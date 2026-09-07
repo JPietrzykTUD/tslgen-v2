@@ -142,14 +142,8 @@ def _cpp_native_registration(
     """Register non-x86 native extensions from typed register spellings."""
 
     lines: list[str] = []
-    emitted = {
-        ext
-        for ext, type_tag, _base in used_vector_type_specs(by_primitive)
-        if (extension := extensions.get(ext)) is not None
-        and not is_width_indexed_register_extension(extension)
-        and extension.direct_vector_register_type("cpp", type_tag) is not None
-    }
-    for ext in sorted(emitted):
+    emitted = cpp_native_registration_extensions(by_primitive, extensions)
+    for ext in emitted:
         lines.append(
             _guard_cpp_extension(
                 f"struct {ext} {{}};\n",
@@ -157,8 +151,10 @@ def _cpp_native_registration(
             )
         )
     for ext, type_tag, base in used_vector_type_specs(by_primitive):
+        if ext not in emitted:
+            continue
         extension = extensions.get(ext)
-        if extension is None or is_width_indexed_register_extension(extension):
+        if extension is None:
             continue
         register = extension.direct_vector_register_type("cpp", type_tag)
         if register is None:
@@ -199,6 +195,22 @@ def _cpp_native_registration(
     return "".join(lines)
 
 
+def cpp_native_registration_extensions(
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
+    extensions: Mapping[str, Extension],
+) -> tuple[str, ...]:
+    """Return exact non-width-indexed extension tags rendered for a header."""
+
+    emitted = {
+        ext
+        for ext, type_tag, _base in used_vector_type_specs(by_primitive)
+        if (extension := extensions.get(ext)) is not None
+        and not is_width_indexed_register_extension(extension)
+        and extension.direct_vector_register_type("cpp", type_tag) is not None
+    }
+    return tuple(sorted(emitted))
+
+
 def _cpp_sized_registration(
     emitted_exts: Sequence[str],
     extensions: Mapping[str, Extension],
@@ -206,17 +218,8 @@ def _cpp_sized_registration(
     """Register profile-local sized vector tags that are not the static generic tag."""
 
     lines: list[str] = []
-    for ext in emitted_exts:
-        extension = extensions.get(ext)
-        if (
-            extension is None
-            or (
-                extension.is_unconditional_implementation_fallback
-                and DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension)
-            )
-            or not DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension)
-        ):
-            continue
+    for ext in cpp_sized_registration_extensions(emitted_exts, extensions):
+        extension = extensions[ext]
         mask = _cpp_sized_mask_type(extension)
         imask = _cpp_sized_imask_type(extension, mask)
         lines.append(
@@ -253,6 +256,21 @@ def _cpp_sized_registration(
             "};\n\n"
         )
     return "".join(lines)
+
+
+def cpp_sized_registration_extensions(
+    emitted_exts: Sequence[str],
+    extensions: Mapping[str, Extension],
+) -> tuple[str, ...]:
+    """Return exact sized extension tags rendered for one base profile header."""
+
+    return tuple(
+        ext
+        for ext in emitted_exts
+        if (extension := extensions.get(ext)) is not None
+        and not extension.is_unconditional_implementation_fallback
+        and DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension)
+    )
 
 
 def _cpp_sized_mask_type(extension: Extension) -> str:

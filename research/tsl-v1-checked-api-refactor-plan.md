@@ -2,9 +2,9 @@
 
 Date: 2026-09-02
 
-Status: post-implementation review; Slices 0 through 9 are implemented, but
-TSL v1 release readiness remains blocked on the exact public-declaration
-manifest in Slice 10
+Status: Slices 0 through 10 are implemented and have completed their focused
+review/fix loops; broader product-quality findings outside this refactor remain
+tracked separately before TSL v1.0.0
 
 Related evidence: [TSL v1.0.0 generated API and documentation audit](tsl-v1-generated-api-docs-audit.md)
 
@@ -1407,6 +1407,36 @@ Stop release if either backend cannot name a single typed owner for a stable
 declaration fact. Do not paper over that ownership gap with whole-artifact
 hashes or target-language parsing.
 
+Implementation and review evidence:
+
+- Frozen C++ and Rust backend records now own exact primitive wrappers, checked
+  twins, algorithms, opaque-facade types and callables, stable static types and
+  members, root reexports, language-specific qualifiers/safety, and typed
+  selection reachability. Rust definition identities are distinct from their
+  crate-root reexports.
+- Stable declaration heads are rendered through named asset holes or directly
+  from those records. The compatibility tests no longer regex-parse algorithm
+  assets or hash a complete Rust module; static and algorithm holes are checked
+  against their record inventories.
+- Every remaining exported surface is classified stable, unstable, or
+  implementation detail. Recursive defaults are restricted to explicitly
+  non-stable module/type subtrees; stable exceptions still require exact
+  records, and stable overload sets are rejected.
+- Each generated project ships a deterministic `public-api.json`. The v3
+  reviewed baseline contains 797 C++ and 4,937 Rust records for scalar/AVX2;
+  Rust correctly records the selected AVX2 surface plus its generic fallback.
+- The review/fix loop removed checked/result inference from target spelling and
+  name suffixes, made declaration relations resolve one exact owner, separated
+  Rust facade definitions from root reexports, modeled `crate::profile` as its
+  actual target-selected reexport and `crate::profile::algo` as its stable child
+  module, added exact C++ `span`/`array_type`/policy member declarations, removed
+  duplicate signature construction from renderers, and made Rust algorithm
+  support reexports backend-owned rather than renderer literals.
+- Focused negative tests cover C++ specifiers, bounds, parameter declarations,
+  results, `noexcept`, method qualifiers, and reachability; Rust visibility,
+  bounds, parameters, results, `unsafe`, and reachability; plus missing or
+  non-ordinary checked twins and illegal coarse stable records.
+
 ## Performance and correctness showcase
 
 The refactor needs a genuine experiment demonstrating the intended lever.
@@ -1637,10 +1667,9 @@ The refactor is complete when:
     source preconditions from the typed registry, while the TypeScript client
     and TSIL grammar contain no copied precondition semantics.
 
-Post-implementation review validates items 2, 3, 5 through 8, and 10 through 13
-for directly declared operations after the corrections recorded above. Slice 9
-also validates transitive catastrophic-precondition accounting. Items 1, 4,
-and 9 are not yet release-complete because Slice 10 must classify and ratchet
-every backend public declaration exactly. The typed source-family,
-checked-coverage, and call-precondition baselines remain strong semantic
-ratchets, but they are not a substitute for that final gate.
+Post-implementation review validates all thirteen items for the declared v1
+surface after the corrections recorded above. Slice 9 supplies explicit
+transitive catastrophic-precondition accounting; Slice 10 classifies and
+ratchets exact backend declarations and selection reachability. Broader warning
+cleanliness, unsupported hardware/profile coverage, and artifact-size work from
+the original product audit remain outside this refactor's definition of done.

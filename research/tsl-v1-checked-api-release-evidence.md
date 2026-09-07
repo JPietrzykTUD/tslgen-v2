@@ -247,10 +247,14 @@ The checked representation achieves its intended C++ lever: callers opt into
 validation without changing the unsuffixed path or forcing a value-owning
 result aggregate. Rust's `Result` path is explicit and correct, but the
 showcase also identifies an independent AVX2 cross-crate inlining opportunity.
-The existing baselines prevent accidental typed-family and checked-coverage
-drift, the checked census keeps every omission explicit, and package/doc gates
-make generated artifacts reproducible. They do not yet prevent every emitted
-qualifier, overload, parameter, result, visibility, or reachability change;
-typed transitive-precondition accounting in Slice 9 and the exact backend
-declaration manifest in Slice 10 remain TSL v1 release blockers. See the
-[post-implementation review](tsl-v1-checked-api-post-implementation-review.md).
+The baselines prevent accidental typed-family, checked-coverage, transitive
+call-precondition, and exact backend-declaration drift. The checked census keeps
+every omission explicit, while package/doc gates make generated artifacts
+reproducible. Slice 9 now ratchets every applicable catastrophic callee
+obligation as forwarded or explicitly discharged. Slice 10 adds deterministic
+scope-exact C++ and Rust manifests and a schema-v3 reviewed baseline covering
+qualifiers, overloads, parameters, results, visibility, checked/reexport
+relationships, stable type members, and reachability. The remaining v1 work is
+the broader product-quality/platform work listed in the
+[post-implementation review](tsl-v1-checked-api-post-implementation-review.md),
+not either former release-proof gap.

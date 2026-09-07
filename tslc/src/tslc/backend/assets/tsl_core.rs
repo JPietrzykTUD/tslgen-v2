@@ -18,25 +18,24 @@ pub enum ImplementationState {
 }
 
 /// A failure reported before a checked operation invokes its ordinary twin.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[non_exhaustive]
-pub enum PreconditionError {
+@{precondition_error_declaration}
+{
     /// A runtime lane or memory index is outside the represented extent.
-    IndexOutOfBounds,
+    @{precondition_error_variant_index_out_of_bounds},
     /// An active integer divisor lane is zero.
-    ZeroDivisor,
+    @{precondition_error_variant_zero_divisor},
     /// A memory view is shorter than the operation's required payload.
-    InsufficientExtent,
+    @{precondition_error_variant_insufficient_extent},
     /// A secondary input or mask range is shorter than the driving range.
-    InsufficientInput,
+    @{precondition_error_variant_insufficient_input},
     /// An output range cannot hold every result selected by the contract.
-    InsufficientOutput,
+    @{precondition_error_variant_insufficient_output},
     /// An aligned operation received an address with insufficient alignment.
-    Misaligned,
+    @{precondition_error_variant_misaligned},
     /// Ranges overlap where the operation requires them to be disjoint.
-    OverlappingRanges,
+    @{precondition_error_variant_overlapping_ranges},
     /// A scaled or offset address cannot be represented.
-    AddressOverflow,
+    @{precondition_error_variant_address_overflow},
 }
 
 mod checked_integer_lane_sealed {

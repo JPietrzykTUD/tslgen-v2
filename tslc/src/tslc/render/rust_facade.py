@@ -25,6 +25,13 @@ from tslc.backend.rust_api_model import (
     RustNativeAlias,
     RustNativeAliasSelection,
 )
+from tslc.backend.rust_facade_public_declarations import (
+    rust_bit_conversion_declaration,
+    rust_curated_method_declaration,
+    rust_facade_core_declaration_holes,
+    rust_facade_type_declaration_holes,
+    rust_numeric_cast_declaration,
+)
 from tslc.compiler_assets import RenderAssets
 from tslc.render.rust_facade_common import (
     arm_selection_cfg as _arm_selection_cfg,
@@ -42,6 +49,8 @@ def rust_facade_module(plan: RustFacadePlan, assets: RenderAssets) -> str:
     comprehensive = render_comprehensive_facade(plan)
     return assets.fill(
         "rust_facade.rs.tmpl",
+        **rust_facade_type_declaration_holes(),
+        **rust_facade_core_declaration_holes(),
         comprehensive_private_traits=comprehensive.private_traits,
         comprehensive_private_impls=comprehensive.private_impls,
         comprehensive_items=comprehensive.public_items,
@@ -248,17 +257,12 @@ def _conversion_methods(plan: RustFacadePlan) -> str:
         for method in plan.curated_methods
     ):
         return ""
+    declaration = rust_numeric_cast_declaration()
     return "\n".join(
         (
             "    /// Numerically converts each lane while preserving the lane count.",
-            "    #[inline]",
-            "    #[must_use]",
-            "    #[allow(private_bounds)]",
-            "    pub fn cast<U>(self) -> Simd<U, N>",
-            "    where",
-            "        U: SupportedSimd<N>,",
-            "        T: private::ConvertTo<U, N>,",
-            "    {",
+            *(_indent(attribute, 4) for attribute in declaration.attributes),
+            _indent(declaration.render_definition_head(), 4),
             "        Simd {",
             (
                 "            value: <T as private::ConvertTo<U, N>>::"
@@ -326,18 +330,15 @@ def _curated_method_impl(
     vector = f"Simd<{shape.base_spelling}, {shape.lanes}>"
     mask = f"Mask<{shape.base_spelling}, {shape.lanes}>"
     call = _lower_call_expression(arm.call)
+    declaration = rust_curated_method_declaration(method, arm)
     if method.kind is RustCuratedMethodKind.SELECTION:
         return "\n".join(
             (
                 _cfg_attribute(_arm_selection_cfg(arm.selection)),
                 f"impl {mask} {{",
                 "    /// Selects `true_values` on active lanes.",
-                "    #[inline]",
-                "    #[must_use]",
-                (
-                    f"    pub fn {method.public_name}(self, true_values: {vector}, "
-                    f"false_values: {vector}) -> {vector} {{"
-                ),
+                *(_indent(attribute, 4) for attribute in declaration.attributes),
+                _indent(declaration.render_definition_head(), 4),
                 f"        Simd::<{shape.base_spelling}, {shape.lanes}> {{",
                 f"            value: {call},",
                 "        }",
@@ -350,11 +351,8 @@ def _curated_method_impl(
             _cfg_attribute(_arm_selection_cfg(arm.selection)),
             f"impl {vector} {{",
             "    /// Compares corresponding lanes.",
-            "    #[inline]",
-            "    #[must_use]",
-            (
-                f"    pub fn {method.public_name}(self, other: Self) -> {mask} {{"
-            ),
+            *(_indent(attribute, 4) for attribute in declaration.attributes),
+            _indent(declaration.render_definition_head(), 4),
             f"        Mask::<{shape.base_spelling}, {shape.lanes}> {{",
             f"            value: {call},",
             "        }",
@@ -728,18 +726,14 @@ def _bit_method_impl(
     float_vector = f"Simd<{float_shape.base_spelling}, {float_shape.lanes}>"
     bits_vector = f"Simd<{bits_shape.base_spelling}, {bits_shape.lanes}>"
     to_bits = arm.direction is RustFacadeBitConversionDirection.TO_BITS
-    if to_bits:
-        signature = f"    pub fn to_bits(self) -> {bits_vector} {{"
-    else:
-        signature = f"    pub fn from_bits(bits: {bits_vector}) -> Self {{"
+    declaration = rust_bit_conversion_declaration(arm)
     return "\n".join(
         (
             _cfg_attribute(_arm_selection_cfg(arm.conversion.selection)),
             f"impl {float_vector} {{",
             "    /// Reinterprets the same-width lane bit patterns.",
-            "    #[inline]",
-            "    #[must_use]",
-            signature,
+            *(_indent(attribute, 4) for attribute in declaration.attributes),
+            _indent(declaration.render_definition_head(), 4),
             (
                 f"        Simd::<{bits_shape.base_spelling}, {bits_shape.lanes}> {{"
                 if to_bits
@@ -785,6 +779,11 @@ def _array_from_impls(plan: RustFacadePlan) -> str:
             )
         )
     return "\n\n".join(blocks)
+
+
+def _indent(text: str, spaces: int) -> str:
+    prefix = " " * spaces
+    return "\n".join(f"{prefix}{line}" if line else "" for line in text.splitlines())
 
 
 __all__ = ("rust_facade_module",)

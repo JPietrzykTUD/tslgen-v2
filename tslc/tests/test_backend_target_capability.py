@@ -19,7 +19,10 @@ from tslc.backend.cpp_profile import (
     _cpp_registration,
 )
 from tslc.target_text import LoweredBody
-from tslc.backend.rust_vectors import rust_registrations
+from tslc.backend.rust_vectors import (
+    rust_extension_tag_registrations,
+    rust_registrations,
+)
 
 
 def test_backend_specific_feature_spellings_are_source_capabilities(
@@ -224,7 +227,13 @@ def test_rust_registration_uses_source_tag_and_lowered_register(
     )
 
     rendered = rust_registrations({"add": (spec,)}, {"x86_demo": extension})
+    tag_registrations = rust_extension_tag_registrations(
+        {"add": (spec,)}, {"x86_demo": extension}
+    )
 
+    assert tuple(item.render_declaration() for item in tag_registrations) == (
+        "pub struct X86Demo;",
+    )
     assert "pub struct X86Demo;" in rendered
     assert "impl SimdVector for Simd<i32, X86Demo>" in rendered
     assert "impl StaticSimdVector for Simd<i32, X86Demo>" in rendered

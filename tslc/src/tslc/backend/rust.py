@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 from tslc.backend.primitive_rendering import body_for as _body_for
 from tslc.backend.checked_api import (
@@ -17,7 +17,9 @@ from tslc.backend.primitive_rendering import variant_names as _variant_names
 from tslc.backend.precondition_error_rendering import rust_precondition_error
 from tslc.backend.rust_direct_calls import (
     checked_free_function as _checked_free_function,
+    checked_free_function_declaration as _checked_free_function_declaration,
     free_function as _free_function,
+    free_function_declaration as _free_function_declaration,
     free_variant_functions as _free_variant_functions,
     implementation_lint_allowance as _implementation_lint_allowance,
     implementation_trait_name as _implementation_trait_name,
@@ -45,9 +47,10 @@ from tslc.backend.rust_policy_selection import (
 from tslc.backend.rust_signatures import (
     arithmetic_preconditions as _rust_arithmetic_preconditions,
     axis_name as _axis_name,
-    checked_params as _checked_params,
+    checked_parameter_types as _checked_parameter_types,
     checked_runtime_names as _checked_runtime_names,
     checked_type_where as _checked_type_where,
+    checked_type_where_predicates as _checked_type_where_predicates,
     concrete_param_type as _rust_concrete_param,
     concrete_result_type as _rust_concrete_result,
     concrete_type as _rust_concrete,
@@ -56,6 +59,7 @@ from tslc.backend.rust_signatures import (
     kind_type as _kind_type,
     param_kind_type as _param_kind_type,
     params as _params,
+    parameter_types as _parameter_types,
     runtime_names as _runtime_names,
     trait_args_by_name as _trait_args_by_name,
     trait_args_by_value as _trait_args_by_value,
@@ -63,10 +67,23 @@ from tslc.backend.rust_signatures import (
     unsafe_prefix as _unsafe_prefix,
     vector_type as _vector_type,
 )
+from tslc.backend.rust_public_declarations import (
+    RustGenericParameter,
+    RustPublicDeclaration,
+    RustPublicParameter,
+    rust_const_parameter,
+    rust_parameter_role,
+    rust_type_parameter,
+)
+from tslc.backend.public_declarations import (
+    PublicDeclarationKind,
+    PublicDeclarationStability,
+)
 from tslc.backend.rust_documentation import rust_doc as _rust_doc
 from tslc.backend.rust_names import rust_primitive_trait_name
 from tslc.backend.rust_type_params import (
     index_where as _index_where,
+    type_param_where_clauses as _type_param_where_clauses,
     rust_base_dispatch_key_tag as _rust_base_dispatch_key_tag,
     type_param_base_key_args as _type_param_base_key_args,
     type_param_base_key_decls as _type_param_base_key_decls,
@@ -329,6 +346,293 @@ def _rust_overloaded_memory_impl_members(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class _RustPublicWrapperFacts:
+    trait_args: tuple[str, ...]
+    public_trait_args: tuple[str, ...]
+    generic_parameters: tuple[RustGenericParameter, ...]
+    target_owner: str | None
+    result_owner: str
+    index_type: str | None
+    vector_bound: str
+
+
+def _rust_const_generic_parameters(
+    shape: LoweredSpecialization,
+) -> tuple[RustGenericParameter, ...]:
+    parameters = [
+        rust_const_parameter(_axis_name(key), "bool") for key, _ in shape.axis
+    ]
+    if shape.immediate is not None:
+        parameters.append(
+            rust_const_parameter(shape.immediate[0], shape.immediate[1])
+        )
+    parameters.extend(
+        rust_const_parameter(name, typ)
+        for name, typ, _default in shape.generic_params
+    )
+    return tuple(parameters)
+
+
+def _rust_type_generic_parameters(
+    shape: LoweredSpecialization,
+) -> tuple[RustGenericParameter, ...]:
+    return tuple(
+        rust_type_parameter(
+            parameter.name,
+            "StaticSimdVector",
+            *(
+                f"{_PRIMITIVE_TRAIT_PREFIX}{rust_primitive_trait_name(bound)}"
+                for bound in parameter.bounds
+            ),
+        )
+        for parameter in shape.type_params
+    )
+
+
+def _rust_public_wrapper_facts(
+    primitive_name: str,
+    shape: LoweredSpecialization,
+) -> _RustPublicWrapperFacts:
+    public_trait_args = list(_trait_args_by_name(shape))
+    trait_args = list(public_trait_args)
+    generic_parameters: list[RustGenericParameter] = list(
+        _rust_const_generic_parameters(shape)
+    )
+    target_owner: str | None = None
+    result_owner = "S"
+    if shape.target is not None:
+        trait_args.insert(0, "T")
+        public_trait_args.insert(0, "T")
+        generic_parameters.insert(0, rust_type_parameter("T", "StaticSimdVector"))
+        target_owner = "T"
+        result_owner = "T"
+    index_type: str | None = None
+    if shape.type_params:
+        type_names = _type_param_names(shape)
+        trait_args = [
+            *type_names,
+            *_type_param_base_key_args(shape, mode="projection"),
+            *trait_args,
+        ]
+        public_trait_args = [*type_names, *public_trait_args]
+        generic_parameters = [
+            *_rust_type_generic_parameters(shape),
+            *generic_parameters,
+        ]
+        index_type = f"{shape.type_params[0].name}::RegisterType"
+        if shape.result_vector_param is not None:
+            result_owner = shape.result_vector_param
+    rendered_trait_args = (
+        f"<{', '.join(trait_args)}>" if trait_args else ""
+    )
+    vector_bound = (
+        f"{_PRIMITIVE_TRAIT_PREFIX}"
+        f"{rust_primitive_trait_name(primitive_name)}{rendered_trait_args}"
+    )
+    return _RustPublicWrapperFacts(
+        trait_args=tuple(trait_args),
+        public_trait_args=tuple(public_trait_args),
+        generic_parameters=tuple(generic_parameters),
+        target_owner=target_owner,
+        result_owner=result_owner,
+        index_type=index_type,
+        vector_bound=vector_bound,
+    )
+
+
+def _rust_overload_identity(
+    specializations: tuple[LoweredSpecialization, ...], surface: str
+) -> str:
+    shapes = sorted(
+        {
+            f"{spec.result_kind}=({','.join(spec.param_kinds)})"
+            for spec in specializations
+        }
+    )
+    return f"{surface}:" + "|".join(shapes)
+
+
+def _rust_wrapper_declaration(
+    primitive_name: str,
+    shape: LoweredSpecialization,
+    *,
+    caller_unsafe: bool,
+    reachability: tuple[str, ...],
+) -> RustPublicDeclaration:
+    facts = _rust_public_wrapper_facts(primitive_name, shape)
+    parameters = tuple(
+        RustPublicParameter(
+            name,
+            typ,
+            rust_parameter_role(shape, index, shape.param_kinds[index]),
+        )
+        for index, name, typ in _parameter_types(
+            shape,
+            "S",
+            target_owner=facts.target_owner,
+            vidx_type=facts.index_type,
+        )
+    )
+    return RustPublicDeclaration(
+        identity=f"crate::profile::{primitive_name}#vector",
+        name=rust_raw_identifier(primitive_name),
+        owner="crate::profile",
+        reachability=reachability,
+        stability=PublicDeclarationStability.STABLE,
+        kind=PublicDeclarationKind.FUNCTION,
+        overload=_rust_overload_identity((shape,), "vector"),
+        visibility="pub",
+        generic_parameters=(
+            rust_type_parameter("S", facts.vector_bound),
+            *facts.generic_parameters,
+        ),
+        parameters=parameters,
+        where_predicates=tuple(
+            _type_param_where_clauses(shape, base_dispatch="projection")
+        ),
+        where_inline=True,
+        result_type=_kind_type(shape.result_kind, facts.result_owner),
+        result_form="direct",
+        unsafe=caller_unsafe,
+    )
+
+
+def _rust_checked_wrapper_declaration(
+    primitive_name: str,
+    specializations: tuple[LoweredSpecialization, ...],
+    *,
+    reachability: tuple[str, ...],
+) -> RustPublicDeclaration | None:
+    plan = applicable_checked_api_plan(specializations)
+    if plan is None:
+        return None
+    shape = specializations[0]
+    facts = _rust_public_wrapper_facts(primitive_name, shape)
+    checked_where = _checked_type_where_predicates(plan, "S")
+    index_where = tuple(
+        _type_param_where_clauses(shape, base_dispatch="projection")
+    )
+    if checked_where and index_where:
+        raise ValueError(
+            "checked wrapper cannot combine numeric-domain and index-vector bounds"
+        )
+    parameters = tuple(
+        RustPublicParameter(
+            name,
+            typ,
+            rust_parameter_role(shape, index, shape.param_kinds[index]),
+        )
+        for index, name, typ in _checked_parameter_types(
+            shape,
+            "S",
+            plan,
+            target_owner=facts.target_owner,
+            vidx_type=facts.index_type,
+        )
+    )
+    ordinary_identity = f"crate::profile::{primitive_name}#vector"
+    return RustPublicDeclaration(
+        identity=f"crate::profile::{primitive_name}_checked#vector",
+        name=rust_raw_identifier(f"{primitive_name}_checked"),
+        owner="crate::profile",
+        reachability=reachability,
+        stability=PublicDeclarationStability.STABLE,
+        kind=PublicDeclarationKind.FUNCTION,
+        overload=_rust_overload_identity(specializations, "checked-vector"),
+        visibility="pub",
+        generic_parameters=(
+            rust_type_parameter("S", facts.vector_bound),
+            *facts.generic_parameters,
+        ),
+        parameters=parameters,
+        where_predicates=checked_where or index_where,
+        result_type=(
+            f"Result<{_kind_type(shape.result_kind, facts.result_owner)}, "
+            "PreconditionError>"
+        ),
+        result_form="result",
+        attributes=("#[inline]",),
+        checked_of=ordinary_identity,
+        error_form="result",
+    )
+
+
+def _rust_overloaded_wrapper_declaration(
+    primitive_name: str,
+    specializations: tuple[LoweredSpecialization, ...],
+    *,
+    checked: bool,
+    caller_unsafe: bool,
+    reachability: tuple[str, ...],
+) -> RustPublicDeclaration | None:
+    shape = specializations[0]
+    varying = varying_positions(specializations)
+    if len(varying) != 1:
+        raise ValueError("Rust public overload requires one varying parameter")
+    varying_index = varying[0]
+    axis_args = "".join(f", {_axis_name(key)}" for key, _ in shape.axis)
+    generic_args = "".join(
+        f", {name}" for name, _typ, _default in shape.generic_params
+    )
+    arg_trait = (
+        f"{_PRIMITIVE_TRAIT_PREFIX}{rust_primitive_trait_name(primitive_name)}Arg"
+    )
+    generics: tuple[RustGenericParameter, ...] = (
+        rust_type_parameter("S", "StaticSimdVector"),
+        *_rust_const_generic_parameters(shape),
+        rust_type_parameter("V", f"{arg_trait}<S{axis_args}{generic_args}>")
+    )
+    plan = applicable_checked_api_plan(specializations) if checked else None
+    if checked and plan is None:
+        return None
+    memory = checked_memory_condition(plan.conditions) if plan is not None else None
+    parameters: list[RustPublicParameter] = []
+    for index, (name, kind) in enumerate(zip(shape.param_names, shape.param_kinds)):
+        if index == varying_index:
+            typ = "V"
+        elif memory is not None and index == memory.parameter_index:
+            typ = (
+                "&[S::BaseType]"
+                if memory.memory_access is MemoryAccess.READ
+                else "&mut [S::BaseType]"
+            )
+        else:
+            typ = _param_kind_type(kind, "S")
+        parameters.append(
+            RustPublicParameter(
+                name,
+                typ,
+                rust_parameter_role(shape, index, kind),
+            )
+        )
+    suffix = "_checked" if checked else ""
+    ordinary_identity = f"crate::profile::{primitive_name}#overload"
+    result = _kind_type(shape.result_kind, "S")
+    return RustPublicDeclaration(
+        identity=f"crate::profile::{primitive_name}{suffix}#overload",
+        name=rust_raw_identifier(f"{primitive_name}{suffix}"),
+        owner="crate::profile",
+        reachability=reachability,
+        stability=PublicDeclarationStability.STABLE,
+        kind=PublicDeclarationKind.FUNCTION,
+        overload=_rust_overload_identity(
+            specializations, "checked-overload" if checked else "overload"
+        ),
+        visibility="pub",
+        generic_parameters=generics,
+        parameters=tuple(parameters),
+        result_type=(
+            f"Result<{result}, PreconditionError>" if checked else result
+        ),
+        result_form="result" if checked else "direct",
+        attributes=("#[inline]",) if checked else (),
+        unsafe=caller_unsafe and not checked,
+        checked_of=ordinary_identity if checked else None,
+        error_form="result" if checked else None,
+    )
+
+
 class RustBackend:
     backend_id = "rust"
 
@@ -518,6 +822,62 @@ class RustBackend:
         ordinary = self._wrapper(primitive_name, shape, caller_unsafe=caller_unsafe)
         checked = self._checked_wrapper(primitive_name, specializations)
         return "\n\n".join(part for part in (ordinary, checked) if part)
+
+    def public_declarations(
+        self,
+        primitive_name: str,
+        specializations: tuple[LoweredSpecialization, ...],
+        *,
+        reachability: tuple[str, ...],
+    ) -> tuple[RustPublicDeclaration, ...]:
+        """Finalize the stable profile-callable declarations for one group."""
+
+        specializations = _with_consistent_type_param_bounds(specializations)
+        shape = specializations[0]
+        if DEFAULT_SUPPORT_POLICY.is_free_function_signature(
+            shape.result_kind, shape.param_kinds
+        ):
+            ordinary = _free_function_declaration(
+                shape, reachability=reachability
+            )
+            checked = _checked_free_function_declaration(
+                shape, reachability=reachability
+            )
+            return (ordinary,) if checked is None else (ordinary, checked)
+        caller_unsafe = public_call_requires_unsafe(specializations)
+        if varying_positions(specializations):
+            overloaded_ordinary = _rust_overloaded_wrapper_declaration(
+                primitive_name,
+                specializations,
+                checked=False,
+                caller_unsafe=caller_unsafe,
+                reachability=reachability,
+            )
+            overloaded_checked = _rust_overloaded_wrapper_declaration(
+                primitive_name,
+                specializations,
+                checked=True,
+                caller_unsafe=caller_unsafe,
+                reachability=reachability,
+            )
+            assert overloaded_ordinary is not None
+            return (
+                (overloaded_ordinary,)
+                if overloaded_checked is None
+                else (overloaded_ordinary, overloaded_checked)
+            )
+        ordinary = _rust_wrapper_declaration(
+            primitive_name,
+            shape,
+            caller_unsafe=caller_unsafe,
+            reachability=reachability,
+        )
+        checked = _rust_checked_wrapper_declaration(
+            primitive_name,
+            specializations,
+            reachability=reachability,
+        )
+        return (ordinary,) if checked is None else (ordinary, checked)
 
     def render_documentation_api(
         self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
@@ -873,38 +1233,36 @@ class RustBackend:
         arg_trait = (
             f"{_PRIMITIVE_TRAIT_PREFIX}{rust_primitive_trait_name(primitive_name)}Arg"
         )
-        fixed = [
-            (name, kind)
-            for i, (name, kind) in enumerate(zip(shape.param_names, shape.param_kinds))
-            if i != vi
-        ]
-        axis_wrap = "".join(f"const {_axis_name(k)}: bool, " for k, _ in shape.axis)
         axis_args = "".join(f", {_axis_name(k)}" for k, _ in shape.axis)
-        gp_wrap = "".join(f"const {name}: {typ}, " for name, typ, _ in shape.generic_params)
-        gp_names = [name for name, _, _ in shape.generic_params]
-        gp_args = "".join(f", {name}" for name in gp_names)
-        wrap_params = ", ".join(
-            (f"{name}: V" if i == vi else f"{name}: {_param_kind_type(kind, 'S')}")
-            for i, (name, kind) in enumerate(zip(shape.param_names, shape.param_kinds))
+        gp_args = "".join(
+            f", {name}" for name, _typ, _default in shape.generic_params
         )
-        fixed_names = [n for n, _ in fixed]
+        fixed_names = [
+            name
+            for index, name in enumerate(shape.param_names)
+            if index != vi
+        ]
         call_args = ", ".join((shape.param_names[vi], *fixed_names))
         call = f"<V as {arg_trait}<S{axis_args}{gp_args}>>::apply({call_args})"
         call = _unsafe_call(call, caller_unsafe)
-        unsafe_prefix = _unsafe_prefix(caller_unsafe)
-        ret_type = _kind_type(shape.result_kind, "S")
         doc = _rust_doc(
             shape,
             context="Rust wrapper",
             concrete=False,
             specializations=specs,
         )
+        declaration = _rust_overloaded_wrapper_declaration(
+            primitive_name,
+            specs,
+            checked=False,
+            caller_unsafe=caller_unsafe,
+            reachability=("profile",),
+        )
+        assert declaration is not None
         return (
             (f"{doc}\n" if doc else "")
-            + f"pub {unsafe_prefix}fn {primitive_name}"
-            f"<S: StaticSimdVector, {axis_wrap}{gp_wrap}"
-            f"V: {arg_trait}<S{axis_args}{gp_args}>>"
-            f"({wrap_params}) -> {ret_type} {{\n"
+            + declaration.render_definition_head()
+            + "\n"
             f"    {call}\n"
             f"}}"
         )
@@ -938,27 +1296,9 @@ class RustBackend:
         arg_trait = (
             f"{_PRIMITIVE_TRAIT_PREFIX}{rust_primitive_trait_name(primitive_name)}Arg"
         )
-        axis_wrap = "".join(
-            f"const {_axis_name(key)}: bool, " for key, _ in shape.axis
-        )
         axis_args = "".join(f", {_axis_name(key)}" for key, _ in shape.axis)
-        generic_wrap = "".join(
-            f"const {name}: {typ}, " for name, typ, _ in shape.generic_params
-        )
         generic_args = "".join(
             f", {name}" for name, _typ, _default in shape.generic_params
-        )
-        parameters = ", ".join(
-            (
-                f"{name}: V"
-                if index == varying_index
-                else f"{name}: &mut [S::BaseType]"
-                if index == memory_index
-                else f"{name}: {_param_kind_type(kind, 'S')}"
-            )
-            for index, (name, kind) in enumerate(
-                zip(shape.param_names, shape.param_kinds)
-            )
         )
         fixed_arguments = tuple(
             (
@@ -1000,7 +1340,6 @@ class RustBackend:
             raise ValueError(
                 f"unsupported checked Rust overload condition {condition.kind.value!r}"
             )
-        result = _kind_type(shape.result_kind, "S")
         success = (
             f"    {call};\n    Ok(())"
             if shape.result_kind == "void"
@@ -1014,13 +1353,20 @@ class RustBackend:
             checked_conditions=plan.conditions,
             specializations=specs,
         )
+        declaration = _rust_overloaded_wrapper_declaration(
+            primitive_name,
+            specs,
+            checked=True,
+            caller_unsafe=False,
+            reachability=("profile",),
+        )
+        assert declaration is not None
         return (
             (f"{doc}\n" if doc else "")
-            + "#[inline]\n"
-            + f"pub fn {rust_raw_identifier(primitive_name + '_checked')}"
-            f"<S: StaticSimdVector, {axis_wrap}{generic_wrap}"
-            f"V: {arg_trait}<S{axis_args}{generic_args}>>"
-            f"({parameters}) -> Result<{result}, PreconditionError> {{\n"
+            + declaration.render_attributes()
+            + "\n"
+            + declaration.render_definition_head()
+            + "\n"
             f"{body}\n"
             "}"
         )
@@ -1243,22 +1589,11 @@ class RustBackend:
         # `name::<Self, …>` uniformly. The trait bound carries them (`S: MulImmImpl<factor>`);
         # Rust allows referencing a const-generic in the bound before it is declared.
         targs = _trait_args_by_name(shape)
-        decl_list = _generic_decls(shape)
-        ret = _kind_type(shape.result_kind, "S")
-        call = ""
-        target_owner: str | None = None
         # A representation-change primitive takes the target vector `T` as a generic, bounds `S`
         # on `…Impl<T, …>`, and projects the result and target-owned parameters through `T`;
         # the call is qualified to pin the target.
         if shape.target is not None:
             targs = ["T", *targs]
-            decl_list = ["T: StaticSimdVector", *decl_list]
-            ret = _kind_type(shape.result_kind, "T")
-            target_owner = "T"
-            call = (
-                f"<S as {_PRIMITIVE_TRAIT_PREFIX}{rust_primitive_trait_name(primitive_name)}"
-                f"<{', '.join(targs)}>>::apply({names})"
-            )
         # Free SIMD type params: declare them (bounded) and pass them as trait args. The call is
         # qualified — `IndicesType::RegisterType` is non-injective, so it can't be inferred from
         # the `vidx` argument; pinning `IndicesType` in the trait path resolves `apply`.
@@ -1268,38 +1603,23 @@ class RustBackend:
                 *_type_param_base_key_args(shape, mode="projection"),
                 *targs,
             ]
-            decl_list = _type_param_decls(
-                shape, trait_prefix=_PRIMITIVE_TRAIT_PREFIX
-            ) + decl_list
-            vidx_type = f"{shape.type_params[0].name}::RegisterType"
-            call = (
-                f"<S as {_PRIMITIVE_TRAIT_PREFIX}{rust_primitive_trait_name(primitive_name)}"
-                f"<{', '.join(targs)}>>::apply({names})"
-            )
-            if shape.result_vector_param is not None:
-                ret = _kind_type(shape.result_kind, shape.result_vector_param)
-        else:
-            vidx_type = None
-        params = _params(
-            shape,
-            "S",
-            target_owner=target_owner,
-            vidx_type=vidx_type,
-        )
         trait_args = f"<{', '.join(targs)}>" if targs else ""
-        decls = "".join(f", {d}" for d in decl_list)
         call = (
             f"<S as {_PRIMITIVE_TRAIT_PREFIX}{rust_primitive_trait_name(primitive_name)}"
             f"{trait_args}>::apply({names})"
         )
         call = _unsafe_call(call, caller_unsafe)
         doc = _rust_doc(shape, context="Rust wrapper", concrete=False)
+        declaration = _rust_wrapper_declaration(
+            primitive_name,
+            shape,
+            caller_unsafe=caller_unsafe,
+            reachability=("profile",),
+        )
         return (
             (f"{doc}\n" if doc else "")
-            + f"pub {_unsafe_prefix(caller_unsafe)}fn {rust_raw_identifier(primitive_name)}"
-            f"<S: {_PRIMITIVE_TRAIT_PREFIX}{rust_primitive_trait_name(primitive_name)}"
-            f"{trait_args}{decls}>"
-            f"({params}) -> {ret}{_index_where(shape, base_dispatch='projection')} {{\n"
+            + declaration.render_definition_head()
+            + "\n"
             f"    {call}\n"
             f"}}"
         )
@@ -1315,15 +1635,11 @@ class RustBackend:
         shape = specializations[0]
         public_trait_args = _trait_args_by_name(shape)
         trait_args = list(public_trait_args)
-        declarations = _generic_decls(shape)
         target_owner: str | None = None
-        result_owner = "S"
         if shape.target is not None:
             trait_args = ["T", *trait_args]
             public_trait_args = ["T", *public_trait_args]
-            declarations = ["T: StaticSimdVector", *declarations]
             target_owner = "T"
-            result_owner = "T"
         if shape.type_params:
             type_names = _type_param_names(shape)
             trait_args = [
@@ -1332,29 +1648,11 @@ class RustBackend:
                 *trait_args,
             ]
             public_trait_args = [*type_names, *public_trait_args]
-            type_declarations = _type_param_decls(
-                shape, trait_prefix=_PRIMITIVE_TRAIT_PREFIX
-            )
-            declarations = [*type_declarations, *declarations]
-            vidx_type = f"{shape.type_params[0].name}::RegisterType"
-            if shape.result_vector_param is not None:
-                result_owner = shape.result_vector_param
-        else:
-            vidx_type = None
         rendered_trait_args = f"<{', '.join(trait_args)}>" if trait_args else ""
         vector_bound = (
             f"{_PRIMITIVE_TRAIT_PREFIX}"
             f"{rust_primitive_trait_name(primitive_name)}{rendered_trait_args}"
         )
-        generics = ", ".join((f"S: {vector_bound}", *declarations))
-        params = _checked_params(
-            shape,
-            "S",
-            plan,
-            target_owner=target_owner,
-            vidx_type=vidx_type,
-        )
-        result = _kind_type(shape.result_kind, result_owner)
         doc = _rust_doc(
             shape,
             context="Rust checked wrapper",
@@ -1521,20 +1819,18 @@ class RustBackend:
             else f"    Ok({call})"
         )
         body = "\n".join((*checks, success))
-        where_clause = _checked_type_where(plan, "S")
-        index_where = _index_where(shape, base_dispatch="projection")
-        if where_clause and index_where:
-            raise ValueError(
-                "checked wrapper cannot combine numeric-domain and index-vector bounds"
-            )
-        where_clause = where_clause or index_where
-        opening_brace = f"{where_clause}\n{{" if where_clause else " {"
+        declaration = _rust_checked_wrapper_declaration(
+            primitive_name,
+            specializations,
+            reachability=("profile",),
+        )
+        assert declaration is not None
         return (
             (f"{doc}\n" if doc else "")
-            + "#[inline]\n"
-            + f"pub fn {rust_raw_identifier(primitive_name + '_checked')}"
-            f"<{generics}>({params}) -> Result<{result}, PreconditionError>"
-            f"{opening_brace}\n"
+            + declaration.render_attributes()
+            + "\n"
+            + declaration.render_definition_head()
+            + "\n"
             f"{body}\n"
             "}"
         )
