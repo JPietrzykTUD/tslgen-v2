@@ -37,9 +37,9 @@ extensions or LMULs, or stable Rust SVE/RVV.
 ## Stable callable universe
 
 - Scalar types: `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64`.
-- Primitive callable families: 181.
+- Primitive callable families: 185.
 - Algorithm callable families: 44.
-- Accelerated-core callable families: 173.
+- Accelerated-core callable families: 177.
 - Portable utility callable families: 7.
 - Portable utility names: `allocate`, `allocate_aligned`, `custom_sequence`, `deallocate`, `memory_cp`, `sequence`, `to_ostream`.
 - Fixed-shape signature kinds: `lanes<s>`, `s[]`.
@@ -48,7 +48,7 @@ The exact callable-family records below are projected from
 `coverage/tsl-v1-public-api.json`; generated projects also carry their
 scope-exact backend declaration manifests.
 
-Public-API baseline SHA-256: `da5d877f45983d5c71279743d05c8638f9adf5df0d4a086f19b876871472bef8`.
+Public-API baseline SHA-256: `624435cb233eeb5999b03b7faa9526ce427c658a3cb7a03606d71e453e722ea2`.
 
 ### Primitive callable families
 
@@ -130,6 +130,7 @@ Public-API baseline SHA-256: `da5d877f45983d5c71279743d05c8638f9adf5df0d4a086f19
 | `insert_imask#im:=(imt,im,usize)->extension:ToExtension` | no | no | not yet annotated |
 | `insert_value#v:=(v,s)` | no | no | operation |
 | `insert_value_at#v:=(v,usize,s)` | yes | no | operation |
+| `interleave_lo#v:=(v,v)` | no | no | not yet annotated |
 | `inv#v:=v` | no | no | operation |
 | `inv[mask=pass_through]#v:=(m,v)` | no | no | operation |
 | `inv[mask=zero]#v:=(m,v)` | no | no | operation |
@@ -156,7 +157,9 @@ Public-API baseline SHA-256: `da5d877f45983d5c71279743d05c8638f9adf5df0d4a086f19
 | `mask_binary_not#m:=m` | no | no | operation |
 | `mask_binary_or#m:=(m,m)` | no | no | operation |
 | `mask_binary_xor#m:=(m,m)` | no | no | operation |
+| `mask_deinterleave_odd#m:=(m,m)` | no | no | not yet annotated |
 | `mask_false[value=zero]#m:=()` | no | no | operation |
+| `mask_interleave_lo#m:=(m,m)` | no | no | not yet annotated |
 | `mask_population_count#usize:=m` | no | no | operation |
 | `mask_true[value=all]#m:=()` | no | no | operation |
 | `masked_set1[mask=zero]#v:=(m,v,s)` | no | no | not yet annotated |
@@ -191,6 +194,7 @@ Public-API baseline SHA-256: `da5d877f45983d5c71279743d05c8638f9adf5df0d4a086f19
 | `resize_down#v:=v->extension:ToExtension` | no | no | not yet annotated |
 | `resize_up_undef[value=undef]#v:=v->extension:ToExtension` | no | no | not yet annotated |
 | `resize_up_zero[value=zero]#v:=v->extension:ToExtension` | no | no | not yet annotated |
+| `reverse#v:=(v)` | no | no | not yet annotated |
 | `scatter#void:=(ptr,vidx,v,sImm)` | yes | no | operation, memory |
 | `scatter[mask=zero]#void:=(m,ptr,vidx,v,sImm)` | yes | no | operation, memory |
 | `select[mask=pass_through]#v:=(m,v,v)` | no | no | operation |

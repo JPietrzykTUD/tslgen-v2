@@ -204,6 +204,11 @@ def checked_api_plan(
 
     if not specializations:
         return None
+    if any(
+        spec.unavailable_checked_dependency_origins
+        for spec in specializations
+    ):
+        return None
     if any(spec.unresolved_call_preconditions for spec in specializations):
         return None
     first = specializations[0]

@@ -791,7 +791,7 @@ prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [intrinsic, raw_pointer]
+          reasons [intrinsic, raw_pointer, value_reinterpretation]
         implementation:
           tsil """
             intrin<maskstore, build>(

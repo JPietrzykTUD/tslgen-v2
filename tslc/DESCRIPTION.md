@@ -458,9 +458,13 @@ admission can fail closed, including after transitive closure.
 The pipeline then runs a **profile-scoped dependency closure**: from the
 requested primitives it resolves those lowered call facts
 ([lower/dependencies.py](src/tslc/lower/dependencies.py)), lowers callees, and
-**prunes to a fixpoint** any specialization whose callees aren't themselves
-emitted for the same concrete `simd<type,ext>` (else the generated call
-wouldn't link). A call on a free SIMD type parameter instead retains a symbolic
+**prunes to a fixpoint** any specialization whose implementation-body callees
+aren't themselves emitted for the same concrete `simd<type,ext>` (else the
+generated call wouldn't link). Compiler-created checked-guard calls are
+discovered through the same typed dependency model but are not body edges:
+after ordinary closure stabilizes, an unavailable guard dependency suppresses
+only the optional checked companion, never the unchecked callable. A call on a
+free SIMD type parameter instead retains a symbolic
 reference containing the authored parameter name and its optional selected base
 binding, never the caller's extension. Its compiler-derived trait bounds are
 validated during lowering, and dependency discovery keeps the corresponding
@@ -548,10 +552,10 @@ narrow implementation-mechanism labels currently known to coexist with it.
 Unknown labels, unchecked indexing, and generic unsafe operations cannot be
 erased by a range signature. Compiler-derived, internal-only
 `value_reinterpretation` and `unsafe_callee` framing effects are admitted; the
-latter does not prove that the callee's own condition was forwarded or
-discharged. This is a conservative direct-admission guard over the current
-lowered safety model; the typed transitive proof described below remains a v1
-release gate.
+latter does not itself prove that the callee's own condition was forwarded or
+discharged. Typed `forward[...]` and `discharge[...]` call dispositions own
+that proof independently, and unresolved obligations make checked admission
+fail closed through the live ordinary call graph.
 [catalog/memory.py](src/tslc/catalog/memory.py) also owns whether indexed
 operations consume one address per result-vector lane or per index-vector lane;
 catalog validation requires that fact for indexed memory, and checked wrappers
@@ -577,12 +581,10 @@ candidate, comprehensive, curated, and surface planners under `backend/rust_api_
 Rust facade checked-condition translation remains in
 [backend/rust_facade_checked.py](src/tslc/backend/rust_facade_checked.py); the
 renderer receives those finalized backend facts and only formats public items.
-Primitive-call lowering currently records callee identities and creates the
-necessary local Rust unsafe boundary, but does not yet carry a typed proof that
-an applicable callee precondition was forwarded or discharged. The reviewed
-current corpus is accounted for manually; explicit call-site obligation
-semantics remain a TSL v1 release gate and must stay in typed TSIL/lowering
-rather than being inferred from raw target text.
+Primitive-call lowering records callee identities, source-located typed
+precondition dispositions, and the necessary local Rust unsafe boundary.
+Catalog validation and transitive closure reject or retain unresolved proof
+gaps without inferring anything from raw target text.
 The public
 [backend/rust_api_planner.py](src/tslc/backend/rust_api_planner.py)
 orchestrates those projections directly and preserves the compiler-facing

@@ -452,7 +452,7 @@ prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [intrinsic, raw_pointer]
+          reasons [intrinsic, raw_pointer, value_reinterpretation]
         implementation:
           tsil """
             complete(
@@ -814,7 +814,7 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
             complete(
               call<primitive=select, attrs[mask=pass_through]>(
                 mask,
-                call<primitive=load, attrs[mask=zero]>(mask, ptr),
+                call<primitive=load, attrs[mask=zero], forward[contiguous_memory_extent]>(mask, ptr),
                 data
               )
             );
@@ -830,7 +830,7 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
             complete(
               call<primitive=select, attrs[mask=pass_through]>(
                 mask,
-                call<primitive=load, attrs[mask=zero]>(mask, ptr),
+                call<primitive=load, attrs[mask=zero], forward[contiguous_memory_extent]>(mask, ptr),
                 data
               )
             );

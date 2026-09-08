@@ -667,6 +667,10 @@ def test_value_full_corpus_avx2_rust_parity_inventory_is_explicit(
             "insert_imask",
             "insert_imask_ui32_clang_v128_to_clang_v256_clang",
         ),
+        (
+            "interleave_lo",
+            "interleave_lo_si32_clang_v512_clang_wide",
+        ),
         ("lzc", "lzc_ui32_clang_v128_clang_edge"),
         ("lzc", "lzc_ui32_clang_v256_clang_edge"),
         ("lzc", "lzc_ui32_clang_v512_clang_edge"),
@@ -698,6 +702,7 @@ def test_value_full_corpus_avx2_rust_parity_inventory_is_explicit(
             "resize_up_zero",
             "resize_up_zero_si32_clang_v128_to_clang_v512_zero_clang",
         ),
+        ("reverse", "reverse_si32_clang_v512_clang_wide"),
         (
             "to_integral",
             "to_integral_f64_clang_v128_bool_clang_boolean_edge",

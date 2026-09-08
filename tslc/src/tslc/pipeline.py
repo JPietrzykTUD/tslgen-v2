@@ -612,7 +612,12 @@ class _GenerationSession:
                 )
                 if lowered.specialization is None:
                     continue
-                callee_origins = lowered.specialization.call_dependency_origins
+                all_callee_origins = (
+                    lowered.specialization.call_dependency_origins
+                )
+                callee_origins = (
+                    lowered.specialization.implementation_call_dependency_origins
+                )
                 callees = frozenset(
                     origin.dependency for origin in callee_origins
                 )
@@ -632,7 +637,9 @@ class _GenerationSession:
                 )
                 discovered_dependencies.update(
                     _dependency_discovery_requests(
-                        callees,
+                        frozenset(
+                            origin.dependency for origin in all_callee_origins
+                        ),
                         backend=backend,
                         catalog=catalog,
                         fallback_types=self.type_tags,

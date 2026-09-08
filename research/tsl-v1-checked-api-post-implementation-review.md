@@ -1,9 +1,9 @@
 # TSL v1 checked-API post-implementation design review
 
-Date: 2026-09-07
+Date: 2026-09-08
 
-Reviewed range: `08954770` through Slices 9 and 10, including the
-post-implementation review/fix loops for both final slices.
+Reviewed range: `08954770` through Slices 9 and 10 and their replay onto
+`tsl-v1-release` after `3d5848e8`, including the integration review/fix loop.
 
 Related documents:
 
@@ -19,7 +19,9 @@ public preconditions, the catalog validates and types them, lowering transports
 them with explicit call-site dispositions, backends decide language-specific
 APIs and exact declaration records, renderers format finalized facts, and the
 editor consumes compiler projections. The two former high-severity proof gaps
-are closed by Slices 9 and 10. This verdict does not close the separate
+are closed by Slices 9 and 10. The integration review also corrected the
+ordinary/checked dependency-boundary defect described by C-10 and the
+AVX-selection regression described by C-11. This verdict does not close the separate
 full-header warning debt or unsupported-platform work from the broader v1 audit.
 
 ## Findings
@@ -190,6 +192,43 @@ owns those meanings. C++ and Rust algorithm translation dispatch on the role;
 names are used only for public spelling. Additive rename tests show that changed
 names preserve check and forwarding behavior in both backends.
 
+### C-10 — High, fixed: optional checked guards pruned ordinary callables
+
+The initial integration put compiler-created checked-guard calls into the same
+closure edge set as calls made by the ordinary implementation body. If a guard
+helper was unavailable for a profile, closure consequently removed the
+ordinary specialization even though its body did not call that helper. This
+regressed ordinary SVE `scatter` and AVX/AVX-512 division/remainder coverage and
+violated the central contract that checked companions are optional additions to
+the direct API.
+
+[`pipeline.py`](../tslc/src/tslc/pipeline.py) now discovers both edge kinds but
+passes only implementation-body edges into pruning and transitive propagation.
+After ordinary closure stabilizes,
+[`_pipeline_closure.py`](../tslc/src/tslc/_pipeline_closure.py) records missing
+checked-guard dependencies on the surviving lowered specialization, and
+[`checked_api.py`](../tslc/src/tslc/backend/checked_api.py) suppresses only that
+companion. `tslc explain` presents body and checked-guard callees separately.
+Focused generation proves that SVE `scatter` remains callable while its
+currently unrepresentable checked twin is absent; focused AVX2 C++ and Rust
+generation proves that ordinary `mod`/`mod_imm` remain buildable.
+
+### C-11 — High, fixed: an AVX fallback shadowed the native AVX2 compare
+
+The first repair for the ordinary AVX division/remainder closure added a
+composed integer `equal` body under the `avx2` source extension with more direct
+required features than the native AVX2 body. The selector correctly treats more
+requirements as more specialized, so that fallback won even on AVX2 and
+replaced `_mm256_cmpeq_epi32` with two SSE-half calls.
+
+The composed body now declares only its direct AVX requirement and appears
+after the native body. The native body wins the existing earlier-source
+tiebreak when both are usable; on an AVX-only profile it is rejected for its
+missing AVX2 feature and the composed body remains available. Transitive
+closure, rather than duplicated source requirements, carries the SSE callee
+features. Existing intrinsic-selection tests and focused strict AVX/AVX2 checks
+prove both outcomes.
+
 ### C-06 — Medium, fixed: checked planning retained partial or duplicated facts
 
 The Rust facade used a second checked-condition dataclass with weaker invariants,
@@ -244,7 +283,7 @@ warnings as errors.
 | --- | --- | --- |
 | Source | `tsldata` declares catastrophic preconditions and the otherwise non-derivable indexed-lane extent | Correct; no backend spelling or check code in source metadata |
 | Parse/catalog | parser nodes preserve syntax; frozen catalog enums/dataclasses validate roles, applicability, memory shape, and source locations | Correct; loose mappings stop at input/maintenance serialization boundaries |
-| Lowering | `LoweredPrimitiveSemantics` transports typed catalog facts; dependency edges carry selected callee identities and explicit forwarded/discharged obligations | Correct after Slice 9 |
+| Lowering | `LoweredPrimitiveSemantics` transports typed catalog facts; dependency edges carry selected callee identities and explicit forwarded/discharged obligations; ordinary body edges are distinct from optional checked-guard edges | Correct after Slice 9 and integration fix C-10 |
 | Backend-neutral policy | checked-condition and algorithm-contract records own eligibility and language-neutral relations | Correct; deterministic, typed, and independent of target text |
 | C++ backend | owns span/error ABI, direct-result/error-output convention, constraints, guards, and C++ documentation facts | Correct for implemented families |
 | Rust backend | owns `unsafe`/`Result`, slice adaptation, trait bounds, representation alignment, and facade admission | Correct after C-04 |
@@ -270,14 +309,14 @@ tests/reports, and it has no path back into selection, lowering, or generation.
 | 6 — irregular/compacted memory | Indexed lane domains and compacted conditional alignment were corrected; pointer-index narrow gather remains an honest omission |
 | 7 — remaining memory | Random output and widening-load twins are checkable; mask-layout, deallocation-provenance, and raw-copy gaps remain explicit rather than receiving dishonest twins |
 | 8 — docs/editor/release evidence | Documentation, package reproducibility, editor projection, typed baseline, census, and showcase gates are present; Slices 9 and 10 close the two proof gaps identified by its first review |
-| 9 — transitive preconditions | Exact forwarding and explicit author discharge are typed, source-visible, projected to authoring tools, and ratcheted with zero unresolved current-corpus obligations |
+| 9 — transitive preconditions | Exact forwarding and explicit author discharge are typed, source-visible, projected to authoring tools, and ratcheted with zero unresolved current-corpus obligations; checked-guard dependencies cannot prune the ordinary API |
 | 10 — exact declarations | Backend-owned exact records drive stable declarations and deterministic manifests; non-stable surfaces are explicitly classified |
 
 ## Coverage and validation
 
 The reviewed census is deterministic at:
 
-- 181 typed primitive callable families;
+- 185 typed primitive callable families;
 - 33 exact source identities with at least one caller-unsafe implementation;
 - 22 identities with an admitted checked source contract and 11 explicit
   no-honest-twin omissions;
@@ -289,13 +328,13 @@ Completed validation on the corrected tree:
 | Gate | Result |
 | --- | --- |
 | Python byte compilation | Passed |
-| Mypy | Passed: 355 source files |
+| Mypy | Passed on the original reviewed tree: 355 source files |
 | Full corpus `tslc check` | Passed: 43 source documents |
-| Typed public baseline | Passed: 181 primitive families; 797 exact C++ and 4,937 exact Rust declaration records |
+| Typed public baseline | Passed after integration: 185 primitive families; 813 exact C++ and 4,953 exact Rust declaration records |
 | Checked census baseline | Passed: 154 runtime sites, 33 caller-unsafe identities, 138 metadata suggestions |
 | Focused architecture/backend suite | Passed: 221; skipped: 18 |
 | Checked generated/ABI suite | Passed: 59; skipped: 1 |
-| Full generated C++/Rust build and value matrix | Passed: 84 in 51m08s |
+| Full generated C++/Rust build and value matrix | 83 generated build/value gates passed in one 51m44s run; the sole failure was a stale exact parity set for two new C++-only Clang cases, and that full-corpus parity gate passed after correction |
 | Python LSP suite | Passed: 29 |
 | VS Code unit and grammar suites | Passed: 23 + 2 |
 | VS Code integration suite | Passed: 2 |
@@ -303,7 +342,9 @@ Completed validation on the corrected tree:
 | Strict Doxygen, Rustdoc, Sphinx, and site build | Passed: 50,984 specializations and 93 artifacts |
 | Rust doctests | Passed: 2 executed; 205 deliberately ignored comprehensive snippets |
 | Checked C++ documentation example | Passed with GCC and Clang under strict consumer warnings, generated headers as system includes |
-| Full ordinary Python suite | Passed on the final frozen tree |
+| Full ordinary Python suite | Passed after the integration fix loop: 2,759 passed, 124 expected skips |
+| PIVOT downstream suite | Passed: 86; exact baseline contains 17,080 definitions and 35,849 skips |
+| Integrated call-precondition audit | Passed: 132 dispositions (11 forward, 121 discharge), zero unresolved |
 
 The generated full-matrix run covers all repository-supported build/value gates;
 unavailable hardware and emulator paths remain gated rather than becoming hidden

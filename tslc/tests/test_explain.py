@@ -148,6 +148,26 @@ def test_dependency_closure_marks_emitted_callee(
     assert "✓" in report  # the callee is emitted in the closure
 
 
+def test_missing_checked_guard_dependency_does_not_prune_unchecked_slot(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    report = _explain(
+        data_root,
+        machine_profiles_path,
+        primitive="scatter",
+        profile="sve",
+        type_tag="si32",
+        backend="cpp",
+        extension="sve",
+    )
+
+    assert "checked-companion guard callees" in report
+    assert "to_array <sve, si32>" in report
+    assert "checked companion is not emitted" in report
+    assert "VERDICT: COMPILES" in report
+
+
 def test_lzc_explain_defaults_to_automatic_compiler_capability_frontier(
     data_root: Path,
     machine_profiles_path: Path,

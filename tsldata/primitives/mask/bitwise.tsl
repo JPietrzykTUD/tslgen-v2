@@ -139,6 +139,24 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
           reasons []
         implementation:
           tsil "complete(call<primitive=binary_and[Vec]>(mask_a, mask_b));"
+      ?i?:
+        requires [avx, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(FloatVec, vector::as_base(f32));
+            complete(
+              call<primitive=reinterpret[FloatVec, Vec]>(
+                call<primitive=binary_and[FloatVec]>(
+                  call<primitive=reinterpret[Vec, FloatVec]>(mask_a),
+                  call<primitive=reinterpret[Vec, FloatVec]>(mask_b)
+                )
+              )
+            );
+          """
     sse:
       arith:
         requires {si8 [sse, sse2], ui8 [sse, sse2], si16 [sse, sse2], ui16 [sse, sse2], si32 [sse, sse2], ui32 [sse, sse2], si64 [sse, sse2], ui64 [sse, sse2], f32 [sse], f64 [sse, sse2]}
@@ -810,7 +828,7 @@ prim<usize:=m> mask_population_count(mask):
           avx512 [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl [sse2, avx512f, avx512vl]
-          avx2 [avx2]
+          avx2 [avx]
           sse [sse2]
           neon [neon]
           wasm128 [simd128]

@@ -3121,6 +3121,27 @@
       ]
     },
     {
+      "name": "interleave_lo",
+      "signature": "v:=(v,v)",
+      "parameters": [
+        "left",
+        "right"
+      ],
+      "attributes": {},
+      "result_target": [],
+      "immediate_parameters": [],
+      "generic_parameters": [],
+      "parameter_type_rules": [],
+      "overload": null,
+      "operation": null,
+      "arithmetic": null,
+      "memory": null,
+      "conversion": null,
+      "shift": null,
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
       "name": "inv",
       "signature": "v:=(m,v)",
       "parameters": [
@@ -4302,6 +4323,27 @@
       "preconditions": []
     },
     {
+      "name": "mask_deinterleave_odd",
+      "signature": "m:=(m,m)",
+      "parameters": [
+        "mask_a",
+        "mask_b"
+      ],
+      "attributes": {},
+      "result_target": [],
+      "immediate_parameters": [],
+      "generic_parameters": [],
+      "parameter_type_rules": [],
+      "overload": null,
+      "operation": null,
+      "arithmetic": null,
+      "memory": null,
+      "conversion": null,
+      "shift": null,
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
       "name": "mask_false",
       "signature": "m:=()",
       "parameters": [],
@@ -4317,6 +4359,27 @@
         "kind": "mask_all_false",
         "operands": []
       },
+      "arithmetic": null,
+      "memory": null,
+      "conversion": null,
+      "shift": null,
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "mask_interleave_lo",
+      "signature": "m:=(m,m)",
+      "parameters": [
+        "mask_a",
+        "mask_b"
+      ],
+      "attributes": {},
+      "result_target": [],
+      "immediate_parameters": [],
+      "generic_parameters": [],
+      "parameter_type_rules": [],
+      "overload": null,
+      "operation": null,
       "arithmetic": null,
       "memory": null,
       "conversion": null,
@@ -5516,6 +5579,26 @@
         "extension",
         "ToExtension"
       ],
+      "immediate_parameters": [],
+      "generic_parameters": [],
+      "parameter_type_rules": [],
+      "overload": null,
+      "operation": null,
+      "arithmetic": null,
+      "memory": null,
+      "conversion": null,
+      "shift": null,
+      "checked_source_contract": false,
+      "preconditions": []
+    },
+    {
+      "name": "reverse",
+      "signature": "v:=(v)",
+      "parameters": [
+        "data"
+      ],
+      "attributes": {},
+      "result_target": [],
       "immediate_parameters": [],
       "generic_parameters": [],
       "parameter_type_rules": [],
@@ -45545,6 +45628,236 @@
           "classification_scope": "exact"
         },
         {
+          "identity": "tsl::interleave_lo#dataparallel-policy",
+          "name": "interleave_lo",
+          "owner": "tsl",
+          "reachability": [
+            "tsl.hpp",
+            "profile:avx2",
+            "header:base"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "dataparallel-policy",
+          "template_parameters": [
+            {
+              "name": "Policy",
+              "kind": "type",
+              "type": null,
+              "default": null,
+              "constraint": null
+            },
+            {
+              "name": "T",
+              "kind": "type",
+              "type": null,
+              "default": null,
+              "constraint": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "left",
+              "type": "typename ::tsl::reg_param<::tsl::dataparallel::simd_for_t<Policy, T>>::type",
+              "role": "signature:v",
+              "declaration": null
+            },
+            {
+              "name": "right",
+              "type": "typename ::tsl::reg_param<::tsl::dataparallel::simd_for_t<Policy, T>>::type",
+              "role": "signature:v",
+              "declaration": null
+            }
+          ],
+          "result_type": "typename ::tsl::dataparallel::simd_for_t<Policy, T>::register_type",
+          "specifiers": [
+            "inline"
+          ],
+          "attributes": [],
+          "noexcept": false,
+          "trailing_return": false,
+          "alias_target": null,
+          "type_form": null,
+          "underlying_type": null,
+          "enumerators": [],
+          "qualifiers": [],
+          "type_spelling": null,
+          "value": null,
+          "reexport_of": null,
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
+          "identity": "tsl::interleave_lo#dataparallel-policy",
+          "name": "interleave_lo",
+          "owner": "tsl",
+          "reachability": [
+            "tsl.hpp",
+            "profile:scalar",
+            "header:base"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "dataparallel-policy",
+          "template_parameters": [
+            {
+              "name": "Policy",
+              "kind": "type",
+              "type": null,
+              "default": null,
+              "constraint": null
+            },
+            {
+              "name": "T",
+              "kind": "type",
+              "type": null,
+              "default": null,
+              "constraint": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "left",
+              "type": "typename ::tsl::reg_param<::tsl::dataparallel::simd_for_t<Policy, T>>::type",
+              "role": "signature:v",
+              "declaration": null
+            },
+            {
+              "name": "right",
+              "type": "typename ::tsl::reg_param<::tsl::dataparallel::simd_for_t<Policy, T>>::type",
+              "role": "signature:v",
+              "declaration": null
+            }
+          ],
+          "result_type": "typename ::tsl::dataparallel::simd_for_t<Policy, T>::register_type",
+          "specifiers": [
+            "inline"
+          ],
+          "attributes": [],
+          "noexcept": false,
+          "trailing_return": false,
+          "alias_target": null,
+          "type_form": null,
+          "underlying_type": null,
+          "enumerators": [],
+          "qualifiers": [],
+          "type_spelling": null,
+          "value": null,
+          "reexport_of": null,
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
+          "identity": "tsl::interleave_lo#vector",
+          "name": "interleave_lo",
+          "owner": "tsl",
+          "reachability": [
+            "tsl.hpp",
+            "profile:avx2",
+            "header:base"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "vector:v=(v,v)",
+          "template_parameters": [
+            {
+              "name": "Vec",
+              "kind": "type",
+              "type": null,
+              "default": null,
+              "constraint": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "left",
+              "type": "typename tsl::reg_param<Vec>::type",
+              "role": "signature:v",
+              "declaration": null
+            },
+            {
+              "name": "right",
+              "type": "typename tsl::reg_param<Vec>::type",
+              "role": "signature:v",
+              "declaration": null
+            }
+          ],
+          "result_type": "typename Vec::register_type",
+          "specifiers": [
+            "inline"
+          ],
+          "attributes": [],
+          "noexcept": false,
+          "trailing_return": false,
+          "alias_target": null,
+          "type_form": null,
+          "underlying_type": null,
+          "enumerators": [],
+          "qualifiers": [],
+          "type_spelling": null,
+          "value": null,
+          "reexport_of": null,
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
+          "identity": "tsl::interleave_lo#vector",
+          "name": "interleave_lo",
+          "owner": "tsl",
+          "reachability": [
+            "tsl.hpp",
+            "profile:scalar",
+            "header:base"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "vector:v=(v,v)",
+          "template_parameters": [
+            {
+              "name": "Vec",
+              "kind": "type",
+              "type": null,
+              "default": null,
+              "constraint": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "left",
+              "type": "typename tsl::reg_param<Vec>::type",
+              "role": "signature:v",
+              "declaration": null
+            },
+            {
+              "name": "right",
+              "type": "typename tsl::reg_param<Vec>::type",
+              "role": "signature:v",
+              "declaration": null
+            }
+          ],
+          "result_type": "typename Vec::register_type",
+          "specifiers": [
+            "inline"
+          ],
+          "attributes": [],
+          "noexcept": false,
+          "trailing_return": false,
+          "alias_target": null,
+          "type_form": null,
+          "underlying_type": null,
+          "enumerators": [],
+          "qualifiers": [],
+          "type_spelling": null,
+          "value": null,
+          "reexport_of": null,
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
           "identity": "tsl::inv#dataparallel-policy",
           "name": "inv",
           "owner": "tsl",
@@ -49571,6 +49884,236 @@
           "classification_scope": "exact"
         },
         {
+          "identity": "tsl::mask_deinterleave_odd#dataparallel-policy",
+          "name": "mask_deinterleave_odd",
+          "owner": "tsl",
+          "reachability": [
+            "tsl.hpp",
+            "profile:avx2",
+            "header:base"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "dataparallel-policy",
+          "template_parameters": [
+            {
+              "name": "Policy",
+              "kind": "type",
+              "type": null,
+              "default": null,
+              "constraint": null
+            },
+            {
+              "name": "T",
+              "kind": "type",
+              "type": null,
+              "default": null,
+              "constraint": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "mask_a",
+              "type": "typename ::tsl::dataparallel::simd_for_t<Policy, T>::mask_type",
+              "role": "signature:m",
+              "declaration": null
+            },
+            {
+              "name": "mask_b",
+              "type": "typename ::tsl::dataparallel::simd_for_t<Policy, T>::mask_type",
+              "role": "signature:m",
+              "declaration": null
+            }
+          ],
+          "result_type": "typename ::tsl::dataparallel::simd_for_t<Policy, T>::mask_type",
+          "specifiers": [
+            "inline"
+          ],
+          "attributes": [],
+          "noexcept": false,
+          "trailing_return": false,
+          "alias_target": null,
+          "type_form": null,
+          "underlying_type": null,
+          "enumerators": [],
+          "qualifiers": [],
+          "type_spelling": null,
+          "value": null,
+          "reexport_of": null,
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
+          "identity": "tsl::mask_deinterleave_odd#dataparallel-policy",
+          "name": "mask_deinterleave_odd",
+          "owner": "tsl",
+          "reachability": [
+            "tsl.hpp",
+            "profile:scalar",
+            "header:base"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "dataparallel-policy",
+          "template_parameters": [
+            {
+              "name": "Policy",
+              "kind": "type",
+              "type": null,
+              "default": null,
+              "constraint": null
+            },
+            {
+              "name": "T",
+              "kind": "type",
+              "type": null,
+              "default": null,
+              "constraint": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "mask_a",
+              "type": "typename ::tsl::dataparallel::simd_for_t<Policy, T>::mask_type",
+              "role": "signature:m",
+              "declaration": null
+            },
+            {
+              "name": "mask_b",
+              "type": "typename ::tsl::dataparallel::simd_for_t<Policy, T>::mask_type",
+              "role": "signature:m",
+              "declaration": null
+            }
+          ],
+          "result_type": "typename ::tsl::dataparallel::simd_for_t<Policy, T>::mask_type",
+          "specifiers": [
+            "inline"
+          ],
+          "attributes": [],
+          "noexcept": false,
+          "trailing_return": false,
+          "alias_target": null,
+          "type_form": null,
+          "underlying_type": null,
+          "enumerators": [],
+          "qualifiers": [],
+          "type_spelling": null,
+          "value": null,
+          "reexport_of": null,
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
+          "identity": "tsl::mask_deinterleave_odd#vector",
+          "name": "mask_deinterleave_odd",
+          "owner": "tsl",
+          "reachability": [
+            "tsl.hpp",
+            "profile:avx2",
+            "header:base"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "vector:m=(m,m)",
+          "template_parameters": [
+            {
+              "name": "Vec",
+              "kind": "type",
+              "type": null,
+              "default": null,
+              "constraint": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "mask_a",
+              "type": "typename Vec::mask_type",
+              "role": "signature:m",
+              "declaration": null
+            },
+            {
+              "name": "mask_b",
+              "type": "typename Vec::mask_type",
+              "role": "signature:m",
+              "declaration": null
+            }
+          ],
+          "result_type": "typename Vec::mask_type",
+          "specifiers": [
+            "inline"
+          ],
+          "attributes": [],
+          "noexcept": false,
+          "trailing_return": false,
+          "alias_target": null,
+          "type_form": null,
+          "underlying_type": null,
+          "enumerators": [],
+          "qualifiers": [],
+          "type_spelling": null,
+          "value": null,
+          "reexport_of": null,
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
+          "identity": "tsl::mask_deinterleave_odd#vector",
+          "name": "mask_deinterleave_odd",
+          "owner": "tsl",
+          "reachability": [
+            "tsl.hpp",
+            "profile:scalar",
+            "header:base"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "vector:m=(m,m)",
+          "template_parameters": [
+            {
+              "name": "Vec",
+              "kind": "type",
+              "type": null,
+              "default": null,
+              "constraint": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "mask_a",
+              "type": "typename Vec::mask_type",
+              "role": "signature:m",
+              "declaration": null
+            },
+            {
+              "name": "mask_b",
+              "type": "typename Vec::mask_type",
+              "role": "signature:m",
+              "declaration": null
+            }
+          ],
+          "result_type": "typename Vec::mask_type",
+          "specifiers": [
+            "inline"
+          ],
+          "attributes": [],
+          "noexcept": false,
+          "trailing_return": false,
+          "alias_target": null,
+          "type_form": null,
+          "underlying_type": null,
+          "enumerators": [],
+          "qualifiers": [],
+          "type_spelling": null,
+          "value": null,
+          "reexport_of": null,
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
           "identity": "tsl::mask_false#dataparallel-policy",
           "name": "mask_false",
           "owner": "tsl",
@@ -49729,6 +50272,236 @@
             }
           ],
           "parameters": [],
+          "result_type": "typename Vec::mask_type",
+          "specifiers": [
+            "inline"
+          ],
+          "attributes": [],
+          "noexcept": false,
+          "trailing_return": false,
+          "alias_target": null,
+          "type_form": null,
+          "underlying_type": null,
+          "enumerators": [],
+          "qualifiers": [],
+          "type_spelling": null,
+          "value": null,
+          "reexport_of": null,
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
+          "identity": "tsl::mask_interleave_lo#dataparallel-policy",
+          "name": "mask_interleave_lo",
+          "owner": "tsl",
+          "reachability": [
+            "tsl.hpp",
+            "profile:avx2",
+            "header:base"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "dataparallel-policy",
+          "template_parameters": [
+            {
+              "name": "Policy",
+              "kind": "type",
+              "type": null,
+              "default": null,
+              "constraint": null
+            },
+            {
+              "name": "T",
+              "kind": "type",
+              "type": null,
+              "default": null,
+              "constraint": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "mask_a",
+              "type": "typename ::tsl::dataparallel::simd_for_t<Policy, T>::mask_type",
+              "role": "signature:m",
+              "declaration": null
+            },
+            {
+              "name": "mask_b",
+              "type": "typename ::tsl::dataparallel::simd_for_t<Policy, T>::mask_type",
+              "role": "signature:m",
+              "declaration": null
+            }
+          ],
+          "result_type": "typename ::tsl::dataparallel::simd_for_t<Policy, T>::mask_type",
+          "specifiers": [
+            "inline"
+          ],
+          "attributes": [],
+          "noexcept": false,
+          "trailing_return": false,
+          "alias_target": null,
+          "type_form": null,
+          "underlying_type": null,
+          "enumerators": [],
+          "qualifiers": [],
+          "type_spelling": null,
+          "value": null,
+          "reexport_of": null,
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
+          "identity": "tsl::mask_interleave_lo#dataparallel-policy",
+          "name": "mask_interleave_lo",
+          "owner": "tsl",
+          "reachability": [
+            "tsl.hpp",
+            "profile:scalar",
+            "header:base"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "dataparallel-policy",
+          "template_parameters": [
+            {
+              "name": "Policy",
+              "kind": "type",
+              "type": null,
+              "default": null,
+              "constraint": null
+            },
+            {
+              "name": "T",
+              "kind": "type",
+              "type": null,
+              "default": null,
+              "constraint": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "mask_a",
+              "type": "typename ::tsl::dataparallel::simd_for_t<Policy, T>::mask_type",
+              "role": "signature:m",
+              "declaration": null
+            },
+            {
+              "name": "mask_b",
+              "type": "typename ::tsl::dataparallel::simd_for_t<Policy, T>::mask_type",
+              "role": "signature:m",
+              "declaration": null
+            }
+          ],
+          "result_type": "typename ::tsl::dataparallel::simd_for_t<Policy, T>::mask_type",
+          "specifiers": [
+            "inline"
+          ],
+          "attributes": [],
+          "noexcept": false,
+          "trailing_return": false,
+          "alias_target": null,
+          "type_form": null,
+          "underlying_type": null,
+          "enumerators": [],
+          "qualifiers": [],
+          "type_spelling": null,
+          "value": null,
+          "reexport_of": null,
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
+          "identity": "tsl::mask_interleave_lo#vector",
+          "name": "mask_interleave_lo",
+          "owner": "tsl",
+          "reachability": [
+            "tsl.hpp",
+            "profile:avx2",
+            "header:base"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "vector:m=(m,m)",
+          "template_parameters": [
+            {
+              "name": "Vec",
+              "kind": "type",
+              "type": null,
+              "default": null,
+              "constraint": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "mask_a",
+              "type": "typename Vec::mask_type",
+              "role": "signature:m",
+              "declaration": null
+            },
+            {
+              "name": "mask_b",
+              "type": "typename Vec::mask_type",
+              "role": "signature:m",
+              "declaration": null
+            }
+          ],
+          "result_type": "typename Vec::mask_type",
+          "specifiers": [
+            "inline"
+          ],
+          "attributes": [],
+          "noexcept": false,
+          "trailing_return": false,
+          "alias_target": null,
+          "type_form": null,
+          "underlying_type": null,
+          "enumerators": [],
+          "qualifiers": [],
+          "type_spelling": null,
+          "value": null,
+          "reexport_of": null,
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
+          "identity": "tsl::mask_interleave_lo#vector",
+          "name": "mask_interleave_lo",
+          "owner": "tsl",
+          "reachability": [
+            "tsl.hpp",
+            "profile:scalar",
+            "header:base"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "vector:m=(m,m)",
+          "template_parameters": [
+            {
+              "name": "Vec",
+              "kind": "type",
+              "type": null,
+              "default": null,
+              "constraint": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "mask_a",
+              "type": "typename Vec::mask_type",
+              "role": "signature:m",
+              "declaration": null
+            },
+            {
+              "name": "mask_b",
+              "type": "typename Vec::mask_type",
+              "role": "signature:m",
+              "declaration": null
+            }
+          ],
           "result_type": "typename Vec::mask_type",
           "specifiers": [
             "inline"
@@ -55573,6 +56346,212 @@
             }
           ],
           "result_type": "typename ToVec::register_type",
+          "specifiers": [
+            "inline"
+          ],
+          "attributes": [],
+          "noexcept": false,
+          "trailing_return": false,
+          "alias_target": null,
+          "type_form": null,
+          "underlying_type": null,
+          "enumerators": [],
+          "qualifiers": [],
+          "type_spelling": null,
+          "value": null,
+          "reexport_of": null,
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
+          "identity": "tsl::reverse#dataparallel-policy",
+          "name": "reverse",
+          "owner": "tsl",
+          "reachability": [
+            "tsl.hpp",
+            "profile:avx2",
+            "header:base"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "dataparallel-policy",
+          "template_parameters": [
+            {
+              "name": "Policy",
+              "kind": "type",
+              "type": null,
+              "default": null,
+              "constraint": null
+            },
+            {
+              "name": "T",
+              "kind": "type",
+              "type": null,
+              "default": null,
+              "constraint": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "data",
+              "type": "typename ::tsl::reg_param<::tsl::dataparallel::simd_for_t<Policy, T>>::type",
+              "role": "signature:v",
+              "declaration": null
+            }
+          ],
+          "result_type": "typename ::tsl::dataparallel::simd_for_t<Policy, T>::register_type",
+          "specifiers": [
+            "inline"
+          ],
+          "attributes": [],
+          "noexcept": false,
+          "trailing_return": false,
+          "alias_target": null,
+          "type_form": null,
+          "underlying_type": null,
+          "enumerators": [],
+          "qualifiers": [],
+          "type_spelling": null,
+          "value": null,
+          "reexport_of": null,
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
+          "identity": "tsl::reverse#dataparallel-policy",
+          "name": "reverse",
+          "owner": "tsl",
+          "reachability": [
+            "tsl.hpp",
+            "profile:scalar",
+            "header:base"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "dataparallel-policy",
+          "template_parameters": [
+            {
+              "name": "Policy",
+              "kind": "type",
+              "type": null,
+              "default": null,
+              "constraint": null
+            },
+            {
+              "name": "T",
+              "kind": "type",
+              "type": null,
+              "default": null,
+              "constraint": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "data",
+              "type": "typename ::tsl::reg_param<::tsl::dataparallel::simd_for_t<Policy, T>>::type",
+              "role": "signature:v",
+              "declaration": null
+            }
+          ],
+          "result_type": "typename ::tsl::dataparallel::simd_for_t<Policy, T>::register_type",
+          "specifiers": [
+            "inline"
+          ],
+          "attributes": [],
+          "noexcept": false,
+          "trailing_return": false,
+          "alias_target": null,
+          "type_form": null,
+          "underlying_type": null,
+          "enumerators": [],
+          "qualifiers": [],
+          "type_spelling": null,
+          "value": null,
+          "reexport_of": null,
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
+          "identity": "tsl::reverse#vector",
+          "name": "reverse",
+          "owner": "tsl",
+          "reachability": [
+            "tsl.hpp",
+            "profile:avx2",
+            "header:base"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "vector:v=(v)",
+          "template_parameters": [
+            {
+              "name": "Vec",
+              "kind": "type",
+              "type": null,
+              "default": null,
+              "constraint": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "data",
+              "type": "typename tsl::reg_param<Vec>::type",
+              "role": "signature:v",
+              "declaration": null
+            }
+          ],
+          "result_type": "typename Vec::register_type",
+          "specifiers": [
+            "inline"
+          ],
+          "attributes": [],
+          "noexcept": false,
+          "trailing_return": false,
+          "alias_target": null,
+          "type_form": null,
+          "underlying_type": null,
+          "enumerators": [],
+          "qualifiers": [],
+          "type_spelling": null,
+          "value": null,
+          "reexport_of": null,
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
+          "identity": "tsl::reverse#vector",
+          "name": "reverse",
+          "owner": "tsl",
+          "reachability": [
+            "tsl.hpp",
+            "profile:scalar",
+            "header:base"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "vector:v=(v)",
+          "template_parameters": [
+            {
+              "name": "Vec",
+              "kind": "type",
+              "type": null,
+              "default": null,
+              "constraint": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "data",
+              "type": "typename tsl::reg_param<Vec>::type",
+              "role": "signature:v",
+              "declaration": null
+            }
+          ],
+          "result_type": "typename Vec::register_type",
           "specifiers": [
             "inline"
           ],
@@ -279571,6 +280550,39 @@
           "classification_scope": "exact"
         },
         {
+          "identity": "crate::interleave_lo#v:=(v,v)",
+          "name": "interleave_lo",
+          "owner": "crate",
+          "reachability": [
+            "crate"
+          ],
+          "stability": "stable",
+          "kind": "reexport",
+          "overload": "v:=(v,v):ordinary",
+          "visibility": "pub",
+          "generic_parameters": [],
+          "parameters": [],
+          "where_predicates": [],
+          "where_inline": false,
+          "result_type": null,
+          "result_form": "implicit-unit",
+          "attributes": [],
+          "unsafe": false,
+          "const": false,
+          "type_spelling": null,
+          "value": null,
+          "type_form": null,
+          "alias_target": null,
+          "supertraits": [],
+          "associated_items": [],
+          "enumerators": [],
+          "reexport_target": "tsl_facade::interleave_lo",
+          "reexport_of": "crate::tsl_facade::interleave_lo#v:=(v,v)",
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
           "identity": "crate::load_mask_repr#m:=(cptr)",
           "name": "load_mask_repr",
           "owner": "crate",
@@ -279901,6 +280913,39 @@
           "classification_scope": "exact"
         },
         {
+          "identity": "crate::mask_deinterleave_odd#m:=(m,m)",
+          "name": "mask_deinterleave_odd",
+          "owner": "crate",
+          "reachability": [
+            "crate"
+          ],
+          "stability": "stable",
+          "kind": "reexport",
+          "overload": "m:=(m,m):ordinary",
+          "visibility": "pub",
+          "generic_parameters": [],
+          "parameters": [],
+          "where_predicates": [],
+          "where_inline": false,
+          "result_type": null,
+          "result_form": "implicit-unit",
+          "attributes": [],
+          "unsafe": false,
+          "const": false,
+          "type_spelling": null,
+          "value": null,
+          "type_form": null,
+          "alias_target": null,
+          "supertraits": [],
+          "associated_items": [],
+          "enumerators": [],
+          "reexport_target": "tsl_facade::mask_deinterleave_odd",
+          "reexport_of": "crate::tsl_facade::mask_deinterleave_odd#m:=(m,m)",
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
           "identity": "crate::mask_false#m:=()",
           "name": "mask_false",
           "owner": "crate",
@@ -279929,6 +280974,39 @@
           "enumerators": [],
           "reexport_target": "tsl_facade::mask_false",
           "reexport_of": "crate::tsl_facade::mask_false#m:=()",
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
+          "identity": "crate::mask_interleave_lo#m:=(m,m)",
+          "name": "mask_interleave_lo",
+          "owner": "crate",
+          "reachability": [
+            "crate"
+          ],
+          "stability": "stable",
+          "kind": "reexport",
+          "overload": "m:=(m,m):ordinary",
+          "visibility": "pub",
+          "generic_parameters": [],
+          "parameters": [],
+          "where_predicates": [],
+          "where_inline": false,
+          "result_type": null,
+          "result_form": "implicit-unit",
+          "attributes": [],
+          "unsafe": false,
+          "const": false,
+          "type_spelling": null,
+          "value": null,
+          "type_form": null,
+          "alias_target": null,
+          "supertraits": [],
+          "associated_items": [],
+          "enumerators": [],
+          "reexport_target": "tsl_facade::mask_interleave_lo",
+          "reexport_of": "crate::tsl_facade::mask_interleave_lo#m:=(m,m)",
           "checked_of": null,
           "error_form": null,
           "classification_scope": "exact"
@@ -323623,6 +324701,127 @@
           "classification_scope": "exact"
         },
         {
+          "identity": "crate::profile::interleave_lo#vector",
+          "name": "interleave_lo",
+          "owner": "crate::profile",
+          "reachability": [
+            "crate",
+            "profile",
+            "selection:avx2",
+            "target-arch:x86_64",
+            "target-features:avx,avx2,rdrand,sse,sse2,sse4.1,sse4.2,ssse3"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "vector:v=(v,v)",
+          "visibility": "pub",
+          "generic_parameters": [
+            {
+              "name": "S",
+              "kind": "type",
+              "declaration": "S: detail::primitives::Interleave_loImpl",
+              "bounds": [
+                "detail::primitives::Interleave_loImpl"
+              ],
+              "type": null,
+              "default": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "left",
+              "type": "S::RegisterType",
+              "role": "signature:v",
+              "receiver": false
+            },
+            {
+              "name": "right",
+              "type": "S::RegisterType",
+              "role": "signature:v",
+              "receiver": false
+            }
+          ],
+          "where_predicates": [],
+          "where_inline": true,
+          "result_type": "S::RegisterType",
+          "result_form": "direct",
+          "attributes": [],
+          "unsafe": false,
+          "const": false,
+          "type_spelling": null,
+          "value": null,
+          "type_form": null,
+          "alias_target": null,
+          "supertraits": [],
+          "associated_items": [],
+          "enumerators": [],
+          "reexport_target": null,
+          "reexport_of": null,
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
+          "identity": "crate::profile::interleave_lo#vector",
+          "name": "interleave_lo",
+          "owner": "crate::profile",
+          "reachability": [
+            "crate",
+            "profile",
+            "selection:fallback",
+            "excludes:x86_64:avx,avx2,rdrand,sse,sse2,sse4.1,sse4.2,ssse3"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "vector:v=(v,v)",
+          "visibility": "pub",
+          "generic_parameters": [
+            {
+              "name": "S",
+              "kind": "type",
+              "declaration": "S: detail::primitives::Interleave_loImpl",
+              "bounds": [
+                "detail::primitives::Interleave_loImpl"
+              ],
+              "type": null,
+              "default": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "left",
+              "type": "S::RegisterType",
+              "role": "signature:v",
+              "receiver": false
+            },
+            {
+              "name": "right",
+              "type": "S::RegisterType",
+              "role": "signature:v",
+              "receiver": false
+            }
+          ],
+          "where_predicates": [],
+          "where_inline": true,
+          "result_type": "S::RegisterType",
+          "result_form": "direct",
+          "attributes": [],
+          "unsafe": false,
+          "const": false,
+          "type_spelling": null,
+          "value": null,
+          "type_form": null,
+          "alias_target": null,
+          "supertraits": [],
+          "associated_items": [],
+          "enumerators": [],
+          "reexport_target": null,
+          "reexport_of": null,
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
           "identity": "crate::profile::inv#vector",
           "name": "inv",
           "owner": "crate::profile",
@@ -326772,6 +327971,127 @@
           "classification_scope": "exact"
         },
         {
+          "identity": "crate::profile::mask_deinterleave_odd#vector",
+          "name": "mask_deinterleave_odd",
+          "owner": "crate::profile",
+          "reachability": [
+            "crate",
+            "profile",
+            "selection:avx2",
+            "target-arch:x86_64",
+            "target-features:avx,avx2,rdrand,sse,sse2,sse4.1,sse4.2,ssse3"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "vector:m=(m,m)",
+          "visibility": "pub",
+          "generic_parameters": [
+            {
+              "name": "S",
+              "kind": "type",
+              "declaration": "S: detail::primitives::Mask_deinterleave_oddImpl",
+              "bounds": [
+                "detail::primitives::Mask_deinterleave_oddImpl"
+              ],
+              "type": null,
+              "default": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "mask_a",
+              "type": "S::MaskType",
+              "role": "signature:m",
+              "receiver": false
+            },
+            {
+              "name": "mask_b",
+              "type": "S::MaskType",
+              "role": "signature:m",
+              "receiver": false
+            }
+          ],
+          "where_predicates": [],
+          "where_inline": true,
+          "result_type": "S::MaskType",
+          "result_form": "direct",
+          "attributes": [],
+          "unsafe": false,
+          "const": false,
+          "type_spelling": null,
+          "value": null,
+          "type_form": null,
+          "alias_target": null,
+          "supertraits": [],
+          "associated_items": [],
+          "enumerators": [],
+          "reexport_target": null,
+          "reexport_of": null,
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
+          "identity": "crate::profile::mask_deinterleave_odd#vector",
+          "name": "mask_deinterleave_odd",
+          "owner": "crate::profile",
+          "reachability": [
+            "crate",
+            "profile",
+            "selection:fallback",
+            "excludes:x86_64:avx,avx2,rdrand,sse,sse2,sse4.1,sse4.2,ssse3"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "vector:m=(m,m)",
+          "visibility": "pub",
+          "generic_parameters": [
+            {
+              "name": "S",
+              "kind": "type",
+              "declaration": "S: detail::primitives::Mask_deinterleave_oddImpl",
+              "bounds": [
+                "detail::primitives::Mask_deinterleave_oddImpl"
+              ],
+              "type": null,
+              "default": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "mask_a",
+              "type": "S::MaskType",
+              "role": "signature:m",
+              "receiver": false
+            },
+            {
+              "name": "mask_b",
+              "type": "S::MaskType",
+              "role": "signature:m",
+              "receiver": false
+            }
+          ],
+          "where_predicates": [],
+          "where_inline": true,
+          "result_type": "S::MaskType",
+          "result_form": "direct",
+          "attributes": [],
+          "unsafe": false,
+          "const": false,
+          "type_spelling": null,
+          "value": null,
+          "type_form": null,
+          "alias_target": null,
+          "supertraits": [],
+          "associated_items": [],
+          "enumerators": [],
+          "reexport_target": null,
+          "reexport_of": null,
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
           "identity": "crate::profile::mask_false#vector",
           "name": "mask_false",
           "owner": "crate::profile",
@@ -326846,6 +328166,127 @@
             }
           ],
           "parameters": [],
+          "where_predicates": [],
+          "where_inline": true,
+          "result_type": "S::MaskType",
+          "result_form": "direct",
+          "attributes": [],
+          "unsafe": false,
+          "const": false,
+          "type_spelling": null,
+          "value": null,
+          "type_form": null,
+          "alias_target": null,
+          "supertraits": [],
+          "associated_items": [],
+          "enumerators": [],
+          "reexport_target": null,
+          "reexport_of": null,
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
+          "identity": "crate::profile::mask_interleave_lo#vector",
+          "name": "mask_interleave_lo",
+          "owner": "crate::profile",
+          "reachability": [
+            "crate",
+            "profile",
+            "selection:avx2",
+            "target-arch:x86_64",
+            "target-features:avx,avx2,rdrand,sse,sse2,sse4.1,sse4.2,ssse3"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "vector:m=(m,m)",
+          "visibility": "pub",
+          "generic_parameters": [
+            {
+              "name": "S",
+              "kind": "type",
+              "declaration": "S: detail::primitives::Mask_interleave_loImpl",
+              "bounds": [
+                "detail::primitives::Mask_interleave_loImpl"
+              ],
+              "type": null,
+              "default": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "mask_a",
+              "type": "S::MaskType",
+              "role": "signature:m",
+              "receiver": false
+            },
+            {
+              "name": "mask_b",
+              "type": "S::MaskType",
+              "role": "signature:m",
+              "receiver": false
+            }
+          ],
+          "where_predicates": [],
+          "where_inline": true,
+          "result_type": "S::MaskType",
+          "result_form": "direct",
+          "attributes": [],
+          "unsafe": false,
+          "const": false,
+          "type_spelling": null,
+          "value": null,
+          "type_form": null,
+          "alias_target": null,
+          "supertraits": [],
+          "associated_items": [],
+          "enumerators": [],
+          "reexport_target": null,
+          "reexport_of": null,
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
+          "identity": "crate::profile::mask_interleave_lo#vector",
+          "name": "mask_interleave_lo",
+          "owner": "crate::profile",
+          "reachability": [
+            "crate",
+            "profile",
+            "selection:fallback",
+            "excludes:x86_64:avx,avx2,rdrand,sse,sse2,sse4.1,sse4.2,ssse3"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "vector:m=(m,m)",
+          "visibility": "pub",
+          "generic_parameters": [
+            {
+              "name": "S",
+              "kind": "type",
+              "declaration": "S: detail::primitives::Mask_interleave_loImpl",
+              "bounds": [
+                "detail::primitives::Mask_interleave_loImpl"
+              ],
+              "type": null,
+              "default": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "mask_a",
+              "type": "S::MaskType",
+              "role": "signature:m",
+              "receiver": false
+            },
+            {
+              "name": "mask_b",
+              "type": "S::MaskType",
+              "role": "signature:m",
+              "receiver": false
+            }
+          ],
           "where_predicates": [],
           "where_inline": true,
           "result_type": "S::MaskType",
@@ -331455,6 +332896,115 @@
           "classification_scope": "exact"
         },
         {
+          "identity": "crate::profile::reverse#vector",
+          "name": "reverse",
+          "owner": "crate::profile",
+          "reachability": [
+            "crate",
+            "profile",
+            "selection:avx2",
+            "target-arch:x86_64",
+            "target-features:avx,avx2,rdrand,sse,sse2,sse4.1,sse4.2,ssse3"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "vector:v=(v)",
+          "visibility": "pub",
+          "generic_parameters": [
+            {
+              "name": "S",
+              "kind": "type",
+              "declaration": "S: detail::primitives::ReverseImpl",
+              "bounds": [
+                "detail::primitives::ReverseImpl"
+              ],
+              "type": null,
+              "default": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "data",
+              "type": "S::RegisterType",
+              "role": "signature:v",
+              "receiver": false
+            }
+          ],
+          "where_predicates": [],
+          "where_inline": true,
+          "result_type": "S::RegisterType",
+          "result_form": "direct",
+          "attributes": [],
+          "unsafe": false,
+          "const": false,
+          "type_spelling": null,
+          "value": null,
+          "type_form": null,
+          "alias_target": null,
+          "supertraits": [],
+          "associated_items": [],
+          "enumerators": [],
+          "reexport_target": null,
+          "reexport_of": null,
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
+          "identity": "crate::profile::reverse#vector",
+          "name": "reverse",
+          "owner": "crate::profile",
+          "reachability": [
+            "crate",
+            "profile",
+            "selection:fallback",
+            "excludes:x86_64:avx,avx2,rdrand,sse,sse2,sse4.1,sse4.2,ssse3"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "vector:v=(v)",
+          "visibility": "pub",
+          "generic_parameters": [
+            {
+              "name": "S",
+              "kind": "type",
+              "declaration": "S: detail::primitives::ReverseImpl",
+              "bounds": [
+                "detail::primitives::ReverseImpl"
+              ],
+              "type": null,
+              "default": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "data",
+              "type": "S::RegisterType",
+              "role": "signature:v",
+              "receiver": false
+            }
+          ],
+          "where_predicates": [],
+          "where_inline": true,
+          "result_type": "S::RegisterType",
+          "result_form": "direct",
+          "attributes": [],
+          "unsafe": false,
+          "const": false,
+          "type_spelling": null,
+          "value": null,
+          "type_form": null,
+          "alias_target": null,
+          "supertraits": [],
+          "associated_items": [],
+          "enumerators": [],
+          "reexport_target": null,
+          "reexport_of": null,
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
           "identity": "crate::profile::scatter#vector",
           "name": "scatter",
           "owner": "crate::profile",
@@ -336622,6 +338172,39 @@
           "enumerators": [],
           "reexport_target": null,
           "reexport_of": null,
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
+          "identity": "crate::reverse#v:=(v)",
+          "name": "reverse",
+          "owner": "crate",
+          "reachability": [
+            "crate"
+          ],
+          "stability": "stable",
+          "kind": "reexport",
+          "overload": "v:=(v):ordinary",
+          "visibility": "pub",
+          "generic_parameters": [],
+          "parameters": [],
+          "where_predicates": [],
+          "where_inline": false,
+          "result_type": null,
+          "result_form": "implicit-unit",
+          "attributes": [],
+          "unsafe": false,
+          "const": false,
+          "type_spelling": null,
+          "value": null,
+          "type_form": null,
+          "alias_target": null,
+          "supertraits": [],
+          "associated_items": [],
+          "enumerators": [],
+          "reexport_target": "tsl_facade::reverse",
+          "reexport_of": "crate::tsl_facade::reverse#v:=(v)",
           "checked_of": null,
           "error_form": null,
           "classification_scope": "exact"
@@ -339064,6 +340647,76 @@
           "classification_scope": "exact"
         },
         {
+          "identity": "crate::tsl_facade::interleave_lo#v:=(v,v)",
+          "name": "interleave_lo",
+          "owner": "crate::tsl_facade",
+          "reachability": [
+            "crate",
+            "opaque-facade"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "v:=(v,v):ordinary",
+          "visibility": "pub",
+          "generic_parameters": [
+            {
+              "name": "T",
+              "kind": "type",
+              "declaration": "T",
+              "bounds": [],
+              "type": null,
+              "default": null
+            },
+            {
+              "name": "N",
+              "kind": "const",
+              "declaration": "const N: usize",
+              "bounds": [],
+              "type": "usize",
+              "default": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "left",
+              "type": "Simd<T, N>",
+              "role": "signature:v",
+              "receiver": false
+            },
+            {
+              "name": "right",
+              "type": "Simd<T, N>",
+              "role": "signature:v",
+              "receiver": false
+            }
+          ],
+          "where_predicates": [
+            "T: SupportedSimd<N> + private::FacadePrimitiveFreeInterleaveLo<N>"
+          ],
+          "where_inline": false,
+          "result_type": "Simd<T, N>",
+          "result_form": "direct",
+          "attributes": [
+            "#[inline]",
+            "#[must_use]",
+            "#[allow(private_bounds)]"
+          ],
+          "unsafe": false,
+          "const": false,
+          "type_spelling": null,
+          "value": null,
+          "type_form": null,
+          "alias_target": null,
+          "supertraits": [],
+          "associated_items": [],
+          "enumerators": [],
+          "reexport_target": null,
+          "reexport_of": null,
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
           "identity": "crate::tsl_facade::load_mask_repr#m:=(cptr)",
           "name": "load_mask_repr",
           "owner": "crate::tsl_facade",
@@ -339801,6 +341454,76 @@
           "classification_scope": "exact"
         },
         {
+          "identity": "crate::tsl_facade::mask_deinterleave_odd#m:=(m,m)",
+          "name": "mask_deinterleave_odd",
+          "owner": "crate::tsl_facade",
+          "reachability": [
+            "crate",
+            "opaque-facade"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "m:=(m,m):ordinary",
+          "visibility": "pub",
+          "generic_parameters": [
+            {
+              "name": "T",
+              "kind": "type",
+              "declaration": "T",
+              "bounds": [],
+              "type": null,
+              "default": null
+            },
+            {
+              "name": "N",
+              "kind": "const",
+              "declaration": "const N: usize",
+              "bounds": [],
+              "type": "usize",
+              "default": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "mask_a",
+              "type": "Mask<T, N>",
+              "role": "signature:m",
+              "receiver": false
+            },
+            {
+              "name": "mask_b",
+              "type": "Mask<T, N>",
+              "role": "signature:m",
+              "receiver": false
+            }
+          ],
+          "where_predicates": [
+            "T: SupportedSimd<N> + private::FacadePrimitiveFreeMaskDeinterleaveOdd<N>"
+          ],
+          "where_inline": false,
+          "result_type": "Mask<T, N>",
+          "result_form": "direct",
+          "attributes": [
+            "#[inline]",
+            "#[must_use]",
+            "#[allow(private_bounds)]"
+          ],
+          "unsafe": false,
+          "const": false,
+          "type_spelling": null,
+          "value": null,
+          "type_form": null,
+          "alias_target": null,
+          "supertraits": [],
+          "associated_items": [],
+          "enumerators": [],
+          "reexport_target": null,
+          "reexport_of": null,
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
           "identity": "crate::tsl_facade::mask_false#m:=()",
           "name": "mask_false",
           "owner": "crate::tsl_facade",
@@ -339833,6 +341556,76 @@
           "parameters": [],
           "where_predicates": [
             "T: SupportedSimd<N> + private::FacadePrimitiveFreeMaskFalse<N>"
+          ],
+          "where_inline": false,
+          "result_type": "Mask<T, N>",
+          "result_form": "direct",
+          "attributes": [
+            "#[inline]",
+            "#[must_use]",
+            "#[allow(private_bounds)]"
+          ],
+          "unsafe": false,
+          "const": false,
+          "type_spelling": null,
+          "value": null,
+          "type_form": null,
+          "alias_target": null,
+          "supertraits": [],
+          "associated_items": [],
+          "enumerators": [],
+          "reexport_target": null,
+          "reexport_of": null,
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
+          "identity": "crate::tsl_facade::mask_interleave_lo#m:=(m,m)",
+          "name": "mask_interleave_lo",
+          "owner": "crate::tsl_facade",
+          "reachability": [
+            "crate",
+            "opaque-facade"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "m:=(m,m):ordinary",
+          "visibility": "pub",
+          "generic_parameters": [
+            {
+              "name": "T",
+              "kind": "type",
+              "declaration": "T",
+              "bounds": [],
+              "type": null,
+              "default": null
+            },
+            {
+              "name": "N",
+              "kind": "const",
+              "declaration": "const N: usize",
+              "bounds": [],
+              "type": "usize",
+              "default": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "mask_a",
+              "type": "Mask<T, N>",
+              "role": "signature:m",
+              "receiver": false
+            },
+            {
+              "name": "mask_b",
+              "type": "Mask<T, N>",
+              "role": "signature:m",
+              "receiver": false
+            }
+          ],
+          "where_predicates": [
+            "T: SupportedSimd<N> + private::FacadePrimitiveFreeMaskInterleaveLo<N>"
           ],
           "where_inline": false,
           "result_type": "Mask<T, N>",
@@ -340830,6 +342623,70 @@
           "checked_of": null,
           "error_form": null,
           "classification_scope": "descendants"
+        },
+        {
+          "identity": "crate::tsl_facade::reverse#v:=(v)",
+          "name": "reverse",
+          "owner": "crate::tsl_facade",
+          "reachability": [
+            "crate",
+            "opaque-facade"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "v:=(v):ordinary",
+          "visibility": "pub",
+          "generic_parameters": [
+            {
+              "name": "T",
+              "kind": "type",
+              "declaration": "T",
+              "bounds": [],
+              "type": null,
+              "default": null
+            },
+            {
+              "name": "N",
+              "kind": "const",
+              "declaration": "const N: usize",
+              "bounds": [],
+              "type": "usize",
+              "default": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "data",
+              "type": "Simd<T, N>",
+              "role": "signature:v",
+              "receiver": false
+            }
+          ],
+          "where_predicates": [
+            "T: SupportedSimd<N> + private::FacadePrimitiveFreeReverse<N>"
+          ],
+          "where_inline": false,
+          "result_type": "Simd<T, N>",
+          "result_form": "direct",
+          "attributes": [
+            "#[inline]",
+            "#[must_use]",
+            "#[allow(private_bounds)]"
+          ],
+          "unsafe": false,
+          "const": false,
+          "type_spelling": null,
+          "value": null,
+          "type_form": null,
+          "alias_target": null,
+          "supertraits": [],
+          "associated_items": [],
+          "enumerators": [],
+          "reexport_target": null,
+          "reexport_of": null,
+          "checked_of": null,
+          "error_form": null,
+          "classification_scope": "exact"
         },
         {
           "identity": "crate::tsl_facade::sequence#v:=()",

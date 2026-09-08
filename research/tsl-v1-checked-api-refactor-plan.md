@@ -2,9 +2,9 @@
 
 Date: 2026-09-02
 
-Status: Slices 0 through 10 are implemented and have completed their focused
-review/fix loops; broader product-quality findings outside this refactor remain
-tracked separately before TSL v1.0.0
+Status: Slices 0 through 10 are implemented, integrated on `tsl-v1-release`,
+and have completed their focused review/fix loops. Broader product-quality
+findings outside this refactor remain tracked separately before TSL v1.0.0.
 
 Related evidence: [TSL v1.0.0 generated API and documentation audit](tsl-v1-generated-api-docs-audit.md)
 
@@ -1238,7 +1238,7 @@ Observed after implementation:
   Doxygen now consumes the facade and stable core/algorithm headers, and its
   strict validator checks public types, every algorithm family, primitive
   prose, callable identity uniqueness, and ordinary twins for checked names.
-- The typed v1 public baseline freezes 181 primitive families, 44 C++ algorithm
+- At Slice 8, the typed v1 public baseline froze 181 primitive families, 44 C++ algorithm
   families, 35 C++ checked-algorithm families, 174 Rust algorithm names,
   stable root/core identities, source signature semantics, checked-condition
   descriptors, checked error spellings, and algorithm contracts. The checked
@@ -1336,9 +1336,12 @@ Implementation and review evidence:
   `discharge[...]`; no raw target text is parsed to infer a proof.
 - Closure propagates unresolved obligations conservatively across alternatives
   and duplicate lowered identities, and checked-wrapper planning refuses any
-  specialization group containing such a gap. Invalid source claims also fail
-  lowering at their exact condition span.
-- The validated corpus contains 127 dispositions: 9 exact forwards and 118
+  specialization group containing such a gap. Compiler-created checked-guard
+  dependencies are discovered through the same typed model but are not ordinary
+  implementation-body edges: an unavailable guard dependency suppresses only
+  the optional checked companion. Invalid source claims also fail lowering at
+  their exact condition span.
+- The integrated corpus contains 132 dispositions: 11 exact forwards and 121
   explicit discharges, with zero unresolved obligations. The deterministic,
   schema-versioned inventory is available through
   `tslc audit call-preconditions --format json` and is ratcheted by an exact
@@ -1425,6 +1428,9 @@ Implementation and review evidence:
 - Each generated project ships a deterministic `public-api.json`. The v3
   reviewed baseline contains 797 C++ and 4,937 Rust records for scalar/AVX2;
   Rust correctly records the selected AVX2 surface plus its generic fallback.
+- Integration with the four newer mainline primitive families expands the same
+  exact baseline to 813 C++ and 4,953 Rust records without changing its schema
+  or declaration ownership.
 - The review/fix loop removed checked/result inference from target spelling and
   name suffixes, made declaration relations resolve one exact owner, separated
   Rust facade definitions from root reexports, modeled `crate::profile` as its
@@ -1607,6 +1613,11 @@ forwarding is compiler-validated from typed identities; transformed and local
 proofs remain visible author discharges. Dependency closure propagates any
 unresolved obligation and checked-wrapper admission fails closed. No proof is
 inferred from raw target text or from a local unsafe frame.
+
+Compiler-created checked guards remain optional API edges. Their dependencies
+are resolved and reported with the same typed call identities, but an
+unavailable guard helper removes only the `*_checked` companion; it cannot
+prune the ordinary specialization or propagate implementation-body facts.
 
 ### Masked operations reject irrelevant lanes
 

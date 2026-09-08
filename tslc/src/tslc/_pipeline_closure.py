@@ -15,6 +15,7 @@ from tslc.diagnostics import SourceSpan
 from tslc.lower.dependencies import (
     CallDependency,
     CallDependencyOrigin,
+    CallDependencyOriginKind,
     VectorIdentity,
     dependency_sort_key,
     is_concrete_call_dependency,
@@ -210,6 +211,7 @@ def _prune_unresolved(
     # release pruning indexes before constructing the propagation graph.
     del available, candidates, compiler_groups
     del dependency_items, dependents, slot_keys
+    _mark_unavailable_checked_dependencies(live_slots, split_names)
     _propagate_transitive_call_facts(live_slots, split_names)
 
     grouped: dict[str, dict[str, list[LoweredSpecialization]]] = {}
@@ -252,7 +254,7 @@ def _merge_compiler_alternative_slots(
         )
         canonical = ranked[-1]
         if len(ranked) > 1:
-            origins = tuple(
+            implementation_origins = tuple(
                 sorted(
                     {
                         origin
@@ -262,19 +264,44 @@ def _merge_compiler_alternative_slots(
                     key=origin_sort_key,
                 )
             )
+            all_origins = tuple(
+                sorted(
+                    {
+                        origin
+                        for candidate in ranked
+                        for origin in candidate.spec.call_dependency_origins
+                    },
+                    key=origin_sort_key,
+                )
+            )
+            unavailable_checked_origins = tuple(
+                sorted(
+                    {
+                        origin
+                        for candidate in ranked
+                        for origin in (
+                            candidate.spec.unavailable_checked_dependency_origins
+                        )
+                    },
+                    key=origin_sort_key,
+                )
+            )
             canonical.spec = replace(
                 canonical.spec,
                 compiler_alternatives=tuple(
                     candidate.spec for candidate in ranked[:-1]
                 ),
-                call_dependency_origins=origins,
+                call_dependency_origins=all_origins,
+                unavailable_checked_dependency_origins=(
+                    unavailable_checked_origins
+                ),
             )
             canonical.callees = frozenset(
                 dependency
                 for candidate in ranked
                 for dependency in candidate.callees
             )
-            canonical.callee_origins = origins
+            canonical.callee_origins = implementation_origins
         merged[key] = canonical
 
     emitted: list[_LoweredSlot] = []
@@ -291,6 +318,45 @@ def _merge_compiler_alternative_slots(
         seen.add(key)
         emitted.append(merged[key])
     return emitted
+
+
+def _mark_unavailable_checked_dependencies(
+    slots: list[_LoweredSlot],
+    split_names: frozenset[str],
+) -> None:
+    """Keep base callables while failing optional checked companions closed.
+
+    Checked guards call generated primitives too, but those calls are not part
+    of the ordinary implementation body. A missing guard dependency therefore
+    makes only the checked companion unavailable; pruning the unchecked
+    specialization would conflate two independently callable API surfaces.
+    """
+
+    available = {_slot_key(slot, split_names) for slot in slots}
+    for slot in slots:
+        unavailable = tuple(
+            sorted(
+                (
+                    origin
+                    for origin in slot.spec.checked_guard_dependency_origins
+                    if (
+                        dependency_key := _dependency_key(
+                            slot,
+                            origin.dependency,
+                            split_names,
+                        )
+                    )
+                    is not None
+                    and dependency_key not in available
+                ),
+                key=origin_sort_key,
+            )
+        )
+        if unavailable != slot.spec.unavailable_checked_dependency_origins:
+            slot.spec = replace(
+                slot.spec,
+                unavailable_checked_dependency_origins=unavailable,
+            )
 
 
 def _profile_with_required_features(

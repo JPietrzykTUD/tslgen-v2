@@ -683,9 +683,9 @@ prim<m:=(m,m)> mask_deinterleave_odd(mask_a, mask_b):
       arith:
         requires [sve]
         safety:
-          internal_unsafe false
+          internal_unsafe true
           caller_unsafe false
-          reasons []
+          reasons [raw_memory]
         implementation:
           tsil """
             let<type>(Base, base::in);
@@ -695,8 +695,8 @@ prim<m:=(m,m)> mask_deinterleave_odd(mask_a, mask_b):
             var<runtime_array>(Base, a_lanes, lanes);
             var<runtime_array>(Base, b_lanes, lanes);
             var<runtime_array>(Base, result, lanes);
-            call<primitive=store[Vec], attrs[aligned=false]>(a_lanes, a_vec);
-            call<primitive=store[Vec], attrs[aligned=false]>(b_lanes, b_vec);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(a_lanes, a_vec);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(b_lanes, b_vec);
             loop<backend>(i, 0, lanes, 1) {
               if ((2 * i) < lanes) {
                 result[i] = a_lanes[2 * i + 1];
@@ -705,6 +705,6 @@ prim<m:=(m,m)> mask_deinterleave_odd(mask_a, mask_b):
               }
             }
             complete(call<primitive=unequal_zero[Vec]>(
-              call<primitive=load[Vec], attrs[aligned=false]>(result)
+              call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result)
             ));
           """

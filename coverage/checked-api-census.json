@@ -1416,10 +1416,11 @@
       },
       "result_target": [],
       "reasons": [
+        "compiler_builtin",
         "intrinsic",
         "raw_pointer"
       ],
-      "implementation_count": 24,
+      "implementation_count": 32,
       "family": "contiguous_memory_contract",
       "checked_source_status": "declared",
       "preconditions": [
@@ -1438,10 +1439,12 @@
       },
       "result_target": [],
       "reasons": [
+        "compiler_builtin",
         "intrinsic",
-        "raw_pointer"
+        "raw_pointer",
+        "value_reinterpretation"
       ],
-      "implementation_count": 24,
+      "implementation_count": 33,
       "family": "contiguous_memory_contract",
       "checked_source_status": "declared",
       "preconditions": [
@@ -1460,10 +1463,12 @@
       },
       "result_target": [],
       "reasons": [
+        "compiler_builtin",
         "intrinsic",
-        "raw_pointer"
+        "raw_pointer",
+        "value_reinterpretation"
       ],
-      "implementation_count": 24,
+      "implementation_count": 33,
       "family": "contiguous_memory_contract",
       "checked_source_status": "declared",
       "preconditions": [
@@ -1643,10 +1648,11 @@
       },
       "result_target": [],
       "reasons": [
+        "compiler_builtin",
         "intrinsic",
         "raw_pointer"
       ],
-      "implementation_count": 24,
+      "implementation_count": 32,
       "family": "contiguous_memory_contract",
       "checked_source_status": "declared",
       "preconditions": [
@@ -1665,10 +1671,12 @@
       },
       "result_target": [],
       "reasons": [
+        "compiler_builtin",
         "intrinsic",
-        "raw_pointer"
+        "raw_pointer",
+        "value_reinterpretation"
       ],
-      "implementation_count": 24,
+      "implementation_count": 33,
       "family": "contiguous_memory_contract",
       "checked_source_status": "declared",
       "preconditions": [
@@ -1687,10 +1695,12 @@
       },
       "result_target": [],
       "reasons": [
+        "compiler_builtin",
         "intrinsic",
-        "raw_pointer"
+        "raw_pointer",
+        "value_reinterpretation"
       ],
-      "implementation_count": 24,
+      "implementation_count": 33,
       "family": "contiguous_memory_contract",
       "checked_source_status": "declared",
       "preconditions": [

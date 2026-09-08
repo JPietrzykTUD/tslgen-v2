@@ -685,13 +685,13 @@ prim<v:=(v,v)> interleave_lo(left, right):
               var<runtime_array>(Base, left_lanes, lanes);
               var<runtime_array>(Base, right_lanes, lanes);
               var<runtime_array>(Base, result, lanes);
-              call<primitive=store[Vec], attrs[aligned=false]>(left_lanes, left);
-              call<primitive=store[Vec], attrs[aligned=false]>(right_lanes, right);
+              call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(left_lanes, left);
+              call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(right_lanes, right);
               loop<backend>(i, 0, lanes, 1) {
                 if ((i % 2) == 0) { result[i] = left_lanes[i / 2]; }
                 else { result[i] = right_lanes[i / 2]; }
               }
-              complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
+              complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
             """
 
 prim<v:=(v)> reverse(data):
@@ -855,11 +855,11 @@ prim<v:=(v)> reverse(data):
               var<const_infer>(lanes, value(vector::runtime_length));
               var<runtime_array>(Base, source_lanes, lanes);
               var<runtime_array>(Base, result, lanes);
-              call<primitive=store[Vec], attrs[aligned=false]>(source_lanes, data);
+              call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(source_lanes, data);
               loop<backend>(i, 0, lanes, 1) {
                 result[i] = source_lanes[lanes - 1 - i];
               }
-              complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
+              complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
             """
 
 prim<v:=(v,sImm)> permute_lanes(data, control):

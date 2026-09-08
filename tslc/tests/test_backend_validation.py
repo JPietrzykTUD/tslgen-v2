@@ -40,6 +40,7 @@ from tslc.catalog.target_families import (
     ProfileFamilyCapability,
 )
 from tslc.diagnostics import SourceSpan
+from tslc.lower.dependencies import CallDependencyOrigin
 from tslc.lower.primitive_semantics import LoweredPrimitiveSemantics
 
 
@@ -58,6 +59,7 @@ class _Specialization:
     source: SourceSpan | None = None
     safety: ImplementationSafety = ImplementationSafety()
     primitive_semantics: LoweredPrimitiveSemantics = LoweredPrimitiveSemantics()
+    unavailable_checked_dependency_origins: tuple[CallDependencyOrigin, ...] = ()
     unresolved_call_preconditions: tuple[CallPreconditionObligation, ...] = ()
 
 

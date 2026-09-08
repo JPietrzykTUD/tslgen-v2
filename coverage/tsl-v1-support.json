@@ -1791,6 +1791,18 @@
         "source_contract_sha256": "4db11def46fe514ef01737152640c851739b16da03ff8c516b33f666571a8717"
       },
       {
+        "identity": "interleave_lo#v:=(v,v)",
+        "name": "interleave_lo",
+        "signature": "v:=(v,v)",
+        "attributes": {},
+        "result_target": [],
+        "overload": null,
+        "checked_companion": false,
+        "semantic_categories": [],
+        "fixed_shape_only": false,
+        "source_contract_sha256": "7766b78b96f9be26f40774537bdcc8ff8aa41b2662f2eea4b40c2e6659ae4b58"
+      },
+      {
         "identity": "inv#v:=v",
         "name": "inv",
         "signature": "v:=v",
@@ -2190,6 +2202,18 @@
         "source_contract_sha256": "66ad9b2685dd9bb2e2d7feb19c3f7d5d803cd0a8fa35d74b630c4771ddaf8dee"
       },
       {
+        "identity": "mask_deinterleave_odd#m:=(m,m)",
+        "name": "mask_deinterleave_odd",
+        "signature": "m:=(m,m)",
+        "attributes": {},
+        "result_target": [],
+        "overload": null,
+        "checked_companion": false,
+        "semantic_categories": [],
+        "fixed_shape_only": false,
+        "source_contract_sha256": "7a9d11c93a4dcbef90d54a8440b4584847f6c46becc820ce7ef23954bff62023"
+      },
+      {
         "identity": "mask_false[value=zero]#m:=()",
         "name": "mask_false",
         "signature": "m:=()",
@@ -2204,6 +2228,18 @@
         ],
         "fixed_shape_only": false,
         "source_contract_sha256": "77610daf0604d92b6b53566be7101979ed3fc43d240dd65ea97c610d89301945"
+      },
+      {
+        "identity": "mask_interleave_lo#m:=(m,m)",
+        "name": "mask_interleave_lo",
+        "signature": "m:=(m,m)",
+        "attributes": {},
+        "result_target": [],
+        "overload": null,
+        "checked_companion": false,
+        "semantic_categories": [],
+        "fixed_shape_only": false,
+        "source_contract_sha256": "61c95e1e688471acd6d25a46f529d9a3218b2e80c8cbf8b3b5443f5702d23c53"
       },
       {
         "identity": "mask_population_count#usize:=m",
@@ -2695,6 +2731,18 @@
         "semantic_categories": [],
         "fixed_shape_only": false,
         "source_contract_sha256": "db5af8fce3d6e0fc2843535fabc42930032aea8fa4501e8c1a700687a770b43d"
+      },
+      {
+        "identity": "reverse#v:=(v)",
+        "name": "reverse",
+        "signature": "v:=(v)",
+        "attributes": {},
+        "result_target": [],
+        "overload": null,
+        "checked_companion": false,
+        "semantic_categories": [],
+        "fixed_shape_only": false,
+        "source_contract_sha256": "848b7143d002eeacc86a0fb6201329db9eacaa2663640989d8e43287f5e0de9f"
       },
       {
         "identity": "scatter#void:=(ptr,vidx,v,sImm)",
@@ -3538,6 +3586,7 @@
       "insert_imask#im:=(imt,im,usize)->extension:ToExtension",
       "insert_value#v:=(v,s)",
       "insert_value_at#v:=(v,usize,s)",
+      "interleave_lo#v:=(v,v)",
       "inv#v:=v",
       "inv[mask=pass_through]#v:=(m,v)",
       "inv[mask=zero]#v:=(m,v)",
@@ -3564,7 +3613,9 @@
       "mask_binary_not#m:=m",
       "mask_binary_or#m:=(m,m)",
       "mask_binary_xor#m:=(m,m)",
+      "mask_deinterleave_odd#m:=(m,m)",
       "mask_false[value=zero]#m:=()",
+      "mask_interleave_lo#m:=(m,m)",
       "mask_population_count#usize:=m",
       "mask_true[value=all]#m:=()",
       "masked_set1[mask=zero]#v:=(m,v,s)",
@@ -3597,6 +3648,7 @@
       "resize_down#v:=v->extension:ToExtension",
       "resize_up_undef[value=undef]#v:=v->extension:ToExtension",
       "resize_up_zero[value=zero]#v:=v->extension:ToExtension",
+      "reverse#v:=(v)",
       "scatter#void:=(ptr,vidx,v,sImm)",
       "scatter[mask=zero]#void:=(m,ptr,vidx,v,sImm)",
       "select[mask=pass_through]#v:=(m,v,v)",
@@ -3652,10 +3704,10 @@
     "public_api_baseline": {
       "path": "coverage/tsl-v1-public-api.json",
       "schema_version": 3,
-      "sha256": "da5d877f45983d5c71279743d05c8638f9adf5df0d4a086f19b876871472bef8",
+      "sha256": "624435cb233eeb5999b03b7faa9526ce427c658a3cb7a03606d71e453e722ea2",
       "exact_declaration_counts": {
-        "cpp": 797,
-        "rust": 4937
+        "cpp": 813,
+        "rust": 4953
       }
     }
   },

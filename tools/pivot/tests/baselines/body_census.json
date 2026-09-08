@@ -3,12 +3,12 @@
     "cpp": {
       "categories": {
         "call_and_local": 77,
-        "call_only": 2932,
+        "call_only": 2884,
         "local_only": 10,
-        "native_leaf": 4152,
+        "native_leaf": 4146,
         "synthetic_fixed": 3090
       },
-      "entries": 10261,
+      "entries": 10207,
       "failures": 0,
       "feature_combinations": [
         {
@@ -68,7 +68,7 @@
           ]
         },
         {
-          "count": 2200,
+          "count": 2148,
           "features": [
             "multi_statement",
             "nested_typed_call",
@@ -78,7 +78,7 @@
           ]
         },
         {
-          "count": 732,
+          "count": 736,
           "features": [
             "multi_statement",
             "residual_expression",
@@ -95,7 +95,7 @@
           ]
         },
         {
-          "count": 4152,
+          "count": 4146,
           "features": [
             "residual_expression",
             "result_only"
@@ -121,30 +121,30 @@
       ],
       "features": {
         "call_and_local": 77,
-        "multi_statement": 3019,
+        "multi_statement": 2971,
         "multiple_locals": 3,
-        "nested_typed_call": 2273,
-        "residual_expression": 10111,
-        "result_only": 10222,
+        "nested_typed_call": 2221,
+        "residual_expression": 10057,
+        "result_only": 10168,
         "synthetic_fixed": 3090,
-        "typed_call": 6099,
+        "typed_call": 6051,
         "typed_local": 87
       },
-      "multi_statement": 3019,
+      "multi_statement": 2971,
       "origins": {
         "fixed_wrapper": 3090,
-        "lowered_source": 7171
+        "lowered_source": 7117
       }
     },
     "rust": {
       "categories": {
         "call_and_local": 5,
-        "call_only": 1660,
+        "call_only": 1588,
         "local_only": 10,
-        "native_leaf": 2226,
+        "native_leaf": 2196,
         "synthetic_fixed": 3074
       },
-      "entries": 6975,
+      "entries": 6873,
       "failures": 0,
       "feature_combinations": [
         {
@@ -184,7 +184,7 @@
           ]
         },
         {
-          "count": 1386,
+          "count": 1322,
           "features": [
             "multi_statement",
             "nested_typed_call",
@@ -205,7 +205,7 @@
           ]
         },
         {
-          "count": 164,
+          "count": 156,
           "features": [
             "multi_statement",
             "residual_expression",
@@ -232,7 +232,7 @@
           ]
         },
         {
-          "count": 596,
+          "count": 566,
           "features": [
             "residual_expression",
             "result_only"
@@ -266,31 +266,31 @@
       ],
       "features": {
         "call_and_local": 5,
-        "multi_statement": 1675,
+        "multi_statement": 1603,
         "multiple_locals": 3,
-        "nested_typed_call": 1487,
-        "residual_expression": 6825,
-        "result_only": 6960,
-        "rust_unsafe_frame": 3185,
+        "nested_typed_call": 1423,
+        "residual_expression": 6723,
+        "result_only": 6858,
+        "rust_unsafe_frame": 3113,
         "synthetic_fixed": 3074,
-        "typed_call": 4739,
+        "typed_call": 4667,
         "typed_local": 15
       },
-      "multi_statement": 1675,
+      "multi_statement": 1603,
       "origins": {
         "fixed_wrapper": 3074,
-        "lowered_source": 3901
+        "lowered_source": 3799
       }
     }
   },
-  "location_digest": "b2cb2579051d816f49b32dcc018369d5c0903deb3be05642cb148dcafa819476",
+  "location_digest": "a74f6807243ac2929b7d8284321517716d9f6acb563568b9c3fcdf1cad13395e",
   "schema": "tslc-pivot-body-census-v2",
-  "semantic_digest": "700cca8e85750ee45b4f1d0c346f0df212610194c56e3924145c637b06e4ecb0",
+  "semantic_digest": "99057ae137cb58b482afd0cdb0ac5f50bdf81989bafea0597ca431f38ff86f7e",
   "summary": {
-    "entries": 17236,
+    "entries": 17080,
     "failures": 0,
     "fixed_wrappers": 6164,
-    "multi_statement": 4694,
+    "multi_statement": 4574,
     "nominal_collision_entries": 640,
     "nominal_collision_groups": 320
   }

@@ -312,14 +312,30 @@ def _explain_selected_slot(
 
     # 4. DEPENDENCIES & PRUNING ---------------------------------------------------
     out.line("[4] DEPENDENCIES & VERDICT")
-    origins = (
-        lowered.specialization.call_dependency_origins
+    implementation_origins = (
+        lowered.specialization.implementation_call_dependency_origins
         if lowered.specialization is not None
         else ()
     )
-    callees = frozenset(origin.dependency for origin in origins)
-    _print_dependencies(out, callees, verdicts)
-    _print_call_preconditions(out, origins)
+    checked_origins = (
+        lowered.specialization.checked_guard_dependency_origins
+        if lowered.specialization is not None
+        else ()
+    )
+    _print_dependencies(
+        out,
+        frozenset(origin.dependency for origin in implementation_origins),
+        verdicts,
+    )
+    _print_call_preconditions(out, implementation_origins)
+    if checked_origins:
+        _print_dependencies(
+            out,
+            frozenset(origin.dependency for origin in checked_origins),
+            verdicts,
+            heading="checked-companion guard callees",
+            missing_consequence="checked companion is not emitted",
+        )
     out.blank()
     _print_verdict(out, verdicts, extension_tag, slot.type_tag)
 
@@ -476,13 +492,18 @@ def _print_specialization(out: "_Writer", spec: LoweredSpecialization) -> None:
 
 
 def _print_dependencies(
-    out: "_Writer", callees: frozenset[CallDependency], verdicts: "_PipelineVerdicts"
+    out: "_Writer",
+    callees: frozenset[CallDependency],
+    verdicts: "_PipelineVerdicts",
+    *,
+    heading: str = "call<…> callees",
+    missing_consequence: str = "would dangle this slot at link time -> prune",
 ) -> None:
     if not callees:
-        out.line("    no call<…> callees (leaf primitive)")
+        out.line(f"    no {heading} (leaf primitive)")
         return
     out.line(
-        "    call<…> callees "
+        f"    {heading} "
         "(✓ = emitted for this profile; ~ = symbolic trait-bound call):"
     )
     for dependency in sorted(callees, key=dependency_sort_key):
@@ -514,7 +535,7 @@ def _print_dependencies(
     missing = verdicts.missing_callees(callees)
     if missing:
         out.line(
-            "    missing callees (would dangle this slot at link time -> prune): "
+            f"    missing callees ({missing_consequence}): "
             + ", ".join(missing)
         )
 

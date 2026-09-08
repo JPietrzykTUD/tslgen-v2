@@ -154,6 +154,28 @@ prim<m:=(v,v)> equal(left, right):
               intrin<cmpeq, build[suffix=base::signed_of(base::in)]>(left, right)
             );
           """
+      ?i?:
+        requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(HalfVec, vector::as_extension(sse));
+            var<const_infer>(low, call<primitive=@self[HalfVec]>(
+              call<primitive=extract[Vec, sse, 0]>(left),
+              call<primitive=extract[Vec, sse, 0]>(right)
+            ));
+            var<const_infer>(high, call<primitive=@self[HalfVec]>(
+              call<primitive=extract[Vec, sse, 1]>(left),
+              call<primitive=extract[Vec, sse, 1]>(right)
+            ));
+            var<infer>(result, call<primitive=insert[HalfVec, Vec, 0]>(
+              call<primitive=set_zero[Vec]>(), low
+            ));
+            complete(call<primitive=insert[HalfVec, Vec, 1]>(result, high));
+          """
       f?:
         requires [avx]
         safety:

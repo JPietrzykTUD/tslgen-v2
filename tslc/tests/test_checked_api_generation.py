@@ -898,6 +898,38 @@ def test_unrepresentable_or_already_reported_raw_memory_has_no_checked_twin(
         assert f"{primitive_name}_checked" not in rendered
 
 
+def test_unavailable_checked_guard_keeps_the_unchecked_specialization(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["scatter"],
+        profiles=["sve"],
+        type_tags=("si32",),
+        backends=["cpp"],
+    )
+
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.emitted_profiles
+    specializations = result.emitted_profiles[0].specializations("cpp")["scatter"]
+    sve = next(spec for spec in specializations if spec.extension_name == "sve")
+    assert tuple(
+        origin.dependency.primitive
+        for origin in sve.unavailable_checked_dependency_origins
+    ) == ("to_array",)
+    assert applicable_checked_api_plan((sve,)) is None
+
+    source = "\n".join(
+        artifact.content
+        for artifact in result.artifacts.artifacts
+        if artifact.logical_path.endswith("/include/tsl_sve.hpp")
+    )
+    assert "inline void scatter(" in source
+    assert "scatter_checked" not in source
+
+
 @pytest.fixture(scope="module")
 def checked_lane_cpp_project(
     data_root: Path,
