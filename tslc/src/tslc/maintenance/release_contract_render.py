@@ -91,7 +91,7 @@ def render_markdown(contract: ReleaseContract) -> str:
         + ", ".join(
             f"`{kind}`"
             for kind in sorted(
-                DEFAULT_SUPPORT_POLICY.scalable_deferred_signature_kinds
+                DEFAULT_SUPPORT_POLICY.fixed_shape_signature_kinds
             )
         )
         + ".",

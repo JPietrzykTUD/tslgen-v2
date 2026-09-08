@@ -38,7 +38,13 @@ from tslc.catalog.scalar_types import (
     SCALAR_TYPE_ORDER,
 )
 from tslc.catalog.signatures import parse_signature
-from tslc.diagnostics import Diagnostic, SourceSpan, has_errors, sort_diagnostics
+from tslc.diagnostics import (
+    Diagnostic,
+    SourceSpan,
+    diagnostic_at,
+    has_errors,
+    sort_diagnostics,
+)
 from tslc.ir.scan import scan
 from tslc.lower.dependencies import (
     CallDependency,
@@ -64,6 +70,7 @@ from tslc.pipeline_request import (
 )
 from tslc.render.project import RenderedProject, render_project
 from tslc.select.selector import (
+    SelectionSlotDisposition,
     SelectionSlotResult,
     SelectedImplementation,
     Selector,
@@ -628,6 +635,12 @@ class _GenerationSession:
                 collect_slots=self.request.collect_target_support,
             )
             self.diagnostics.extend(selection.diagnostics)
+            self._record_selection_deferrals(
+                profile_name,
+                backend,
+                selection.slots,
+                extensions,
+            )
             self._record_target_selection(
                 profile_name,
                 backend,
@@ -848,6 +861,14 @@ class _GenerationSession:
                 slot.type_tag,
                 slot.to_target,
             )
+            if slot.disposition is SelectionSlotDisposition.FIXED_SHAPE_ONLY:
+                self.target_support_entries[(key, None)] = TargetSupportEntry(
+                    key=key,
+                    realization=None,
+                    status=TargetSupportStatus.POLICY_DEFERRED,
+                    reason_id="TSL-SELECT-FIXED-SHAPE-ONLY",
+                )
+                continue
             if not slot.selected:
                 self.target_support_entries[(key, None)] = TargetSupportEntry(
                     key=key,
@@ -865,6 +886,57 @@ class _GenerationSession:
                     realization=realization,
                     status=TargetSupportStatus.SELECTED,
                 )
+
+    def _record_selection_deferrals(
+        self,
+        profile: str,
+        backend: str,
+        slots: tuple[SelectionSlotResult, ...],
+        extensions: tuple[str, ...] | None,
+    ) -> None:
+        for slot in slots:
+            if slot.disposition is not SelectionSlotDisposition.FIXED_SHAPE_ONLY:
+                continue
+            if (
+                extensions is not None
+                and slot.extension.name not in extensions
+                and slot.extension.isa_name not in extensions
+            ):
+                continue
+            shape = parse_signature(slot.primitive.signature)
+            diagnostic = diagnostic_at(
+                severity="info",
+                code="TSL-SELECT-FIXED-SHAPE-ONLY",
+                message=(
+                    f"signature {slot.primitive.signature!r} requires a static lane "
+                    f"count and is unavailable for runtime-length extension "
+                    f"{slot.extension.name!r} (fixed-shape kinds: "
+                    f"{', '.join(sorted(slot.fixed_shape_kinds))})"
+                ),
+                source=slot.primitive.signature_source,
+            )
+            self.skipped.append(
+                SkippedEntry(
+                    profile=profile,
+                    backend=backend,
+                    primitive=slot.primitive.name,
+                    extension=slot.extension.name,
+                    type_tag=slot.type_tag,
+                    reason=diagnostic.message,
+                    diagnostics=(diagnostic,),
+                    status="policy_deferred",
+                    source_primitive_name=slot.primitive.name,
+                    result_kind="" if shape is None else shape.result_kind,
+                    param_kinds=() if shape is None else shape.param_kinds,
+                    mask_policy=slot.primitive.mask_mode,
+                    axis=tuple(
+                        (key, slot.primitive.attributes[key])
+                        for key in sorted(slot.primitive.attributes)
+                        if key in BOOLEAN_WILDCARD_ATTRIBUTES
+                    ),
+                    variant_names=(),
+                )
+            )
 
     def _target_support_identity(
         self,

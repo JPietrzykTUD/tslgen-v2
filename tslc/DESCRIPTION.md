@@ -252,6 +252,15 @@ prim<v:=(v,v)> add(left, right):
 - **Extension fallback**: extensions form `inherits` chains (e.g. `avx2_vl →
   avx2`); an active variant can explicitly `supersedes` another extension while
   still borrowing fallback bodies from its inheritance chain.
+- **Register multiplicity**: `register_multiplicity_types` is a sparse,
+  source-owned map from a physical capacity (`x2`, `x4`, `d2`, and so on) and
+  scalar type/group to backend spelling. The catalog promotes the capacity to
+  `RegisterMultiplicity`; conversion semantics derive the required capacity
+  from concrete source/target widths, and backend dialects translate only that
+  finalized fact. These physical spellings are deliberately not inherited by
+  fixed-width facades, whose register representation may differ. The map does
+  not create a general target-language type AST or make a grouped vector part
+  of the public API by itself.
 - **Target-family capabilities**: `target_families:` owns behavioral roles for
   source-named extension families—fallback classification, free-function
   ownership, declared-register requirements, and index-vector support—and for

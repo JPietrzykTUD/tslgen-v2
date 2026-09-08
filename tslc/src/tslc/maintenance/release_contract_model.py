@@ -211,7 +211,7 @@ class ReleaseContract:
                 ],
                 "algorithm_callable_families": list(self.algorithms),
                 "fixed_shape_signature_kinds": sorted(
-                    DEFAULT_SUPPORT_POLICY.scalable_deferred_signature_kinds
+                    DEFAULT_SUPPORT_POLICY.fixed_shape_signature_kinds
                 ),
                 "fixed_shape_callable_families": list(fixed_shape),
                 "target_specific_callables": target_specific,

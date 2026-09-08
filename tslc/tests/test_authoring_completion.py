@@ -173,6 +173,43 @@ def test_requires_and_datatype_lists_use_distinct_vocabularies(
     assert {"si8", "si16", "si32", "si64"} <= datatypes
     assert "avx512_fp16" not in datatypes
 
+
+def test_register_multiplicity_completion_follows_the_extension_schema(
+    catalog: Catalog,
+) -> None:
+    baseline = (
+        "extension sample:\n"
+        "  register_multiplicity_types:\n"
+        "    x2:\n"
+        "      si16:\n"
+        '        cpp "pair"\n'
+    )
+
+    multiplicities = _labels(
+        catalog,
+        baseline,
+        "extension sample:\n  register_multiplicity_types:\n    x",
+    )
+    type_selectors = _labels(
+        catalog,
+        baseline,
+        "extension sample:\n  register_multiplicity_types:\n    x2:\n      si",
+    )
+    backends = _labels(
+        catalog,
+        baseline,
+        (
+            "extension sample:\n  register_multiplicity_types:\n"
+            "    x2:\n      si16:\n        "
+        ),
+    )
+
+    assert {"x2", "x4", "x8"} <= multiplicities
+    assert {"si8", "si16", "si32", "si64"} <= type_selectors
+    assert "rust" in backends
+    assert "cpp" not in backends
+
+
 def test_compiler_requires_completion_is_backend_and_capability_scoped(
     catalog: Catalog,
 ) -> None:

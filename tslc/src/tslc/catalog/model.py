@@ -22,6 +22,7 @@ from tslc.catalog.overloads import (
     ResolvedPrimitiveOverload,
 )
 from tslc.catalog.preconditions import PrimitivePrecondition
+from tslc.catalog.register_shapes import RegisterMultiplicity
 from tslc.catalog.semantics import PrimitiveSemanticContract
 from tslc.catalog.shift import PrimitiveShiftContract
 from tslc.catalog.signature_kinds import PointerMutability
@@ -710,6 +711,12 @@ class Extension:
     vector_register_types: Mapping[str, Mapping[str, str]] = field(
         default_factory=dict
     )  # type tag/group -> backend_id -> register type
+    # Physical register multiplicity -> type tag/group -> backend -> spelling.
+    # Entries are intentionally sparse: they describe only concrete scalable
+    # conversion representations a target can actually expose.
+    register_multiplicity_types: Mapping[
+        RegisterMultiplicity, Mapping[str, Mapping[str, str]]
+    ] = field(default_factory=dict)
     backend_headers: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     # backend_id -> whether this extension is emittable for that backend. Missing entries are
     # unsupported; inherited extensions receive parent entries during catalog promotion.
@@ -761,6 +768,11 @@ class Extension:
             self,
             "vector_register_types",
             _freeze_nested_mapping(self.vector_register_types),
+        )
+        object.__setattr__(
+            self,
+            "register_multiplicity_types",
+            _freeze_three_level_mapping(self.register_multiplicity_types),
         )
         object.__setattr__(
             self,
@@ -831,6 +843,17 @@ class Extension:
         """The declared register spelling for an exact type tag/group key."""
 
         return self.vector_register_types.get(type_tag_or_group, {}).get(backend_id)
+
+    def direct_register_multiplicity_type(
+        self,
+        backend_id: str,
+        type_tag_or_group: str,
+        multiplicity: RegisterMultiplicity,
+    ) -> str | None:
+        if multiplicity.is_single:
+            return self.direct_vector_register_type(backend_id, type_tag_or_group)
+        by_type = self.register_multiplicity_types.get(multiplicity, {})
+        return by_type.get(type_tag_or_group, {}).get(backend_id)
 
     def headers_for_backend(self, backend_id: str) -> tuple[str, ...]:
         return self.backend_headers.get(backend_id, ())
@@ -993,4 +1016,20 @@ def _freeze_nested_mapping(
 ) -> Mapping[_K, Mapping[_InnerK, _InnerV]]:
     return MappingProxyType(
         {key: _freeze_mapping(value) for key, value in mapping.items()}
+    )
+
+
+def _freeze_three_level_mapping(
+    mapping: Mapping[_K, Mapping[_InnerK, Mapping[str, str]]],
+) -> Mapping[_K, Mapping[_InnerK, Mapping[str, str]]]:
+    return MappingProxyType(
+        {
+            key: MappingProxyType(
+                {
+                    inner_key: MappingProxyType(dict(inner_value))
+                    for inner_key, inner_value in value.items()
+                }
+            )
+            for key, value in mapping.items()
+        }
     )

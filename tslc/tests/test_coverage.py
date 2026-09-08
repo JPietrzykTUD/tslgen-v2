@@ -95,7 +95,7 @@ def test_scalable_fixed_lane_signatures_are_policy_deferred(
         diagnostic.code
         for entry in result.skipped
         for diagnostic in entry.diagnostics
-    } == {"TSL-LOWER-POLICY-DEFERRED-SIGNATURE"}
+    } == {"TSL-SELECT-FIXED-SHAPE-ONLY"}
     assert all(
         diagnostic.location is not None
         for entry in result.skipped

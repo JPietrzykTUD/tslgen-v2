@@ -14,6 +14,7 @@ from tslc.catalog.scalar_types import (
     unsigned_of,
 )
 from tslc.lane_count import LaneCount
+from tslc.catalog.register_shapes import RegisterMultiplicity
 from tslc.target_text import RenderField, RenderText
 
 
@@ -49,6 +50,12 @@ class BackendTypeDialect(Protocol):
         *,
         uses_sized_vector: bool = False,
         lane_parameter: str | None = None,
+    ) -> str | None: ...
+    def register_multiplicity_spelling(
+        self,
+        base_tag: str,
+        extension_isa: str,
+        multiplicity: RegisterMultiplicity,
     ) -> str | None: ...
     def register_type_spelling(self) -> RenderField: ...
     def mask_type_spelling(self) -> RenderField: ...

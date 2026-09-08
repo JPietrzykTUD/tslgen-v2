@@ -21,6 +21,7 @@ from tslc.catalog.model import (
     MaskPolicyKind,
     VectorBitsKind,
 )
+from tslc.catalog.register_shapes import RegisterMultiplicity
 from tslc.syntax.access import child as _child
 from tslc.syntax.access import children as _children
 from tslc.syntax.access import field_text as _field_text
@@ -172,6 +173,9 @@ def _build_extension(
         family=_field_text(fields.get("family")) or "",
         intrinsic_composition=_intrinsic_composition(compose),
         vector_register_types=_vector_register_types(fields.get("vector_register_types")),
+        register_multiplicity_types=_register_multiplicity_types(
+            fields.get("register_multiplicity_types")
+        ),
         backend_headers=_backend_headers(fields, backend_ids),
         backend_supported=_backend_supported(fields, backend_ids),
         inherits=_field_text(fields.get("inherits")),
@@ -253,6 +257,30 @@ def _vector_register_types(
         }
         if by_backend:
             result[type_entry.key.text] = by_backend
+    return result
+
+
+def _register_multiplicity_types(
+    field: ParsedTslField | None,
+) -> dict[RegisterMultiplicity, dict[str, dict[str, str]]]:
+    """Promote ``xN``/``dN`` register shapes to typed multiplicities."""
+
+    result: dict[RegisterMultiplicity, dict[str, dict[str, str]]] = {}
+    for multiplicity_entry in _children(field):
+        multiplicity = RegisterMultiplicity.parse(multiplicity_entry.key.text)
+        if multiplicity is None:
+            continue
+        by_type: dict[str, dict[str, str]] = {}
+        for type_entry in _children(multiplicity_entry):
+            by_backend = {
+                backend_entry.key.text: (_field_text(backend_entry) or "")
+                for backend_entry in _children(type_entry)
+                if _field_text(backend_entry) is not None
+            }
+            if by_backend:
+                by_type[type_entry.key.text] = by_backend
+        if by_type:
+            result[multiplicity] = by_type
     return result
 
 

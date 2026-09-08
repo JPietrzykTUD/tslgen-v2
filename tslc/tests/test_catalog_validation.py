@@ -1704,6 +1704,46 @@ def test_scalable_cpp_extension_requires_runtime_lane_count() -> None:
     assert "runtime_lane_count entry for backend 'cpp'" in diagnostic.message
 
 
+@pytest.mark.parametrize("token", ("pair", "x0", "x01", "x1", "d1"))
+def test_register_multiplicity_keys_are_validated(token: str) -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "extension grouped:\n"
+            '  extension_name "grouped"\n'
+            '  family "x86"\n'
+            "  register_multiplicity_types:\n"
+            f"    {token}:\n"
+            "      si32:\n"
+            '        cpp "group_type"\n'
+        )
+    )
+
+    assert any(
+        diagnostic.code == "TSL-CATALOG-MALFORMED-REGISTER-MULTIPLICITY"
+        for diagnostic in diagnostics
+    )
+
+
+def test_register_multiplicity_backend_keys_are_validated() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "extension grouped:\n"
+            '  extension_name "grouped"\n'
+            '  family "x86"\n'
+            "  register_multiplicity_types:\n"
+            "    x2:\n"
+            "      si32:\n"
+            '        mystery "group_type"\n'
+        )
+    )
+
+    assert any(
+        diagnostic.code == "TSL-CATALOG-UNKNOWN-BACKEND"
+        and "mystery" in diagnostic.message
+        for diagnostic in diagnostics
+    )
+
+
 def test_invalid_enum_like_values_are_diagnosed() -> None:
     diagnostics = _diagnostics(
         "target_families:\n"

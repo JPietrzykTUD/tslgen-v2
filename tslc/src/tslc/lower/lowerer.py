@@ -127,7 +127,7 @@ class Lowerer:
                 f"{backend.backend_id}",
                 source=_implementation_source(selected),
             )
-        deferred_kinds = self._support.deferred_signature_kinds_for_extension(
+        deferred_kinds = self._support.fixed_shape_kinds_for_extension(
             shape, selected.extension
         )
         unsupported_kinds = self._support.unsupported_signature_kinds_for_extension(

@@ -134,7 +134,7 @@ def test_callable_classification_uses_public_and_support_policy_owners() -> None
     universe = payload["support_universe"]
 
     assert universe["fixed_shape_signature_kinds"] == sorted(
-        DEFAULT_SUPPORT_POLICY.scalable_deferred_signature_kinds
+        DEFAULT_SUPPORT_POLICY.fixed_shape_signature_kinds
     )
     identities = {
         item["identity"] for item in universe["primitive_callable_families"]

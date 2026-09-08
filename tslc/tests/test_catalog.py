@@ -21,6 +21,7 @@ from tslc.catalog.model import (
     PrimitiveValueMode,
     TargetConstraint,
 )
+from tslc.catalog.register_shapes import RegisterMultiplicity
 from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.sources import SourceDocument
 from tslc.syntax.parser import TslParser
@@ -272,6 +273,13 @@ def test_extension_compiler_metadata_is_promoted(catalog: Catalog) -> None:
     assert avx2.metadata.backend["rust"].arch_module == "x86_64"
     assert neon.metadata.backend["rust"].arch_module == "aarch64"
     assert sve.runtime_lane_count["cpp"] == "svcntb() / sizeof({base_type})"
+    assert (
+        sve.direct_register_multiplicity_type(
+            "cpp", "si16", RegisterMultiplicity(2)
+        )
+        == "svint16x2_t"
+    )
+    assert catalog.extensions["sve128"].register_multiplicity_types == {}
 
 
 def test_boolean_wildcard_attributes_expand_to_concrete_variants() -> None:

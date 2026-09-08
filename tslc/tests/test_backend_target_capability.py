@@ -12,6 +12,13 @@ from tslc.backend.target_capability import (
 )
 from tslc.backend.registry import create_backend_dialect
 from tslc.catalog.model import Catalog
+from tslc.catalog.conversion import (
+    ConversionKind,
+    LaneCountRelation,
+    PrimitiveConversionContract,
+    conversion_register_shape,
+)
+from tslc.catalog.register_shapes import RegisterMultiplicity
 from tslc.lane_count import LaneCount
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.backend.cpp_profile import (
@@ -188,6 +195,47 @@ def test_lane_count_arithmetic_is_rendered_by_backend_dialects(
     assert cpp.types.render_lane_count(scaled) == "(LANES * 8 / 32)"
     assert rust.types.render_lane_count(plain) == "LANES"
     assert rust.types.render_lane_count(scaled) is None
+
+
+def test_scalable_conversion_multiplicity_is_typed_and_backend_translated(
+    catalog: Catalog,
+) -> None:
+    contract = PrimitiveConversionContract(
+        kind=ConversionKind.NUMERIC,
+        lane_count=LaneCountRelation.PRESERVE_LANE_COUNT,
+    )
+    shape = conversion_register_shape(contract, "si8", "si16")
+
+    assert shape is not None
+    assert shape.target_multiplicity == RegisterMultiplicity(2, 1)
+
+    cpp = create_backend_dialect(catalog, "cpp")
+    assert cpp.types.register_multiplicity_spelling(
+        "si16", "sve", shape.target_multiplicity
+    ) == "svint16x2_t"
+    assert cpp.types.register_multiplicity_spelling(
+        "si16", "rvv", shape.target_multiplicity
+    ) == "vint16m2_t"
+
+
+def test_unavailable_scalable_conversion_shape_stays_explicit(
+    catalog: Catalog,
+) -> None:
+    contract = PrimitiveConversionContract(
+        kind=ConversionKind.NUMERIC,
+        lane_count=LaneCountRelation.PRESERVE_LANE_COUNT,
+    )
+    shape = conversion_register_shape(contract, "si8", "si64")
+
+    assert shape is not None
+    assert shape.target_multiplicity == RegisterMultiplicity(8, 1)
+    cpp = create_backend_dialect(catalog, "cpp")
+    assert cpp.types.register_multiplicity_spelling(
+        "si64", "sve", shape.target_multiplicity
+    ) is None
+    assert cpp.types.register_multiplicity_spelling(
+        "si64", "rvv", shape.target_multiplicity
+    ) is None
 
 
 def test_wasm_intrinsic_composition_is_lane_shape_first(catalog: Catalog) -> None:

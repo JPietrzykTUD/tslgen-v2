@@ -25,6 +25,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
+from enum import StrEnum
 from itertools import product
 from typing import assert_never
 
@@ -106,6 +107,14 @@ class ProfileSelectionResult:
     slots: tuple["SelectionSlotResult", ...] = ()
 
 
+class SelectionSlotDisposition(StrEnum):
+    """Selector-owned outcome before any implementation body is lowered."""
+
+    ABSENT = "absent"
+    SELECTED = "selected"
+    FIXED_SHAPE_ONLY = "fixed_shape_only"
+
+
 @dataclass(frozen=True, slots=True)
 class SelectionSlotResult:
     """One selector-owned expected slot and every realization selected for it."""
@@ -115,6 +124,20 @@ class SelectionSlotResult:
     type_tag: str
     to_target: str | None
     selected: tuple[SelectedImplementation, ...]
+    disposition: SelectionSlotDisposition
+    fixed_shape_kinds: frozenset[str] = frozenset()
+
+    def __post_init__(self) -> None:
+        if bool(self.selected) != (
+            self.disposition is SelectionSlotDisposition.SELECTED
+        ):
+            raise ValueError("selected slot disposition must match selected bodies")
+        if bool(self.fixed_shape_kinds) != (
+            self.disposition is SelectionSlotDisposition.FIXED_SHAPE_ONLY
+        ):
+            raise ValueError(
+                "fixed-shape slot disposition must match fixed signature kinds"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -252,8 +275,19 @@ class Selector:
             for slot in self._selection_slots(
                 catalog, primitive, emitted_extensions, type_tags
             ):
+                extension = catalog.extensions[slot.extension_name]
+                fixed_shape_kinds = (
+                    frozenset()
+                    if shape is None
+                    else self.support.fixed_shape_kinds_for_extension(
+                        shape, extension
+                    )
+                )
+                fixed_shape_only = bool(fixed_shape_kinds)
                 slot_selected = (
-                    self._select_slot(
+                    ()
+                    if fixed_shape_only or not slot.target_resolved
+                    else self._select_slot(
                         catalog,
                         profile,
                         primitive,
@@ -263,18 +297,26 @@ class Selector:
                         compiler_capabilities,
                         warnings,
                     )
-                    if slot.target_resolved
-                    else ()
                 )
                 selected.extend(slot_selected)
-                if collect_slots:
+                if collect_slots or fixed_shape_only:
                     evaluated_slots.append(
                         SelectionSlotResult(
                             primitive=primitive,
-                            extension=catalog.extensions[slot.extension_name],
+                            extension=extension,
                             type_tag=slot.type_tag,
                             to_target=slot.to_target,
                             selected=slot_selected,
+                            disposition=(
+                                SelectionSlotDisposition.FIXED_SHAPE_ONLY
+                                if fixed_shape_only
+                                else (
+                                    SelectionSlotDisposition.SELECTED
+                                    if slot_selected
+                                    else SelectionSlotDisposition.ABSENT
+                                )
+                            ),
+                            fixed_shape_kinds=fixed_shape_kinds,
                         )
                     )
         return ProfileSelectionResult(
@@ -350,6 +392,11 @@ class Selector:
                         type_tag=slot.type_tag,
                         to_target=slot.to_target,
                         selected=slot_selected,
+                        disposition=(
+                            SelectionSlotDisposition.SELECTED
+                            if slot_selected
+                            else SelectionSlotDisposition.ABSENT
+                        ),
                     )
                 )
             if slot_selected:

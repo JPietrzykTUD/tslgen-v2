@@ -72,8 +72,8 @@ class SupportPolicy:
         return self.signature_kinds.mutable_pointer_kinds
 
     @property
-    def scalable_deferred_signature_kinds(self) -> frozenset[str]:
-        return self.signature_kinds.scalable_deferred_kinds
+    def fixed_shape_signature_kinds(self) -> frozenset[str]:
+        return self.signature_kinds.fixed_shape_kinds
 
     def supports_extension_family(
         self,
@@ -122,20 +122,24 @@ class SupportPolicy:
         self, shape: SignatureShape, extension: Extension
     ) -> frozenset[str]:
         unsupported = set(self.unsupported_signature_kinds(shape))
-        unsupported.update(self.deferred_signature_kinds_for_extension(shape, extension))
+        unsupported.update(
+            self.fixed_shape_kinds_for_extension(shape, extension)
+        )
         return frozenset(unsupported)
 
-    def deferred_signature_kinds_for_extension(
+    def fixed_shape_kinds_for_extension(
         self, shape: SignatureShape, extension: Extension
     ) -> frozenset[str]:
         if not self.uses_scalable_vector(extension):
             return frozenset()
         kinds = {shape.result_kind, *shape.param_kinds}
-        deferred = set(kinds & self.scalable_deferred_signature_kinds)
+        fixed_shape = set(kinds & self.fixed_shape_signature_kinds)
         if shape.result_term.is_lane_list_like:
-            deferred.add(shape.result_kind)
-        deferred.update(term.kind for term in shape.param_terms if term.is_lane_list_like)
-        return frozenset(deferred)
+            fixed_shape.add(shape.result_kind)
+        fixed_shape.update(
+            term.kind for term in shape.param_terms if term.is_lane_list_like
+        )
+        return frozenset(fixed_shape)
 
     def has_immediate_operand(self, shape: SignatureShape) -> bool:
         return self.immediate_kind in shape.param_kinds

@@ -235,7 +235,7 @@ def test_lane_preserving_conversion_keeps_explicit_target_vector_typed(
                 GenericVectorReference("ToVec", "f64"),
             ),
         }
-        assert "require_same_lanes" in lowered.body_text
+        assert "require_same_lanes" not in lowered.body_text
         assert "scalar_as_cast" in lowered.body_text
         rendered_doc = (
             cpp_doc(lowered, context="implementation")

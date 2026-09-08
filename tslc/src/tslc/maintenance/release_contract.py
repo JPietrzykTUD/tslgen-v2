@@ -358,7 +358,7 @@ def _callable_families(baseline: Mapping[str, Any]) -> tuple[CallableFamily, ...
                     key for key in _SEMANTIC_KEYS if data.get(key) is not None
                 ),
                 fixed_shape_only=bool(
-                    kinds & DEFAULT_SUPPORT_POLICY.scalable_deferred_signature_kinds
+                    kinds & DEFAULT_SUPPORT_POLICY.fixed_shape_signature_kinds
                 ),
                 source_contract_sha256=sha256(
                     json.dumps(

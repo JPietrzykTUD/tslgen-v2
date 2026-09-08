@@ -413,6 +413,14 @@ extension sve:
       cpp "svfloat32_t"
     f64:
       cpp "svfloat64_t"
+  # Lane-preserving si8 -> si16 conversion needs two natural si16 SVE
+  # registers. Keep this table sparse: add a shape only for a concrete required
+  # case. Physical group spellings are not inherited by fixed-SVE
+  # facades because those use distinct attributed register representations.
+  register_multiplicity_types:
+    x2:
+      si16:
+        cpp "svint16x2_t"
   intrinsic_compose:
     prefix:
       cpp ""
@@ -479,6 +487,12 @@ extension rvv:
       cpp "vfloat32m1_t"
     f64:
       cpp "vfloat64m1_t"
+  # RVV expresses the same concrete lane-preserving si8 -> si16 requirement as
+  # LMUL=2.
+  register_multiplicity_types:
+    x2:
+      si16:
+        cpp "vint16m2_t"
   intrinsic_compose:
     prefix:
       cpp "__riscv_"

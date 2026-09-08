@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from tslc.catalog.model import Catalog, Extension, IntrinsicNameOrder
+from tslc.catalog.register_shapes import RegisterMultiplicity
 from tslc.catalog.scalar_types import (
     normalize_scalar_tag,
 )
@@ -39,6 +40,32 @@ def vector_register_type(
         for key in sorted(extension.vector_register_types):
             if catalog.type_group_contains(key, type_tag):
                 spelling = extension.direct_vector_register_type(backend_id, key)
+                if spelling is not None:
+                    return spelling
+    return None
+
+
+def register_multiplicity_type(
+    catalog: Catalog,
+    backend_id: str,
+    extension_isa: str,
+    type_tag: str,
+    multiplicity: RegisterMultiplicity,
+) -> str | None:
+    """Concrete spelling for one finalized register multiplicity."""
+
+    for extension in _extensions_for_isa(catalog, extension_isa):
+        exact = extension.direct_register_multiplicity_type(
+            backend_id, type_tag, multiplicity
+        )
+        if exact is not None:
+            return exact
+        by_type = extension.register_multiplicity_types.get(multiplicity, {})
+        for key in sorted(by_type):
+            if catalog.type_group_contains(key, type_tag):
+                spelling = extension.direct_register_multiplicity_type(
+                    backend_id, key, multiplicity
+                )
                 if spelling is not None:
                     return spelling
     return None

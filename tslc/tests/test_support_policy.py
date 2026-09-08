@@ -35,7 +35,7 @@ def test_policy_owns_signature_support(catalog: Catalog) -> None:
     assert policy.supports_signature(lane_list_shape)
     assert policy.has_lane_list_parameter(lane_list_shape)
     sve = catalog.extensions["sve"]
-    assert policy.deferred_signature_kinds_for_extension(lane_list_shape, sve) == (
+    assert policy.fixed_shape_kinds_for_extension(lane_list_shape, sve) == (
         frozenset({"lanes<s>"})
     )
     assert policy.unsupported_signature_kinds_for_extension(lane_list_shape, sve) == (
@@ -178,7 +178,7 @@ def test_signature_kind_capabilities_own_language_neutral_rules() -> None:
         "o",
     }
     assert policy.pointer_kinds == frozenset({"ptr", "ptr+", "cptr", "cptr+"})
-    assert policy.scalable_deferred_signature_kinds == frozenset(
+    assert policy.fixed_shape_signature_kinds == frozenset(
         {"s[]", policy.lane_list_kind}
     )
     assert not policy.signature_kind_requires_vector_axis("ptr")

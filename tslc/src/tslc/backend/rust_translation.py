@@ -11,6 +11,7 @@ from tslc.backend.target_capability import (
     rust_extension_tag,
 )
 from tslc.catalog.model import Catalog, Extension
+from tslc.catalog.register_shapes import RegisterMultiplicity
 from tslc.lane_count import LaneCount
 from tslc.target_text import (
     RenderContext,
@@ -103,6 +104,20 @@ class _RustTypes:
         if common.requires_declared_vector_register(self.catalog, extension_isa):
             return None
         return base
+
+    def register_multiplicity_spelling(
+        self,
+        base_tag: str,
+        extension_isa: str,
+        multiplicity: RegisterMultiplicity,
+    ) -> str | None:
+        return common.register_multiplicity_type(
+            self.catalog,
+            self.backend_id,
+            extension_isa,
+            base_tag,
+            multiplicity,
+        )
 
     def register_type_spelling(self) -> RenderText:
         return RenderPlaceholder("current_register", "Self::RegisterType")

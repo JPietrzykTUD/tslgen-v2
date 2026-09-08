@@ -11,6 +11,7 @@ from tslc.catalog.model import (
     MaskPolicyKind,
     VectorBitsKind,
 )
+from tslc.catalog.register_shapes import RegisterMultiplicity
 from tslc.catalog.scalar_types import KNOWN_SCALAR_TYPE_TAGS
 from tslc.catalog.target_families import TargetFamilyCatalog
 from tslc.catalog.validation._schema_common import (
@@ -42,6 +43,7 @@ KNOWN_EXTENSION_FIELDS = frozenset(
         "mask_type_policy",
         "native_sort_order",
         "runtime_lane_count",
+        "register_multiplicity_types",
         "size_bits",
         "size_parameter",
         "supersedes",
@@ -360,6 +362,59 @@ def validate_extension_block(
                 backend_ids,
                 diagnostics,
                 owner=backend_map_name,
+            )
+    _validate_register_multiplicity_types(
+        fields.get("register_multiplicity_types"), backend_ids, diagnostics
+    )
+
+
+def _validate_register_multiplicity_types(
+    field: ParsedTslField | None,
+    backend_ids: Collection[str],
+    diagnostics: list[Diagnostic],
+) -> None:
+    if field is None:
+        return
+    diagnose_duplicate_fields(
+        children(field), diagnostics, label="register multiplicity"
+    )
+    for multiplicity_entry in children(field):
+        token = multiplicity_entry.key.text
+        multiplicity = RegisterMultiplicity.parse(token)
+        if multiplicity is None or multiplicity.is_single:
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-MALFORMED-REGISTER-MULTIPLICITY",
+                    message=(
+                        "register_multiplicity_types key "
+                        f"{token!r} must be xN or dN with N greater than one"
+                    ),
+                    source=source_span(multiplicity_entry.source),
+                )
+            )
+        diagnose_duplicate_fields(
+            children(multiplicity_entry),
+            diagnostics,
+            label=f"register multiplicity {token!r} type",
+        )
+        for type_entry in children(multiplicity_entry):
+            diagnose_duplicate_fields(
+                children(type_entry),
+                diagnostics,
+                label=(
+                    f"register multiplicity {token!r} type "
+                    f"{type_entry.key.text!r} backend"
+                ),
+            )
+            validate_backend_key_fields(
+                children(type_entry),
+                backend_ids,
+                diagnostics,
+                owner=(
+                    f"register_multiplicity_types {token!r} "
+                    f"type {type_entry.key.text!r}"
+                ),
             )
 
 
