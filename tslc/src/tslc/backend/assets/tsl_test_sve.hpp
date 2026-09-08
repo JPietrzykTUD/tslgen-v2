@@ -84,6 +84,31 @@ struct sve_mask_bits_adapter {
         }
         return failures;
     }
+
+    static int check_lane_mutation(const char *name,
+                                   typename Vec::mask_type mask,
+                                   std::uint64_t original_bits,
+                                   std::size_t authored_lanes,
+                                   std::size_t changed_lane,
+                                   bool changed_value,
+                                   std::size_t lanes) {
+        int failures = 0;
+        for (std::size_t i = 0; i < lanes; ++i) {
+            const svbool_t lane = sve_detail::lane_predicate<Vec>(i);
+            const bool got = svptest_any(lane, mask);
+            const bool tiled =
+                ((original_bits >> (i % authored_lanes)) & 1u) != 0;
+            const bool want = i == changed_lane ? changed_value : tiled;
+            if (got != want) {
+                std::fprintf(stderr,
+                             "FAIL %s lane %zu: expected %s, got %s\n",
+                             name, i, want ? "set" : "clear",
+                             got ? "set" : "clear");
+                ++failures;
+            }
+        }
+        return failures;
+    }
 };
 
 #if defined(TSL_PROFILE_SVE)

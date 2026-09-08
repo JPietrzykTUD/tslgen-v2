@@ -276,7 +276,7 @@ def _conversion_methods(plan: RustFacadePlan) -> str:
 
 def _conversion_pair_impls(plan: RustFacadePlan) -> str:
     return "\n\n".join(
-        _conversion_pair_impl(arm)
+        _conversion_pair_impl(method, arm)
         for method in plan.curated_methods
         if method.kind is RustCuratedMethodKind.NUMERIC_CAST
         for arm in method.conversion_implementation_arms
@@ -284,10 +284,14 @@ def _conversion_pair_impls(plan: RustFacadePlan) -> str:
 
 
 def _conversion_pair_impl(
+    method: RustCuratedMethod,
     arm: RustFacadeConversionImplementationArm,
 ) -> str:
     source = arm.source_shape
     target = arm.target_shape
+    call = _lower_call_expression(arm.call)
+    if method.lower_call_unsafe:
+        call = f"unsafe {{ {call} }}"
     return "\n".join(
         (
             _cfg_attribute(_arm_selection_cfg(arm.selection)),
@@ -301,7 +305,15 @@ def _conversion_pair_impl(
                 f"<{target.base_spelling} as "
                 f"private::Representation<{source.lanes}>>::Vector {{"
             ),
-            f"        {_lower_call_expression(arm.call)}",
+            *(
+                (
+                    "        // SAFETY: source and target facade shapes have the "
+                    "same logical lane count.",
+                )
+                if method.lower_call_unsafe
+                else ()
+            ),
+            f"        {call}",
             "    }",
             "}",
         )

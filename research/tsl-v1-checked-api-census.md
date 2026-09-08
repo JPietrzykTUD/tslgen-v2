@@ -198,9 +198,9 @@ Sizes, lane counts, and mask-storage capacity are compiler-owned specialization 
 - `tslc/src/tslc/backend/assets/tsl_algorithm.rs:657` — owner `validate_integral_mask_vector` — `assert` — `assert!( lanes > 0, "{} requires a vector with at least one lane", helper_name, );`
 - `tslc/src/tslc/backend/assets/tsl_core.hpp:498` — owner `require_same_lanes` — `throw` — `throw std::invalid_argument( "lane-preserving conversion requires equal source and target lane counts" );`
 - `tslc/src/tslc/backend/assets/tsl_core.hpp:496` — owner `require_same_lanes` — `trap` — `__builtin_trap();`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:299` — owner `bit_cast` — `assert_eq` — `assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:313` — owner `reinterpret_unchecked` — `assert_eq` — `assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:762` — owner `require_same_lanes` — `assert_eq` — `assert_eq!( source_lanes, target_lanes, "lane-preserving conversion requires equal source and target lane counts" );`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:301` — owner `bit_cast` — `assert_eq` — `assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:315` — owner `reinterpret_unchecked` — `assert_eq` — `assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:764` — owner `require_same_lanes` — `assert_eq` — `assert_eq!( source_lanes, target_lanes, "lane-preserving conversion requires equal source and target lane counts" );`
 
 ### `static_immediate_nonzero` (2)
 
@@ -229,11 +229,11 @@ The checked signature must establish an addressable extent.
 
 This is a compiler/backend defect if reachable, not invalid caller data.
 
-- `tslc/src/tslc/backend/assets/tsl_core.rs:1146` — owner `saturating_cast_value` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:1103` — owner `saturating_from_f64` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:1018` — owner `saturating_from_i128` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:1061` — owner `saturating_from_u128` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:975` — owner `scalar_as_cast_value` — `panic` — `panic!("unsupported scalar-as cast")`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:1148` — owner `saturating_cast_value` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:1105` — owner `saturating_from_f64` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:1020` — owner `saturating_from_i128` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:1063` — owner `saturating_from_u128` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:977` — owner `scalar_as_cast_value` — `panic` — `panic!("unsupported scalar-as cast")`
 
 ### `implementation_invariant` (3)
 
@@ -241,7 +241,7 @@ The condition is not part of the public call domain.
 
 - `tslc/src/tslc/backend/assets/tsl_algorithm.rs:146` — owner `lane_is_set` — `debug_assert` — `debug_assert!(lane < <Self as IntegralMaskWord>::BITS);`
 - `tslc/src/tslc/backend/assets/tsl_algorithm.rs:133` — owner `one_at` — `debug_assert` — `debug_assert!(lane < <Self as IntegralMaskWord>::BITS);`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:743` — owner `ostream_write` — `unwrap` — `.unwrap()`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:745` — owner `ostream_write` — `unwrap` — `.unwrap()`
 
 ## Typed `caller_unsafe` public paths
 
@@ -249,18 +249,18 @@ These identities come from `Catalog` and `ImplementationSafety`, not target-text
 
 ### `contiguous_memory_contract` (13)
 
-- `load v:=(m,cptr,v)`; attributes `aligned=false, mask=pass_through`; result target `none`; reasons `compiler_builtin, intrinsic, raw_pointer`; caller-unsafe implementations 32; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
+- `load v:=(m,cptr,v)`; attributes `aligned=false, mask=pass_through`; result target `none`; reasons `compiler_builtin, intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 32; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
 - `store void:=(m,ptr,v)`; attributes `aligned=false, mask=pass_through`; result target `none`; reasons `compiler_builtin, intrinsic, raw_pointer, value_reinterpretation`; caller-unsafe implementations 33; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
 - `load v:=(m,cptr)`; attributes `aligned=false, mask=zero`; result target `none`; reasons `compiler_builtin, intrinsic, raw_pointer, value_reinterpretation`; caller-unsafe implementations 33; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
 - `load v:=cptr`; attributes `aligned=false`; result target `none`; reasons `compiler_builtin, intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 22; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
-- `load_scalar s:=cptr`; attributes `aligned=false`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 15; checked source status `declared`; preconditions `contiguous_memory_extent`; coverage: source preconditions are available for backend check planning
-- `store void:=(ptr,s)`; attributes `aligned=false`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 14; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
+- `load_scalar s:=cptr`; attributes `aligned=false`; result target `none`; reasons `raw_memory, raw_pointer`; caller-unsafe implementations 15; checked source status `declared`; preconditions `contiguous_memory_extent`; coverage: source preconditions are available for backend check planning
+- `store void:=(ptr,s)`; attributes `aligned=false`; result target `none`; reasons `raw_memory, raw_pointer`; caller-unsafe implementations 14; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
 - `store void:=(ptr,v)`; attributes `aligned=false`; result target `none`; reasons `compiler_builtin, intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 26; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
-- `load v:=(m,cptr,v)`; attributes `aligned=true, mask=pass_through`; result target `none`; reasons `compiler_builtin, intrinsic, raw_pointer`; caller-unsafe implementations 32; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
+- `load v:=(m,cptr,v)`; attributes `aligned=true, mask=pass_through`; result target `none`; reasons `compiler_builtin, intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 32; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
 - `store void:=(m,ptr,v)`; attributes `aligned=true, mask=pass_through`; result target `none`; reasons `compiler_builtin, intrinsic, raw_pointer, value_reinterpretation`; caller-unsafe implementations 33; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
 - `load v:=(m,cptr)`; attributes `aligned=true, mask=zero`; result target `none`; reasons `compiler_builtin, intrinsic, raw_pointer, value_reinterpretation`; caller-unsafe implementations 33; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
 - `load v:=cptr`; attributes `aligned=true`; result target `none`; reasons `compiler_builtin, intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 22; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
-- `store void:=(ptr,s)`; attributes `aligned=true`; result target `none`; reasons `raw_pointer`; caller-unsafe implementations 14; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
+- `store void:=(ptr,s)`; attributes `aligned=true`; result target `none`; reasons `raw_memory, raw_pointer`; caller-unsafe implementations 14; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
 - `store void:=(ptr,v)`; attributes `aligned=true`; result target `none`; reasons `compiler_builtin, intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 26; checked source status `declared`; preconditions `contiguous_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
 
 Review: The checked view establishes the represented range; constructing an invalid C++ span still violates its documented object invariant.

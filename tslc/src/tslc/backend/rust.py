@@ -1635,7 +1635,7 @@ class RustBackend:
         shape = specializations[0]
         public_trait_args = _trait_args_by_name(shape)
         trait_args = list(public_trait_args)
-        target_owner: str | None = None
+        target_owner: str | None = shape.result_vector_param
         if shape.target is not None:
             trait_args = ["T", *trait_args]
             public_trait_args = ["T", *public_trait_args]
@@ -1670,6 +1670,19 @@ class RustBackend:
                 checks.extend(
                     (
                         f"    if {condition.parameter_name} >= S::lane_count() {{",
+                        f"        return Err({_rust_precondition_error(condition.error)});",
+                        "    }",
+                    )
+                )
+                continue
+            if condition.kind is PreconditionKind.EQUAL_LANE_COUNT:
+                if target_owner is None:
+                    raise ValueError(
+                        "Rust equal-lane-count check has no target vector type"
+                    )
+                checks.extend(
+                    (
+                        f"    if S::lane_count() != {target_owner}::lane_count() {{",
                         f"        return Err({_rust_precondition_error(condition.error)});",
                         "    }",
                     )
@@ -1730,11 +1743,11 @@ class RustBackend:
                 ):
                     raise ValueError("Rust checked indexed memory plan is incomplete")
                 if (
-                    PreconditionCheckPrimitive.VECTOR_TO_ARRAY
+                    PreconditionCheckPrimitive.VECTOR_EXTRACT_LANE
                     not in condition.check_primitives
                 ):
                     raise ValueError(
-                        "indexed-memory check plan has no to-array primitive"
+                        "indexed-memory check plan has no lane-extraction primitive"
                     )
                 if len(shape.type_params) != 1:
                     raise ValueError(
@@ -1769,13 +1782,14 @@ class RustBackend:
                         f"    if {invalid_lane_extent} {{",
                         f"        return Err({_rust_precondition_error(condition.error)});",
                         "    }",
-                        f"    let __tsl_indices = to_array::<{index_owner}>("
-                        f"{condition.index_parameter_name});",
                         f"    for __tsl_lane in 0..{accessed_lanes} {{",
                         f"        if {active} {{",
+                        f"            let __tsl_index = unsafe {{ "
+                        f"extract_value_at::<{index_owner}>("
+                        f"{condition.index_parameter_name}, __tsl_lane) }};",
                         "            if let Some(error) = "
                         "indexed_memory_address_error::<_, S::BaseType>(",
-                        "                __tsl_indices[__tsl_lane], "
+                        "                __tsl_index, "
                         f"{condition.scale_parameter_name}, "
                         f"{condition.parameter_name}.len(),",
                         "            ) {",

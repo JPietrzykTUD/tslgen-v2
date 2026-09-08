@@ -519,21 +519,26 @@ class _GenerationSession:
                     processed.setdefault((primitive, type_tag, scope), set()).add(backend)
                 lowered_specs.extend(primitive_slots)
                 for slot in primitive_slots:
-                    target = slot.spec.target
-                    if target is None:
-                        continue
-                    for harness_primitive in harness_primitives:
-                        if slot.backend not in processed.get(
-                            (harness_primitive, target.base_tag, None), set()
-                        ):
-                            worklist.append(
-                                (
-                                    harness_primitive,
-                                    (target.base_tag,),
-                                    frozenset({slot.backend}),
-                                    None,
+                    harness_type_tags = {
+                        param.base_type_binding
+                        for param in slot.spec.type_params
+                        if param.base_type_binding is not None
+                    }
+                    if slot.spec.target is not None:
+                        harness_type_tags.add(slot.spec.target.base_tag)
+                    for harness_type_tag in sorted(harness_type_tags):
+                        for harness_primitive in harness_primitives:
+                            if slot.backend not in processed.get(
+                                (harness_primitive, harness_type_tag, None), set()
+                            ):
+                                worklist.append(
+                                    (
+                                        harness_primitive,
+                                        (harness_type_tag,),
+                                        frozenset({slot.backend}),
+                                        None,
+                                    )
                                 )
-                            )
                 for (
                     dependency_primitive,
                     dependency_type,

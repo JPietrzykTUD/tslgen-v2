@@ -407,6 +407,7 @@ def _serialize_value_test_checked_precondition(
         "error": value.error.value,
         "parameter_index": value.parameter_index,
         "invalid_value": value.invalid_value.name.lower(),
+        "invalid_lane_index": value.invalid_lane_index,
     }
 
 

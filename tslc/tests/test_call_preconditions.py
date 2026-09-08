@@ -299,8 +299,8 @@ def test_current_corpus_call_precondition_report_is_complete_and_deterministic(
 
     assert diagnostics == ()
     assert audit is not None
-    assert audit.disposition_counts == {"forward": 11, "discharge": 123}
-    assert len(audit.entries) == 134
+    assert audit.disposition_counts == {"forward": 11, "discharge": 138}
+    assert len(audit.entries) == 149
     first = serialize_call_precondition_audit(audit, root=data_root.parent)
     assert serialize_call_precondition_audit(audit, root=data_root.parent) == first
     payload = json.loads(first)

@@ -1085,6 +1085,30 @@ prim<im:=(im,usize)> shift_right_imask(data, shift):
              )
            );
             """
+    sve:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(empty, call<primitive=mask_false[Vec]>());
+            if (shift >= value(vector::runtime_length)) {
+              complete(empty);
+            }
+            var<infer>(result, empty);
+            loop<backend>(i, 0, value(vector::runtime_length) - shift, 1) {
+              var<const_infer>(source_lane, call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(empty, i + shift, 1));
+              if (call<primitive=mask_population_count[Vec]>(
+                call<primitive=mask_binary_and[Vec]>(data, source_lane)
+              ) != 0) {
+                result = call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(result, i, 1);
+              }
+            }
+            complete(result);
+          """
 prim<im:=(im,usize)> shift_left_imask(data, shift):
   brief_description "Shifts an integral mask value left by a scalar shift count."
   detailed_description """
@@ -1136,4 +1160,28 @@ prim<im:=(im,usize)> shift_left_imask(data, shift):
                 cast<static>(vector::imask, data << shift)
               )
             );
+          """
+    sve:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(empty, call<primitive=mask_false[Vec]>());
+            if (shift >= value(vector::runtime_length)) {
+              complete(empty);
+            }
+            var<infer>(result, empty);
+            loop<backend>(i, 0, value(vector::runtime_length) - shift, 1) {
+              var<const_infer>(source_lane, call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(empty, i, 1));
+              if (call<primitive=mask_population_count[Vec]>(
+                call<primitive=mask_binary_and[Vec]>(data, source_lane)
+              ) != 0) {
+                result = call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(result, i + shift, 1);
+              }
+            }
+            complete(result);
           """

@@ -1208,7 +1208,38 @@ prim<v:=(v,v)> div(dividend, divisor):
               ));
             """
     sve:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<backend>(i, 0, value(vector::runtime_length), 1) {
+              var<const_infer>(lane_dividend, call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(dividend, i));
+              var<const_infer>(lane_divisor, call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(divisor, i));
+              var<const_infer>(quotient, helper<arith_div>(lane_dividend, lane_divisor));
+              result = call<primitive=insert_value_at[Vec], discharge[lane_index_in_range]>(result, i, quotient);
+            }
+            complete(result);
+          """
       idqword:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(intrin<svdiv, build[post=x]>(
+              call<primitive=mask_true[Vec]>(),
+              dividend,
+              divisor
+            ));
+          """
+      f?:
         requires [sve]
         safety:
           internal_unsafe true
@@ -1435,7 +1466,41 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, dividend, divisor):
             );
           """
     sve:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(safe_dividend, call<primitive=mov, attrs[mask=pass_through]>(
+              mask,
+              call<primitive=set_zero[Vec]>(),
+              dividend
+            ));
+            var<const_infer>(safe_divisor, call<primitive=mov, attrs[mask=pass_through]>(
+              mask,
+              call<primitive=set1[Vec]>(cast<static>(base::in, 1)),
+              divisor
+            ));
+            complete(call<primitive=mov, attrs[mask=pass_through]>(
+              mask,
+              call<primitive=set_zero[Vec]>(),
+              call<primitive=div, discharge[active_divisor_nonzero]>(safe_dividend, safe_divisor)
+            ));
+          """
       idqword:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(intrin<svdiv, build[post=z]>(mask, dividend, divisor));
+          """
+      f?:
         requires [sve]
         safety:
           internal_unsafe true
@@ -1652,7 +1717,41 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, dividend, divisor):
             );
           """
     sve:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(safe_dividend, call<primitive=mov, attrs[mask=pass_through]>(
+              mask,
+              call<primitive=set_zero[Vec]>(),
+              dividend
+            ));
+            var<const_infer>(safe_divisor, call<primitive=mov, attrs[mask=pass_through]>(
+              mask,
+              call<primitive=set1[Vec]>(cast<static>(base::in, 1)),
+              divisor
+            ));
+            complete(call<primitive=mov, attrs[mask=pass_through]>(
+              mask,
+              dividend,
+              call<primitive=div, discharge[active_divisor_nonzero]>(safe_dividend, safe_divisor)
+            ));
+          """
       idqword:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(intrin<svdiv, build[post=m]>(mask, dividend, divisor));
+          """
+      f?:
         requires [sve]
         safety:
           internal_unsafe true

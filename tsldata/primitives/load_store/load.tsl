@@ -47,9 +47,9 @@ prim<v:=cptr>[aligned=*] load(ptr):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [raw_pointer]
+          reasons [raw_memory, raw_pointer]
         implementation:
-          tsil "complete(*ptr);"
+          tsil "complete(mem<load_scalar>(ptr));"
     [generic, oneapi_fpga]:
       arith:
         requires:
@@ -716,11 +716,11 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [raw_pointer]
+          reasons [raw_memory, raw_pointer]
         implementation:
           tsil """
             if (mask) {
-              complete(*ptr);
+              complete(mem<load_scalar>(ptr));
             } else {
               complete(data);
             }
@@ -1307,6 +1307,6 @@ prim<s:=cptr>[aligned=false] load_scalar(ptr):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [raw_pointer]
+          reasons [raw_memory, raw_pointer]
         implementation:
-          tsil "complete(*ptr);"
+          tsil "complete(mem<load_scalar>(ptr));"

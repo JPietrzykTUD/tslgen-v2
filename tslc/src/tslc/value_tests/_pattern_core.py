@@ -21,10 +21,12 @@ from tslc.value_tests._case_scalable import (
     scalable_golden_cases,
     scalable_immediate_cases,
     scalable_masked_cases,
+    scalable_runtime_scalar_cases,
     scalable_scalar_vector_cases,
 )
 from tslc.value_tests._case_scalable_masks import (
     scalable_mask_count_cases,
+    scalable_mask_lane_cases,
     scalable_mask_result_cases,
 )
 from tslc.value_tests._pattern_base import (
@@ -285,6 +287,30 @@ class _SimpleShapePattern(_BasePattern):
         if self.result_kind == "v" and "s" in self.param_kinds:
             plans.extend(
                 scalable_scalar_vector_cases(
+                    context.emitted_name,
+                    context.index,
+                    context.case,
+                    specs,
+                    context.catalog,
+                    context.harness,
+                    context.backend,
+                )
+            )
+        if self.result_kind == "s" and self.param_kinds == ("v", "usize"):
+            plans.extend(
+                scalable_runtime_scalar_cases(
+                    context.emitted_name,
+                    context.index,
+                    context.case,
+                    specs,
+                    context.catalog,
+                    context.harness,
+                    context.backend,
+                )
+            )
+        if self.result_kind == "m" and self.param_kinds == ("m", "usize", "usize"):
+            plans.extend(
+                scalable_mask_lane_cases(
                     context.emitted_name,
                     context.index,
                     context.case,

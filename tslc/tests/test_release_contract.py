@@ -150,6 +150,13 @@ def test_callable_classification_uses_public_and_support_policy_owners() -> None
     }
     assert "abs#v:=(v)" in universe["accelerated_core_callable_families"]
     assert "sequence#v:=()" in universe["portable_utility_callable_families"]
+    target_exclusions = universe["target_slot_exclusions"]
+    assert target_exclusions
+    assert all("callable_identities" in item for item in target_exclusions)
+    assert all(
+        set(item["callable_identities"]) <= identities
+        for item in target_exclusions
+    )
     classified = (
         set(universe["accelerated_core_callable_families"])
         | set(universe["portable_utility_callable_families"])

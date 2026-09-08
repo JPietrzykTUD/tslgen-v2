@@ -8,11 +8,13 @@ from pathlib import Path
 from tslc.api import generate_project
 from tslc.lower.implementation_facts import ImplementationState
 from tslc.maintenance.target_support_ratchet import (
+    Exclusion,
     SlotOutcome,
     SlotRecord,
     Snapshot,
     deserialize,
     diff_snapshots,
+    implementation_quality_gaps,
     serialize,
 )
 from tslc.target_support import (
@@ -49,6 +51,8 @@ def _snapshot(record: SlotRecord) -> Snapshot:
     return Snapshot(
         profile_targets=(("rvv", "cpp", "rvv"),),
         types=("si32",),
+        accelerated_core=("probe#v:=(v)",),
+        fallback_exceptions=(),
         exclusions=(),
         slots={_KEY: record},
     )
@@ -136,6 +140,59 @@ def test_new_complete_primitive_slot_is_additive() -> None:
     assert [item.kind for item in diff.changes] == ["added"]
 
 
+def test_accelerated_fallback_requires_exact_reviewed_exception() -> None:
+    fallback = _snapshot(
+        SlotRecord(
+            (
+                SlotOutcome(
+                    _REALIZATION,
+                    TargetSupportStatus.EMITTED,
+                    implementation_state="fallback",
+                ),
+            )
+        )
+    )
+
+    assert "lacks an exact reviewed exception" in implementation_quality_gaps(
+        fallback
+    )[0].detail
+    assert not implementation_quality_gaps(
+        replace(fallback, fallback_exceptions=("probe#v:=(v)",))
+    )
+
+
+def test_portable_fallback_is_not_an_implementation_quality_gap() -> None:
+    fallback = _snapshot(
+        SlotRecord(
+            (
+                SlotOutcome(
+                    _REALIZATION,
+                    TargetSupportStatus.EMITTED,
+                    implementation_state="fallback",
+                ),
+            )
+        )
+    )
+
+    assert not implementation_quality_gaps(replace(fallback, accelerated_core=()))
+
+
+def test_unknown_implementation_state_is_always_a_quality_gap() -> None:
+    unknown = _snapshot(
+        SlotRecord(
+            (
+                SlotOutcome(
+                    _REALIZATION,
+                    TargetSupportStatus.EMITTED,
+                    implementation_state="unknown",
+                ),
+            )
+        )
+    )
+
+    assert "unknown implementation state" in implementation_quality_gaps(unknown)[0].detail
+
+
 def test_resolving_an_absent_conversion_target_is_an_improvement() -> None:
     unresolved_key = replace(
         _KEY,
@@ -183,6 +240,18 @@ def test_exact_snapshot_serialization_is_deterministic_and_round_trips() -> None
         )
     )
 
+    snapshot = replace(
+        snapshot,
+        exclusions=(
+            Exclusion(
+                profile="rvv",
+                backend="cpp",
+                declaration_identity="fixed#v:=(v)",
+                type_tag=None,
+                reason_id="TSL-V1-TEST",
+            ),
+        ),
+    )
     text = serialize(snapshot)
 
     assert serialize(snapshot) == text

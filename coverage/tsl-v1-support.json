@@ -1199,13 +1199,13 @@
           "ToVec"
         ],
         "overload": null,
-        "checked_companion": false,
+        "checked_companion": true,
         "semantic_categories": [
           "operation",
           "conversion"
         ],
         "fixed_shape_only": false,
-        "source_contract_sha256": "1588fe472200b752d5a89df26b484710fb33d1cde376f5d574e2af50acf366a8"
+        "source_contract_sha256": "338a03845a7d73449a0324dce11066be18d110292ff02f77bd2d90620069bbeb"
       },
       {
         "identity": "convert_up[cast=convert,direction=up]#v:=(v,sImm)->base:ToBase",
@@ -3516,6 +3516,65 @@
     "target_specific_callables": {
       "random_step": "x86 RDRAND operation with no portable fallback"
     },
+    "target_slot_exclusions": [
+      {
+        "profiles": [
+          "sve",
+          "rvv"
+        ],
+        "backend": "cpp",
+        "callable_identities": [
+          "concat#v:=(v,v)->extension:ToExtension",
+          "extract[cast=reinterpret]#v:=(v,sImm)->extension:ToExtension",
+          "extract_imask#im:=(im,usize)->base:ToBase",
+          "extract_imask#im:=(im,usize)->extension:ToExtension",
+          "insert[cast=reinterpret]#v:=(vt,v,sImm)->extension:ToExtension",
+          "insert_imask#im:=(imt,im,usize)->base:ToBase",
+          "insert_imask#im:=(imt,im,usize)->extension:ToExtension",
+          "resize_down#v:=v->extension:ToExtension",
+          "resize_up_undef[value=undef]#v:=v->extension:ToExtension",
+          "resize_up_zero[value=zero]#v:=v->extension:ToExtension"
+        ],
+        "type_tags": [],
+        "reason_id": "TSL-V1-RUNTIME-SCALABLE-FIXED-WIDTH-REPRESENTATION",
+        "reason": "The callable changes between statically ordered register widths or fixed mask windows and has no truthful meaning for one runtime-scalable register type."
+      },
+      {
+        "profiles": [
+          "sve",
+          "rvv"
+        ],
+        "backend": "cpp",
+        "callable_identities": [
+          "convert_up[cast=convert,direction=up]#v:=(v,sImm)->base:ToBase",
+          "load_convert_up#v:=cptr+->base:ToBase"
+        ],
+        "type_tags": [
+          "si64",
+          "ui64",
+          "f64"
+        ],
+        "reason_id": "TSL-V1-NO-WIDER-SCALAR-TYPE",
+        "reason": "The stable scalar domain has no wider target lane type for these source types."
+      },
+      {
+        "profiles": [
+          "sve",
+          "rvv"
+        ],
+        "backend": "cpp",
+        "callable_identities": [
+          "convert_down[cast=convert,direction=down]#v:=(v,sImm)->base:ToBase"
+        ],
+        "type_tags": [
+          "si8",
+          "ui8",
+          "f32"
+        ],
+        "reason_id": "TSL-V1-NO-NARROWER-SCALAR-TYPE",
+        "reason": "The stable scalar domain has no supported narrower target lane type for these source types."
+      }
+    ],
     "accelerated_core_callable_families": [
       "abs#v:=(v)",
       "add#v:=(v,v)",
@@ -3707,10 +3766,10 @@
     "public_api_baseline": {
       "path": "coverage/tsl-v1-public-api.json",
       "schema_version": 3,
-      "sha256": "624435cb233eeb5999b03b7faa9526ce427c658a3cb7a03606d71e453e722ea2",
+      "sha256": "c2c7e893acf0a2eaf642f70b115ca5d211d66eebc9fbed0bef72ba6dfefed109",
       "exact_declaration_counts": {
-        "cpp": 813,
-        "rust": 4953
+        "cpp": 815,
+        "rust": 4955
       }
     }
   },
@@ -3750,7 +3809,45 @@
       "to_ostream"
     ],
     "fallback_policy": "forbidden_without_reviewed_exception",
-    "fallback_exceptions": []
+    "fallback_exceptions": [
+      "abs#v:=(v)",
+      "compress[mask=zero,op=pack]#v:=(m,v)",
+      "compress_store[aligned=true,op=pack]#void:=(m,ptr,v)",
+      "conflict#v:=v",
+      "conflict_free#m:=(m,v)",
+      "convert_down[cast=convert,direction=down]#v:=(v,sImm)->base:ToBase",
+      "convert_lanes#v:=v->vector:ToVec",
+      "div#v:=(v,v)",
+      "div[mask=pass_through]#v:=(m,v,v)",
+      "div[mask=zero]#v:=(m,v,v)",
+      "expand[mask=pass_through,op=expand]#v:=(m,v,v)",
+      "expand_load[aligned=true,op=expand]#v:=(m,cptr)",
+      "extract[cast=reinterpret]#v:=(v,sImm)->extension:ToExtension",
+      "gather#v:=(cptr,vidx,sImm)",
+      "gather[mask=pass_through]#v:=(m,cptr,vidx,v,sImm)",
+      "gather_narrow#v:=(cptr,cptr,sImm)",
+      "gather_narrow_partial#v:=(cptr,vidx,sImm)",
+      "lzc_imask#usize:=m",
+      "mask_deinterleave_odd#m:=(m,m)",
+      "mod#v:=(v,v)",
+      "mod[mask=pass_through]#v:=(m,v,v)",
+      "mod[mask=zero]#v:=(m,v,v)",
+      "mod_imm#v:=(v,sImm)",
+      "mod_imm[mask=pass_through]#v:=(m,v,sImm)",
+      "mod_imm[mask=zero]#v:=(m,v,sImm)",
+      "overlay_imask#im:=(im,im,usize)",
+      "permute_lanes#v:=(v,sImm)",
+      "permute_lanes#v:=(v,vidx)",
+      "permute_lanes[mask=pass_through]#v:=(m,v,v,vidx)",
+      "permute_lanes[mask=zero]#v:=(m,v,vidx)",
+      "scatter#void:=(ptr,vidx,v,sImm)",
+      "scatter[mask=zero]#void:=(m,ptr,vidx,v,sImm)",
+      "set#v:=(lanes<s>)",
+      "shift_left_imask#im:=(im,usize)",
+      "shift_right_imask#im:=(im,usize)",
+      "table_lookup#v:=(v,vidx,v)",
+      "tzc#usize:=m"
+    ]
   },
   "target_scopes": [
     {

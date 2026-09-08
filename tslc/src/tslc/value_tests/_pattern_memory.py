@@ -18,6 +18,7 @@ from tslc.value_tests._case_memory import (
     pointer_lifetime_case,
 )
 from tslc.value_tests._case_scalable_memory import (
+    scalable_indexed_memory_cases,
     scalable_mask_store_cases,
     scalable_masked_pointer_load_cases,
     scalable_masked_pointer_store_cases,
@@ -317,7 +318,21 @@ class _IndexedMemoryPattern(_BasePattern):
             context.specs,
             index_base_spelling,
         )
-        return (plan,) if plan is not None else ()
+        plans = [plan] if plan is not None else []
+        plans.extend(
+            scalable_indexed_memory_cases(
+                context.emitted_name,
+                context.index,
+                context.case,
+                context.specs,
+                context.catalog,
+                context.harness,
+                context.backend,
+                result_kind=self.result_kind,
+                index_base_spelling=index_base_spelling,
+            )
+        )
+        return tuple(plans)
 
 
 def _index_base_spelling(

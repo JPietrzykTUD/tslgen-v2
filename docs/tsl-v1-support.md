@@ -48,7 +48,7 @@ The exact callable-family records below are projected from
 `coverage/tsl-v1-public-api.json`; generated projects also carry their
 scope-exact backend declaration manifests.
 
-Public-API baseline SHA-256: `624435cb233eeb5999b03b7faa9526ce427c658a3cb7a03606d71e453e722ea2`.
+Public-API baseline SHA-256: `c2c7e893acf0a2eaf642f70b115ca5d211d66eebc9fbed0bef72ba6dfefed109`.
 
 ### Primitive callable families
 
@@ -89,7 +89,7 @@ Public-API baseline SHA-256: `624435cb233eeb5999b03b7faa9526ce427c658a3cb7a03606
 | `conflict#v:=v` | no | no | not yet annotated |
 | `conflict_free#m:=(m,v)` | no | no | not yet annotated |
 | `convert_down[cast=convert,direction=down]#v:=(v,sImm)->base:ToBase` | no | no | not yet annotated |
-| `convert_lanes#v:=v->vector:ToVec` | no | no | operation, conversion |
+| `convert_lanes#v:=v->vector:ToVec` | yes | no | operation, conversion |
 | `convert_up[cast=convert,direction=up]#v:=(v,sImm)->base:ToBase` | no | no | not yet annotated |
 | `count_matches#s:=(v,s)` | no | no | not yet annotated |
 | `custom_sequence#v:=(s,s)` | no | no | not yet annotated |
@@ -248,6 +248,12 @@ Public-API baseline SHA-256: `624435cb233eeb5999b03b7faa9526ce427c658a3cb7a03606
 
 - `random_step`: x86 RDRAND operation with no portable fallback.
 
+### Reviewed target-slot exclusions
+
+- `TSL-V1-RUNTIME-SCALABLE-FIXED-WIDTH-REPRESENTATION` (sve, rvv/cpp; concat#v:=(v,v)->extension:ToExtension, extract[cast=reinterpret]#v:=(v,sImm)->extension:ToExtension, extract_imask#im:=(im,usize)->base:ToBase, extract_imask#im:=(im,usize)->extension:ToExtension, insert[cast=reinterpret]#v:=(vt,v,sImm)->extension:ToExtension, insert_imask#im:=(imt,im,usize)->base:ToBase, insert_imask#im:=(imt,im,usize)->extension:ToExtension, resize_down#v:=v->extension:ToExtension, resize_up_undef[value=undef]#v:=v->extension:ToExtension, resize_up_zero[value=zero]#v:=v->extension:ToExtension; types all): The callable changes between statically ordered register widths or fixed mask windows and has no truthful meaning for one runtime-scalable register type..
+- `TSL-V1-NO-WIDER-SCALAR-TYPE` (sve, rvv/cpp; convert_up[cast=convert,direction=up]#v:=(v,sImm)->base:ToBase, load_convert_up#v:=cptr+->base:ToBase; types si64, ui64, f64): The stable scalar domain has no wider target lane type for these source types..
+- `TSL-V1-NO-NARROWER-SCALAR-TYPE` (sve, rvv/cpp; convert_down[cast=convert,direction=down]#v:=(v,sImm)->base:ToBase; types si8, ui8, f32): The stable scalar domain has no supported narrower target lane type for these source types..
+
 ## Safety API
 
 Unchecked calls perform the operation directly and do not sanitize inputs.
@@ -266,7 +272,8 @@ This conservative default prevents incomplete semantic annotations from
 silently weakening the quality gate. A fallback in that set is forbidden
 unless its exact identity is a
 reviewed exception with correctness and performance evidence. There are
-currently 0 exceptions.
+currently 37 exceptions.
+Their review record is `supplementary/release/tsl-v1-fallback-review.md`.
 
 The coarse implementation-state meanings are:
 

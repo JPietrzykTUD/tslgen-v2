@@ -528,6 +528,7 @@ class RustComprehensiveMethod:
     result_kind: str
     type_tags: tuple[str, ...]
     shape_keys: tuple[tuple[str, int], ...]
+    lower_call_unsafe: bool
     caller_unsafe: bool
     caller_unsafe_type_tags: tuple[str, ...]
     safety_requirements: tuple[str, ...]
@@ -551,6 +552,7 @@ class RustCuratedMethod:
     source_primitive_name: str
     type_tags: tuple[str, ...]
     shape_keys: tuple[tuple[str, int], ...]
+    lower_call_unsafe: bool
     caller_unsafe: bool
     invocation: RustFacadeInvocation
     conversion_pairs: tuple[RustFacadeConversionPair, ...]

@@ -39,6 +39,7 @@ from tslc.backend.rust_api_model import (
     RustFacadeTypeParameterRole,
 )
 from tslc.backend.rust_api_types import RUST_FACADE_SIGNATURE_TYPES
+from tslc.backend.rust_facade_checked import rust_facade_requires_unsafe
 from tslc.catalog.conversion import LaneCountRelation
 from tslc.catalog.memory import MemoryAccess
 from tslc.catalog.model import PrimitiveMaskMode
@@ -224,6 +225,8 @@ def _comprehensive_method(
         if key.result_vector_param is not None
         else ()
     )
+    specializations = tuple(spec for _profile_name, spec in candidate.specs)
+    caller_unsafe = rust_facade_requires_unsafe(specializations)
     return (
         RustComprehensiveMethod(
             public_name=public_name,
@@ -237,19 +240,20 @@ def _comprehensive_method(
             result_kind=key.result_kind,
             type_tags=candidate.type_tags,
             shape_keys=(),
-            caller_unsafe=public_call_requires_unsafe(
-                tuple(spec for _profile_name, spec in candidate.specs)
-            ),
+            lower_call_unsafe=public_call_requires_unsafe(specializations),
+            caller_unsafe=caller_unsafe,
             caller_unsafe_type_tags=tuple(
                 sorted(
                     {
                         spec.type_tag
                         for _profile_name, spec in candidate.specs
-                        if public_call_requires_unsafe((spec,))
+                        if rust_facade_requires_unsafe((spec,))
                     }
                 )
             ),
-            safety_requirements=_safety_requirements(candidate),
+            safety_requirements=(
+                _safety_requirements(candidate) if caller_unsafe else ()
+            ),
             panic_conditions=_panic_conditions(candidate),
             checked_conditions=_checked_conditions(candidate),
             must_use=key.result_kind != "void",

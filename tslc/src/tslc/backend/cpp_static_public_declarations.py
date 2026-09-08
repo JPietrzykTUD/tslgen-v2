@@ -191,6 +191,7 @@ _DECLARATIONS = (
                 "misaligned",
                 "overlapping_ranges",
                 "address_overflow",
+                "lane_count_mismatch",
             ),
             overload="checked-error-enum",
         ),

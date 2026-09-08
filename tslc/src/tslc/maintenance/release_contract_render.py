@@ -125,6 +125,16 @@ def render_markdown(contract: ReleaseContract) -> str:
             for item in contract.policy.target_specific_callables
         ),
         "",
+        "### Reviewed target-slot exclusions",
+        "",
+        *(
+            f"- `{item.reason_id}` ({', '.join(item.profiles)}/{item.backend_id}; "
+            f"{', '.join(item.callable_identities)}; "
+            f"types {', '.join(item.type_tags) if item.type_tags else 'all'}): "
+            f"{item.reason}."
+            for item in contract.policy.target_slot_exclusions
+        ),
+        "",
         "## Safety API",
         "",
         "Unchecked calls perform the operation directly and do not sanitize inputs.",
@@ -144,6 +154,7 @@ def render_markdown(contract: ReleaseContract) -> str:
         "unless its exact identity is a",
         "reviewed exception with correctness and performance evidence. There are",
         f"currently {len(contract.policy.accelerated_core.fallback_exceptions)} exceptions.",
+        "Their review record is `supplementary/release/tsl-v1-fallback-review.md`.",
         "",
         "The coarse implementation-state meanings are:",
         "",

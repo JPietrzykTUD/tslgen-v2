@@ -1116,10 +1116,14 @@ def test_clang_generic_index_memory_ops_delegate_to_fixed_native_leaf(
     assert f"::tsl::{primitive}<" in lowered.body_text
     assert ", scale, N>" in lowered.body_text
     assert "[0]" not in lowered.body_text
-    assert {
+    dependencies = {
         (origin.dependency.primitive, origin.dependency.source.extension_isa)
         for origin in lowered.call_dependency_origins
-    } == {
-        (primitive, fixed_isa),
-        ("to_array", extension),
     }
+    expected_dependencies = {
+        (primitive, fixed_isa),
+        ("extract_value_at", extension),
+    }
+    if primitive == "gather":
+        expected_dependencies.add(("set_zero", extension))
+    assert dependencies == expected_dependencies

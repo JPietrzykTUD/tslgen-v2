@@ -16,6 +16,7 @@ import pytest
 from tslc.api import generate_project, verify_project, write_artifacts
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.model import TestComparison as CaseComparison
+from tslc.catalog.preconditions import PreconditionErrorKind
 from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.diagnostics import has_errors
 from tslc.sources import SourceLoader
@@ -472,6 +473,80 @@ def test_neon_native_arithmetic_bitwise_extract_and_cast_value_tests_build_and_p
         run_value_tests=True,
     )
     _assert_value_tests_ran(report, backends=("cpp", "rust"))
+
+
+def test_sve_runtime_semantics_and_checked_failures_build_and_pass(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    compiler = Path("/usr/bin/aarch64-linux-gnu-g++")
+    qemu = shutil.which("qemu-aarch64")
+    if not compiler.is_file() or qemu is None:
+        pytest.skip("SVE value gate needs aarch64-linux-gnu-g++ and qemu-aarch64")
+
+    primitives = (
+        "convert_lanes",
+        "extract_value_at",
+        "gather",
+        "gather_narrow_partial",
+        "insert_value_at",
+        "load",
+        "scatter",
+        "set_mask_lane",
+        "store",
+    )
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=primitives,
+        profiles=("sve",),
+        backends=("cpp",),
+        test_harness=True,
+        value_test_warnings=True,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    cases = tuple(
+        case
+        for profile in result.rendered.value_tests.profiles_for("cpp")
+        for case in profile.cases
+        if case.function_name.startswith("test_scalable_sve_")
+    )
+    assert {
+        "scalable_indexed_load",
+        "scalable_indexed_store",
+        "scalable_mask_lane",
+        "scalable_repr_cast",
+        "scalable_scalar_result",
+        "scalable_scalar_vector",
+    } <= {case.kind for case in cases}
+    checked_errors = {
+        case.checked_precondition.error
+        for case in cases
+        if case.checked_precondition is not None
+    }
+    assert {
+        PreconditionErrorKind.INDEX_OUT_OF_BOUNDS,
+        PreconditionErrorKind.LANE_COUNT_MISMATCH,
+        PreconditionErrorKind.MISALIGNED,
+    } <= checked_errors
+
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(
+        tmp_path,
+        result.rendered.verify,
+        toolchains={
+            "cpp": BackendToolchain.create(
+                compiler=str(compiler),
+                target="aarch64-linux-gnu",
+            )
+        },
+        runner_paths={"qemu-aarch64": qemu},
+        run_value_tests=True,
+    )
+    _assert_value_tests_ran(report, backends=("cpp",))
 
 
 def test_shift_imask_value_tests_cover_x86_arm_and_oneapi(

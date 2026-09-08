@@ -2335,6 +2335,25 @@ def test_malformed_mask_body_region_is_diagnosed(body: str) -> None:
     assert "malformed mask selector" in diagnostic.message
 
 
+@pytest.mark.parametrize(
+    "body",
+    [
+        "complete(mem<load_scalar>());",
+        "complete(mem<load_scalar>(ptr, extra));",
+        "mem<store_scalar>(ptr); complete(data);",
+        "mem<copy>(dst, src); complete(data);",
+        "mem<unknown>(ptr); complete(data);",
+    ],
+)
+def test_malformed_mem_body_region_is_diagnosed(body: str) -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace('tsil "complete(data);"', f'tsil "{body}"')
+    )
+
+    diagnostic = next(d for d in diagnostics if d.code == "TSL-BODY-BAD-MEM")
+    assert "malformed memory operation" in diagnostic.message
+
+
 def test_array_set_body_region_is_accepted_with_nested_index() -> None:
     diagnostics = _diagnostics(
         _base_source().replace(

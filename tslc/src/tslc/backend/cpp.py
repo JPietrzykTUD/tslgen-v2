@@ -135,6 +135,15 @@ def _cpp_checked_condition(
             f"{_cpp_checked_failure(condition, plan, indent='        ')}\n"
             "    }"
         )
+    if condition.kind is PreconditionKind.EQUAL_LANE_COUNT:
+        if plan.result_vector_type_name is None:
+            raise ValueError("C++ equal-lane-count check has no result vector type")
+        return (
+            "    if (Vec::lane_count() != "
+            f"{plan.result_vector_type_name}::lane_count()) {{\n"
+            f"{_cpp_checked_failure(condition, plan, indent='        ')}\n"
+            "    }"
+        )
     if condition.kind is not PreconditionKind.ACTIVE_DIVISOR_NONZERO:
         if condition.kind is PreconditionKind.CONTIGUOUS_MEMORY_EXTENT:
             if (
@@ -189,10 +198,12 @@ def _cpp_checked_condition(
             ):
                 raise ValueError("C++ checked indexed memory plan is incomplete")
             if (
-                PreconditionCheckPrimitive.VECTOR_TO_ARRAY
+                PreconditionCheckPrimitive.VECTOR_EXTRACT_LANE
                 not in condition.check_primitives
             ):
-                raise ValueError("indexed-memory check plan has no to-array primitive")
+                raise ValueError(
+                    "indexed-memory check plan has no lane-extraction primitive"
+                )
             index_type = plan.index_type_parameter_name
             if (
                 condition.memory_indexed_lane_extent
@@ -247,17 +258,17 @@ def _cpp_checked_condition(
                         indent="            ",
                     ),
                     "        }",
-                    "        auto const __tsl_indices = "
-                    f"::tsl::to_array<{index_type}>("
-                    f"{condition.index_parameter_name});",
                     "        for (std::size_t __tsl_lane = 0; "
                     f"__tsl_lane < {accessed_lanes}; ++__tsl_lane) {{",
                     *active_setup,
                     f"            if ({active}) {{",
+                    "                auto const __tsl_index = "
+                    f"::tsl::extract_value_at<{index_type}>("
+                    f"{condition.index_parameter_name}, __tsl_lane);",
                     "                auto const __tsl_error = "
                     "::tsl::detail::indexed_memory_address_error<"
                     "typename Vec::base_type>(",
-                    "                    __tsl_indices[__tsl_lane], "
+                    "                    __tsl_index, "
                     f"{condition.scale_parameter_name}, "
                     f"{plan.memory_parameter_name}.size());",
                     "                if (__tsl_error != "

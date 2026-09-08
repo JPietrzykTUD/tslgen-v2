@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tslc.catalog.preconditions import PreconditionErrorKind
+from tslc.catalog.preconditions import PreconditionErrorKind, PreconditionKind
 from tslc.value_tests.case_components import ValueTestInvalidPreconditionValue
 from tslc.value_tests.literals import cpp_literal, cpp_literal_list
 from tslc.value_tests.model import ValueTestCasePlan
@@ -140,6 +140,14 @@ def _scalable_checked_precondition(case: ValueTestCasePlan) -> str:
     checked = case.checked_precondition
     assert checked is not None
     lines = _scalable_header(case)
+    if checked.kind is PreconditionKind.EQUAL_LANE_COUNT:
+        target = case.target
+        assert target is not None and target.base_spelling is not None
+        assert case.scalable is not None
+        lines.append(
+            f"  using ToVec = tsl::simd<{target.base_spelling}, "
+            f"tsl::{case.scalable.source_extension}>;"
+        )
     args: list[str] = []
     vector_index = 0
     mask_index = 0
@@ -172,7 +180,10 @@ def _scalable_checked_precondition(case: ValueTestCasePlan) -> str:
                 "scalable checked-precondition test does not support argument kind "
                 f"{kind!r}"
             )
-    if checked.invalid_value is not ValueTestInvalidPreconditionValue.ACTIVE_DIVISOR_ZERO:
+    if checked.invalid_value not in {
+        ValueTestInvalidPreconditionValue.ACTIVE_DIVISOR_ZERO,
+        ValueTestInvalidPreconditionValue.LANE_COUNT_MISMATCH,
+    }:
         args[checked.parameter_index] = {
             ValueTestInvalidPreconditionValue.LANE_COUNT: "Vec::lane_count()",
             ValueTestInvalidPreconditionValue.SIZE_MAX: (
@@ -184,11 +195,19 @@ def _scalable_checked_precondition(case: ValueTestCasePlan) -> str:
             "tsl::precondition_error::index_out_of_bounds"
         ),
         PreconditionErrorKind.ZERO_DIVISOR: "tsl::precondition_error::zero_divisor",
+        PreconditionErrorKind.LANE_COUNT_MISMATCH: (
+            "tsl::precondition_error::lane_count_mismatch"
+        ),
     }[checked.error]
+    type_args = (
+        "Vec, ToVec"
+        if checked.kind is PreconditionKind.EQUAL_LANE_COUNT
+        else "Vec"
+    )
     lines.extend(
         (
             "  tsl::precondition_error error = tsl::precondition_error::none;",
-            f"  auto result = tsl::{case.call_name}_checked<Vec>("
+            f"  auto result = tsl::{case.call_name}_checked<{type_args}>("
             f"{', '.join((*args, 'error'))});",
             "  (void)result;",
             f"  return error == {error} ? 0 : 1;",
@@ -371,6 +390,24 @@ def _scalar_result(case: ValueTestCasePlan) -> str:
     return "\n".join(lines)
 
 
+def _scalable_scalar_result(case: ValueTestCasePlan) -> str:
+    lines = _scalable_header(case)
+    vector = _append_runtime_vector_input(lines, case, 0)
+    index = case.inputs.scalars[0]
+    expected = cpp_literal(case.expectation.values[0], case.type_tag)
+    lines.extend(
+        [
+            f"  auto result = tsl::{case.call_name}<Vec>("
+            f"{vector}, static_cast<std::size_t>({index}));",
+            f"  {case.base_spelling} expected = {expected};",
+            f'  return tsl::test::check_scalar<{case.base_spelling}>('
+            f'"{case.case_name}", result, expected);',
+            "}",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def _scalable_mask_count(case: ValueTestCasePlan) -> str:
     scalable = case.scalable
     assert scalable is not None
@@ -389,6 +426,27 @@ def _scalable_mask_count(case: ValueTestCasePlan) -> str:
             "  }",
             f'  return tsl::test::check_scalar<std::size_t>("'
             f'{case.case_name}", result, expected);',
+            "}",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _scalable_mask_lane(case: ValueTestCasePlan) -> str:
+    scalable = case.scalable
+    assert scalable is not None and scalable.mask_bits
+    lines = _scalable_header(case)
+    lane, value = case.inputs.scalars
+    lines.extend(
+        [
+            f"  typename Vec::mask_type input = {_scalable_mask_from_bits(case, 0)};",
+            f"  typename Vec::mask_type result = tsl::{case.call_name}<Vec>("
+            f"input, static_cast<std::size_t>({lane}), "
+            f"static_cast<std::size_t>({value}));",
+            f"  return tsl::test::check_mask_lane_mutation<Vec>("
+            f'"{case.case_name}", result, {scalable.mask_bits[0]}ull, '
+            f"{case.lanes}, static_cast<std::size_t>({lane}), "
+            f"static_cast<bool>({value}), lanes);",
             "}",
         ]
     )
@@ -441,7 +499,9 @@ __all__ = (
     "_scalar_vector",
     "_vector_to_array",
     "_scalar_result",
+    "_scalable_scalar_result",
     "_scalable_mask_count",
+    "_scalable_mask_lane",
     "_lane_list",
     "_reduction",
     "_status_pointer",

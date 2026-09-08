@@ -16,6 +16,7 @@ from tslc.value_tests.case_components import (
     ValueTestFact,
     ValueTestIndex,
     ValueTestInputs,
+    ValueTestInvalidPreconditionValue,
     ValueTestInvocation,
     ValueTestMemory,
     ValueTestRepresentation,
@@ -273,6 +274,29 @@ class ValueTestCasePlan:
         checked = self.checked_precondition
         if checked is None:
             return
+        allowed_invalid_values = {
+            PreconditionKind.LANE_INDEX_IN_RANGE: {
+                ValueTestInvalidPreconditionValue.LANE_COUNT,
+                ValueTestInvalidPreconditionValue.SIZE_MAX,
+            },
+            PreconditionKind.ACTIVE_DIVISOR_NONZERO: {
+                ValueTestInvalidPreconditionValue.ACTIVE_DIVISOR_ZERO,
+            },
+            PreconditionKind.EQUAL_LANE_COUNT: {
+                ValueTestInvalidPreconditionValue.LANE_COUNT_MISMATCH,
+            },
+            PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID: {
+                ValueTestInvalidPreconditionValue.INDEXED_ADDRESS_OUT_OF_RANGE,
+                ValueTestInvalidPreconditionValue.INDEXED_ADDRESS_MISALIGNED,
+            },
+        }
+        if checked.invalid_value not in allowed_invalid_values.get(
+            checked.kind, set()
+        ):
+            raise ValueError(
+                f"value-test case {self.function_name!r} has an invalid-value "
+                f"strategy incompatible with {checked.kind.value!r}"
+            )
         if checked.parameter_index >= len(self.invocation.param_kinds):
             raise ValueError(
                 f"value-test case {self.function_name!r} checked parameter "
@@ -282,7 +306,13 @@ class ValueTestCasePlan:
             "usize"
             if checked.kind is PreconditionKind.LANE_INDEX_IN_RANGE
             else "v"
-            if checked.kind is PreconditionKind.ACTIVE_DIVISOR_NONZERO
+            if checked.kind
+            in {
+                PreconditionKind.ACTIVE_DIVISOR_NONZERO,
+                PreconditionKind.EQUAL_LANE_COUNT,
+            }
+            else "cptr_or_ptr"
+            if checked.kind is PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID
             else None
         )
         if expected_kind is None:
@@ -290,10 +320,30 @@ class ValueTestCasePlan:
                 f"value-test case {self.function_name!r} has unsupported checked "
                 f"precondition {checked.kind.value!r}"
             )
-        if self.invocation.param_kinds[checked.parameter_index] != expected_kind:
+        actual_kind = self.invocation.param_kinds[checked.parameter_index]
+        kind_matches = (
+            actual_kind in {"cptr", "ptr"}
+            if expected_kind == "cptr_or_ptr"
+            else actual_kind == expected_kind
+        )
+        if not kind_matches:
             raise ValueError(
                 f"value-test case {self.function_name!r} checked precondition "
                 f"must bind a runtime {expected_kind} parameter"
+            )
+        if checked.kind is PreconditionKind.EQUAL_LANE_COUNT and self.target is None:
+            raise ValueError(
+                f"value-test case {self.function_name!r} equal-lane-count "
+                "precondition requires a target vector"
+            )
+        if checked.kind in {
+            PreconditionKind.LANE_INDEX_IN_RANGE,
+            PreconditionKind.ACTIVE_DIVISOR_NONZERO,
+            PreconditionKind.EQUAL_LANE_COUNT,
+        } and any(len(values) != self.lanes for values in self.inputs.vectors):
+            raise ValueError(
+                f"value-test case {self.function_name!r} checked vector inputs "
+                f"must contain {self.lanes} lane values"
             )
 
     def _expected_error(self, expectation: str) -> str:

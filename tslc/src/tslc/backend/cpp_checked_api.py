@@ -29,6 +29,7 @@ class CppCheckedApiPlan:
     template_constraint: str | None
     public_result_type: str
     has_value_result: bool
+    result_vector_type_name: str | None
     memory_parameter_name: str | None
     memory_parameter_index: int | None
     memory_access: MemoryAccess | None
@@ -77,6 +78,19 @@ def plan_cpp_checked_api(
     if plan is None:
         return None
     has_value_result = result_kind != "void"
+    result_owner = (
+        specializations[0].result_vector_param
+        or ("ToVec" if specializations[0].target is not None else "Vec")
+    )
+    failure_placeholder = (
+        f"::tsl::set_zero<{result_owner}>()"
+        if result_kind in {"v", "vidx"}
+        else (
+            f"::tsl::mask_false<{result_owner}>()"
+            if result_kind == "m"
+            else f"{result_type}{{}}"
+        )
+    )
     memory_condition = checked_memory_condition(plan.conditions)
     memory_parameter_name: str | None = None
     memory_parameter_index: int | None = None
@@ -181,7 +195,7 @@ def plan_cpp_checked_api(
         ),
         success_error_expression="::tsl::precondition_error::none",
         failure_placeholder_expression=(
-            f"{result_type}{{}}" if has_value_result else None
+            failure_placeholder if has_value_result else None
         ),
         attributes=("[[nodiscard]]",),
         specifiers=("TSL_FORCE_INLINE",),
@@ -190,6 +204,9 @@ def plan_cpp_checked_api(
             result_type if has_value_result else "::tsl::precondition_error"
         ),
         has_value_result=has_value_result,
+        result_vector_type_name=(
+            result_owner if result_kind in {"v", "vidx", "m"} else None
+        ),
         memory_parameter_name=memory_parameter_name,
         memory_parameter_index=memory_parameter_index,
         memory_access=memory_access,

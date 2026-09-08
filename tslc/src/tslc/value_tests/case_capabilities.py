@@ -52,7 +52,6 @@ _CASE_REQUIREMENTS = {
         required_facts=frozenset(
             {ValueTestFact.RESULT_KIND, ValueTestFact.CHECKED_PRECONDITION}
         ),
-        vector_inputs_match_lanes=True,
     ),
     "convert": ValueTestCaseRequirements(
         expected="target_lanes",
@@ -211,6 +210,33 @@ _CASE_REQUIREMENTS = {
         | frozenset({ValueTestFact.IMMEDIATE}),
         vector_inputs_match_lanes=True,
     ),
+    "scalable_indexed_load": ValueTestCaseRequirements(
+        expected="target_lanes",
+        vector_inputs="non_empty",
+        required_facts=_SCALABLE_VALUE_FACTS
+        | frozenset(
+            {
+                ValueTestFact.IMMEDIATE,
+                ValueTestFact.TARGET_LANES,
+                ValueTestFact.INDEX_STYLE,
+                ValueTestFact.INDEX_LANES,
+                ValueTestFact.MEMORY_LENGTH,
+            }
+        ),
+    ),
+    "scalable_indexed_store": ValueTestCaseRequirements(
+        expected="non_empty",
+        vector_inputs="non_empty",
+        required_facts=_SCALABLE_VALUE_FACTS
+        | frozenset(
+            {
+                ValueTestFact.IMMEDIATE,
+                ValueTestFact.INDEX_STYLE,
+                ValueTestFact.INDEX_LANES,
+                ValueTestFact.MEMORY_LENGTH,
+            }
+        ),
+    ),
     "scalable_repr_cast": ValueTestCaseRequirements(
         expected="target_lanes",
         vector_inputs="one",
@@ -220,8 +246,21 @@ _CASE_REQUIREMENTS = {
     "scalable_scalar_vector": ValueTestCaseRequirements(
         expected="lanes",
         vector_inputs="non_empty",
-        scalar_inputs="one",
+        scalar_inputs="non_empty",
         required_facts=_SCALABLE_VALUE_FACTS,
+        vector_inputs_match_lanes=True,
+    ),
+    "scalable_scalar_result": ValueTestCaseRequirements(
+        expected="one",
+        vector_inputs="one",
+        scalar_inputs="one",
+        required_facts=frozenset(
+            {
+                ValueTestFact.RESULT_KIND,
+                ValueTestFact.SCALABLE_RUNTIME,
+                ValueTestFact.SCALABLE_LOAD,
+            }
+        ),
         vector_inputs_match_lanes=True,
     ),
     "scalable_mask_constant": ValueTestCaseRequirements(
@@ -249,6 +288,18 @@ _CASE_REQUIREMENTS = {
         mask_inputs="non_empty",
         required_facts=_SCALABLE_MASK_FACTS
         | frozenset({ValueTestFact.SCALABLE_MASK_INPUTS}),
+    ),
+    "scalable_mask_lane": ValueTestCaseRequirements(
+        expected="one",
+        mask_inputs="one",
+        scalar_inputs="non_empty",
+        required_facts=frozenset(
+            {
+                ValueTestFact.RESULT_KIND,
+                ValueTestFact.SCALABLE_RUNTIME,
+                ValueTestFact.SCALABLE_MASK_INPUTS,
+            }
+        ),
     ),
     "scalable_mask_result": ValueTestCaseRequirements(
         expected="lanes",

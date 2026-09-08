@@ -14,6 +14,7 @@ from tslc.catalog.arithmetic import (
     ArithmeticOperation,
     matches_numeric_domain,
 )
+from tslc.catalog.conversion import LaneCountRelation
 from tslc.catalog.scalar_types import scalar_type_info
 from tslc.catalog.memory import (
     MemoryAccess,
@@ -32,6 +33,7 @@ class PreconditionKind(StrEnum):
     SELECTED_MEMORY_ALIGNMENT = "selected_memory_alignment"
     INDEXED_MEMORY_ADDRESS_VALID = "indexed_memory_address_valid"
     COMPACTED_MEMORY_EXTENT = "compacted_memory_extent"
+    EQUAL_LANE_COUNT = "equal_lane_count"
 
 
 class PreconditionHazard(StrEnum):
@@ -51,6 +53,7 @@ class PreconditionErrorKind(StrEnum):
     MISALIGNED = "misaligned"
     OVERLAPPING_RANGES = "overlapping_ranges"
     ADDRESS_OVERFLOW = "address_overflow"
+    LANE_COUNT_MISMATCH = "lane_count_mismatch"
 
 
 class PreconditionCheckPrimitive(StrEnum):
@@ -61,7 +64,7 @@ class PreconditionCheckPrimitive(StrEnum):
     MASK_FALSE = "mask_false"
     MASK_POPULATION_COUNT = "mask_population_count"
     MASK_SET_LANE = "set_mask_lane"
-    VECTOR_TO_ARRAY = "to_array"
+    VECTOR_EXTRACT_LANE = "extract_value_at"
     ZERO_VECTOR = "set_zero"
 
 
@@ -85,6 +88,7 @@ class PreconditionDescriptor:
     masked_check_primitives: tuple[PreconditionCheckPrimitive, ...] = ()
     compatible_memory_accesses: frozenset[MemoryAccess] = frozenset()
     compatible_memory_addressings: frozenset[MemoryAddressing] = frozenset()
+    compatible_conversion_lane_counts: frozenset[LaneCountRelation] = frozenset()
 
     @property
     def binds_memory_operand(self) -> bool:
@@ -266,7 +270,7 @@ PRECONDITION_DESCRIPTORS: Mapping[
                 {MemoryAccess.READ, MemoryAccess.WRITE}
             ),
             compatible_memory_addressings=frozenset({MemoryAddressing.INDEXED}),
-            check_primitives=(PreconditionCheckPrimitive.VECTOR_TO_ARRAY,),
+            check_primitives=(PreconditionCheckPrimitive.VECTOR_EXTRACT_LANE,),
             masked_check_primitives=(
                 PreconditionCheckPrimitive.MASK_FALSE,
                 PreconditionCheckPrimitive.MASK_SET_LANE,
@@ -304,6 +308,23 @@ PRECONDITION_DESCRIPTORS: Mapping[
             unchecked_consequence=(
                 "Violating this precondition may read or write outside the live "
                 "memory object, causing undefined behavior or a process-level fault."
+            ),
+        ),
+        PreconditionKind.EQUAL_LANE_COUNT: PreconditionDescriptor(
+            kind=PreconditionKind.EQUAL_LANE_COUNT,
+            description=(
+                "The source and target SIMD types have equal logical lane counts."
+            ),
+            required_roles=frozenset({OperandRole.PRIMARY}),
+            compatible_operations=frozenset({PrimitiveOperation.CONVERT}),
+            compatible_conversion_lane_counts=frozenset(
+                {LaneCountRelation.PRESERVE_LANE_COUNT}
+            ),
+            hazard=PreconditionHazard.CATASTROPHIC,
+            error=PreconditionErrorKind.LANE_COUNT_MISMATCH,
+            unchecked_consequence=(
+                "Violating this precondition may access a result lane outside the "
+                "target vector, causing undefined behavior or a process-level fault."
             ),
         ),
     }

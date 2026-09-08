@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from tslc.backend.checked_api import CheckedConditionPlan, checked_memory_condition
+from tslc.backend.checked_api import (
+    CheckedConditionPlan,
+    applicable_checked_api_plan,
+    checked_memory_condition,
+    public_call_requires_unsafe,
+)
 from tslc.backend.precondition_error_rendering import rust_precondition_error
 from tslc.backend.rust_api_arms import RustComprehensivePrivateImplementationArm
 from tslc.backend.rust_api_model import RustComprehensiveMethod, RustFacadeParameter
@@ -10,6 +15,29 @@ from tslc.backend.rust_api_kinds import RustFacadeParameterPlacement
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.catalog.memory import MemoryAccess, MemoryAddressing, MemoryPayloadExtent
 from tslc.catalog.preconditions import PreconditionErrorKind, PreconditionKind
+from tslc.lower.model import LoweredSpecialization
+
+
+def rust_facade_requires_unsafe(
+    specializations: tuple[LoweredSpecialization, ...],
+) -> bool:
+    """Whether a fixed-lane facade must preserve the raw API's unsafe marker."""
+
+    if not public_call_requires_unsafe(specializations):
+        return False
+    plan = applicable_checked_api_plan(specializations)
+    return not (
+        plan is not None
+        and all(
+            condition.kind is PreconditionKind.EQUAL_LANE_COUNT
+            for condition in plan.conditions
+        )
+        and all(
+            kind not in {"cptr", "ptr"}
+            for spec in specializations
+            for kind in spec.param_kinds
+        )
+    )
 
 
 def rust_checked_conditions_for_type(
@@ -20,6 +48,9 @@ def rust_checked_conditions_for_type(
         condition
         for condition in conditions
         if type_tag in condition.applicable_type_tags
+        # Simd<T, LANES> -> Simd<U, LANES> discharges this source condition
+        # structurally, so the safe facade needs no redundant checked twin.
+        and condition.kind is not PreconditionKind.EQUAL_LANE_COUNT
     )
 
 
@@ -264,6 +295,7 @@ def _identifier(name: str) -> str:
 
 
 __all__ = (
+    "rust_facade_requires_unsafe",
     "rust_checked_conditions_for_type",
     "rust_checked_error_names",
     "rust_checked_guards",

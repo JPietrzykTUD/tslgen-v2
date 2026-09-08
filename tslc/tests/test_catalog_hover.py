@@ -66,8 +66,10 @@ _REGION_FACTS = (
     ),
     (
         "mem",
-        "Perform raw byte-memory operations.",
+        "Perform typed scalar or raw byte-memory operations.",
         (
+            "mem<load_scalar>(ptr)",
+            "mem<store_scalar>(ptr, value)",
             "mem<copy>(dst, src, count)",
             "mem<set>(ptr, value, count)",
             "mem<alloc>(count)",

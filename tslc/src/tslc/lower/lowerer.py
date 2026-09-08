@@ -32,6 +32,7 @@ from tslc.catalog.model import (
 from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS, scalar_bit_width_or_default
 from tslc.catalog.preconditions import (
     PRECONDITION_DESCRIPTORS,
+    PreconditionHazard,
     precondition_applies_to_type,
 )
 from tslc.catalog.signatures import SignatureShape, parse_signature
@@ -60,6 +61,7 @@ from tslc.lower.dependencies import (
     CallDependency,
     CallDependencyOrigin,
     CallDependencyOriginKind,
+    GenericVectorReference,
     VectorIdentity,
     origin_sort_key,
     symbolic_call_dependency_error,
@@ -360,7 +362,14 @@ class Lowerer:
         effective_safety = safety
         diagnostics = [*default_body.diagnostics]
         call_dependency_origins = set(context.effects.call_dependency_origins)
-        call_dependency_origins.update(_checked_precondition_dependencies(selected))
+        call_dependency_origins.update(
+            _checked_precondition_dependencies(
+                selected,
+                backend_id=backend.backend_id,
+                result_kind=shape.result_kind,
+                target=target,
+            )
+        )
         for variant, variant_segments in variant_sources:
             variant_context = body_context(
                 replace(
@@ -595,13 +604,20 @@ def _arithmetic_preconditions(
 
 def _checked_precondition_dependencies(
     selected: SelectedImplementation,
+    *,
+    backend_id: str,
+    result_kind: str,
+    target: TargetVector | None,
 ) -> tuple[CallDependencyOrigin, ...]:
     current = VectorIdentity(selected.type_tag, selected.extension.isa_name)
     dependencies: list[CallDependencyOrigin] = []
+    has_checked_condition = False
     for precondition in selected.primitive.preconditions:
         descriptor = PRECONDITION_DESCRIPTORS[precondition.kind]
         if not precondition_applies_to_type(precondition, selected.type_tag):
             continue
+        if descriptor.hazard is PreconditionHazard.CATASTROPHIC:
+            has_checked_condition = True
         check_primitives = descriptor.check_primitives
         if selected.primitive.mask_mode is not None:
             check_primitives += descriptor.masked_check_primitives
@@ -617,6 +633,40 @@ def _checked_precondition_dependencies(
                 source=precondition.source,
             )
             for primitive in check_primitives
+        )
+    if (
+        backend_id == "cpp"
+        and has_checked_condition
+        and result_kind in {"v", "vidx", "m"}
+    ):
+        result_vector: GenericVectorReference | VectorIdentity
+        result_target = selected.primitive.result_target
+        if result_target is not None and result_target[0] == RESULT_DIM_VECTOR:
+            base_binding = next(
+                (
+                    binding.base_tag
+                    for binding in selected.simd_type_base_bindings
+                    if binding.param_name == result_target[1]
+                ),
+                None,
+            )
+            result_vector = GenericVectorReference(result_target[1], base_binding)
+        elif target is not None:
+            result_vector = VectorIdentity(target.base_tag, target.extension_isa)
+        else:
+            result_vector = current
+        placeholder_primitive = "mask_false" if result_kind == "m" else "set_zero"
+        dependencies.append(
+            CallDependencyOrigin(
+                dependency=CallDependency(
+                    primitive=placeholder_primitive,
+                    mask_policy=None,
+                    source=result_vector,
+                ),
+                origin="C++ checked failure value",
+                kind=CallDependencyOriginKind.CHECKED_GUARD,
+                source=selected.primitive.source,
+            )
         )
     return tuple(dependencies)
 

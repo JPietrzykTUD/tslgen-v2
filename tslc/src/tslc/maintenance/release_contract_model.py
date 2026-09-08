@@ -58,6 +58,18 @@ class TargetSpecificCallable:
 
 
 @dataclass(frozen=True, slots=True)
+class TargetSlotExclusionPolicy:
+    """One reviewed exclusion from an otherwise declared target scope."""
+
+    profiles: tuple[str, ...]
+    backend_id: str
+    callable_identities: tuple[str, ...]
+    type_tags: tuple[str, ...]
+    reason_id: str
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
 class AcceleratedCorePolicy:
     selection: str
     portable_callable_names: tuple[str, ...]
@@ -73,6 +85,7 @@ class ReleasePolicy:
     backend_profiles: tuple[BackendProfilePolicy, ...]
     target_scopes: tuple[TargetScopePolicy, ...]
     target_specific_callables: tuple[TargetSpecificCallable, ...]
+    target_slot_exclusions: tuple[TargetSlotExclusionPolicy, ...]
     accelerated_core: AcceleratedCorePolicy
 
 
@@ -215,6 +228,17 @@ class ReleaseContract:
                 ),
                 "fixed_shape_callable_families": list(fixed_shape),
                 "target_specific_callables": target_specific,
+                "target_slot_exclusions": [
+                    {
+                        "profiles": list(item.profiles),
+                        "backend": item.backend_id,
+                        "callable_identities": list(item.callable_identities),
+                        "type_tags": list(item.type_tags),
+                        "reason_id": item.reason_id,
+                        "reason": item.reason,
+                    }
+                    for item in self.policy.target_slot_exclusions
+                ],
                 "accelerated_core_callable_families": list(self.accelerated_core),
                 "portable_utility_callable_families": list(
                     self.portable_utility_families
@@ -290,5 +314,6 @@ __all__ = (
     "ReleasePolicy",
     "ReleaseProfile",
     "TargetScopePolicy",
+    "TargetSlotExclusionPolicy",
     "TargetSpecificCallable",
 )

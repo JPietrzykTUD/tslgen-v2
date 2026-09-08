@@ -387,6 +387,8 @@ mask<test, imask>(bits, lane)
 Accepted forms:
 
 ```tsil
+mem<load_scalar>(ptr)
+mem<store_scalar>(ptr, value)
 mem<copy>(dst, src, count)
 mem<set>(ptr, value, count)
 mem<alloc>(count)
@@ -394,7 +396,8 @@ mem<alloc_aligned>(count, align)
 mem<free>(ptr)
 ```
 
-Counts are byte counts.
+`load_scalar` and `store_scalar` preserve the pointer's scalar type. Counts in
+the other operations are byte counts.
 
 `alloc_aligned` keeps source order `(count, align)`.
 

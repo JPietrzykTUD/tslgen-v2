@@ -14,6 +14,7 @@ from tslc.value_tests.case_helpers import (
     mask_inputs as _mask_inputs,
     maskish_inputs as _maskish_inputs,
     vector_inputs as _vector_inputs,
+    scalar_inputs as _scalar_inputs,
 )
 from tslc.value_tests.literals import token_truthy
 from tslc.value_tests.model import (
@@ -155,6 +156,82 @@ def scalable_mask_count_cases(
                     values=case.expected,
                     comparison=case.comparison,
                 ),
+                invocation=ValueTestInvocation(
+                    result_kind=spec.result_kind,
+                    param_kinds=spec.param_kinds,
+                ),
+                scalable=scalable,
+            )
+        )
+    return tuple(plans)
+
+
+def scalable_mask_lane_cases(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+    catalog: Catalog,
+    harness: HarnessPrimitiveNames,
+    backend: ValueTestBackendSupport,
+) -> tuple[ValueTestCasePlan, ...]:
+    """Plan a runtime-indexed scalable predicate-lane mutation."""
+
+    del index
+    del harness
+    masks = _mask_inputs(case)
+    scalars = _scalar_inputs(case)
+    if (
+        case.lanes is None
+        or case.expected_rule is not None
+        or len(masks) != 1
+        or len(scalars) != 2
+        or len(case.expected) != 1
+    ):
+        return ()
+    initial = _mask_bits_value(masks[0])
+    expected = _mask_bits_value(case.expected[0])
+    try:
+        lane = int(scalars[0], 0)
+        value = int(scalars[1], 0)
+    except ValueError:
+        return ()
+    if initial is None or expected is None or not 0 <= lane < case.lanes:
+        return ()
+    wanted = (initial | (1 << lane)) if value else (initial & ~(1 << lane))
+    if expected != wanted:
+        return ()
+    plans: list[ValueTestCasePlan] = []
+    for spec in specs:
+        if (
+            spec.type_tag != case.type_tag
+            or spec.result_kind != "m"
+            or spec.param_kinds != ("m", "usize", "usize")
+        ):
+            continue
+        if case.extension is not None and spec.extension_name != case.extension:
+            continue
+        scalable = scalable_case_facts(
+            spec,
+            catalog,
+            backend,
+            mask_bit_tokens=masks,
+        )
+        if scalable is None:
+            continue
+        plans.append(
+            ValueTestCasePlan(
+                kind="scalable_mask_lane",
+                function_name=scalable_function_name(
+                    spec.extension_name, case.name, call_name=name
+                ),
+                case_name=case.name,
+                call_name=name,
+                type_tag=case.type_tag,
+                base_spelling=spec.base_type_spelling,
+                lanes=case.lanes,
+                inputs=ValueTestInputs(masks=masks, scalars=scalars),
+                expectation=ValueTestExpectation(values=case.expected),
                 invocation=ValueTestInvocation(
                     result_kind=spec.result_kind,
                     param_kinds=spec.param_kinds,
@@ -430,6 +507,7 @@ __all__ = (
     "scalable_mask_conversion_cases",
     "scalable_mask_count_cases",
     "scalable_mask_logic_cases",
+    "scalable_mask_lane_cases",
     "scalable_mask_result_cases",
     "scalable_masked_mask_result_cases",
 )

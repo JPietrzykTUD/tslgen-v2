@@ -246,8 +246,10 @@ DEFAULT_TSIL_REGION_DESCRIPTORS: tuple[TsilRegionDescriptor, ...] = (
     ),
     TsilRegionDescriptor(
         "mem",
-        "Perform raw byte-memory operations.",
+        "Perform typed scalar or raw byte-memory operations.",
         (
+            "mem<load_scalar>(ptr)",
+            "mem<store_scalar>(ptr, value)",
             "mem<copy>(dst, src, count)",
             "mem<set>(ptr, value, count)",
             "mem<alloc>(count)",
@@ -257,9 +259,18 @@ DEFAULT_TSIL_REGION_DESCRIPTORS: tuple[TsilRegionDescriptor, ...] = (
         _authoring(
             *(
                 (_value(selector),)
-                for selector in ("copy", "set", "alloc", "alloc_aligned", "free")
+                for selector in (
+                    "load_scalar",
+                    "store_scalar",
+                    "copy",
+                    "set",
+                    "alloc",
+                    "alloc_aligned",
+                    "free",
+                )
             )
         ),
+        shell_validator="mem_selector",
     ),
     TsilRegionDescriptor(
         "lanes",

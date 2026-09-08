@@ -164,6 +164,13 @@ class _ScalableLaneModel(LaneModel):
                 lines.append(f"  {case.base_spelling} s{scalar_index} = {value};")
                 args.append(f"s{scalar_index}")
                 scalar_index += 1
+            elif kind == "usize":
+                lines.append(
+                    f"  std::size_t s{scalar_index} = static_cast<std::size_t>("
+                    f"{case.inputs.scalars[scalar_index]});"
+                )
+                args.append(f"s{scalar_index}")
+                scalar_index += 1
             else:
                 raise ValueError(
                     f"scalable value test does not support argument kind {kind!r}"
@@ -257,7 +264,11 @@ def render_value_case(case: ValueTestCasePlan) -> str:
     template_args = ["Vec"]
     if "vidx" in case.invocation.param_kinds:
         template_args.append("Indices")
-    if case.index is not None and case.index.value is not None:
+    if (
+        case.index is not None
+        and case.index.value is not None
+        and "usize" not in case.invocation.param_kinds
+    ):
         template_args.append(case.index.value)
     if case.invocation.immediate is not None:
         template_args.append(case.invocation.immediate)

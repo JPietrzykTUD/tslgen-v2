@@ -825,6 +825,23 @@ prim<s:=(v,usize)> extract_value_at(data, index):
           reasons []
         implementation:
           tsil "complete(data);"
+    sve:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, unchecked_index]
+        implementation:
+          tsil """
+            let<type>(IndexBase, base::unsigned_of(base::in));
+            let<type>(IndexVec, vector::as_base(IndexBase));
+            var<const_infer>(index_lane, call<primitive=equal[IndexVec]>(
+              call<primitive=sequence[IndexVec]>(),
+              call<primitive=set1[IndexVec]>(cast<static>(IndexBase, index))
+            ));
+            complete(intrin<svlastb, build>(index_lane, data));
+          """
     [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, avx2, sse_vl, sse, neon, sve, wasm128]:
       arith:
         prefer_fixed_native true
@@ -897,6 +914,27 @@ prim<v:=(v,usize,s)> insert_value_at(data, index, value):
           reasons []
         implementation:
           tsil "complete(value);"
+    sve:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(IndexBase, base::unsigned_of(base::in));
+            let<type>(IndexVec, vector::as_base(IndexBase));
+            var<const_infer>(index_lane, call<primitive=equal[IndexVec]>(
+              call<primitive=sequence[IndexVec]>(),
+              call<primitive=set1[IndexVec]>(cast<static>(IndexBase, index))
+            ));
+            complete(call<primitive=mov, attrs[mask=pass_through]>(
+              index_lane,
+              data,
+              call<primitive=set1[Vec]>(value)
+            ));
+          """
     [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, avx2, sse_vl, sse, neon, sve, wasm128]:
       arith:
         prefer_fixed_native true

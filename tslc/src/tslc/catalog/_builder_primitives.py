@@ -89,14 +89,14 @@ def _build_primitives(
     memory = build_memory_contract(
         declaration, operation, result_target, diagnostics
     )
-    preconditions = build_preconditions(
-        declaration, operation, arithmetic, memory, diagnostics
-    )
     conversion = build_conversion_contract(
         declaration,
         operation,
         result_target,
         diagnostics,
+    )
+    preconditions = build_preconditions(
+        declaration, operation, arithmetic, memory, conversion, diagnostics
     )
     shift = build_shift_contract(declaration, operation, diagnostics)
     overload = _primitive_overload(declaration)

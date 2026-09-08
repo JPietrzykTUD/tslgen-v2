@@ -28,6 +28,27 @@ _CPP_COMPILER_BUILTIN_MASK_POLICY_NAMES = {
 }
 
 
+def _cpp_used_vector_type_specs(
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
+) -> tuple[tuple[str, str, str], ...]:
+    """Return every concrete C++ SIMD type needed by definitions and bindings."""
+
+    facts = set(used_vector_type_specs(by_primitive))
+    facts.update(
+        (
+            spec.extension_name,
+            param.base_type_binding,
+            param.base_type_binding_spelling,
+        )
+        for specializations in by_primitive.values()
+        for spec in specializations
+        for param in spec.type_params
+        if param.base_type_binding is not None
+        and param.base_type_binding_spelling is not None
+    )
+    return tuple(sorted(facts))
+
+
 def cpp_extension_availability_condition(extension: Extension | None) -> str | None:
     """Optional backend-owned compiler capabilities for one extension."""
 
@@ -150,7 +171,7 @@ def _cpp_native_registration(
                 extensions.get(ext),
             )
         )
-    for ext, type_tag, base in used_vector_type_specs(by_primitive):
+    for ext, type_tag, base in _cpp_used_vector_type_specs(by_primitive):
         if ext not in emitted:
             continue
         extension = extensions.get(ext)
@@ -203,7 +224,7 @@ def cpp_native_registration_extensions(
 
     emitted = {
         ext
-        for ext, type_tag, _base in used_vector_type_specs(by_primitive)
+        for ext, type_tag, _base in _cpp_used_vector_type_specs(by_primitive)
         if (extension := extensions.get(ext)) is not None
         and not is_width_indexed_register_extension(extension)
         and extension.direct_vector_register_type("cpp", type_tag) is not None
@@ -332,7 +353,7 @@ def _cpp_inferred_simd_registrations(
 
     candidates: dict[tuple[str, int], tuple[tuple[int, int, str], str]] = {}
     native_candidates: dict[str, tuple[tuple[int, int, str], str]] = {}
-    for ext, type_tag, base in used_vector_type_specs(by_primitive):
+    for ext, type_tag, base in _cpp_used_vector_type_specs(by_primitive):
         extension = extensions.get(ext)
         if extension is None or not cpp_participates_in_dataparallel_inference(
             extension, type_tag
@@ -386,7 +407,7 @@ def _cpp_overlay_fixed_registrations(
     """Expose an explicit fixed-lane policy for one opt-in header overlay."""
 
     candidates: dict[tuple[str, str, int], tuple[tuple[int, str], str]] = {}
-    for ext, type_tag, base in used_vector_type_specs(by_primitive):
+    for ext, type_tag, base in _cpp_used_vector_type_specs(by_primitive):
         extension = extensions.get(ext)
         metadata = (
             None

@@ -32,6 +32,7 @@ from tslc.catalog.semantics import OperandBinding, OperandRole
 from tslc.compiler_assets import RenderAssets
 from tslc.diagnostics import Diagnostic, SourceSpan
 from tslc.lower.lowerer import LoweredSpecialization
+from tslc.lower.model import LoweredTypeParam
 from tslc.lower.primitive_semantics import LoweredPrimitiveSemantics
 from tslc.lower.target_vectors import TargetVector
 from tslc.backend.emitted_names import finalize_emitted_names
@@ -3218,6 +3219,98 @@ def test_scalable_immediate_cases_plan_and_render_runtime_lanes(
     assert "tsl::mul_imm_maskz<Vec, 3>(" in source
     assert "make_mask<tsl::simd<std::int32_t, tsl::sve>>(10ull, 4, lanes)" in source
     assert "authored_expected[i % 4]" in source
+
+
+def test_scalable_lane_conversion_tests_success_and_checked_mismatch(
+    render_assets: RenderAssets,
+) -> None:
+    lane_count_precondition = PrimitivePrecondition(
+        PreconditionKind.EQUAL_LANE_COUNT,
+        (OperandBinding(OperandRole.PRIMARY, "p0", 0, "v"),),
+    )
+    primitive = Primitive(
+        "convert_lanes",
+        "v:=v",
+        ("data",),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="equal_width",
+                type_tag="si32",
+                to_type="f32",
+                tags=("convert",),
+                lanes=4,
+                inputs=(TslTestArg("vector", values=("1", "-2", "3", "-4")),),
+                expected=("1.0", "-2.0", "3.0", "-4.0"),
+            ),
+            TslTestCase(
+                name="different_width",
+                type_tag="si32",
+                to_type="f64",
+                tags=("convert",),
+                lanes=4,
+                inputs=(TslTestArg("vector", values=("1", "-2", "3", "-4")),),
+                expected=("1.0", "-2.0", "3.0", "-4.0"),
+            ),
+        ),
+    )
+    semantics = LoweredPrimitiveSemantics(
+        preconditions=(lane_count_precondition,)
+    )
+    base = _spec(
+        "convert_lanes",
+        "convert_lanes",
+        param_kinds=("v",),
+        extension_name="sve",
+        uses_sized_vector=False,
+        lane_parameter=None,
+        primitive_semantics=semantics,
+    )
+    specs = tuple(
+        replace(
+            base,
+            result_vector_param="ToVec",
+            type_params=(
+                LoweredTypeParam(
+                    "ToVec",
+                    specialize_base=True,
+                    base_type_binding=type_tag,
+                    base_type_binding_spelling=spelling,
+                ),
+            ),
+        )
+        for type_tag, spelling in (("f32", "float"), ("f64", "double"))
+    )
+    catalog = Catalog(
+        primitives=(primitive, *_harness_primitives()),
+        type_groups={},
+        extensions={"sve": _scalable_test_extension()},
+        type_spellings={},
+        translations={},
+    )
+
+    plan = ValueTestPlanner(catalog, (CPP_VALUE_TEST_SUPPORT,)).plan(
+        (ValueTestBackendProfileInput("cpp", "sve", {"convert_lanes": specs}),)
+    )
+
+    assert not plan.diagnostics
+    cases = plan.profiles_for("cpp")[0].cases
+    assert [case.kind for case in cases] == [
+        "scalable_repr_cast",
+        "checked_precondition",
+    ]
+    assert cases[1].checked_precondition is not None
+    assert (
+        cases[1].checked_precondition.kind
+        is PreconditionKind.EQUAL_LANE_COUNT
+    )
+    source = render_cpp_values_runner(plan.profiles_for("cpp")[0], render_assets)
+    assert "using ToVec = tsl::simd<float, tsl::sve>;" in source
+    assert "tsl::convert_lanes<Vec, ToVec>(v0)" in source
+    assert "using ToVec = tsl::simd<double, tsl::sve>;" in source
+    assert "tsl::convert_lanes_checked<Vec, ToVec>(v0, error)" in source
+    assert "precondition_error::lane_count_mismatch" in source
 
 def test_scalable_indexed_lane_uses_one_runtime_lane() -> None:
     insert_value = Primitive(

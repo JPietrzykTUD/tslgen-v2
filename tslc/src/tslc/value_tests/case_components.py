@@ -16,7 +16,7 @@ from tslc.catalog.preconditions import (
 
 ExpectedArity = Literal["optional", "non_empty", "one", "lanes", "target_lanes"]
 InputArity = Literal["optional", "non_empty", "one"]
-ScalableExpectedLayout = Literal["tiled", "indexed_lane"]
+ScalableExpectedLayout = Literal["tiled", "indexed_lane", "indexed_partial"]
 MemoryStorage = Literal["packed", "unpacked"]
 IndexStyle = Literal["register", "pointer"]
 ValueTestFailurePhase = Literal["runtime", "compile"]
@@ -54,6 +54,9 @@ class ValueTestInvalidPreconditionValue(Enum):
     LANE_COUNT = auto()
     SIZE_MAX = auto()
     ACTIVE_DIVISOR_ZERO = auto()
+    LANE_COUNT_MISMATCH = auto()
+    INDEXED_ADDRESS_OUT_OF_RANGE = auto()
+    INDEXED_ADDRESS_MISALIGNED = auto()
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,9 +105,10 @@ class ValueTestExpectation:
     scalable_layout: ScalableExpectedLayout = "tiled"
 
     def __post_init__(self) -> None:
-        if self.scalable_layout not in {"tiled", "indexed_lane"}:
+        if self.scalable_layout not in {"tiled", "indexed_lane", "indexed_partial"}:
             raise ValueError(
-                "value-test scalable expected layout must be 'tiled' or 'indexed_lane'"
+                "value-test scalable expected layout must be 'tiled', "
+                "'indexed_lane', or 'indexed_partial'"
             )
 
 
@@ -140,12 +144,21 @@ class ValueTestCheckedPrecondition:
     error: PreconditionErrorKind
     parameter_index: int
     invalid_value: ValueTestInvalidPreconditionValue
+    invalid_lane_index: int | None = None
 
     def __post_init__(self) -> None:
         if self.parameter_index < 0:
             raise ValueError("checked precondition parameter index must be non-negative")
-        if PRECONDITION_DESCRIPTORS[self.kind].error is not self.error:
+        if self.error not in PRECONDITION_DESCRIPTORS[self.kind].errors:
             raise ValueError("checked precondition error must match its descriptor")
+        if self.invalid_lane_index is not None and self.invalid_lane_index < 0:
+            raise ValueError("checked precondition invalid lane must be non-negative")
+        if (
+            self.kind is PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID
+        ) != (self.invalid_lane_index is not None):
+            raise ValueError(
+                "only indexed-memory checked preconditions carry an invalid lane"
+            )
 
 
 @dataclass(frozen=True, slots=True)

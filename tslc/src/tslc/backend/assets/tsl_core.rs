@@ -36,6 +36,8 @@ pub enum ImplementationState {
     @{precondition_error_variant_overlapping_ranges},
     /// A scaled or offset address cannot be represented.
     @{precondition_error_variant_address_overflow},
+    /// Source and target SIMD types have different logical lane counts.
+    @{precondition_error_variant_lane_count_mismatch},
 }
 
 mod checked_integer_lane_sealed {

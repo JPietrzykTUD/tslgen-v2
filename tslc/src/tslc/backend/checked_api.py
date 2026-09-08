@@ -278,6 +278,16 @@ def checked_api_plan(
             binding = precondition.arithmetic_binding(ArithmeticOperandRole.DIVISOR)
             if binding is None:
                 raise ValueError("divisor precondition has no resolved divisor binding")
+        elif precondition.kind is PreconditionKind.EQUAL_LANE_COUNT:
+            binding = precondition.binding(OperandRole.PRIMARY)
+            if binding is None:
+                raise ValueError(
+                    "equal-lane-count precondition has no resolved primary binding"
+                )
+            if first.target is None and first.result_vector_param is None:
+                raise ValueError(
+                    "equal-lane-count precondition has no resolved target vector"
+                )
         elif descriptor.binds_memory_operand:
             memory = first.primitive_semantics.memory
             if memory is None:

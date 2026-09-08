@@ -293,6 +293,39 @@ def _validate_mask_region(
     )
 
 
+def _validate_mem_region(
+    primitive_name: str,
+    region: Region,
+    diagnostics: list[Diagnostic],
+) -> None:
+    expected_arity = {
+        "load_scalar": 1,
+        "store_scalar": 2,
+        "copy": 3,
+        "set": 3,
+        "alloc": 1,
+        "alloc_aligned": 2,
+        "free": 1,
+    }
+    selector = region.selector_text.strip()
+    groups = split_arg_groups(region.body)
+    if expected_arity.get(selector) == len(groups) and all(
+        _segments_text(group).strip() for group in groups
+    ):
+        return
+    diagnostics.append(
+        diagnostic_at(
+            severity="error",
+            code="TSL-BODY-BAD-MEM",
+            message=(
+                f"primitive {primitive_name!r}: malformed memory operation "
+                f"mem<{region.selector_text}>"
+            ),
+            source=region.source,
+        )
+    )
+
+
 def _validate_var_region(
     primitive_name: str,
     region: Region,
@@ -498,6 +531,7 @@ _SHELL_VALIDATORS: dict[str, ShellValidator] = {
     "let_type": _validate_let_region,
     "intrin_selector": _validate_intrin_region,
     "mask_selector": _validate_mask_region,
+    "mem_selector": _validate_mem_region,
     "no_selector": _validate_no_selector_region,
     "select_expr": _validate_select_expr_region,
     "var_selector": _validate_var_region,

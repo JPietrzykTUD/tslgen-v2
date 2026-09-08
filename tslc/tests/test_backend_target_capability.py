@@ -21,6 +21,7 @@ from tslc.catalog.conversion import (
 from tslc.catalog.register_shapes import RegisterMultiplicity
 from tslc.lane_count import LaneCount
 from tslc.lower.lowerer import LoweredSpecialization
+from tslc.lower.model import LoweredTypeParam
 from tslc.backend.cpp_profile import (
     _cpp_native_registration,
     _cpp_registration,
@@ -132,6 +133,42 @@ def test_cpp_native_registration_exposes_vector_metadata(catalog: Catalog) -> No
     assert "static constexpr std::size_t lane_count() noexcept" in rendered
     assert "static constexpr std::size_t vector_alignment = 16;" in rendered
     assert "static constexpr std::size_t simd_register_alignment_v = vector_alignment;" in rendered
+
+
+def test_native_registration_includes_concrete_simd_type_parameter_bindings(
+    catalog: Catalog,
+) -> None:
+    spec = LoweredSpecialization(
+        backend_id="cpp",
+        primitive_name="gather_narrow",
+        source_primitive_name="gather_narrow",
+        extension_name="sve",
+        type_tag="si32",
+        base_type_spelling="int32_t",
+        register_spelling="svint32_t",
+        result_kind="v",
+        param_names=("base_ptr", "index_ptr", "scale"),
+        param_kinds=("cptr", "cptr", "sImm"),
+        body=LoweredBody.from_text("return svdup_s32(0);"),
+        vector_spelling="tsl::simd<int32_t, tsl::sve>",
+        type_params=(
+            LoweredTypeParam(
+                name="IndicesType",
+                specialize_base=True,
+                base_type_binding="si64",
+                base_type_binding_spelling="int64_t",
+            ),
+        ),
+    )
+
+    assert used_vector_type_specs({"gather_narrow": (spec,)}) == (
+        ("sve", "si32", "int32_t"),
+    )
+    rendered = _cpp_native_registration(
+        {"gather_narrow": (spec,)}, catalog.extensions
+    )
+    assert "struct simd<int32_t, sve>" in rendered
+    assert "struct simd<int64_t, sve>" in rendered
 
 
 def test_rust_target_presentation_capabilities_derive_from_metadata(

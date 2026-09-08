@@ -332,6 +332,17 @@ def test_current_lowered_families_plan_without_reopening_the_catalog(
     ]
     assert "div_checked" not in float_div_block
     assert "pub fn convert_lanes<U>(self)" in facade
+    convert_lanes = next(
+        method
+        for method in plan.comprehensive_methods
+        if method.public_name == "convert_lanes"
+    )
+    assert not convert_lanes.caller_unsafe
+    assert convert_lanes.lower_call_unsafe
+    assert (
+        "// SAFETY: source and target facade shapes have the same logical lane count."
+        in facade
+    )
     assert "pub unsafe fn store<T, const N: usize, const ALIGNED: bool>" in facade
     assert "pub use tsl_facade::load_masked;" in library
     assert "pub use tsl_facade::load_masked_zero;" in library

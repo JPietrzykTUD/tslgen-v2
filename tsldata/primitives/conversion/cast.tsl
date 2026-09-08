@@ -2433,6 +2433,7 @@ prim<v:=v> convert_lanes(data):
     kind numeric
     lane_count preserve_lane_count
     numeric_mode scalar_as
+  preconditions [equal_lane_count]
   return_type:
     vector ToVec
   generic_params:

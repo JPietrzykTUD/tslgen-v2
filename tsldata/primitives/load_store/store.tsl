@@ -627,18 +627,18 @@ prim<void:=(ptr,s)>[aligned=*] store(ptr, scalar):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [raw_pointer]
+          reasons [raw_memory, raw_pointer]
         implementation:
-          tsil "*ptr = scalar;"
+          tsil "mem<store_scalar>(ptr, scalar);"
     sve:
       arith:
         requires [sve]
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [raw_pointer]
+          reasons [raw_memory, raw_pointer]
         implementation:
-          tsil "*ptr = scalar;"
+          tsil "mem<store_scalar>(ptr, scalar);"
 
 prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
   operation store

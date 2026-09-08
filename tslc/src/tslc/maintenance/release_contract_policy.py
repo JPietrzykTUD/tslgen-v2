@@ -15,6 +15,7 @@ from tslc.maintenance.release_contract_model import (
     ProfileSelection,
     ReleasePolicy,
     TargetScopePolicy,
+    TargetSlotExclusionPolicy,
     TargetSpecificCallable,
 )
 
@@ -34,6 +35,7 @@ def load_release_policy(path: Path) -> ReleasePolicy:
             "backend_profiles",
             "target_scopes",
             "target_specific_callables",
+            "target_slot_exclusions",
             "accelerated_core",
         },
         "release policy",
@@ -78,6 +80,15 @@ def load_release_policy(path: Path) -> ReleasePolicy:
             list_value(
                 data.get("target_specific_callables"),
                 "target_specific_callables",
+            )
+        )
+    )
+    target_slot_exclusions = tuple(
+        _target_slot_exclusion(item, index)
+        for index, item in enumerate(
+            list_value(
+                data.get("target_slot_exclusions"),
+                "target_slot_exclusions",
             )
         )
     )
@@ -134,6 +145,7 @@ def load_release_policy(path: Path) -> ReleasePolicy:
         backend_profiles=backend_profiles,
         target_scopes=target_scopes,
         target_specific_callables=target_specific,
+        target_slot_exclusions=target_slot_exclusions,
         accelerated_core=accelerated,
     )
 
@@ -236,6 +248,41 @@ def _target_specific_callable(value: object, index: int) -> TargetSpecificCallab
     exact_keys(data, {"name", "reason"}, owner)
     return TargetSpecificCallable(
         name=string_value(data.get("name"), f"{owner}.name"),
+        reason=string_value(data.get("reason"), f"{owner}.reason"),
+    )
+
+
+def _target_slot_exclusion(
+    value: object, index: int
+) -> TargetSlotExclusionPolicy:
+    owner = f"target_slot_exclusions[{index}]"
+    data = object_value(value, owner)
+    exact_keys(
+        data,
+        {
+            "profiles",
+            "backend",
+            "callable_identities",
+            "type_tags",
+            "reason_id",
+            "reason",
+        },
+        owner,
+    )
+    profiles = string_tuple(data.get("profiles"), f"{owner}.profiles")
+    callables = string_tuple(
+        data.get("callable_identities"), f"{owner}.callable_identities"
+    )
+    if not profiles or not callables:
+        raise ValueError(
+            f"{owner} profiles and callable_identities must be non-empty"
+        )
+    return TargetSlotExclusionPolicy(
+        profiles=profiles,
+        backend_id=string_value(data.get("backend"), f"{owner}.backend"),
+        callable_identities=callables,
+        type_tags=string_tuple(data.get("type_tags"), f"{owner}.type_tags"),
+        reason_id=string_value(data.get("reason_id"), f"{owner}.reason_id"),
         reason=string_value(data.get("reason"), f"{owner}.reason"),
     )
 

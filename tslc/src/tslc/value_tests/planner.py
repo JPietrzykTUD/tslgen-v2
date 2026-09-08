@@ -556,7 +556,9 @@ def _checked_precondition_cases(
     eligible = tuple(
         case
         for case in supported
-        if case.differential is None and case.failure is None
+        if case.differential is None
+        and case.failure is None
+        and case.checked_precondition is None
     )
     bases = tuple(
         case

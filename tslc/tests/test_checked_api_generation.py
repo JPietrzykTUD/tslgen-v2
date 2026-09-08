@@ -178,6 +178,7 @@ def test_cpp_lane_checked_twin_has_direct_result_and_error_reference(
     )
     assert cpp_plan is not None
     assert cpp_plan.failure_placeholder_expression == "typename Vec::base_type{}"
+    assert cpp_plan.result_vector_type_name is None
     assert cpp_plan.error_parameter_declaration.endswith("& error")
     assert "inline typename Vec::base_type extract_value_at(" in rendered
     assert "[[nodiscard]] TSL_FORCE_INLINE auto extract_value_at_checked(" in rendered
@@ -214,6 +215,48 @@ def test_rust_lane_unchecked_is_unsafe_and_checked_returns_result(
     assert "/// # Errors" in docs
     assert "Returns `PreconditionError::IndexOutOfBounds`" in docs
     assert "/// # Safety" in docs
+
+
+def test_convert_lanes_checked_uses_typed_lane_count_and_scalable_placeholder(
+    catalog: Catalog,
+    machine_profiles: Mapping[str, MachineProfile],
+) -> None:
+    cpp_spec = _lowered(
+        catalog,
+        machine_profiles,
+        "convert_lanes",
+        "cpp",
+        extension_name="sve",
+        profile_name="sve",
+    )
+    cpp = CppBackend().render_primitive("convert_lanes", (cpp_spec,))
+    cpp_plan = plan_cpp_checked_api(
+        (cpp_spec,),
+        result_kind=cpp_spec.result_kind,
+        result_type="typename ToVec::register_type",
+    )
+
+    assert cpp_plan is not None
+    assert cpp_plan.result_vector_type_name == "ToVec"
+    assert "if (Vec::lane_count() != ToVec::lane_count())" in cpp
+    assert "error = ::tsl::precondition_error::lane_count_mismatch;" in cpp
+    assert "return ::tsl::set_zero<ToVec>();" in cpp
+    assert any(
+        origin.origin == "C++ checked failure value"
+        and origin.dependency.primitive == "set_zero"
+        and getattr(origin.dependency.source, "parameter_name", None) == "ToVec"
+        for origin in cpp_spec.call_dependency_origins
+    )
+
+    rust_spec = _lowered(
+        catalog,
+        machine_profiles,
+        "convert_lanes",
+        "rust",
+    )
+    rust = RustBackend().render_primitive_public("convert_lanes", (rust_spec,))
+    assert "if S::lane_count() != ToVec::lane_count()" in rust
+    assert "return Err(PreconditionError::LaneCountMismatch);" in rust
 
 
 def test_total_integral_mask_test_gets_no_checked_twin_or_unsafe_surface(
@@ -261,6 +304,17 @@ def test_insert_and_mask_set_follow_the_same_declared_lane_contract(
         cpp = CppBackend().render_primitive(primitive_name, (cpp_spec,))
         assert f"{primitive_name}_checked" in cpp
         assert "if (index >= Vec::lane_count())" in cpp
+        placeholder = (
+            "::tsl::set_zero<Vec>()"
+            if primitive_name == "insert_value_at"
+            else "::tsl::mask_false<Vec>()"
+        )
+        assert f"return {placeholder};" in cpp
+        assert any(
+            origin.origin == "C++ checked failure value"
+            and origin.dependency.primitive in {"set_zero", "mask_false"}
+            for origin in cpp_spec.call_dependency_origins
+        )
 
         rust_spec = _lowered(catalog, machine_profiles, primitive_name, "rust")
         rust = RustBackend().render_primitive(primitive_name, (rust_spec,))
@@ -629,19 +683,19 @@ def test_indexed_memory_checked_twins_use_typed_address_facts(
         PreconditionErrorKind.MISALIGNED,
     )
     assert condition.check_primitives == (
-        PreconditionCheckPrimitive.VECTOR_TO_ARRAY,
+        PreconditionCheckPrimitive.VECTOR_EXTRACT_LANE,
     )
 
     cpp = CppBackend().render_checked_wrappers("gather", (gather,))
     rust_spec = _lowered(catalog, machine_profiles, "gather", "rust")
     rust = RustBackend().render_primitive_public("gather", (rust_spec,))
     assert "::tsl::span<typename Vec::base_type const> base_ptr" in cpp
-    assert "::tsl::to_array<IndicesType>(index)" in cpp
+    assert "::tsl::extract_value_at<IndicesType>(index, __tsl_lane)" in cpp
     assert "IndicesType::lane_count() < Vec::lane_count()" in cpp
     assert "__tsl_lane < Vec::lane_count()" in cpp
     assert "indexed_memory_address_error<typename Vec::base_type>" in cpp
     assert "base_ptr: &[S::BaseType]" in rust
-    assert "let __tsl_indices = to_array::<IndicesType>(index);" in rust
+    assert "extract_value_at::<IndicesType>(index, __tsl_lane)" in rust
     assert "IndicesType::lane_count() < S::lane_count()" in rust
     assert "0..S::lane_count()" in rust
     assert "indexed_memory_address_error::<_, S::BaseType>" in rust
@@ -898,7 +952,7 @@ def test_unrepresentable_or_already_reported_raw_memory_has_no_checked_twin(
         assert f"{primitive_name}_checked" not in rendered
 
 
-def test_unavailable_checked_guard_keeps_the_unchecked_specialization(
+def test_scalable_indexed_checked_guard_closes_over_lane_extraction(
     data_root: Path,
     machine_profiles_path: Path,
 ) -> None:
@@ -915,11 +969,8 @@ def test_unavailable_checked_guard_keeps_the_unchecked_specialization(
     assert result.emitted_profiles
     specializations = result.emitted_profiles[0].specializations("cpp")["scatter"]
     sve = next(spec for spec in specializations if spec.extension_name == "sve")
-    assert tuple(
-        origin.dependency.primitive
-        for origin in sve.unavailable_checked_dependency_origins
-    ) == ("to_array",)
-    assert applicable_checked_api_plan((sve,)) is None
+    assert sve.unavailable_checked_dependency_origins == ()
+    assert applicable_checked_api_plan((sve,)) is not None
 
     source = "\n".join(
         artifact.content
@@ -927,7 +978,8 @@ def test_unavailable_checked_guard_keeps_the_unchecked_specialization(
         if artifact.logical_path.endswith("/include/tsl_sve.hpp")
     )
     assert "inline void scatter(" in source
-    assert "scatter_checked" not in source
+    assert "scatter_checked" in source
+    assert "::tsl::extract_value_at<IndicesType>" in source
 
 
 @pytest.fixture(scope="module")

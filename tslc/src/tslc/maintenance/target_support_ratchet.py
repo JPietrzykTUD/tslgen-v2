@@ -26,7 +26,7 @@ from tslc.target_support import (
 )
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
-_BASELINE_VERSION = 1
+_BASELINE_VERSION = 3
 _TARGET_SPECIFIC = "TSL-V1-TARGET-SPECIFIC-CALLABLE"
 _FIXED_SHAPE = "TSL-V1-RUNTIME-SCALABLE-FIXED-SHAPE"
 _NO_VECTOR_AXIS = "TSL-V1-NO-TARGET-VECTOR-AXIS"
@@ -62,13 +62,15 @@ class Exclusion:
     profile: str
     backend: str
     declaration_identity: str
+    type_tag: str | None
     reason_id: str
 
-    def sort_key(self) -> tuple[str, str, str, str]:
+    def sort_key(self) -> tuple[str, str, str, str, str]:
         return (
             self.profile,
             self.backend,
             self.declaration_identity,
+            self.type_tag or "",
             self.reason_id,
         )
 
@@ -77,6 +79,8 @@ class Exclusion:
 class Snapshot:
     profile_targets: tuple[tuple[str, str, str], ...]
     types: tuple[str, ...]
+    accelerated_core: tuple[str, ...]
+    fallback_exceptions: tuple[str, ...]
     exclusions: tuple[Exclusion, ...]
     slots: dict[TargetSupportKey, SlotRecord]
 
@@ -154,6 +158,7 @@ def compute_snapshot(
     target_specific = frozenset(
         item.name for item in contract.policy.target_specific_callables
     )
+    reviewed_slot_exclusions = contract.policy.target_slot_exclusions
     exclusions: set[Exclusion] = set()
     grouped: dict[TargetSupportKey, list[SlotOutcome]] = defaultdict(list)
     accounted: set[tuple[str, str, str]] = set()
@@ -166,16 +171,36 @@ def compute_snapshot(
         if family is None:
             continue
         reason_id: str | None = None
+        exclusion_type: str | None = None
         if family.name in target_specific:
             reason_id = _TARGET_SPECIFIC
         elif family.fixed_shape_only and scope in runtime_scalable:
             reason_id = _FIXED_SHAPE
+        else:
+            reviewed = next(
+                (
+                    item
+                    for item in reviewed_slot_exclusions
+                    if entry.key.profile in item.profiles
+                    and entry.key.backend == item.backend_id
+                    and family.identity in item.callable_identities
+                    and (
+                        not item.type_tags
+                        or entry.key.type_tag in item.type_tags
+                    )
+                ),
+                None,
+            )
+            if reviewed is not None:
+                reason_id = reviewed.reason_id
+                exclusion_type = entry.key.type_tag if reviewed.type_tags else None
         if reason_id is not None:
             exclusions.add(
                 Exclusion(
                     entry.key.profile,
                     entry.key.backend,
                     family.identity,
+                    exclusion_type,
                     reason_id,
                 )
             )
@@ -192,17 +217,21 @@ def compute_snapshot(
                 continue
             if family.name in target_specific:
                 exclusions.add(
-                    Exclusion(profile, backend, family.identity, _TARGET_SPECIFIC)
+                    Exclusion(
+                        profile, backend, family.identity, None, _TARGET_SPECIFIC
+                    )
                 )
                 continue
             if family.fixed_shape_only and (profile, backend) in runtime_scalable:
                 exclusions.add(
-                    Exclusion(profile, backend, family.identity, _FIXED_SHAPE)
+                    Exclusion(profile, backend, family.identity, None, _FIXED_SHAPE)
                 )
                 continue
             shape = parse_signature(family.signature)
             if shape is not None and DEFAULT_SUPPORT_POLICY.shape_is_free_function(shape):
-                exclusions.add(Exclusion(profile, backend, family.identity, _NO_VECTOR_AXIS))
+                exclusions.add(
+                    Exclusion(profile, backend, family.identity, None, _NO_VECTOR_AXIS)
+                )
                 continue
             unaccounted.append(
                 f"{profile}/{backend} {family.identity}"
@@ -221,6 +250,8 @@ def compute_snapshot(
         Snapshot(
             profile_targets=profile_targets,
             types=DEFAULT_SCALAR_TYPE_TAGS,
+            accelerated_core=contract.accelerated_core,
+            fallback_exceptions=contract.policy.accelerated_core.fallback_exceptions,
             exclusions=tuple(sorted(exclusions, key=Exclusion.sort_key)),
             slots=slots,
         ),
@@ -246,6 +277,13 @@ def diff_snapshots(baseline: Snapshot, current: Snapshot) -> DiffReport:
     if baseline.profile_targets != current.profile_targets or baseline.types != current.types:
         changes.append(
             SlotChange(None, "regressed", "canonical profile/target/type scope changed")
+        )
+    if (
+        baseline.accelerated_core != current.accelerated_core
+        or baseline.fallback_exceptions != current.fallback_exceptions
+    ):
+        changes.append(
+            SlotChange(None, "regressed", "implementation-quality policy changed")
         )
     if baseline.exclusions != current.exclusions:
         changes.append(
@@ -363,6 +401,50 @@ def _record_summary(record: SlotRecord) -> str:
     return ",".join(f"{key}={counts[key]}" for key in sorted(counts))
 
 
+def implementation_quality_gaps(
+    snapshot: Snapshot,
+    *,
+    profiles: frozenset[str] | None = None,
+) -> tuple[SlotChange, ...]:
+    """Return emitted slots whose implementation state violates release policy."""
+
+    accelerated = frozenset(snapshot.accelerated_core)
+    exceptions = frozenset(snapshot.fallback_exceptions)
+    gaps: list[SlotChange] = []
+    for key, record in sorted(
+        snapshot.slots.items(), key=lambda item: item[0].sort_key()
+    ):
+        if profiles is not None and key.profile not in profiles:
+            continue
+        for outcome in record.outcomes:
+            if outcome.status is not TargetSupportStatus.EMITTED:
+                continue
+            state = outcome.implementation_state
+            if state is None or state == "unknown":
+                gaps.append(
+                    SlotChange(
+                        key,
+                        "quality-gap",
+                        "emitted realization has no classified implementation state"
+                        if state is None
+                        else "emitted realization has unknown implementation state",
+                    )
+                )
+            elif (
+                state == "fallback"
+                and key.declaration_identity in accelerated
+                and key.declaration_identity not in exceptions
+            ):
+                gaps.append(
+                    SlotChange(
+                        key,
+                        "quality-gap",
+                        "accelerated-core fallback lacks an exact reviewed exception",
+                    )
+                )
+    return tuple(gaps)
+
+
 def serialize(snapshot: Snapshot) -> str:
     lines = [
         "{",
@@ -371,6 +453,12 @@ def serialize(snapshot: Snapshot) -> str:
         + json.dumps(snapshot.profile_targets, separators=(",", ":"))
         + ",",
         '  "types": ' + json.dumps(snapshot.types, separators=(",", ":")) + ",",
+        '  "accelerated_core": '
+        + json.dumps(snapshot.accelerated_core, separators=(",", ":"))
+        + ",",
+        '  "fallback_exceptions": '
+        + json.dumps(snapshot.fallback_exceptions, separators=(",", ":"))
+        + ",",
         '  "exclusions": [',
     ]
     for index, exclusion in enumerate(snapshot.exclusions):
@@ -378,7 +466,13 @@ def serialize(snapshot: Snapshot) -> str:
         lines.append(
             "    "
             + json.dumps(
-                [*exclusion.sort_key()],
+                [
+                    exclusion.profile,
+                    exclusion.backend,
+                    exclusion.declaration_identity,
+                    exclusion.type_tag,
+                    exclusion.reason_id,
+                ],
                 separators=(",", ":"),
             )
             + suffix
@@ -411,6 +505,8 @@ def deserialize(text: str) -> Snapshot:
     return Snapshot(
         profile_targets=tuple(tuple(item) for item in payload["profile_targets"]),
         types=tuple(payload["types"]),
+        accelerated_core=tuple(payload["accelerated_core"]),
+        fallback_exceptions=tuple(payload["fallback_exceptions"]),
         exclusions=tuple(Exclusion(*item) for item in payload["exclusions"]),
         slots={
             (key := _key_from_payload(item["key"])): SlotRecord(
@@ -565,6 +661,12 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="also fail when any stable slot is not emitted",
     )
+    parser.add_argument(
+        "--profile",
+        action="append",
+        default=[],
+        help="limit completeness and implementation-quality gates to this profile",
+    )
     args = parser.parse_args(argv)
     context = _repo_context.require_repo_context(parser)
     snapshot, errors = compute_snapshot(
@@ -579,9 +681,40 @@ def main(argv: list[str] | None = None) -> int:
         for error in errors:
             print(f"  {error}", file=sys.stderr)
         return 2
+    requested_profiles = frozenset(args.profile)
+    known_profiles = frozenset(
+        profile for profile, _backend, _target in snapshot.profile_targets
+    )
+    unknown_profiles = sorted(requested_profiles - known_profiles)
+    if unknown_profiles:
+        print(
+            "unknown release target profile(s): " + ", ".join(unknown_profiles),
+            file=sys.stderr,
+        )
+        return 2
     path = Path(args.baseline) if args.baseline else canonical_baseline_path(context)
+    quality_gaps = implementation_quality_gaps(
+        snapshot,
+        profiles=None if args.update else requested_profiles or None,
+    )
+    if quality_gaps:
+        for gap in quality_gaps[:100]:
+            assert gap.key is not None
+            print(f"  quality-gap: {_label(gap.key)}: {gap.detail}")
+        if len(quality_gaps) > 100:
+            print(f"  ... and {len(quality_gaps) - 100} more")
+        print(f"FAIL: {len(quality_gaps)} implementation-quality gap(s)")
+        return 1
     if args.update:
-        previous = deserialize(path.read_text(encoding="utf-8")) if path.is_file() else None
+        previous = None
+        if path.is_file():
+            try:
+                previous = deserialize(path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, ValueError):
+                print(
+                    f"replacing incompatible target-support baseline {path}",
+                    file=sys.stderr,
+                )
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(serialize(snapshot), encoding="utf-8")
         if previous is not None:
@@ -598,7 +731,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"FAIL: {len(diff.regressions)} target-support regression(s)")
         return 1
     incomplete = tuple(
-        key for key, record in snapshot.slots.items() if not _complete(record)
+        key
+        for key, record in snapshot.slots.items()
+        if (not requested_profiles or key.profile in requested_profiles)
+        and not _complete(record)
     )
     if args.require_complete and incomplete:
         print(f"FAIL: {len(incomplete)} target-support slot(s) are incomplete")
@@ -618,6 +754,7 @@ __all__ = (
     "deserialize",
     "diff_snapshots",
     "format_report",
+    "implementation_quality_gaps",
     "main",
     "serialize",
 )

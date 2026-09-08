@@ -1349,8 +1349,21 @@
         "numeric_mode": "scalar_as"
       },
       "shift": null,
-      "checked_source_contract": false,
-      "preconditions": []
+      "checked_source_contract": true,
+      "preconditions": [
+        {
+          "kind": "equal_lane_count",
+          "operands": [
+            {
+              "domain": "operation",
+              "role": "primary",
+              "parameter": "data",
+              "parameter_index": 0,
+              "parameter_kind": "v"
+            }
+          ]
+        }
+      ]
     },
     {
       "name": "convert_up",
@@ -7822,6 +7835,28 @@
       ]
     },
     {
+      "kind": "equal_lane_count",
+      "description": "The source and target SIMD types have equal logical lane counts.",
+      "hazard": "catastrophic",
+      "error": "lane_count_mismatch",
+      "additional_errors": [],
+      "unchecked_consequence": "Violating this precondition may access a result lane outside the target vector, causing undefined behavior or a process-level fault.",
+      "required_roles": [
+        "primary"
+      ],
+      "compatible_operations": [
+        "convert"
+      ],
+      "required_arithmetic_roles": [],
+      "compatible_arithmetic_operations": [],
+      "numeric_domain": null,
+      "checkable_arithmetic_binding_kinds": [],
+      "check_primitives": [],
+      "masked_check_primitives": [],
+      "compatible_memory_accesses": [],
+      "compatible_memory_addressings": []
+    },
+    {
       "kind": "indexed_memory_address_valid",
       "description": "The index-vector lane extent satisfies the indexed memory contract, and every active accessed index with its compile-time byte scale forms an aligned element address wholly inside the represented base range without overflowing address arithmetic.",
       "hazard": "catastrophic",
@@ -7844,7 +7879,7 @@
       "numeric_domain": null,
       "checkable_arithmetic_binding_kinds": [],
       "check_primitives": [
-        "to_array"
+        "extract_value_at"
       ],
       "masked_check_primitives": [
         "mask_false",
@@ -7955,6 +7990,11 @@
         "kind": "address_overflow",
         "cpp": "address_overflow",
         "rust": "AddressOverflow"
+      },
+      {
+        "kind": "lane_count_mismatch",
+        "cpp": "lane_count_mismatch",
+        "rust": "LaneCountMismatch"
       }
     ]
   },
@@ -37165,6 +37205,132 @@
           "classification_scope": "exact"
         },
         {
+          "identity": "tsl::convert_lanes_checked#vector",
+          "name": "convert_lanes_checked",
+          "owner": "tsl",
+          "reachability": [
+            "tsl.hpp",
+            "profile:avx2",
+            "header:base"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "checked-vector:v=(v)",
+          "template_parameters": [
+            {
+              "name": "Vec",
+              "kind": "type",
+              "type": null,
+              "default": null,
+              "constraint": null
+            },
+            {
+              "name": "ToVec",
+              "kind": "type",
+              "type": null,
+              "default": null,
+              "constraint": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "data",
+              "type": "typename tsl::reg_param<Vec>::type",
+              "role": "operation:primary",
+              "declaration": null
+            },
+            {
+              "name": "error",
+              "type": "::tsl::precondition_error &",
+              "role": "error_output",
+              "declaration": null
+            }
+          ],
+          "result_type": "typename ToVec::register_type",
+          "specifiers": [
+            "TSL_FORCE_INLINE"
+          ],
+          "attributes": [
+            "[[nodiscard]]"
+          ],
+          "noexcept": true,
+          "trailing_return": true,
+          "alias_target": null,
+          "type_form": null,
+          "underlying_type": null,
+          "enumerators": [],
+          "qualifiers": [],
+          "type_spelling": null,
+          "value": null,
+          "reexport_of": null,
+          "checked_of": "tsl::convert_lanes#vector",
+          "error_form": "result-plus-error-reference",
+          "classification_scope": "exact"
+        },
+        {
+          "identity": "tsl::convert_lanes_checked#vector",
+          "name": "convert_lanes_checked",
+          "owner": "tsl",
+          "reachability": [
+            "tsl.hpp",
+            "profile:scalar",
+            "header:base"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "checked-vector:v=(v)",
+          "template_parameters": [
+            {
+              "name": "Vec",
+              "kind": "type",
+              "type": null,
+              "default": null,
+              "constraint": null
+            },
+            {
+              "name": "ToVec",
+              "kind": "type",
+              "type": null,
+              "default": null,
+              "constraint": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "data",
+              "type": "typename tsl::reg_param<Vec>::type",
+              "role": "operation:primary",
+              "declaration": null
+            },
+            {
+              "name": "error",
+              "type": "::tsl::precondition_error &",
+              "role": "error_output",
+              "declaration": null
+            }
+          ],
+          "result_type": "typename ToVec::register_type",
+          "specifiers": [
+            "TSL_FORCE_INLINE"
+          ],
+          "attributes": [
+            "[[nodiscard]]"
+          ],
+          "noexcept": true,
+          "trailing_return": true,
+          "alias_target": null,
+          "type_form": null,
+          "underlying_type": null,
+          "enumerators": [],
+          "qualifiers": [],
+          "type_spelling": null,
+          "value": null,
+          "reexport_of": null,
+          "checked_of": "tsl::convert_lanes#vector",
+          "error_form": "result-plus-error-reference",
+          "classification_scope": "exact"
+        },
+        {
           "identity": "tsl::convert_up#vector",
           "name": "convert_up",
           "owner": "tsl",
@@ -55445,7 +55611,8 @@
             "insufficient_output",
             "misaligned",
             "overlapping_ranges",
-            "address_overflow"
+            "address_overflow",
+            "lane_count_mismatch"
           ],
           "qualifiers": [],
           "type_spelling": null,
@@ -318415,7 +318582,7 @@
           "result_type": "ToVec::RegisterType",
           "result_form": "direct",
           "attributes": [],
-          "unsafe": false,
+          "unsafe": true,
           "const": false,
           "type_spelling": null,
           "value": null,
@@ -318484,7 +318651,7 @@
           "result_type": "ToVec::RegisterType",
           "result_form": "direct",
           "attributes": [],
-          "unsafe": false,
+          "unsafe": true,
           "const": false,
           "type_spelling": null,
           "value": null,
@@ -318497,6 +318664,149 @@
           "reexport_of": null,
           "checked_of": null,
           "error_form": null,
+          "classification_scope": "exact"
+        },
+        {
+          "identity": "crate::profile::convert_lanes_checked#vector",
+          "name": "convert_lanes_checked",
+          "owner": "crate::profile",
+          "reachability": [
+            "crate",
+            "profile",
+            "selection:avx2",
+            "target-arch:x86_64",
+            "target-features:avx,avx2,rdrand,sse,sse2,sse4.1,sse4.2,ssse3"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "checked-vector:v=(v)",
+          "visibility": "pub",
+          "generic_parameters": [
+            {
+              "name": "S",
+              "kind": "type",
+              "declaration": "S: detail::primitives::Convert_lanesImpl<ToVec, <ToVec::BaseType as BaseTypeDispatch>::Key>",
+              "bounds": [
+                "detail::primitives::Convert_lanesImpl<ToVec, <ToVec::BaseType as BaseTypeDispatch>::Key>"
+              ],
+              "type": null,
+              "default": null
+            },
+            {
+              "name": "ToVec",
+              "kind": "type",
+              "declaration": "ToVec: StaticSimdVector + detail::primitives::From_arrayImpl + detail::primitives::Set_zeroImpl + detail::primitives::To_arrayImpl",
+              "bounds": [
+                "StaticSimdVector",
+                "detail::primitives::From_arrayImpl",
+                "detail::primitives::Set_zeroImpl",
+                "detail::primitives::To_arrayImpl"
+              ],
+              "type": null,
+              "default": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "data",
+              "type": "S::RegisterType",
+              "role": "operation:primary",
+              "receiver": false
+            }
+          ],
+          "where_predicates": [
+            "ToVec::BaseType: BaseTypeDispatch"
+          ],
+          "where_inline": false,
+          "result_type": "Result<ToVec::RegisterType, PreconditionError>",
+          "result_form": "result",
+          "attributes": [
+            "#[inline]"
+          ],
+          "unsafe": false,
+          "const": false,
+          "type_spelling": null,
+          "value": null,
+          "type_form": null,
+          "alias_target": null,
+          "supertraits": [],
+          "associated_items": [],
+          "enumerators": [],
+          "reexport_target": null,
+          "reexport_of": null,
+          "checked_of": "crate::profile::convert_lanes#vector",
+          "error_form": "result",
+          "classification_scope": "exact"
+        },
+        {
+          "identity": "crate::profile::convert_lanes_checked#vector",
+          "name": "convert_lanes_checked",
+          "owner": "crate::profile",
+          "reachability": [
+            "crate",
+            "profile",
+            "selection:fallback",
+            "excludes:x86_64:avx,avx2,rdrand,sse,sse2,sse4.1,sse4.2,ssse3"
+          ],
+          "stability": "stable",
+          "kind": "function",
+          "overload": "checked-vector:v=(v)",
+          "visibility": "pub",
+          "generic_parameters": [
+            {
+              "name": "S",
+              "kind": "type",
+              "declaration": "S: detail::primitives::Convert_lanesImpl<ToVec, <ToVec::BaseType as BaseTypeDispatch>::Key>",
+              "bounds": [
+                "detail::primitives::Convert_lanesImpl<ToVec, <ToVec::BaseType as BaseTypeDispatch>::Key>"
+              ],
+              "type": null,
+              "default": null
+            },
+            {
+              "name": "ToVec",
+              "kind": "type",
+              "declaration": "ToVec: StaticSimdVector + detail::primitives::From_arrayImpl + detail::primitives::Set_zeroImpl + detail::primitives::To_arrayImpl",
+              "bounds": [
+                "StaticSimdVector",
+                "detail::primitives::From_arrayImpl",
+                "detail::primitives::Set_zeroImpl",
+                "detail::primitives::To_arrayImpl"
+              ],
+              "type": null,
+              "default": null
+            }
+          ],
+          "parameters": [
+            {
+              "name": "data",
+              "type": "S::RegisterType",
+              "role": "operation:primary",
+              "receiver": false
+            }
+          ],
+          "where_predicates": [
+            "ToVec::BaseType: BaseTypeDispatch"
+          ],
+          "where_inline": false,
+          "result_type": "Result<ToVec::RegisterType, PreconditionError>",
+          "result_form": "result",
+          "attributes": [
+            "#[inline]"
+          ],
+          "unsafe": false,
+          "const": false,
+          "type_spelling": null,
+          "value": null,
+          "type_form": null,
+          "alias_target": null,
+          "supertraits": [],
+          "associated_items": [],
+          "enumerators": [],
+          "reexport_target": null,
+          "reexport_of": null,
+          "checked_of": "crate::profile::convert_lanes#vector",
+          "error_form": "result",
           "classification_scope": "exact"
         },
         {
@@ -338879,7 +339189,8 @@
             "InsufficientOutput",
             "Misaligned",
             "OverlappingRanges",
-            "AddressOverflow"
+            "AddressOverflow",
+            "LaneCountMismatch"
           ],
           "reexport_target": null,
           "reexport_of": null,

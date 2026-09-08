@@ -103,7 +103,7 @@ def _private_trait(method: RustComprehensiveMethod) -> str:
         lanes="N",
     )
     return_suffix = "" if method.result_kind == "void" else f" -> {return_type}"
-    unsafe_prefix = "unsafe " if method.caller_unsafe else ""
+    unsafe_prefix = "unsafe " if method.lower_call_unsafe else ""
     return "\n".join(
         (
             f"pub trait {trait_name}<{', '.join(generic_parts)}>: Representation<N>"
@@ -172,10 +172,10 @@ def _private_impl(
         arm.call,
         include_result_suffix=False,
     )
-    if method.caller_unsafe:
+    if method.lower_call_unsafe:
         call = f"unsafe {{ {call} }}"
     result = f"{call}{arm.call.result_suffix}"
-    unsafe_prefix = "unsafe " if method.caller_unsafe else ""
+    unsafe_prefix = "unsafe " if method.lower_call_unsafe else ""
     memory_condition = rust_checked_memory_alignment_condition(
         method.checked_conditions
     )
@@ -195,9 +195,10 @@ def _private_impl(
         else ()
     )
     body_lines = []
-    if method.caller_unsafe:
+    if method.lower_call_unsafe:
         body_lines.append(
-            "        // SAFETY: forwarded from the public facade caller contract."
+            "        // SAFETY: the private trait is callable only through a facade "
+            "shape that preserves the lower-level contract."
         )
     body_lines.append(f"        {result}")
     return "\n".join(
@@ -315,10 +316,11 @@ def _public_inherent_method(
                 else (
                     "        // SAFETY: upheld by this method's caller contract."
                     if shape_caller_unsafe
-                    else "        // SAFETY: this lane type has no applicable public precondition."
+                    else "        // SAFETY: this facade specialization has no "
+                    "outstanding caller obligation."
                 )
             ),
-        ) if method.caller_unsafe else ()),
+        ) if method.lower_call_unsafe else ()),
         *_public_success_lines(
             result,
             result_kind=method.result_kind,
@@ -403,9 +405,14 @@ def _public_free_function(
             (
                 "    // SAFETY: checked above before forwarding."
                 if checked
-                else "    // SAFETY: upheld by this function's caller contract."
+                else (
+                    "    // SAFETY: upheld by this function's caller contract."
+                    if method.caller_unsafe
+                    else "    // SAFETY: this facade signature has no outstanding "
+                    "caller obligation."
+                )
             ),
-        ) if method.caller_unsafe else ()),
+        ) if method.lower_call_unsafe else ()),
         *_public_success_lines(
             result,
             result_kind=method.result_kind,
@@ -547,7 +554,7 @@ def _example_call(
 
 
 def _unsafe_forward(method: RustComprehensiveMethod, call: str) -> str:
-    return f"unsafe {{ {call} }}" if method.caller_unsafe else call
+    return f"unsafe {{ {call} }}" if method.lower_call_unsafe else call
 
 
 def _runtime_parameters(

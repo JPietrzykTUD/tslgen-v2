@@ -60,11 +60,16 @@ def test_public_api_matches_reviewed_v1_baseline() -> None:
                 "cpp": "overlapping_ranges",
                 "rust": "OverlappingRanges",
             },
-            {
-                "kind": "address_overflow",
-                "cpp": "address_overflow",
-                "rust": "AddressOverflow",
-            },
+                {
+                    "kind": "address_overflow",
+                    "cpp": "address_overflow",
+                    "rust": "AddressOverflow",
+                },
+                {
+                    "kind": "lane_count_mismatch",
+                    "cpp": "lane_count_mismatch",
+                    "rust": "LaneCountMismatch",
+                },
         ],
     }
     assert baseline["cpp_checked_algorithm_families"]

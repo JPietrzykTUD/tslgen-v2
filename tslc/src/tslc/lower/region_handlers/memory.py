@@ -11,11 +11,11 @@ from tslc.target_text import RenderField, RenderText, render_text, trimmed_text
 
 
 class MemLowerer:
-    """``mem<copy>(dst, src, count) / mem<set>(ptr, value, count) / mem<alloc>(count) /
-    mem<alloc_aligned>(align, count) / mem<free>(ptr)`` -> a raw memory operation, lowered
-    through a backend translate template keyed by ``mem_<op>`` (C++ ``std::memcpy`` etc.;
-    Rust ``crate::tsl_core::mem_copy`` etc.). Like the intrinsics, raw pointer access is
-    ``unsafe`` in Rust, so the body is marked unsafe (a no-op for C++)."""
+    """Lower typed scalar and raw byte-memory operations through backend templates.
+
+    Like intrinsics, direct pointer access is unsafe in Rust, so every operation
+    contributes the compiler-owned raw-memory safety fact.
+    """
 
     keyword = "mem"
 
@@ -29,7 +29,11 @@ class MemLowerer:
             rendered = render(group)
             if render_text(rendered).strip():
                 args.append(trimmed_text(rendered))
-        if op == "copy" and len(args) == 3:
+        if op == "load_scalar" and len(args) == 1:
+            key, fields = "mem_load_scalar", {"ptr": args[0]}
+        elif op == "store_scalar" and len(args) == 2:
+            key, fields = "mem_store_scalar", {"ptr": args[0], "value": args[1]}
+        elif op == "copy" and len(args) == 3:
             key, fields = "mem_copy", {"dst": args[0], "src": args[1], "count": args[2]}
         elif op == "set" and len(args) == 3:
             key, fields = "mem_set", {"ptr": args[0], "value": args[1], "count": args[2]}

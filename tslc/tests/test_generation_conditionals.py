@@ -756,7 +756,7 @@ def test_scalar_load_store_kinds(catalog: Catalog, machine_profiles) -> None:
     load = _spec(catalog, machine_profiles, "scalar", "load", "scalar", "si32")
     assert load is not None
     assert load.result_kind == "v" and load.param_kinds == ("cptr",)
-    assert "return *ptr;" in load.body_text
+    assert "return *(ptr);" in load.body_text
 
 
 def test_scalar_load_store_rust_is_unsafe(catalog: Catalog, machine_profiles) -> None:

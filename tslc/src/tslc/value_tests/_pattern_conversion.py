@@ -17,7 +17,10 @@ from tslc.value_tests._case_conversion import (
     repr_cast_case,
     target_imask_case,
 )
-from tslc.value_tests._case_scalable import scalable_repr_cast_cases
+from tslc.value_tests._case_scalable import (
+    scalable_lane_convert_cases,
+    scalable_repr_cast_cases,
+)
 from tslc.value_tests._pattern_base import _BasePattern, ValueTestCaseContext
 from tslc.value_tests.model import ValueTestCasePlan
 
@@ -109,6 +112,17 @@ class _LaneConvertPattern(_BasePattern):
         )
 
     def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
+        scalable = scalable_lane_convert_cases(
+            context.emitted_name,
+            context.index,
+            context.case,
+            context.specs,
+            context.catalog,
+            context.harness,
+            context.backend,
+        )
+        if scalable:
+            return scalable
         plan = lane_convert_case(
             context.emitted_name,
             context.index,

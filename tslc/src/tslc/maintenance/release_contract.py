@@ -12,6 +12,7 @@ from typing import Any
 
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.model import Catalog
+from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS
 from tslc.catalog.signatures import parse_signature
 from tslc.diagnostics import format_diagnostic, has_errors
 from tslc.maintenance._catalog import load_repository_catalog
@@ -147,6 +148,7 @@ def build_release_contract(context: RepoContext) -> ReleaseContract:
     baseline = object_value(json.loads(baseline_text), "public API baseline")
     families = _callable_families(baseline)
     family_names = frozenset(family.name for family in families)
+    family_identities = frozenset(family.identity for family in families)
     unknown_target_specific = sorted(
         item.name
         for item in policy.target_specific_callables
@@ -160,6 +162,56 @@ def build_release_contract(context: RepoContext) -> ReleaseContract:
     target_specific_names = frozenset(
         item.name for item in policy.target_specific_callables
     )
+    target_profiles = frozenset(
+        (scope.backend_id, profile)
+        for scope in policy.target_scopes
+        for profile in scope.profiles
+    )
+    seen_target_exclusions: set[tuple[str, str, str, str]] = set()
+    for exclusion in policy.target_slot_exclusions:
+        missing_profiles = sorted(
+            profile
+            for profile in exclusion.profiles
+            if (exclusion.backend_id, profile) not in target_profiles
+        )
+        if missing_profiles:
+            raise ValueError(
+                f"target-slot exclusion {exclusion.reason_id!r} profiles are "
+                f"outside target scopes for backend {exclusion.backend_id!r}: "
+                + ", ".join(missing_profiles)
+            )
+        unknown_callables = sorted(
+            set(exclusion.callable_identities) - family_identities
+        )
+        if unknown_callables:
+            raise ValueError(
+                f"target-slot exclusion {exclusion.reason_id!r} names unknown "
+                "callable identities: " + ", ".join(unknown_callables)
+            )
+        unknown_types = sorted(
+            set(exclusion.type_tags) - set(DEFAULT_SCALAR_TYPE_TAGS)
+        )
+        if unknown_types:
+            raise ValueError(
+                f"target-slot exclusion {exclusion.reason_id!r} names unknown "
+                "scalar types: " + ", ".join(unknown_types)
+            )
+        for profile in exclusion.profiles:
+            for callable_identity in exclusion.callable_identities:
+                for type_tag in exclusion.type_tags or DEFAULT_SCALAR_TYPE_TAGS:
+                    key = (
+                        profile,
+                        exclusion.backend_id,
+                        callable_identity,
+                        type_tag,
+                    )
+                    if key in seen_target_exclusions:
+                        raise ValueError(
+                            "duplicate target-slot exclusion for "
+                            f"{profile}/{exclusion.backend_id} "
+                            f"{callable_identity}<{type_tag}>"
+                        )
+                    seen_target_exclusions.add(key)
     portable_names = frozenset(policy.accelerated_core.portable_callable_names)
     unknown_portable = sorted(portable_names - family_names)
     if unknown_portable:

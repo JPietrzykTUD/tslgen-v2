@@ -131,6 +131,8 @@ translation cpp:
   cast_bitcast "::tsl::bit_cast<{type}>({expr})"
   cast_const "const_cast<{type}>({expr})"
   cast_dynamic "dynamic_cast<{type}>({expr})"
+  mem_load_scalar "*({ptr})"
+  mem_store_scalar "*({ptr}) = {value}"
   mem_copy "std::memcpy({dst}, {src}, {count})"
   mem_set "std::memset({ptr}, {value}, {count})"
   mem_alloc "std::malloc({count})"

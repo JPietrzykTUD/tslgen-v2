@@ -44,6 +44,9 @@ def test_direct_state_classifies_intrinsic_call_composition_and_fallback() -> No
     )
     assert _state("native", "complete(data);") is ImplementationState.NATIVE
     assert _state("native", "complete(left + right);") is ImplementationState.UNKNOWN
+    assert _state("native", "complete(mem<load_scalar>(ptr));") is (
+        ImplementationState.COMPOSED
+    )
 
 
 def test_direct_state_recognizes_only_the_canonical_parameter_return() -> None:
