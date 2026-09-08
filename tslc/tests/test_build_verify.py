@@ -2325,9 +2325,10 @@ def test_masked_load_store_build(
     # Masked category C (memory): `load` emits `load_maskz` (zero) + `load_mask` (pass_through);
     # `store` emits `store_mask` — each carrying the `aligned` const-generic (mask × aligned
     # compose orthogonally). avx512(_vl) uses native masked load/store (`maskz_loadu`/`mask_loadu`/
-    # `mask_storeu`); avx2/sse fall back to `load`+`mov`/`select`(+`store`) — the fallback forwards
-    # the caller's `aligned` via `attrs[aligned=value(primitive::attribute(aligned))]`,
-    # which the call lowerer now resolves. `void` store result types in both backends. scalar +
+    # `mask_storeu`); avx2 uses VMASKMOV for 32/64-bit lanes, while sse falls back to
+    # `load`+`mov`/`select`(+`store`) — the fallback forwards the caller's `aligned` via
+    # `attrs[aligned=value(primitive::attribute(aligned))]`, which the call lowerer now resolves.
+    # `void` store result types in both backends. scalar +
     # sse2 + avx2 + skylake. (gather/scatter masked are deferred on the `vidx` kind.)
     result = generate_project(
         [data_root],

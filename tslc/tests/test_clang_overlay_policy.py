@@ -68,6 +68,11 @@ _FIXED_NATIVE_BOOTSTRAP_FALLBACKS = frozenset(
 )
 _EXPECTED_NON_NATIVE_FIRST_PORTABLE_OPERATIONS = (
     _EXPECTED_EXACT_COMPILER_OPERATIONS | _FIXED_NATIVE_BOOTSTRAP_FALLBACKS
+    | frozenset(
+        (primitive, "m:=(m,m)", (), "arith", extension)
+        for primitive in ("mask_deinterleave_odd", "mask_interleave_lo")
+        for extension in _CLANG_OVERLAYS
+    )
 )
 
 

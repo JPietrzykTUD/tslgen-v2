@@ -6,6 +6,7 @@ from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.benchmark._render_rust_common import indent, rust_string_literal
 from tslc.benchmark.model import (
     BenchmarkCandidateSet,
+    BenchmarkCrossLaneScenario,
     BenchmarkImmediateCorrectnessCase,
     BenchmarkImmediateScenario,
     BenchmarkReductionCorrectnessCase,
@@ -20,7 +21,8 @@ def render_scenario(
     scenario_index: int,
     candidate_set: BenchmarkCandidateSet,
     scenario: (
-        BenchmarkImmediateScenario
+        BenchmarkCrossLaneScenario
+        | BenchmarkImmediateScenario
         | BenchmarkReductionScenario
         | BenchmarkRegisterScenario
     ),
@@ -28,9 +30,11 @@ def render_scenario(
     profile_module: str,
 ) -> str:
     correctness = candidate_set.correctness_cases[0]
-    if isinstance(scenario, BenchmarkRegisterScenario):
+    if isinstance(scenario, (BenchmarkRegisterScenario, BenchmarkCrossLaneScenario)):
         if not isinstance(correctness, BenchmarkVectorCorrectnessCase):
-            raise ValueError("Rust register scenarios require vector correctness cases")
+            raise ValueError(
+                "Rust vector-operand scenarios require vector correctness cases"
+            )
         operand_generators = scenario.operand_generators
     elif isinstance(scenario, BenchmarkImmediateScenario):
         if not isinstance(correctness, BenchmarkImmediateCorrectnessCase):
@@ -157,7 +161,8 @@ def _render_candidate_measure(
     candidate_index: int,
     candidate_set: BenchmarkCandidateSet,
     scenario: (
-        BenchmarkImmediateScenario
+        BenchmarkCrossLaneScenario
+        | BenchmarkImmediateScenario
         | BenchmarkReductionScenario
         | BenchmarkRegisterScenario
     ),

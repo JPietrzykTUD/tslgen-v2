@@ -578,8 +578,9 @@ coverage for unsupported signature shapes. C++ renders those facts as a
 standalone native benchmark/policy tool. Rust admits scenario coverage through
 explicit named `profile × scenario-family` pairs while deriving profile family,
 features, spellings, modes, and flags from the live machine profile. It renders
-the `sse2` register and immediate families plus `avx2` one-vector scalar
-reductions as standard-library-only custom Cargo benchmarks. Native feature
+the `sse2` register, whole-register cross-lane, and immediate families plus
+`avx2` one-vector scalar reductions as standard-library-only custom Cargo
+benchmarks. Native feature
 detection consumes the profile family's typed strategy ID; concrete Rust
 `target_arch` and feature-test macro spellings live in
 [backend/rust_benchmark_detection.py](src/tslc/backend/rust_benchmark_detection.py),
@@ -674,9 +675,11 @@ specialization compatibility and owns its canonical policy identity. Candidate
 sets only enforce homogeneous matching families. Harness discovery/closure is
 checked through one planner boundary, while C++ scenario renderers supply typed
 fragments to one shared timing skeleton; the remaining family dispatch selects
-genuinely different input construction and invocation behavior. Pure-register
-scenarios carry
-their operand generators and dependency parameter, vector-plus-scalar scenarios
+genuinely different input construction and invocation behavior. Lane-local
+pure-register scenarios carry their operand generators and dependency parameter
+and may tile authored correctness vectors. Whole-register cross-lane scenarios
+use the same vector call wiring but require an authored correctness case at the
+exact specialization width. Vector-plus-scalar scenarios
 keep the scalar input independent, immediate scenarios carry an authored
 concrete value, indexed-load scenarios carry a SIMD index binding and bounded
 hot-L1 memory contract, vector-to-scalar reduction scenarios carry an

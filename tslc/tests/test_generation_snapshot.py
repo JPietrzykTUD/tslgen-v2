@@ -12,6 +12,8 @@ from tslc.benchmark.model import (
     BenchmarkCandidate,
     BenchmarkCandidateSet,
     BenchmarkCoverageEntry,
+    BenchmarkCrossLaneCorrectnessCase,
+    BenchmarkCrossLaneScenario,
     BenchmarkImmediateCorrectnessCase,
     BenchmarkImmediateScenario,
     BenchmarkIndexedLoadCorrectnessCase,
@@ -313,6 +315,12 @@ _BENCHMARK_SCENARIOS = (
         _BENCHMARK_TIMING,
         ("bounded_random", "bounded_random"),
     ),
+    BenchmarkCrossLaneScenario(
+        "cross_lane",
+        "throughput",
+        _BENCHMARK_TIMING,
+        ("bounded_random", "bounded_random"),
+    ),
     BenchmarkVectorScalarScenario(
         "vector_scalar",
         "throughput",
@@ -330,6 +338,9 @@ _BENCHMARK_SCENARIOS = (
 )
 _BENCHMARK_CORRECTNESS_CASES = (
     BenchmarkVectorCorrectnessCase(
+        "c", (("1",), ("1",)), ("1",), "from_array", "to_array"
+    ),
+    BenchmarkCrossLaneCorrectnessCase(
         "c", (("1",), ("1",)), ("1",), "from_array", "to_array"
     ),
     BenchmarkVectorScalarCorrectnessCase(

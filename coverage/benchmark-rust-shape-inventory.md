@@ -12,11 +12,11 @@ manifest hashes, candidate IDs/body hashes, and policy mapping hashes live in
 ## Summary
 
 - **28 Rust machine profiles** are probed.
-- **4867 selected variant slots** are accounted for.
-- **106 benchmark reports** are emitted.
-- **Policy-mapped reports: 1**; **report-only: 105**.
+- **4938 selected variant slots** are accounted for.
+- **116 benchmark reports** are emitted.
+- **Policy-mapped reports: 1**; **report-only: 115**.
 - **0 signature shapes benchmarked**, **53 not applicable**, **14 gaps**.
-- **4763 strict audit issues**.
+- **4825 strict audit issues**.
 
 ## Signature shapes
 
@@ -27,7 +27,7 @@ manifest hashes, candidate IDs/body hashes, and policy mapping hashes live in
 | `im:=(imt,im,usize)` | 2 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `im:=m` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `m:=()` | 2 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
-| `m:=(m,m)` | 3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
+| `m:=(m,m)` | 5 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `m:=(m,usize,usize)` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `m:=(m,v)` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `m:=(m,v,v)` | 6 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
@@ -66,11 +66,11 @@ manifest hashes, candidate IDs/body hashes, and policy mapping hashes live in
 | `v:=(m,v,v,vidx)` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `v:=(m,v,vidx)` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `v:=(s,s)` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
-| `v:=(v)` | 1 | 1 | 27 | 27 | 320 | 2 | 0 | 2 | gap |
+| `v:=(v)` | 2 | 2 | 34 | 34 | 320 | 2 | 0 | 2 | gap |
 | `v:=(v,s)` | 5 | 2 | 2 | 2 | 12 | 0 | 0 | 0 | gap |
 | `v:=(v,sImm)` | 8 | 2 | 14 | 14 | 330 | 6 | 0 | 6 | gap |
 | `v:=(v,usize,s)` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | not applicable |
-| `v:=(v,v)` | 16 | 7 | 31 | 31 | 1221 | 40 | 1 | 39 | gap |
+| `v:=(v,v)` | 17 | 8 | 41 | 41 | 1292 | 50 | 1 | 49 | gap |
 | `v:=(v,v,sImm)` | 1 | 1 | 16 | 16 | 390 | 0 | 0 | 0 | gap |
 | `v:=(v,vidx)` | 1 | 1 | 9 | 9 | 818 | 0 | 0 | 0 | gap |
 | `v:=(v,vidx,v)` | 1 | 1 | 8 | 8 | 800 | 0 | 0 | 0 | gap |
@@ -96,19 +96,19 @@ manifest hashes, candidate IDs/body hashes, and policy mapping hashes live in
 |---|---:|---:|---:|---:|---|
 | masked primitive | 52 | 1 | 0 | 0 | gap |
 | representation-changing result | 16 | 0 | 0 | 0 | not applicable |
-| cross-lane semantics | 16 | 5 | 2360 | 6 | gap |
+| cross-lane semantics | 20 | 7 | 2431 | 16 | gap |
 | caller-unsafe implementation | 33 | 3 | 32 | 0 | gap |
 | compile-time immediate operand | 21 | 6 | 752 | 6 | gap |
 | lane-list operand | 1 | 0 | 0 | 0 | not applicable |
 | generic SIMD-type parameter | 11 | 5 | 1650 | 0 | gap |
 | boolean attribute axis | 23 | 0 | 0 | 0 | not applicable |
-| sized-vector implementation | 172 | 0 | 0 | 0 | not applicable |
-| scalable-vector implementation | 164 | 4 | 710 | 2 | gap |
+| sized-vector implementation | 176 | 0 | 0 | 0 | not applicable |
+| scalable-vector implementation | 168 | 6 | 781 | 12 | gap |
 | opt-in compiler header implementation | 0 | 0 | 0 | 0 | not applicable |
 
 ## Audit issue counts
 
 | Kind | Count |
 |---|---:|
-| `coverage-gap` | 4761 |
-| `inactive-authored-shape` | 2 |
+| `coverage-gap` | 4822 |
+| `inactive-authored-shape` | 3 |

@@ -567,6 +567,7 @@ prim<m:=(m,m)> mask_interleave_lo(mask_a, mask_b):
       result[2 * i + 1] = mask_b[i]
     return result
     """
+  cross_lane true
   tests:
     - {tags [interleave, both], extension "generic", type "ui32", lane_count 8, case {inputs [15, 15], expected 255}}
     - {tags [interleave, a_only], extension "generic", type "ui32", lane_count 8, case {inputs [15, 0], expected 85}}
@@ -625,6 +626,7 @@ prim<m:=(m,m)> mask_deinterleave_odd(mask_a, mask_b):
       result[half + j] = mask_b[2 * j + 1]
     return result
     """
+  cross_lane true
   tests:
     - {tags [deinterleave, a_odds], extension "generic", type "ui32", lane_count 8, case {inputs [170, 0], expected 15}}
     - {tags [deinterleave, b_odds], extension "generic", type "ui32", lane_count 8, case {inputs [0, 170], expected 240}}

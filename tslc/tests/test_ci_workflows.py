@@ -63,6 +63,17 @@ def test_required_jobs_check_out_the_shared_result_checker() -> None:
         assert checkout < checker
 
 
+def test_tag_workflows_cannot_publish_release_assets_before_atomic_release() -> None:
+    workflows = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted(Path(".github/workflows").glob("*.yml"))
+    )
+
+    assert "gh release create" not in workflows
+    assert "gh release upload" not in workflows
+    assert "contents: write" not in workflows
+
+
 def test_required_result_checker_enforces_selected_jobs() -> None:
     script = ".github/scripts/require_ci_results.sh"
     subprocess.run(

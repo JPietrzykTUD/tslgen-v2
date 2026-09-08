@@ -440,7 +440,7 @@ prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
           tsil """
             complete(
               intrin<maskload, build[suffix=base::signed_of(base::in)]>(
-                reinterpret_cast<long long const *>(ptr),
+                cast<reinterpret, type=const_ptr>(x86::intrinsic_i64, ptr),
                 mask
               )
             );

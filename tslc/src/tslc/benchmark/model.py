@@ -13,6 +13,7 @@ BenchmarkCoverageStatus = Literal["emitted", "unsupported", "missing_correctness
 BenchmarkScenarioKind = Literal["throughput", "latency"]
 BenchmarkScenarioFamily = Literal[
     "register",
+    "cross_lane",
     "vector_scalar",
     "immediate",
     "indexed_load",
@@ -85,7 +86,7 @@ class BenchmarkCandidate:
 
 @dataclass(frozen=True, slots=True)
 class BenchmarkVectorCorrectnessCase:
-    """Authored operands and expectation, tiled for one fixed-width vector."""
+    """Authored operands and expectation resolved for one fixed-width vector."""
 
     case_name: str
     vector_inputs: tuple[tuple[str, ...], ...]
@@ -93,7 +94,7 @@ class BenchmarkVectorCorrectnessCase:
     from_array_name: str
     to_array_name: str
 
-    family: ClassVar[Literal["register"]] = "register"
+    family: ClassVar[Literal["register", "cross_lane"]] = "register"
 
     def __post_init__(self) -> None:
         if (
@@ -117,17 +118,26 @@ class BenchmarkVectorCorrectnessCase:
             or lanes is None
             or len(self.expected) != lanes
         ):
-            raise ValueError("register correctness does not match the specialization")
+            raise ValueError(
+                "vector-operand correctness does not match the specialization"
+            )
 
     def canonical_fields(self) -> tuple[object, ...]:
         return (
-            "vector",
+            "vector" if self.family == "register" else self.family,
             self.case_name,
             self.vector_inputs,
             self.expected,
             self.from_array_name,
             self.to_array_name,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class BenchmarkCrossLaneCorrectnessCase(BenchmarkVectorCorrectnessCase):
+    """Exact-width operands and expectation for whole-register semantics."""
+
+    family: ClassVar[Literal["cross_lane"]] = "cross_lane"
 
 
 @dataclass(frozen=True, slots=True)
@@ -404,6 +414,7 @@ class BenchmarkReductionCorrectnessCase:
 
 BenchmarkCorrectnessCase = (
     BenchmarkVectorCorrectnessCase
+    | BenchmarkCrossLaneCorrectnessCase
     | BenchmarkVectorScalarCorrectnessCase
     | BenchmarkImmediateCorrectnessCase
     | BenchmarkIndexedLoadCorrectnessCase
@@ -437,8 +448,8 @@ class BenchmarkTiming:
 
 
 @dataclass(frozen=True, slots=True)
-class BenchmarkRegisterScenario:
-    """One exact pure-register workload; no call wiring is left to rendering."""
+class _BenchmarkVectorOperandScenario:
+    """One exact vector-operand workload; no call wiring is left to rendering."""
 
     scenario_id: str
     kind: BenchmarkScenarioKind
@@ -446,14 +457,16 @@ class BenchmarkRegisterScenario:
     operand_generators: tuple[BenchmarkOperandGenerator, ...]
     dependency_parameter: int | None = None
 
-    family: ClassVar[Literal["register"]] = "register"
+    family: ClassVar[BenchmarkScenarioFamily]
     correctness_type: ClassVar[type[BenchmarkVectorCorrectnessCase]] = (
         BenchmarkVectorCorrectnessCase
     )
 
     def __post_init__(self) -> None:
         if not self.scenario_id or not self.operand_generators:
-            raise ValueError("register benchmark scenarios require an id and operands")
+            raise ValueError(
+                "vector-operand benchmark scenarios require an id and operands"
+            )
         if self.kind == "latency" and self.dependency_parameter is None:
             raise ValueError("latency scenarios require a dependency parameter")
         if self.kind == "throughput" and self.dependency_parameter is not None:
@@ -465,7 +478,7 @@ class BenchmarkRegisterScenario:
 
     def canonical_fields(self) -> tuple[object, ...]:
         return (
-            "register",
+            self.family,
             self.scenario_id,
             self.kind,
             self.timing.canonical_fields(),
@@ -480,7 +493,9 @@ class BenchmarkRegisterScenario:
             or not all(kind == "v" for kind in key.param_kinds)
             or len(self.operand_generators) != len(key.param_kinds)
         ):
-            raise ValueError("register scenario operands must match the specialization")
+            raise ValueError(
+                "vector-operand scenario operands must match the specialization"
+            )
 
     def manifest_fields(self) -> dict[str, object]:
         return {
@@ -488,6 +503,23 @@ class BenchmarkRegisterScenario:
             "operand_generators": self.operand_generators,
             "dependency_parameter": self.dependency_parameter,
         }
+
+
+@dataclass(frozen=True, slots=True)
+class BenchmarkRegisterScenario(_BenchmarkVectorOperandScenario):
+    """A lane-local pure-register workload."""
+
+    family: ClassVar[Literal["register"]] = "register"
+
+
+@dataclass(frozen=True, slots=True)
+class BenchmarkCrossLaneScenario(_BenchmarkVectorOperandScenario):
+    """A whole-register workload whose correctness case must match its width."""
+
+    family: ClassVar[Literal["cross_lane"]] = "cross_lane"
+    correctness_type: ClassVar[type[BenchmarkCrossLaneCorrectnessCase]] = (
+        BenchmarkCrossLaneCorrectnessCase
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -767,6 +799,7 @@ class BenchmarkReductionScenario:
 
 BenchmarkScenario = (
     BenchmarkRegisterScenario
+    | BenchmarkCrossLaneScenario
     | BenchmarkVectorScalarScenario
     | BenchmarkImmediateScenario
     | BenchmarkIndexedLoadScenario
@@ -799,11 +832,13 @@ class BenchmarkCandidateSet:
         if any(type(scenario) is not scenario_type for scenario in self.scenarios):
             raise ValueError("benchmark candidate sets require one scenario family")
         correctness_type = self.scenarios[0].correctness_type
+        scenario_family = self.scenarios[0].family
         if any(
-            not isinstance(case, correctness_type) for case in self.correctness_cases
+            not isinstance(case, correctness_type) or case.family != scenario_family
+            for case in self.correctness_cases
         ):
             raise ValueError(
-                f"{self.scenarios[0].family} candidate sets require matching correctness facts"
+                f"{scenario_family} candidate sets require matching correctness facts"
             )
         for case in self.correctness_cases:
             case.validate_key(self.key)
@@ -891,6 +926,8 @@ EMPTY_BENCHMARK_PROJECT_PLAN = BenchmarkProjectPlan(profiles=())
 __all__ = (
     "BenchmarkCandidate",
     "BenchmarkCandidateSet",
+    "BenchmarkCrossLaneCorrectnessCase",
+    "BenchmarkCrossLaneScenario",
     "BenchmarkCorrectnessCase",
     "BenchmarkImmediateCorrectnessCase",
     "BenchmarkImmediateScenario",

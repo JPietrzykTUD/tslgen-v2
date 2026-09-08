@@ -63,7 +63,7 @@ jobs:
       - ci-image
     if: needs.scope.outputs.package == 'true' || needs.scope.outputs.docs == 'true'
     permissions:
-      contents: write
+      contents: read
       packages: read
 
     env:
@@ -122,38 +122,6 @@ jobs:
           name: tsl-generated-${{ github.sha }}
           path: tslctmp/artifacts/tsl-generated-${{ github.sha }}.tar.gz
           if-no-files-found: error
-
-      - name: Publish generated release
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ github.ref_name }}
-          ASSET_PATH: tslctmp/artifacts/tsl-generated-${{ github.sha }}.tar.gz
-        run: |
-          bash .github/scripts/run_with_log.sh \
-            "tslctmp/ci-logs/generated-package/release.log" \
-            bash -lc '
-              set -e
-              release_title="TSL generated ${RELEASE_TAG}"
-              release_notes="Generated TSL package for ${RELEASE_TAG} (${GITHUB_SHA})."
-              asset_name="tsl-generated-${RELEASE_TAG}.tar.gz"
-              release_asset_path="tslctmp/artifacts/${asset_name}"
-              cp "${ASSET_PATH}" "${release_asset_path}"
-
-              if ! gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
-                if ! gh release create "${RELEASE_TAG}" \
-                  --title "${release_title}" \
-                  --notes "${release_notes}" \
-                  --verify-tag; then
-                  gh release view "${RELEASE_TAG}" >/dev/null
-                fi
-              fi
-
-              gh release upload \
-                "${RELEASE_TAG}" \
-                "${release_asset_path}" \
-                --clobber
-            '
 
       - name: Upload package logs
         if: always()

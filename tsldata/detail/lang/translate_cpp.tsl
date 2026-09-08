@@ -164,6 +164,7 @@ translation cpp:
   query_value::x86::cmp_le_oq "_CMP_LE_OQ"
   query_value::x86::cmp_neq_uq "_CMP_NEQ_UQ"
   query_value::x86::mm_fround_to_zero "_MM_FROUND_TO_ZERO"
+  query_value::x86::intrinsic_i64 "long long"
   value_array_uninit "{}"
   value_uninit "{}"
   value_uninit_typed "{}"

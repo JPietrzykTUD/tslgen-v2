@@ -92,6 +92,41 @@ def test_call_primitive_renders_wrapper_call(catalog: Catalog, machine_profiles)
     assert rust.body_text == "return nequal::<Self>(data, set_zero::<Self>());"
 
 
+def test_avx2_masked_i64_memory_uses_backend_owned_intrinsic_pointer_types(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["load", "store"],
+        profiles=["avx2"],
+        type_tags=["si64"],
+        backends=["cpp", "rust"],
+    )
+
+    assert not has_errors(result.diagnostics), result.diagnostics
+    artifacts = {
+        artifact.logical_path: artifact.content
+        for artifact in result.artifacts.artifacts
+    }
+    cpp = artifacts["cpp/include/tsl_avx2.hpp"]
+    rust = artifacts["rust/src/tsl_avx2.rs"]
+    assert "_mm256_maskload_epi64(" in cpp
+    assert re.search(r"reinterpret_cast<long long const\s*\*>\(ptr\)", cpp)
+    assert "_mm256_maskstore_epi64(" in cpp
+    assert re.search(r"reinterpret_cast<long long\s*\*>\(ptr\)", cpp)
+    assert re.search(
+        r"_mm256_maskload_epi64\(\s*ptr as \*const i64,\s*mask\s*\)",
+        rust,
+    )
+    assert re.search(
+        r"_mm256_maskstore_epi64\(\s*ptr as \*mut i64,\s*mask,\s*data\s*\)",
+        rust,
+    )
+    assert "reinterpret_cast" not in rust
+
+
 def test_runtime_indexed_call_ignores_split_immediate_overload(
     catalog: Catalog, machine_profiles
 ) -> None:

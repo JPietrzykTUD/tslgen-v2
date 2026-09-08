@@ -778,7 +778,7 @@ prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
         implementation:
           tsil """
             intrin<maskstore, build[suffix=base::signed_of(base::in)]>(
-              reinterpret_cast<long long *>(ptr),
+              cast<reinterpret, type=ptr>(x86::intrinsic_i64, ptr),
               mask,
               data
             );

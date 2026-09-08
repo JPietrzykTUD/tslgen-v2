@@ -22,6 +22,8 @@ from tslc.benchmark.model import (
     BenchmarkCandidate,
     BenchmarkCandidateSet,
     BenchmarkCorrectnessCase,
+    BenchmarkCrossLaneCorrectnessCase,
+    BenchmarkCrossLaneScenario,
     BenchmarkMaskCorrectnessCase,
     BenchmarkMaskDensityScenario,
     BenchmarkMaskResultScenario,
@@ -51,6 +53,7 @@ def test_supported_benchmark_scenario_families_are_consistent() -> None:
 
     assert {scenario_type.family for scenario_type in scenario_types} == {
         "register",
+        "cross_lane",
         "vector_scalar",
         "immediate",
         "indexed_load",
@@ -87,6 +90,17 @@ def test_representative_timing_scenarios_are_byte_stable() -> None:
             ),
             BenchmarkRegisterScenario(
                 "throughput", "throughput", timing, ("bounded_random", "bounded_random")
+            ),
+        ),
+        _timing_sample(
+            SpecializationKey(
+                "cpp", "p", "reverse", "reverse", "e", "si32", "v", ("v",), lanes=2
+            ),
+            BenchmarkCrossLaneCorrectnessCase(
+                "c", (("1", "2"),), ("2", "1"), "from_array", "to_array"
+            ),
+            BenchmarkCrossLaneScenario(
+                "latency", "latency", timing, ("bounded_random",), 0
             ),
         ),
         _timing_sample(
@@ -184,6 +198,7 @@ def test_representative_timing_scenarios_are_byte_stable() -> None:
         for sample in samples
     } == {
         "register": "111c97f41c90e8f326ca08c8ec12e6ae2fe45bdd43d25b24f39e084ea4f14620",
+        "cross_lane": "816954e8da357e7d32c22f9a798ab1a5a2a0b57c9fd37dbe96854d38869d68cc",
         "vector_scalar": "30073bd5bfa3ad2f70629e31130305164ee94878f9cc51fee38880f35a4d4f99",
         "immediate": "d15fe29d6d4ee4b82679af613ff7fd9a77c61e0838ba853663f42b5497a9bb50",
         "indexed_load": "be417ff5f260515d47b95b8ebcb1e090d6ce5b774fee555bb2fe0142fe0c1a90",
@@ -191,6 +206,22 @@ def test_representative_timing_scenarios_are_byte_stable() -> None:
         "mask_result": "111c97f41c90e8f326ca08c8ec12e6ae2fe45bdd43d25b24f39e084ea4f14620",
         "reduction": "039fa946eb5547b4b112b8bbe02bc11713ae158a13e34fc11f7cc9b077a189e1",
     }
+
+
+def test_candidate_set_rejects_cross_lane_correctness_for_lane_local_scenario() -> None:
+    key = SpecializationKey(
+        "cpp", "p", "reverse", "reverse", "e", "si32", "v", ("v",), lanes=2
+    )
+    with pytest.raises(ValueError, match="register candidate sets require matching"):
+        _timing_sample(
+            key,
+            BenchmarkCrossLaneCorrectnessCase(
+                "c", (("1", "2"),), ("2", "1"), "from_array", "to_array"
+            ),
+            BenchmarkRegisterScenario(
+                "throughput", "throughput", BenchmarkTiming(seed=7), ("bounded_random",)
+            ),
+        )
 
 
 def _timing_sample(
@@ -221,6 +252,22 @@ def benchmark_result(data_root: Path, machine_profiles_path: Path):
         profiles=["scalar", "sse2", "avx2"],
         type_tags=["si8"],
         backends=["cpp"],
+        test_harness=True,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    return result
+
+
+@pytest.fixture(scope="module")
+def cross_lane_benchmark_result(data_root: Path, machine_profiles_path: Path):
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["interleave_lo"],
+        profiles=["sse2"],
+        type_tags=["si32"],
+        backends=["cpp", "rust"],
         test_harness=True,
     )
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -468,6 +515,52 @@ def test_planner_keeps_default_and_authored_fallback_with_correctness(
             for case in candidate_set.correctness_cases
             for values in (*case.vector_inputs, case.expected)
         )
+
+
+def test_cross_lane_scenario_requires_exact_width_golden_case(
+    cross_lane_benchmark_result,
+) -> None:
+    plan = cross_lane_benchmark_result.rendered.benchmarks
+    candidate_sets = []
+    for backend_id in ("cpp", "rust"):
+        profile = plan.profile(backend_id, "sse2")
+        assert profile is not None
+        candidate_set = next(
+            item
+            for item in profile.candidate_sets
+            if item.key.primitive_name == "interleave_lo"
+            and item.key.extension_name == "sse"
+        )
+        candidate_sets.append(candidate_set)
+
+        assert candidate_set.key.lanes == 4
+        assert all(
+            isinstance(case, BenchmarkCrossLaneCorrectnessCase)
+            and len(case.expected) == candidate_set.key.lanes
+            for case in candidate_set.correctness_cases
+        )
+        assert all(
+            isinstance(scenario, BenchmarkCrossLaneScenario)
+            for scenario in candidate_set.scenarios
+        )
+        manifest = json.loads(
+            next(
+                artifact.content
+                for artifact in cross_lane_benchmark_result.artifacts.artifacts
+                if artifact.logical_path
+                == f"{backend_id}/bench/manifest_sse2.json"
+            )
+        )
+        assert {
+            scenario["family"]
+            for item in manifest["candidate_sets"]
+            for scenario in item["scenarios"]
+            if item["key"]["primitive"] == "interleave_lo"
+        } == {"cross_lane"}
+
+    cpp, rust = candidate_sets
+    assert replace(rust.key, backend_id="cpp") == cpp.key
+    assert rust.correctness_cases == cpp.correctness_cases
 
 
 def test_ambiguous_register_shape_without_metadata_omits_latency(
@@ -1551,14 +1644,20 @@ def test_avx2_benchmark_source_compiles(
 
 
 @pytest.mark.generated_build
-def test_exact_immediate_benchmark_source_compiles(
-    exact_immediate_benchmark_result,
+@pytest.mark.parametrize(
+    "result_fixture",
+    ["exact_immediate_benchmark_result", "cross_lane_benchmark_result"],
+)
+def test_sse2_benchmark_source_compiles(
+    request: pytest.FixtureRequest,
+    result_fixture: str,
     tmp_path: Path,
 ) -> None:
     if shutil.which("cmake") is None:
         pytest.skip("cmake is required")
+    result = request.getfixturevalue(result_fixture)
     generated = tmp_path / "generated"
-    write_report = write_artifacts(exact_immediate_benchmark_result.artifacts, generated)
+    write_report = write_artifacts(result.artifacts, generated)
     assert not has_errors(write_report.diagnostics), write_report.diagnostics
 
     environment = os.environ.copy()
@@ -1584,6 +1683,43 @@ def test_exact_immediate_benchmark_source_compiles(
         environment,
     )
     assert built.returncode == 0, built.stderr + built.stdout
+    if result_fixture == "cross_lane_benchmark_result":
+        results = tmp_path / "cross_lane_results.jsonl"
+        executed = _run(
+            (
+                str(build / "tsl_variant_bench"),
+                "--results",
+                str(results),
+                "--rounds",
+                "3",
+                "--minimum-sample-ns",
+                "1000",
+            ),
+            environment,
+        )
+        assert executed.returncode == 0, executed.stderr + executed.stdout
+        records = [
+            json.loads(line)
+            for line in results.read_text(encoding="utf-8").splitlines()
+            if line
+        ]
+        profile = result.rendered.benchmarks.profile("cpp", "sse2")
+        assert profile is not None
+        target_sets = tuple(
+            candidate_set
+            for candidate_set in profile.candidate_sets
+            if candidate_set.key.primitive_name == "interleave_lo"
+        )
+        target_ids = {candidate_set.stable_id for candidate_set in target_sets}
+        target_records = [
+            record for record in records if record["stable_id"] in target_ids
+        ]
+        assert target_records
+        assert {record["scenario"] for record in target_records} == {
+            scenario.scenario_id
+            for candidate_set in target_sets
+            for scenario in candidate_set.scenarios
+        }
 
 
 @pytest.mark.generated_build

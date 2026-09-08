@@ -27,6 +27,8 @@ from tslc.backend.rust_policy_selection import (
 )
 from tslc.backend.rust_static_selection import plan_rust_static_selection
 from tslc.benchmark.model import (
+    BenchmarkCrossLaneCorrectnessCase,
+    BenchmarkCrossLaneScenario,
     BenchmarkReductionCorrectnessCase,
     BenchmarkReductionScenario,
 )
@@ -88,6 +90,25 @@ def rust_immediate_benchmark_build_result(
         primitives=["permute_lanes"],
         profiles=["sse2"],
         type_tags=["f32"],
+        backends=["rust"],
+        test_harness=True,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    return result
+
+
+@pytest.fixture(scope="module")
+def rust_cross_lane_benchmark_build_result(
+    data_root: Path,
+    machine_profiles_path: Path,
+):
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["interleave_lo"],
+        profiles=["sse2"],
+        type_tags=["si32"],
         backends=["rust"],
         test_harness=True,
     )
@@ -213,6 +234,38 @@ def test_rust_immediate_reports_bind_const_calls_and_policy_reason(
         "255",
     }
     assert all(not decision.mapping_choices for decision in policy.decisions)
+
+
+def test_rust_cross_lane_reports_use_exact_width_correctness(
+    rust_cross_lane_benchmark_build_result,
+) -> None:
+    plan = rust_cross_lane_benchmark_build_result.rendered.benchmarks
+    profile = plan.profile("rust", "sse2")
+    assert profile is not None
+    candidate_set = next(
+        item
+        for item in profile.candidate_sets
+        if item.key.primitive_name == "interleave_lo"
+        and item.key.extension_name == "sse"
+    )
+    assert all(
+        isinstance(case, BenchmarkCrossLaneCorrectnessCase)
+        and len(case.expected) == candidate_set.key.lanes
+        for case in candidate_set.correctness_cases
+    )
+    assert all(
+        isinstance(scenario, BenchmarkCrossLaneScenario)
+        for scenario in candidate_set.scenarios
+    )
+
+    artifacts = _artifacts(rust_cross_lane_benchmark_build_result)
+    manifest = json.loads(artifacts["rust/bench/manifest_sse2.json"])
+    assert {
+        scenario["family"]
+        for item in manifest["candidate_sets"]
+        for scenario in item["scenarios"]
+        if item["key"]["primitive"] == "interleave_lo"
+    } == {"cross_lane"}
 
 
 def test_rust_avx2_reduction_reports_are_exact_and_report_only(
@@ -928,6 +981,92 @@ def test_generated_rust_immediate_benchmark_runs_report_only_and_has_hot_loop(
 
     if platform.system() == "Linux":
         _assert_gnu_linux_immediate_hot_loop(crate, common, policy_environment)
+
+
+@pytest.mark.generated_build
+def test_generated_rust_cross_lane_benchmark_compiles(
+    rust_cross_lane_benchmark_build_result,
+    tmp_path: Path,
+) -> None:
+    if shutil.which("cargo") is None or shutil.which("rustc") is None:
+        pytest.skip("cargo and rustc are required")
+    if platform.machine().lower() not in {"x86_64", "amd64"}:
+        pytest.skip("the sse2 cross-lane benchmark requires a native x86-64 host")
+
+    generated = tmp_path / "generated"
+    report = write_artifacts(
+        rust_cross_lane_benchmark_build_result.artifacts,
+        generated,
+    )
+    assert not has_errors(report.diagnostics), report.diagnostics
+    crate = generated / "rust"
+    common = ("--manifest-path", str(crate / "Cargo.toml"))
+    policy_environment = _rust_policy_environment(
+        "sse2-cross-lane-generated-test-context"
+    )
+
+    for command in (
+        ("cargo", "check", *common),
+        (
+            "cargo",
+            "bench",
+            "--profile",
+            "bench",
+            *common,
+            "--bench",
+            "tsl_variant_bench_sse2",
+            "--no-default-features",
+            "--no-run",
+        ),
+    ):
+        completed = _run(command, cwd=crate, environment=policy_environment)
+        assert completed.returncode == 0, completed.stderr
+
+    results_path = generated / "cross-lane-samples.jsonl"
+    completed = _run(
+        (
+            "cargo",
+            "bench",
+            "--profile",
+            "bench",
+            *common,
+            "--bench",
+            "tsl_variant_bench_sse2",
+            "--no-default-features",
+            "--",
+            "--rounds",
+            "3",
+            "--minimum-sample-ns",
+            "1000",
+            "--results",
+            str(results_path),
+        ),
+        cwd=crate,
+        environment=policy_environment,
+    )
+    assert completed.returncode == 0, completed.stderr
+    records = [
+        json.loads(line)
+        for line in results_path.read_text(encoding="utf-8").splitlines()
+        if line
+    ]
+    profile = rust_cross_lane_benchmark_build_result.rendered.benchmarks.profile(
+        "rust", "sse2"
+    )
+    assert profile is not None
+    target_sets = tuple(
+        candidate_set
+        for candidate_set in profile.candidate_sets
+        if candidate_set.key.primitive_name == "interleave_lo"
+    )
+    target_ids = {candidate_set.stable_id for candidate_set in target_sets}
+    target_records = [record for record in records if record["stable_id"] in target_ids]
+    assert target_records
+    assert {record["scenario"] for record in target_records} == {
+        scenario.scenario_id
+        for candidate_set in target_sets
+        for scenario in candidate_set.scenarios
+    }
 
 
 @pytest.mark.generated_build

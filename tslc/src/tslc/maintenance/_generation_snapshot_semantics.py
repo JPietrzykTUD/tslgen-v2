@@ -7,6 +7,7 @@ from pathlib import Path
 from tslc.benchmark.model import (
     BenchmarkCorrectnessCase,
     BenchmarkCoverageEntry,
+    BenchmarkCrossLaneScenario,
     BenchmarkImmediateCorrectnessCase,
     BenchmarkImmediateScenario,
     BenchmarkIndexedLoadCorrectnessCase,
@@ -485,7 +486,7 @@ def _serialize_benchmark_correctness(
 ) -> dict[str, object]:
     if isinstance(case, BenchmarkVectorCorrectnessCase):
         return {
-            "kind": "vector",
+            "kind": case.family,
             "case_name": case.case_name,
             "vector_inputs": case.vector_inputs,
             "expected": case.expected,
@@ -563,10 +564,10 @@ def _serialize_benchmark_scenario(scenario: BenchmarkScenario) -> dict[str, obje
         "kind": scenario.kind,
         "timing": timing,
     }
-    if isinstance(scenario, BenchmarkRegisterScenario):
+    if isinstance(scenario, (BenchmarkRegisterScenario, BenchmarkCrossLaneScenario)):
         common.update(
             {
-                "shape": "register",
+                "shape": scenario.family,
                 "operand_generators": scenario.operand_generators,
                 "dependency_parameter": scenario.dependency_parameter,
             }

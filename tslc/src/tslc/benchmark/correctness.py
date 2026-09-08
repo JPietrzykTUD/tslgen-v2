@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from typing import TypeVar
+
 from tslc.benchmark.model import (
+    BenchmarkCrossLaneCorrectnessCase,
     BenchmarkImmediateCorrectnessCase,
     BenchmarkIndexedLoadCorrectnessCase,
     BenchmarkMaskCorrectnessCase,
@@ -24,7 +27,53 @@ def vector_cases(
     from_array_name: str,
     to_array_name: str,
 ) -> tuple[BenchmarkVectorCorrectnessCase, ...]:
-    matching: list[BenchmarkVectorCorrectnessCase] = []
+    return _vector_cases(
+        BenchmarkVectorCorrectnessCase,
+        cases,
+        spec,
+        lanes,
+        from_array_name,
+        to_array_name,
+        allow_tiling=True,
+    )
+
+
+def cross_lane_cases(
+    cases: tuple[ValueTestCasePlan, ...],
+    spec: LoweredSpecialization,
+    lanes: int,
+    from_array_name: str,
+    to_array_name: str,
+) -> tuple[BenchmarkCrossLaneCorrectnessCase, ...]:
+    return _vector_cases(
+        BenchmarkCrossLaneCorrectnessCase,
+        cases,
+        spec,
+        lanes,
+        from_array_name,
+        to_array_name,
+        allow_tiling=False,
+    )
+
+
+_VectorCorrectnessT = TypeVar(
+    "_VectorCorrectnessT",
+    BenchmarkVectorCorrectnessCase,
+    BenchmarkCrossLaneCorrectnessCase,
+)
+
+
+def _vector_cases(
+    case_type: type[_VectorCorrectnessT],
+    cases: tuple[ValueTestCasePlan, ...],
+    spec: LoweredSpecialization,
+    lanes: int,
+    from_array_name: str,
+    to_array_name: str,
+    *,
+    allow_tiling: bool,
+) -> tuple[_VectorCorrectnessT, ...]:
+    matching: list[_VectorCorrectnessT] = []
     seen: set[str] = set()
     for case in cases:
         if (
@@ -40,14 +89,23 @@ def vector_cases(
             continue
         if len(case.expectation.values) != case.lanes:
             continue
+        if not allow_tiling and case.lanes != lanes:
+            continue
         if case.case_name in seen:
             continue
         seen.add(case.case_name)
         matching.append(
-            BenchmarkVectorCorrectnessCase(
+            case_type(
                 case_name=case.case_name,
-                vector_inputs=tuple(tile(values, lanes) for values in case.inputs.vectors),
-                expected=tile(case.expectation.values, lanes),
+                vector_inputs=tuple(
+                    tile(values, lanes) if allow_tiling else values
+                    for values in case.inputs.vectors
+                ),
+                expected=(
+                    tile(case.expectation.values, lanes)
+                    if allow_tiling
+                    else case.expectation.values
+                ),
                 from_array_name=from_array_name,
                 to_array_name=to_array_name,
             )
@@ -359,6 +417,7 @@ def mask_cases(
 
 
 __all__ = (
+    "cross_lane_cases",
     "immediate_cases",
     "immediate_values",
     "indexed_load_bindings",

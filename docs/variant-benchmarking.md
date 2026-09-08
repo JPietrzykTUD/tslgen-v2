@@ -19,6 +19,7 @@ Normal builds keep the authored default variant.
 | Profile | Scenario family | Report | Consumable policy |
 | --- | --- | ---: | ---: |
 | `sse2` | Register | yes | Only the proven `mul/sse/si8` mapping |
+| `sse2` | Whole-register cross-lane | yes | no |
 | `sse2` | Vector plus immediate | yes | no |
 | `avx2` | One-vector scalar reduction | yes | no |
 
@@ -198,7 +199,8 @@ It does not consume raw source maps.
 
 | Specialization shape | Scenarios |
 | --- | --- |
-| Fixed vector result with vector inputs | Independent throughput. Latency when the dependency is known. |
+| Fixed lane-local vector result with vector inputs | Independent throughput. Latency when the dependency is known. Authored golden vectors may be tiled. |
+| Fixed whole-register cross-lane result with vector inputs | Independent throughput. Latency when the dependency is known. Requires an exact-width authored golden case. |
 | Vector plus scalar result | Independent throughput. Latency only when the vector operand is declared. |
 | Vector plus immediate result | Independent throughput and dependency latency for each authored immediate. |
 | `(cptr, vidx, sImm) -> v` | Hot-L1 throughput for each scale and index type. |
@@ -221,6 +223,9 @@ m := (v, v)
   -> throughput_independent
   -> no fabricated mask-to-vector chain
 ```
+
+The typed catalog's `cross_lane` fact distinguishes the first two vector-input
+rows. Primitive names and test tags do not participate in that decision.
 
 Other memory shapes are unsupported.
 

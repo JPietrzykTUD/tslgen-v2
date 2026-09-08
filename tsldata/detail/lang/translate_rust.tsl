@@ -149,6 +149,7 @@ translation rust:
   query_value::x86::cmp_le_oq "core::arch::x86_64::_CMP_LE_OQ"
   query_value::x86::cmp_neq_uq "core::arch::x86_64::_CMP_NEQ_UQ"
   query_value::x86::mm_fround_to_zero "core::arch::x86_64::_MM_FROUND_TO_ZERO"
+  query_value::x86::intrinsic_i64 "i64"
   value_array_uninit "Default::default()"
   value_uninit "Default::default()"
   value_uninit_typed "<{type} as Default>::default()"

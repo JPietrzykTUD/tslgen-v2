@@ -7,6 +7,10 @@
     },
     {
       "profile_name": "sse2",
+      "scenario_family": "cross_lane"
+    },
+    {
+      "profile_name": "sse2",
       "scenario_family": "immediate"
     },
     {

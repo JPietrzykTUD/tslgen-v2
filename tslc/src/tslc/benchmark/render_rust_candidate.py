@@ -8,6 +8,7 @@ from tslc.backend.rust import RustBackend
 from tslc.benchmark._render_rust_common import indent, rust_string_literal
 from tslc.benchmark.model import (
     BenchmarkCandidateSet,
+    BenchmarkCrossLaneScenario,
     BenchmarkImmediateScenario,
     BenchmarkReductionScenario,
     BenchmarkRegisterScenario,
@@ -29,6 +30,7 @@ def render_candidate_set(
             scenario,
             (
                 BenchmarkImmediateScenario,
+                BenchmarkCrossLaneScenario,
                 BenchmarkReductionScenario,
                 BenchmarkRegisterScenario,
             ),
@@ -76,7 +78,8 @@ def render_candidate_set(
             scenario_index,
             candidate_set,
             cast(
-                BenchmarkImmediateScenario
+                BenchmarkCrossLaneScenario
+                | BenchmarkImmediateScenario
                 | BenchmarkReductionScenario
                 | BenchmarkRegisterScenario,
                 scenario,
