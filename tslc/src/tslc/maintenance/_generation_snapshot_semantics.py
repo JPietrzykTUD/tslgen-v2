@@ -78,6 +78,51 @@ def serialize_generation_semantics(
         ],
         "coverage": [_serialize_coverage(item) for item in result.coverage],
         "skipped": [_serialize_skipped(item, repo_root) for item in result.skipped],
+        "target_support": (
+            None
+            if result.target_support is None
+            else {
+                "entries": [
+                    {
+                        "profile": item.key.profile,
+                        "backend": item.key.backend,
+                        "primitive": item.key.primitive,
+                        "signature": item.key.signature,
+                        "attributes": item.key.attributes,
+                        "result_target": item.key.result_target,
+                        "overload": item.key.overload,
+                        "type_tag": item.key.type_tag,
+                        "target_extension": item.key.target_extension,
+                        "conversion_target": item.key.conversion_target,
+                        "realization": (
+                            None
+                            if item.realization is None
+                            else {
+                                "source_extension": item.realization.source_extension,
+                                "selector_path": item.realization.selector_path,
+                                "required_features": item.realization.required_features,
+                                "required_compiler_capabilities": (
+                                    item.realization.required_compiler_capabilities
+                                ),
+                                "concrete_lanes": item.realization.concrete_lanes,
+                                "simd_type_base_bindings": (
+                                    item.realization.simd_type_base_bindings
+                                ),
+                                "variant_names": item.realization.variant_names,
+                            }
+                        ),
+                        "status": item.status.value,
+                        "reason_id": item.reason_id,
+                        "implementation_state": (
+                            None
+                            if item.implementation_state is None
+                            else item.implementation_state.value
+                        ),
+                    }
+                    for item in result.target_support.entries
+                ]
+            }
+        ),
         "verification": _serialize_verify_project(verification),
         "value_tests": (
             {

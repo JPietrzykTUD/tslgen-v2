@@ -103,6 +103,18 @@ class SelectedImplementation:
 class ProfileSelectionResult:
     selected: tuple[SelectedImplementation, ...]
     diagnostics: tuple[Diagnostic, ...]
+    slots: tuple["SelectionSlotResult", ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class SelectionSlotResult:
+    """One selector-owned expected slot and every realization selected for it."""
+
+    primitive: Primitive
+    extension: Extension
+    type_tag: str
+    to_target: str | None
+    selected: tuple[SelectedImplementation, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,6 +129,7 @@ class _SelectionSlot:
     extension_name: str
     type_tag: str
     to_target: str | None
+    target_resolved: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,6 +201,7 @@ class Selector:
         type_tags: tuple[str, ...],
         backend_id: str | None = None,
         compiler_capabilities: frozenset[str] | None = None,
+        collect_slots: bool = False,
     ) -> ProfileSelectionResult:
         # Variants of this name fall into two groups, emitted side by side:
         #  - the UNMASKED overload set: same-arity overloads (store's `(ptr,v)`/`(ptr,s)`,
@@ -213,6 +227,7 @@ class Selector:
             )
 
         selected: list[SelectedImplementation] = []
+        evaluated_slots: list[SelectionSlotResult] = []
         warnings: dict[str, Diagnostic] = {}  # keyed by message, so each ambiguity warns once
         emitted_extensions = list(
             self.emitted_extensions(catalog, profile, backend_id=backend_id)
@@ -220,22 +235,24 @@ class Selector:
         for primitive in variants:
             shape = parse_signature(primitive.signature)
             if shape is not None and self.support.shape_is_free_function(shape):
-                selected.extend(
-                    self._select_free_function(
-                        catalog,
-                        profile,
-                        primitive,
-                        emitted_extensions,
-                        backend_id,
-                        compiler_capabilities,
-                        warnings,
-                    )
+                free_selected, free_slots = self._select_free_function(
+                    catalog,
+                    profile,
+                    primitive,
+                    emitted_extensions,
+                    backend_id,
+                    compiler_capabilities,
+                    warnings,
+                    collect_slots,
                 )
+                selected.extend(free_selected)
+                if collect_slots:
+                    evaluated_slots.extend(free_slots)
                 continue
             for slot in self._selection_slots(
                 catalog, primitive, emitted_extensions, type_tags
             ):
-                selected.extend(
+                slot_selected = (
                     self._select_slot(
                         catalog,
                         profile,
@@ -246,9 +263,24 @@ class Selector:
                         compiler_capabilities,
                         warnings,
                     )
+                    if slot.target_resolved
+                    else ()
                 )
+                selected.extend(slot_selected)
+                if collect_slots:
+                    evaluated_slots.append(
+                        SelectionSlotResult(
+                            primitive=primitive,
+                            extension=catalog.extensions[slot.extension_name],
+                            type_tag=slot.type_tag,
+                            to_target=slot.to_target,
+                            selected=slot_selected,
+                        )
+                    )
         return ProfileSelectionResult(
-            selected=tuple(selected), diagnostics=tuple(warnings.values())
+            selected=tuple(selected),
+            diagnostics=tuple(warnings.values()),
+            slots=tuple(evaluated_slots),
         )
 
     def _select_free_function(
@@ -260,7 +292,8 @@ class Selector:
         backend_id: str | None,
         compiler_capabilities: frozenset[str] | None,
         warnings: dict[str, Diagnostic],
-    ) -> tuple[SelectedImplementation, ...]:
+        collect_slots: bool,
+    ) -> tuple[tuple[SelectedImplementation, ...], tuple[SelectionSlotResult, ...]]:
         """Select the first ISA-independent declaration owner in profile order."""
 
         # Free functions have no SIMD axis. Their placeholder type groups still
@@ -291,22 +324,37 @@ class Selector:
                 catalog.extensions[name].family
             ).free_function_owner
         ]
+        evaluated: list[SelectionSlotResult] = []
         for slot in self._selection_slots(
             catalog, primitive, owner_extensions, type_tags
         ):
-            selected = self._select_slot(
-                catalog,
-                profile,
-                primitive,
-                slot,
-                emitted_extensions,
-                backend_id,
-                compiler_capabilities,
-                warnings,
+            slot_selected = (
+                self._select_slot(
+                    catalog,
+                    profile,
+                    primitive,
+                    slot,
+                    emitted_extensions,
+                    backend_id,
+                    compiler_capabilities,
+                    warnings,
+                )
+                if slot.target_resolved
+                else ()
             )
-            if selected:
-                return selected
-        return ()
+            if collect_slots:
+                evaluated.append(
+                    SelectionSlotResult(
+                        primitive=primitive,
+                        extension=catalog.extensions[slot.extension_name],
+                        type_tag=slot.type_tag,
+                        to_target=slot.to_target,
+                        selected=slot_selected,
+                    )
+                )
+            if slot_selected:
+                return slot_selected, tuple(evaluated)
+        return (), tuple(evaluated)
 
     def _selection_slots(
         self,
@@ -319,14 +367,29 @@ class Selector:
 
         for extension_name in extension_names:
             for type_tag in type_tags:
-                for to_target in concrete_target_candidates(
+                if not any(
+                    catalog.type_group_contains(
+                        implementation.type_group, type_tag
+                    )
+                    for implementation in primitive.implementations
+                ):
+                    continue
+                targets = concrete_target_candidates(
                     catalog,
                     primitive,
                     extension_name,
                     type_tag,
                     self.support,
-                ):
+                )
+                for to_target in targets:
                     yield _SelectionSlot(extension_name, type_tag, to_target)
+                if primitive.result_target is not None and not targets:
+                    yield _SelectionSlot(
+                        extension_name,
+                        type_tag,
+                        None,
+                        target_resolved=False,
+                    )
 
     def _select_slot(
         self,

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
+from tslc.catalog.primitive_identity import primitive_declaration_identity
 from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS
 from tslc.lower.implementation_facts import (
     ImplementationState,
@@ -46,6 +47,7 @@ class TargetScopePolicy:
     backend_id: str
     profiles: tuple[str, ...]
     runtime_scalable_profiles: tuple[str, ...]
+    profile_extensions: tuple[tuple[str, str], ...]
     excludes: tuple[str, ...]
 
 
@@ -88,19 +90,13 @@ class CallableFamily:
 
     @property
     def identity(self) -> str:
-        attributes = ""
-        if self.attributes:
-            attributes = "[" + ",".join(
-                f"{key}={value}" for key, value in self.attributes
-            ) + "]"
-        target = ""
-        if self.result_target:
-            target = "->" + ":".join(self.result_target)
-        overload = ""
-        if self.overload is not None:
-            axis, value, primary = self.overload
-            overload = f"@{axis}={value}" + (":primary" if primary else "")
-        return f"{self.name}{attributes}#{self.signature}{target}{overload}"
+        return primitive_declaration_identity(
+            self.name,
+            self.signature,
+            self.attributes,
+            self.result_target,
+            self.overload,
+        )
 
     def payload(self) -> dict[str, object]:
         return {
@@ -273,6 +269,7 @@ class ReleaseContract:
                     "runtime_scalable_profiles": list(
                         scope.runtime_scalable_profiles
                     ),
+                    "profile_extensions": dict(scope.profile_extensions),
                     "excludes": list(scope.excludes),
                 }
                 for scope in self.policy.target_scopes

@@ -58,11 +58,14 @@ def render_markdown(contract: ReleaseContract) -> str:
         "profiles below. These claims do not imply SVE2, undeclared optional RVV",
         "extensions or LMULs, or stable Rust SVE/RVV.",
         "",
-        "| Scope | Backend | Profiles | Runtime-scalable profiles | Excludes |",
+        "| Scope | Backend | Profile → target extension | Runtime-scalable profiles | Excludes |",
         "| --- | --- | --- | --- | --- |",
         *(
             f"| `{scope.scope_id}` | `{scope.backend_id}` | "
-            + ", ".join(f"`{name}`" for name in scope.profiles)
+            + ", ".join(
+                f"`{profile}` → `{extension}`"
+                for profile, extension in scope.profile_extensions
+            )
             + " | "
             + ", ".join(f"`{name}`" for name in scope.runtime_scalable_profiles)
             + " | "

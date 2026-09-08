@@ -43,7 +43,7 @@ sources + compiler assets → parse → catalog → select → scan body → low
 | **sources** | [sources.py](src/tslc/sources.py) | Read `.tsl` source files |
 | **syntax** | [syntax/](src/tslc/syntax/) | Lark grammar → parse tree (outer declarations + TSIL body envelopes) |
 | **catalog** | [catalog/](src/tslc/catalog/) | Promote parse tree → typed, immutable domain model (`Primitive`, `Extension`, `Catalog`) |
-| **select** | [select/](src/tslc/select/) | For each `(backend, extension, type)` slot, pick the best implementation body |
+| **select** | [select/](src/tslc/select/) | Enumerate each applicable `(backend, declaration, extension, type, target)` slot and pick the best implementation body, retaining explicit absences for requested analyses |
 | **ir / scan** | [ir/](src/tslc/ir/) | Turn a TSIL body into a recursive `tuple[Segment, ...]` — *not* an AST |
 | **lower** | [lower/](src/tslc/lower/) | Walk segments, resolve queries/intrinsics → `LoweredSpecialization` |
 | **backend** | [backend/](src/tslc/backend/) | Own target type projection, helper manifests, emitted profiles, Rust compile-target selection, validation, and C++/Rust function text |
@@ -840,6 +840,16 @@ AVX-512/NEON/SVE code runs on hardware that lacks it.
   shown beside backend-local lowering success. Profile rows use the typed
   architecture order, then target-feature count and name. Explicit `--update`
   and `--check` modes own the canonical tracked Markdown evidence.
+  The opt-in exact target-support trace in
+  [target_support.py](src/tslc/target_support.py) is different: selection owns
+  its complete declaration/type/target universe, including slots with no
+  candidate, and the pipeline advances each selected realization through
+  `selected`, `lowered`, `pruned`, `policy_deferred`, or `emitted`. Emitted
+  realizations retain the propagated implementation state. The release-only
+  [target_support_ratchet.py](src/tslc/maintenance/target_support_ratchet.py)
+  filters those facts through the typed v1 support contract and serializes the
+  exact SVE/SVE128/SVE256/SVE512/RVV baseline; it never selects or infers a
+  body itself.
 - **Honest edges**: [support_policy.py](src/tslc/support_policy.py) centralizes
   what the compiler can emit today; some keyword forms are *recognized so a
   body skips cleanly* rather than leaking through as raw text.

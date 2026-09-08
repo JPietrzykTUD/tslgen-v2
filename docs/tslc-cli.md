@@ -272,6 +272,7 @@ tslc audit metadata
 tslc audit call-preconditions
 tslc audit call-preconditions --format json
 tslc coverage ratchet
+tslc coverage target-ratchet
 tslc coverage inventory
 tslc coverage inventory --profiles scalar,avx2 --backends cpp,rust
 tslc coverage inventory --format json
@@ -290,6 +291,19 @@ by `--format json` are also consumed by distributable-package generation; CI
 does not maintain a separate package profile list. `--check` compares both
 `coverage/tsl-v1-support.json` and `docs/tsl-v1-support.md` with that projection.
 Use `--update` only after reviewing an intentional support-contract change.
+
+`coverage target-ratchet` checks the exact v1 C++ SVE and RVV target-support
+projection in `coverage/tsl-v1-target-support.json`. Unlike the aggregate
+inventory, its denominator includes applicable declaration/type/conversion
+slots for which selection found no candidate. Each selected source selector,
+compiler-capability alternative, monomorphization, authored variant, final
+pipeline stage, and emitted `native | composed | fallback | unknown` state is
+preserved. Reviewed target-specific, target-neutral, and runtime-scalable
+fixed-shape exclusions carry stable reason IDs. Use `--update` only after
+reviewing the line-oriented exact diff.
+`--require-complete` additionally turns every current absent, selected-only,
+policy-deferred, or pruned stable slot into a failing release gate; the normal
+ratchet permits already-recorded gaps while rejecting new regressions.
 
 `explain` and the selection/lowered `inspect` stages default to the same
 automatic compiler-capability frontier as ordinary generation. Pass

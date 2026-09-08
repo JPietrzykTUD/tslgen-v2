@@ -80,6 +80,7 @@ overlay.
 - Standalone PIVOT exporter: [tools/pivot/README.md](tools/pivot/README.md)
 - Command-line tools: [docs/tslc-cli.md](docs/tslc-cli.md)
 - Generated-library v1 support contract: [docs/tsl-v1-support.md](docs/tsl-v1-support.md)
+- Exact v1 SVE/RVV support ratchet: [coverage/tsl-v1-target-support.json](coverage/tsl-v1-target-support.json)
 - Editor setup and architecture: [docs/tsl-editor.md](docs/tsl-editor.md)
 - Repository charter: [CHARTER.md](CHARTER.md)
 - Compiler charter: [tslc/CHARTER.md](tslc/CHARTER.md)

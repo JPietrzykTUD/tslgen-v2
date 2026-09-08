@@ -60,6 +60,12 @@ jobs:
             "tslctmp/ci-logs/coverage-ratchet/ratchet.log" \
             bash dev.sh ratchet
 
+      - name: Run exact release-target support ratchet
+        run: |
+          bash .github/scripts/run_with_log.sh \
+            "tslctmp/ci-logs/coverage-ratchet/target-ratchet.log" \
+            bash dev.sh target-ratchet
+
       - name: Run benchmark coverage ratchet
         run: |
           bash .github/scripts/run_with_log.sh \

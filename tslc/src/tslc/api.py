@@ -50,6 +50,7 @@ def generate_project(
     value_test_warnings: bool = False,
     value_test_fuzz: bool = False,
     render_artifacts: bool = True,
+    collect_target_support: bool = False,
     rust_package: RustPackageConfig = DEFAULT_RUST_PACKAGE_CONFIG,
 ) -> GenerationResult:
     """Run the full compiler pipeline and return in-memory artifacts.
@@ -102,6 +103,7 @@ def generate_project(
         value_test_warnings=value_test_warnings,
         value_test_fuzz=value_test_fuzz,
         render_artifacts=render_artifacts,
+        collect_target_support=collect_target_support,
         render_config=ProjectRenderConfig(rust_package=rust_package),
     )
     return generate(request)

@@ -183,7 +183,14 @@ def _target_scope_policy(value: object, index: int) -> TargetScopePolicy:
     data = object_value(value, owner)
     exact_keys(
         data,
-        {"id", "backend", "profiles", "runtime_scalable_profiles", "excludes"},
+        {
+            "id",
+            "backend",
+            "profiles",
+            "runtime_scalable_profiles",
+            "profile_extensions",
+            "excludes",
+        },
         owner,
     )
     profiles = string_tuple(data.get("profiles"), f"{owner}.profiles")
@@ -195,11 +202,30 @@ def _target_scope_policy(value: object, index: int) -> TargetScopePolicy:
         raise ValueError(f"{owner}.profiles must be non-empty")
     if not set(runtime) <= set(profiles):
         raise ValueError(f"{owner}.runtime_scalable_profiles must be in profiles")
+    extensions_data = object_value(
+        data.get("profile_extensions"), f"{owner}.profile_extensions"
+    )
+    if set(extensions_data) != set(profiles):
+        raise ValueError(
+            f"{owner}.profile_extensions must map exactly the declared profiles"
+        )
+    if not all(
+        isinstance(value, str) and value.strip()
+        for value in extensions_data.values()
+    ):
+        raise ValueError(
+            f"{owner}.profile_extensions values must be non-empty strings"
+        )
     return TargetScopePolicy(
         scope_id=string_value(data.get("id"), f"{owner}.id"),
         backend_id=string_value(data.get("backend"), f"{owner}.backend"),
         profiles=profiles,
         runtime_scalable_profiles=runtime,
+        profile_extensions=tuple(
+            (profile, extensions_data[profile])
+            for profile in profiles
+            if isinstance(extensions_data[profile], str)
+        ),
         excludes=string_tuple(data.get("excludes"), f"{owner}.excludes"),
     )
 

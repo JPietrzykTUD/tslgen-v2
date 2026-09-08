@@ -29,10 +29,10 @@ C++ v1 includes the declared SVE, fixed-width SVE, and RV64 Vector 1.0
 profiles below. These claims do not imply SVE2, undeclared optional RVV
 extensions or LMULs, or stable Rust SVE/RVV.
 
-| Scope | Backend | Profiles | Runtime-scalable profiles | Excludes |
+| Scope | Backend | Profile → target extension | Runtime-scalable profiles | Excludes |
 | --- | --- | --- | --- | --- |
-| `arm-sve` | `cpp` | `sve`, `sve128`, `sve256`, `sve512` | `sve` | SVE2 |
-| `riscv-vector` | `cpp` | `rvv` | `rvv` | optional RVV extensions; LMUL values other than the declared LMUL=1 profile; stable Rust RVV |
+| `arm-sve` | `cpp` | `sve` → `sve`, `sve128` → `sve128`, `sve256` → `sve256`, `sve512` → `sve512` | `sve` | SVE2 |
+| `riscv-vector` | `cpp` | `rvv` → `rvv` | `rvv` | optional RVV extensions; LMUL values other than the declared LMUL=1 profile; stable Rust RVV |
 
 ## Stable callable universe
 

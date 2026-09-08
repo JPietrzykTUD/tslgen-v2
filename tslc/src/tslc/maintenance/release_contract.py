@@ -11,6 +11,7 @@ import tomllib
 from typing import Any
 
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
+from tslc.catalog.model import Catalog
 from tslc.catalog.signatures import parse_signature
 from tslc.diagnostics import format_diagnostic, has_errors
 from tslc.maintenance._catalog import load_repository_catalog
@@ -122,7 +123,12 @@ def build_release_contract(context: RepoContext) -> ReleaseContract:
         )
         for item in policy.backend_profiles
     )
-    _validate_target_scopes(policy, backends)
+    _validate_target_scopes(
+        policy,
+        backends,
+        catalog,
+        loaded_profiles.profiles,
+    )
 
     project = load_project_config(context.root / "tslc.toml")
     if project is None:
@@ -220,7 +226,10 @@ def _release_profile(profile: MachineProfile) -> ReleaseProfile:
 
 
 def _validate_target_scopes(
-    policy: ReleasePolicy, backends: tuple[BackendReleaseContract, ...]
+    policy: ReleasePolicy,
+    backends: tuple[BackendReleaseContract, ...],
+    catalog: Catalog,
+    profiles: Mapping[str, MachineProfile],
 ) -> None:
     by_backend = {
         backend.backend_id: frozenset(profile.name for profile in backend.profiles)
@@ -239,6 +248,30 @@ def _validate_target_scopes(
                 f"target scope {scope.scope_id!r} profiles are outside backend "
                 f"{scope.backend_id!r}: " + ", ".join(missing)
             )
+        extension_names = frozenset(dict(scope.profile_extensions).values())
+        unknown_extensions = sorted(extension_names - set(catalog.extensions))
+        if unknown_extensions:
+            raise ValueError(
+                f"target scope {scope.scope_id!r} names unknown target extensions: "
+                + ", ".join(unknown_extensions)
+            )
+        for profile_name, extension_name in scope.profile_extensions:
+            extension = catalog.extensions[extension_name]
+            profile = profiles[profile_name]
+            if not extension.backend_supported.get(scope.backend_id, False):
+                raise ValueError(
+                    f"target extension {extension_name!r} does not support backend "
+                    f"{scope.backend_id!r}"
+                )
+            if not DEFAULT_SUPPORT_POLICY.extension_targets_profile(
+                extension.family,
+                profile.family,
+                catalog.target_families,
+            ):
+                raise ValueError(
+                    f"target extension {extension_name!r} does not target profile "
+                    f"{profile_name!r}"
+                )
 
 
 def _component_contracts(

@@ -3762,6 +3762,12 @@
       "runtime_scalable_profiles": [
         "sve"
       ],
+      "profile_extensions": {
+        "sve": "sve",
+        "sve128": "sve128",
+        "sve256": "sve256",
+        "sve512": "sve512"
+      },
       "excludes": [
         "SVE2"
       ]
@@ -3775,6 +3781,9 @@
       "runtime_scalable_profiles": [
         "rvv"
       ],
+      "profile_extensions": {
+        "rvv": "rvv"
+      },
       "excludes": [
         "optional RVV extensions",
         "LMUL values other than the declared LMUL=1 profile",
