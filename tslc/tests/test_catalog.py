@@ -438,7 +438,7 @@ def test_machine_profiles_loaded(machine_profiles) -> None:
         machine_profiles["sve256"].runner.profile
         == "max,sve=on,sve128=on,sve256=on,sve512=off"
     )
-    assert machine_profiles["sve512"].features == frozenset({"sve"})
+    assert machine_profiles["sve512"].features == frozenset({"neon", "sve"})
     assert machine_profiles["sve512"].compile_modes == frozenset(
         {"sve_vector_bits_512"}
     )

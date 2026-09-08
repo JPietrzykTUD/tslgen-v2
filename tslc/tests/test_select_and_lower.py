@@ -22,6 +22,7 @@ from _select_lower_core_support import (
     _slots,
     _TYPES,
 )
+from tslc.lower.dependencies import VectorIdentity
 from tslc.lower.lowerer import LoweredArithmeticPreconditionKind
 from tslc.select.selector import SelectionSlotDisposition
 
@@ -95,6 +96,50 @@ def test_scalable_lane_conversion_uses_runtime_lane_query(
     assert "to_array" not in lowered.specialization.body_text
     assert "from_array" not in lowered.specialization.body_text
     assert "require_same_lanes" not in lowered.specialization.body_text
+
+
+@pytest.mark.parametrize("profile_name", ("sve256", "sve512"))
+def test_fixed_sve_extract_dependencies_stay_inside_the_requested_profile(
+    catalog: Catalog,
+    machine_profiles,
+    profile_name: str,
+) -> None:
+    selection = Selector().select_profile(
+        catalog,
+        machine_profiles[profile_name],
+        "extract",
+        ("si32",),
+        backend_id="cpp",
+    )
+    selected = tuple(
+        item for item in selection.selected if item.extension.name == profile_name
+    )
+
+    assert selected
+    assert {item.to_target for item in selected} == {"neon"}
+    for item in selected:
+        lowered = Lowerer().lower(
+            item,
+            catalog,
+            create_backend_dialect(catalog, "cpp"),
+        )
+        assert lowered.diagnostics == ()
+        assert lowered.specialization is not None
+        assert item.implementation.extension == "sve"
+        dependencies = tuple(
+            origin.dependency
+            for origin in lowered.specialization.call_dependency_origins
+        )
+        assert {dependency.primitive for dependency in dependencies} == {
+            "from_array",
+            "set_zero",
+            "to_array",
+        }
+        assert all(
+            isinstance(dependency.source, VectorIdentity)
+            and dependency.source.extension_isa in {profile_name, "neon"}
+            for dependency in dependencies
+        )
 
 
 def test_lowerer_catalog_facts_cache_is_owned_by_catalog_identity(

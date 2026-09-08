@@ -45,6 +45,7 @@
           "name": "sve128",
           "family": "aarch64",
           "features": [
+            "neon",
             "sve"
           ],
           "compile_modes": [
@@ -56,6 +57,7 @@
           "name": "sve256",
           "family": "aarch64",
           "features": [
+            "neon",
             "sve"
           ],
           "compile_modes": [
@@ -67,6 +69,7 @@
           "name": "sve512",
           "family": "aarch64",
           "features": [
+            "neon",
             "sve"
           ],
           "compile_modes": [

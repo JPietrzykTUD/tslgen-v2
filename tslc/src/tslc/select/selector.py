@@ -273,7 +273,7 @@ class Selector:
                     evaluated_slots.extend(free_slots)
                 continue
             for slot in self._selection_slots(
-                catalog, primitive, emitted_extensions, type_tags
+                catalog, profile, primitive, emitted_extensions, type_tags
             ):
                 extension = catalog.extensions[slot.extension_name]
                 fixed_shape_kinds = (
@@ -368,7 +368,7 @@ class Selector:
         ]
         evaluated: list[SelectionSlotResult] = []
         for slot in self._selection_slots(
-            catalog, primitive, owner_extensions, type_tags
+            catalog, profile, primitive, owner_extensions, type_tags
         ):
             slot_selected = (
                 self._select_slot(
@@ -406,6 +406,7 @@ class Selector:
     def _selection_slots(
         self,
         catalog: Catalog,
+        profile: MachineProfile,
         primitive: Primitive,
         extension_names: list[str],
         type_tags: tuple[str, ...],
@@ -427,6 +428,7 @@ class Selector:
                     extension_name,
                     type_tag,
                     self.support,
+                    profile=profile,
                 )
                 for to_target in targets:
                     yield _SelectionSlot(extension_name, type_tag, to_target)

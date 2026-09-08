@@ -499,6 +499,7 @@ def _resolved_primitive_slots(
                 extension,
                 type_tag,
                 selector.support,
+                profile=profile,
             )
         )
     keys.update(selected)

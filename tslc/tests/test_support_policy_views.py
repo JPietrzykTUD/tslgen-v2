@@ -82,3 +82,18 @@ def test_views_filter_representation_change_targets(catalog: Catalog) -> None:
         catalog, reinterpret, "scalar", "si32", policy
     ) == ("f32", "si32", "ui32")
     assert concrete_target_candidates(catalog, extract, "avx2", "si32", policy) == ("sse",)
+
+
+def test_extension_targets_respect_the_active_compilation_mode(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    extract = catalog.primitives_named("extract", unmasked=False)[0]
+
+    assert concrete_target_candidates(
+        catalog,
+        extract,
+        "sve256",
+        "si32",
+        profile=machine_profiles["sve256"],
+    ) == ("neon",)
