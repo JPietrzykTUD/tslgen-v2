@@ -76,6 +76,27 @@ prim<im:=(im,usize)> test_imask(mask, position):
             }
             complete(empty);
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(empty, call<primitive=mask_false[Vec]>());
+            if (position >= value(vector::runtime_length)) {
+              complete(empty);
+            }
+            var<const_infer>(lane_mask, call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(empty, position, 1));
+            if (call<primitive=mask_population_count[Vec]>(
+              call<primitive=mask_binary_and[Vec]>(mask, lane_mask)
+            ) != 0) {
+              complete(call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(empty, 0, 1));
+            }
+            complete(empty);
+          """
 
 prim<m:=(m,usize,usize)> set_mask_lane(mask, index, value):
   operation mask_set_lane
@@ -131,6 +152,27 @@ prim<m:=(m,usize,usize)> set_mask_lane(mask, index, value):
           neon [neon]
           sve [sve]
           wasm128 [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(lane_mask, call<primitive=equal[Vec]>(
+              call<primitive=sequence[Vec]>(),
+              call<primitive=set1[Vec]>(cast<static>(base::in, index))
+            ));
+            if (value != 0) {
+              complete(call<primitive=mask_binary_or[Vec]>(mask, lane_mask));
+            }
+            complete(call<primitive=mask_binary_and[Vec]>(
+              mask,
+              call<primitive=mask_binary_not[Vec]>(lane_mask)
+            ));
+          """
+    rvv:
+      arith:
+        requires [v]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -230,6 +272,30 @@ prim<im:=(im,im,usize)> overlay_imask(mask_a, mask_b, position):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            if (position >= value(vector::runtime_length)) {
+              complete(mask_a);
+            }
+            var<infer>(result, mask_a);
+            var<const_infer>(empty, call<primitive=mask_false[Vec]>());
+            loop<backend>(i, 0, value(vector::runtime_length) - position, 1) {
+              var<const_infer>(source_lane, call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(empty, i, 1));
+              if (call<primitive=mask_population_count[Vec]>(
+                call<primitive=mask_binary_and[Vec]>(mask_b, source_lane)
+              ) != 0) {
+                result = call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(result, position + i, 1);
+              }
+            }
+            complete(result);
+          """
+    rvv:
+      arith:
+        requires [v]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -654,6 +720,22 @@ prim<m:=(m,m)> mask_interleave_lo(mask_a, mask_b):
               )
             ));
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(call<primitive=unequal_zero[Vec]>(
+              call<primitive=interleave_lo[Vec]>(
+                call<primitive=to_vector[Vec]>(mask_a),
+                call<primitive=to_vector[Vec]>(mask_b)
+              )
+            ));
+          """
 
 prim<m:=(m,m)> mask_deinterleave_odd(mask_a, mask_b):
   brief_description "Gathers the odd lanes of two masks into one mask."
@@ -728,6 +810,35 @@ prim<m:=(m,m)> mask_deinterleave_odd(mask_a, mask_b):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [raw_memory]
+        implementation:
+          tsil """
+            let<type>(Base, base::in);
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<const_infer>(a_vec, call<primitive=to_vector[Vec]>(mask_a));
+            var<const_infer>(b_vec, call<primitive=to_vector[Vec]>(mask_b));
+            var<runtime_array>(Base, a_lanes, lanes);
+            var<runtime_array>(Base, b_lanes, lanes);
+            var<runtime_array>(Base, result, lanes);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(a_lanes, a_vec);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(b_lanes, b_vec);
+            loop<backend>(i, 0, lanes, 1) {
+              if ((2 * i) < lanes) {
+                result[i] = a_lanes[2 * i + 1];
+              } else {
+                result[i] = b_lanes[2 * i - lanes + 1];
+              }
+            }
+            complete(call<primitive=unequal_zero[Vec]>(
+              call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result)
+            ));
+          """
+    rvv:
+      arith:
+        requires [v]
         safety:
           internal_unsafe true
           caller_unsafe false

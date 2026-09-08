@@ -375,6 +375,38 @@ prim<s:=v> hand(vec):
             mem<copy>(cast<reinterpret, type=ptr>(void, address<borrow_mut>(out)), cast<reinterpret, type=const_ptr>(void, address<of>(result)), value(type::size_bytes(base::in)));
             complete(out);
           """
+    rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(first, call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(vec, 0));
+            var<const_infer>(seed, call<primitive=set1[Vec]>(first));
+            var<const_infer>(reduced, intrin<vredand, build[infix=base::in, infix_sep="_vs_"]>(
+              vec,
+              seed,
+              value(vector::runtime_length)
+            ));
+            complete(call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(reduced, 0));
+          """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(BitBase, base::unsigned_of(base::in));
+            let<type>(BitVec, vector::as_base(BitBase));
+            complete(cast<bitcast>(base::in, call<primitive=@self[BitVec]>(
+              call<primitive=reinterpret[Vec, BitVec]>(vec)
+            )));
+          """
 
 prim<s:=v> hor(vec):
   operation horizontal_bit_or
@@ -750,6 +782,38 @@ prim<s:=v> hor(vec):
             mem<copy>(cast<reinterpret, type=ptr>(void, address<borrow_mut>(out)), cast<reinterpret, type=const_ptr>(void, address<of>(result)), value(type::size_bytes(base::in)));
             complete(out);
           """
+    rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(first, call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(vec, 0));
+            var<const_infer>(seed, call<primitive=set1[Vec]>(first));
+            var<const_infer>(reduced, intrin<vredor, build[infix=base::in, infix_sep="_vs_"]>(
+              vec,
+              seed,
+              value(vector::runtime_length)
+            ));
+            complete(call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(reduced, 0));
+          """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(BitBase, base::unsigned_of(base::in));
+            let<type>(BitVec, vector::as_base(BitBase));
+            complete(cast<bitcast>(base::in, call<primitive=@self[BitVec]>(
+              call<primitive=reinterpret[Vec, BitVec]>(vec)
+            )));
+          """
 
 prim<s:=(m,v)> hand(mask, vec):
   operation horizontal_bit_and
@@ -1108,6 +1172,26 @@ prim<s:=(m,v)> hand(mask, vec):
             }
             complete(out);
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            if (call<primitive=mask_population_count[Vec]>(mask) == 0) {
+              complete(cast<static>(base::in, 0));
+            }
+            complete(call<primitive=hand[Vec]>(
+              call<primitive=select[Vec], attrs[mask=pass_through]>(
+                mask,
+                vec,
+                call<primitive=set1[Vec]>(mask<lane_true>())
+              )
+            ));
+          """
 
 prim<s:=(m,v)> hor(mask, vec):
   operation horizontal_bit_or
@@ -1335,6 +1419,19 @@ prim<s:=(m,v)> hor(mask, vec):
             var<infer>(out, cast<static>(base::in, 0));
             mem<copy>(cast<reinterpret, type=ptr>(void, address<borrow_mut>(out)), cast<reinterpret, type=const_ptr>(void, address<of>(result)), value(type::size_bytes(base::in)));
             complete(out);
+          """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(call<primitive=hor[Vec]>(
+              call<primitive=mov[Vec], attrs[mask=zero]>(mask, vec)
+            ));
           """
     scalar:
       arith:

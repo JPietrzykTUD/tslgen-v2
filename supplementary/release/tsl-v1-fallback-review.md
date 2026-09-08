@@ -14,10 +14,10 @@ never permitted. The exact target-support ratchet records the implementation
 state for each profile, type, target, and conversion realization, so an
 exception cannot hide a later `native` or `composed` to `fallback` regression.
 
-The candidate snapshot contains 1,774 fallback realizations under 37 reviewed
-accelerated-core identities and no unknown realizations. The only additional
-fallback identity is `to_ostream#o:=(o,v,s)`, which is an explicitly portable
-utility and therefore needs no accelerated-core exception.
+The candidate snapshot records fallback realizations only under exact reviewed
+accelerated-core identities and contains no unknown realizations. The only
+additional fallback identity is `to_ostream#o:=(o,v,s)`, which is an explicitly
+portable utility and therefore needs no accelerated-core exception.
 
 The performance evidence in this review is structural: the compiler-owned
 implementation graph and generated code identify whether a path uses native
@@ -33,8 +33,10 @@ RVV benchmark measurements remain mandatory release-attestation work in Slice
 Exact identities:
 
 - `abs#v:=(v)`
+- `cast[cast=convert]#v:=v->base:ToBase`
 - `convert_down[cast=convert,direction=down]#v:=(v,sImm)->base:ToBase`
 - `convert_lanes#v:=v->vector:ToVec`
+- `convert_up[cast=convert,direction=up]#v:=(v,sImm)->base:ToBase`
 - `div#v:=(v,v)`
 - `div[mask=pass_through]#v:=(m,v,v)`
 - `div[mask=zero]#v:=(m,v,v)`
@@ -44,6 +46,7 @@ Exact identities:
 - `mod_imm#v:=(v,sImm)`
 - `mod_imm[mask=pass_through]#v:=(m,v,sImm)`
 - `mod_imm[mask=zero]#v:=(m,v,sImm)`
+- `load_convert_up#v:=cptr+->base:ToBase`
 
 These identities have mixed realization quality. For example, scalable SVE
 integer division is composed and floating division is native, while remaining
@@ -55,7 +58,12 @@ multiplication, subtraction, and masking where available. The structural
 performance risk is therefore explicit: conversion may be scalarized and
 modulo/division cost may exceed one target instruction. Correctness coverage
 includes signed, unsigned, floating, masked, width-changing, equal-lane, and
-checked lane-count-mismatch cases.
+checked lane-count-mismatch cases. Baseline RVV `cast`, `convert_up`, and
+`load_convert_up` deliberately stage runtime-VL lanes through typed temporary
+storage. This closes the stable semantic surface without assuming VLEN or
+inventing unsupported register multiplicities; direct widening/narrowing
+recipes remain future optimizations where the concrete source/target pair has
+an ISA mapping.
 
 Decision: acceptable as a correctness-preserving v1 implementation, not as a
 native-performance claim. Native measurements must prioritize
@@ -96,11 +104,15 @@ Exact identities:
 - `expand[mask=pass_through,op=expand]#v:=(m,v,v)`
 - `expand_load[aligned=true,op=expand]#v:=(m,cptr)`
 - `mask_deinterleave_odd#m:=(m,m)`
+- `align_right_lanes#v:=(v,v,sImm)`
+- `interleave_lo#v:=(v,v)`
+- `mask_interleave_lo#m:=(m,m)`
 - `permute_lanes#v:=(v,sImm)`
 - `permute_lanes#v:=(v,vidx)`
 - `permute_lanes[mask=pass_through]#v:=(m,v,v,vidx)`
 - `permute_lanes[mask=zero]#v:=(m,v,vidx)`
 - `table_lookup#v:=(v,vidx,v)`
+- `reverse#v:=(v)`
 
 These are cross-lane algorithms. Their implementation graphs compose supported
 vector comparisons, masks, selects, loads/stores, and lane operations, with
@@ -113,6 +125,41 @@ tail behavior.
 Decision: acceptable as explicitly non-native semantic baselines. Native
 benchmarking should compare data distributions as well as vector lengths,
 because mask density and conflict rate affect the useful speedup.
+
+### Masked extrema reductions
+
+Exact identities:
+
+- `hmax#s:=(m,v)`
+- `hmin#s:=(m,v)`
+
+Unmasked RVV add, minimum, maximum, AND, and OR reductions use baseline-V
+reduction intrinsics. Masked maximum and minimum retain a runtime-VL scalar
+path because the public empty-mask result is zero, while an RVV masked
+reduction always includes its scalar seed. Choosing a neutral seed is
+type-specific and would also change the documented floating NaN and signed-zero
+behavior. The conservative path tests the exact public semantics and makes its
+O(VL) cost visible.
+
+Decision: acceptable for v1 correctness. A later native recipe must prove
+empty-mask, NaN, infinity, signed-zero, and integer-boundary equivalence before
+it replaces this fallback.
+
+### Baseline-V bit counts
+
+Exact identities:
+
+- `lzc#v:=v`
+- `popcnt#v:=v`
+
+The v1 RVV target promises baseline V 1.0 and explicitly excludes optional
+extensions. Per-lane vector count-leading-zero and population-count operations
+are supplied by Zvbb, so the baseline implementation uses correct typed
+software composition instead of silently raising the target requirement.
+
+Decision: acceptable and required for the advertised baseline-V surface. A
+future Zvbb target extension should add native implementations without
+replacing or weakening this baseline path.
 
 ### Integral-mask helpers
 
@@ -155,16 +202,24 @@ The review is backed by these repository-root commands:
 
 ```bash
 ./dev.sh check --profile sve --backend cpp --strict
+./dev.sh check --profile rvv --backend cpp --strict
 ./dev.sh target-ratchet --require-complete --profile sve
+./dev.sh target-ratchet --require-complete --profile rvv
 ./dev.sh test --primitives gather,gather_narrow_partial,scatter,extract_value_at,insert_value_at,set_mask_lane,load,store --profiles sve --backends cpp
+./dev.sh test --profiles rvv --backends cpp --output-root ./tslctmp/rvv-slice7
 PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds tslc/tests/test_value_tests.py -k sve_runtime_semantics
+PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds tslc/tests/test_chorys_rvv_consumer.py
 ```
 
-The focused generated gate cross-compiles a real SVE project and runs it with
-`qemu-aarch64`. It includes scalable lane extraction/insertion, predicate-lane
-mutation, indexed loads/stores, partial gather, equal-width conversion, checked
-lane-count mismatch, checked index bounds and alignment, inactive mask lanes,
-tail lanes, and scatter failure no-write behavior.
+The focused SVE gate cross-compiles a real project and runs it with
+`qemu-aarch64`. The full RVV gate cross-compiles all 19,643 specializations and
+runs all 4,448 planned cases with `qemu-riscv64`; the same binary also passes at
+VLEN 256 and 512. Together they include scalable lane extraction/insertion,
+predicate-lane mutation, indexed loads/stores, partial gather, equal-width
+conversion, checked lane-count mismatch, checked index bounds and alignment,
+inactive mask lanes, tail lanes, and scatter failure no-write behavior. The
+[RVV evidence record](tsl-v1-rvv-evidence.md) captures the exact inventory and
+CHORYS-shaped consumer boundary.
 
 Before the final v1.0.0 tag, Slice 8 must append native benchmark attestations
 for representative identities from every group. If those runs expose an

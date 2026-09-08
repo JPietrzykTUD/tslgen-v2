@@ -624,6 +624,27 @@ prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
             );
             complete(*ptr);
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_memory, raw_pointer]
+        implementation:
+          tsil """
+            let<type>(Base, base::in);
+            let<type>(IndexBase, base::generic(IndicesType));
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<const_infer>(index_lanes, value(generic::runtime_length(IndicesType)));
+            var<runtime_array>(IndexBase, idx_array, index_lanes);
+            var<runtime_array>(Base, result, lanes);
+            call<primitive=store[IndicesType], attrs[aligned=false], discharge[contiguous_memory_extent]>(idx_array, index);
+            loop<backend>(i, 0, lanes, 1) {
+              result[i] = *(cast<reinterpret, type=const_ptr>(Base, ptr_add(cast<reinterpret, type=const_ptr>(scalar::ui8, base_ptr), idx_offset(idx_array[i], scale))));
+            }
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
+          """
 prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
   operation load
   operand_roles:
@@ -847,6 +868,30 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
             );
             complete(*ptr);
           """
+    rvv:
+      [bword, dword]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_memory, raw_pointer]
+        implementation:
+          tsil """
+            let<type>(Base, base::in);
+            let<type>(IndexBase, base::generic(IndicesType));
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<const_infer>(index_lanes, value(generic::runtime_length(IndicesType)));
+            var<runtime_array>(IndexBase, idx_array, index_lanes);
+            var<runtime_array>(Base, result, lanes);
+            call<primitive=store[IndicesType], attrs[aligned=false], discharge[contiguous_memory_extent]>(idx_array, index);
+            loop<backend>(i, 0, lanes, 1) {
+              result[i] = cast<static>(Base, 0);
+            }
+            loop<backend>(i, 0, index_lanes, 1) {
+              result[i] = *(cast<reinterpret, type=const_ptr>(Base, ptr_add(cast<reinterpret, type=const_ptr>(scalar::ui8, base_ptr), idx_offset(idx_array[i], scale))));
+            }
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
+          """
 prim<v:=(cptr,cptr,sImm)> gather_narrow(base_ptr, index_ptr, scale):
   brief_description "Gathers a full vector of narrow memory elements using scalar indices loaded from memory."
   detailed_description """
@@ -1028,6 +1073,23 @@ prim<v:=(cptr,cptr,sImm)> gather_narrow(base_ptr, index_ptr, scale):
               )
             );
             complete(*ptr);
+          """
+    rvv:
+      [bword, dword]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_memory, raw_pointer]
+        implementation:
+          tsil """
+            let<type>(Base, base::in);
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<runtime_array>(Base, result, lanes);
+            loop<backend>(i, 0, lanes, 1) {
+              result[i] = *(cast<reinterpret, type=const_ptr>(Base, ptr_add(cast<reinterpret, type=const_ptr>(scalar::ui8, base_ptr), idx_offset(*(ptr_add(index_ptr, i)), scale))));
+            }
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
           """
 prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, source, scale):
   operation load
@@ -1521,6 +1583,37 @@ prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, s
             }
             complete(source);
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_memory, raw_pointer]
+        implementation:
+          tsil """
+            let<type>(Base, base::in);
+            let<type>(IndexBase, base::generic(IndicesType));
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<const_infer>(index_lanes, value(generic::runtime_length(IndicesType)));
+            var<runtime_array>(IndexBase, idx_array, index_lanes);
+            var<runtime_array>(Base, result, lanes);
+            var<runtime_array>(Base, active_array, lanes);
+            call<primitive=store[IndicesType], attrs[aligned=false], discharge[contiguous_memory_extent]>(idx_array, index);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result, source);
+            var<const_infer>(active, call<primitive=select[Vec]>(
+              mask,
+              call<primitive=set1[Vec]>(cast<static>(Base, 1)),
+              call<primitive=set_zero[Vec]>()
+            ));
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(active_array, active);
+            loop<backend>(i, 0, lanes, 1) {
+              if (active_array[i] != cast<static>(Base, 0)) {
+                result[i] = *(cast<reinterpret, type=const_ptr>(Base, ptr_add(cast<reinterpret, type=const_ptr>(scalar::ui8, base_ptr), idx_offset(idx_array[i], scale))));
+              }
+            }
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
+          """
 prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
   operation store
   operand_roles:
@@ -1964,6 +2057,27 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
               )
             );
             *ptr = a;
+          """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_memory, raw_pointer]
+        implementation:
+          tsil """
+            let<type>(Base, base::in);
+            let<type>(IndexBase, base::generic(IndicesType));
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<const_infer>(index_lanes, value(generic::runtime_length(IndicesType)));
+            var<runtime_array>(Base, val_array, lanes);
+            var<runtime_array>(IndexBase, idx_array, index_lanes);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(val_array, a);
+            call<primitive=store[IndicesType], attrs[aligned=false], discharge[contiguous_memory_extent]>(idx_array, index);
+            loop<backend>(i, 0, lanes, 1) {
+              *(cast<reinterpret, type=ptr>(Base, ptr_add_mut(cast<reinterpret, type=ptr>(scalar::ui8, base_ptr), idx_offset(idx_array[i], scale)))) = val_array[i];
+            }
           """
 prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, scale):
   operation store
@@ -2447,5 +2561,35 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
                 )
               );
               *ptr = a;
+            }
+          """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_memory, raw_pointer]
+        implementation:
+          tsil """
+            let<type>(Base, base::in);
+            let<type>(IndexBase, base::generic(IndicesType));
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<const_infer>(index_lanes, value(generic::runtime_length(IndicesType)));
+            var<runtime_array>(Base, val_array, lanes);
+            var<runtime_array>(IndexBase, idx_array, index_lanes);
+            var<runtime_array>(Base, active_array, lanes);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(val_array, a);
+            call<primitive=store[IndicesType], attrs[aligned=false], discharge[contiguous_memory_extent]>(idx_array, index);
+            var<const_infer>(active, call<primitive=select[Vec]>(
+              mask,
+              call<primitive=set1[Vec]>(cast<static>(Base, 1)),
+              call<primitive=set_zero[Vec]>()
+            ));
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(active_array, active);
+            loop<backend>(i, 0, lanes, 1) {
+              if (active_array[i] != cast<static>(Base, 0)) {
+                *(cast<reinterpret, type=ptr>(Base, ptr_add_mut(cast<reinterpret, type=ptr>(scalar::ui8, base_ptr), idx_offset(idx_array[i], scale)))) = val_array[i];
+              }
             }
           """

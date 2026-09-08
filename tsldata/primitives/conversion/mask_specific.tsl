@@ -459,6 +459,16 @@ prim<im:=m> to_integral(mask):
               }
                complete(result) ;
             """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(mask);"
+
 prim<v:=m> to_vector(mask):
   brief_description "Converts a mask value to a vector register whose active lanes are all-true lane values."
   detailed_description """
@@ -663,6 +673,21 @@ prim<v:=m> to_vector(mask):
               }
                complete(result) ;
             """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(call<primitive=mov[Vec], attrs[mask=zero]>(
+              mask,
+              call<primitive=set1[Vec]>(mask<lane_true>())
+            ));
+          """
+
 prim<m:=im> to_mask(mask):
   operation mask_from_integral
   operand_roles:
@@ -800,6 +825,15 @@ prim<m:=im> to_mask(mask):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(mask);"
+    rvv:
+      arith:
+        requires [v]
         safety:
           internal_unsafe false
           caller_unsafe false

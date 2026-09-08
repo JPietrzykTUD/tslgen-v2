@@ -658,6 +658,20 @@ prim<s:=v[idx]> extract_value(a):
             ));
             complete(intrin<svlastb, build>(index_lane, a));
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(
+              a,
+              cast<static>(scalar::size, Index)
+            ));
+          """
     [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga]:
       arith:
         requires:
@@ -737,6 +751,21 @@ prim<v:=(v,s)> insert_value(a, value):
               index_lane,
               a,
               call<primitive=set1[Vec]>(value)
+            ));
+          """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(call<primitive=insert_value_at[Vec], discharge[lane_index_in_range]>(
+              a,
+              cast<static>(scalar::size, Index),
+              value
             ));
           """
     sse:
@@ -842,6 +871,87 @@ prim<s:=(v,usize)> extract_value_at(data, index):
             ));
             complete(intrin<svlastb, build>(index_lane, data));
           """
+    rvv:
+      si8:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, unchecked_index]
+        implementation:
+          tsil "complete(intrin<__riscv_vmv_x_s_i8m1_i8>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
+      ui8:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, unchecked_index]
+        implementation:
+          tsil "complete(intrin<__riscv_vmv_x_s_u8m1_u8>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
+      si16:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, unchecked_index]
+        implementation:
+          tsil "complete(intrin<__riscv_vmv_x_s_i16m1_i16>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
+      ui16:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, unchecked_index]
+        implementation:
+          tsil "complete(intrin<__riscv_vmv_x_s_u16m1_u16>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
+      si32:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, unchecked_index]
+        implementation:
+          tsil "complete(intrin<__riscv_vmv_x_s_i32m1_i32>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
+      ui32:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, unchecked_index]
+        implementation:
+          tsil "complete(intrin<__riscv_vmv_x_s_u32m1_u32>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
+      si64:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, unchecked_index]
+        implementation:
+          tsil "complete(intrin<__riscv_vmv_x_s_i64m1_i64>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
+      ui64:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, unchecked_index]
+        implementation:
+          tsil "complete(intrin<__riscv_vmv_x_s_u64m1_u64>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
+      f32:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, unchecked_index]
+        implementation:
+          tsil "complete(intrin<__riscv_vfmv_f_s_f32m1_f32>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
+      f64:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, unchecked_index]
+        implementation:
+          tsil "complete(intrin<__riscv_vfmv_f_s_f64m1_f64>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
     [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, avx2, sse_vl, sse, neon, sve, wasm128]:
       arith:
         prefer_fixed_native true
@@ -933,6 +1043,27 @@ prim<v:=(v,usize,s)> insert_value_at(data, index, value):
               index_lane,
               data,
               call<primitive=set1[Vec]>(value)
+            ));
+          """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(IndexBase, base::unsigned_of(base::in));
+            let<type>(IndexVec, vector::as_base(IndexBase));
+            var<const_infer>(index_lane, call<primitive=equal[IndexVec]>(
+              call<primitive=sequence[IndexVec]>(),
+              call<primitive=set1[IndexVec]>(cast<static>(IndexBase, index))
+            ));
+            complete(call<primitive=select, attrs[mask=pass_through]>(
+              index_lane,
+              call<primitive=set1[Vec]>(value),
+              data
             ));
           """
     [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, avx2, sse_vl, sse, neon, sve, wasm128]:

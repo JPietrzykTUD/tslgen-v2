@@ -1245,6 +1245,54 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
               ));
             }
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            if<generation>(value(primitive::attribute(packed))) {
+              let<type>(MaskT, vector::mask);
+              let<type>(UVec, vector::as_base(base::unsigned_of(base::in)));
+              var<typed>(MaskT, out, call<primitive=mask_false[Vec]>());
+              var<const_infer>(idx, call<primitive=sequence[UVec]>());
+              var<const_infer>(
+                lanes,
+                value(generic::runtime_length(UVec))
+              );
+              var<const_infer>(bytes, cast<reinterpret, type=const_ptr>(scalar::ui8, ptr));
+
+              loop<backend>(lane, 0, lanes, 1) {
+                var<const_infer>(set, (((*ptr_add(bytes, lane >> 3)) >> (lane & 7)) & 1));
+                if (set) {
+                  var<const_infer>(one, call<primitive=equal[UVec]>(
+                    idx,
+                    call<primitive=set1[UVec]>(
+                      cast<static>(base::unsigned_of(base::in), lane)
+                    )
+                  ));
+                  out = call<primitive=mask_binary_or[Vec]>(out, one);
+                }
+              }
+              complete(out);
+            } else<generation> {
+              let<type>(UnsignedT, base::unsigned_of(base::in));
+              let<type>(UVec, vector::as_base(base::unsigned_of(base::in)));
+              var<infer>(vec, call<primitive=set_zero[UVec]>());
+              if<generation>(value(primitive::attribute(aligned))) {
+                vec = call<primitive=load[UVec], attrs[aligned=true], discharge[contiguous_memory_extent, selected_memory_alignment]>(cast<reinterpret, type=const_ptr>(UnsignedT, ptr));
+              } else<generation> {
+                vec = call<primitive=load[UVec], attrs[aligned=false], discharge[contiguous_memory_extent]>(cast<reinterpret, type=const_ptr>(UnsignedT, ptr));
+              }
+              complete(call<primitive=nequal[UVec]>(
+                vec,
+                call<primitive=set_zero[UVec]>()
+              ));
+            }
+          """
 
 prim<s:=cptr>[aligned=false] load_scalar(ptr):
   operation load_scalar
@@ -1304,6 +1352,15 @@ prim<s:=cptr>[aligned=false] load_scalar(ptr):
           sve [sve]
           oneapi_fpga []
           wasm128 [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_memory, raw_pointer]
+        implementation:
+          tsil "complete(mem<load_scalar>(ptr));"
+    rvv:
+      arith:
+        requires [v]
         safety:
           internal_unsafe true
           caller_unsafe true

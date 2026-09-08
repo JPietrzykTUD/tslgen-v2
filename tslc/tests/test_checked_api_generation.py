@@ -982,6 +982,33 @@ def test_scalable_indexed_checked_guard_closes_over_lane_extraction(
     assert "::tsl::extract_value_at<IndicesType>" in source
 
 
+def test_rust_indexed_checked_guard_carries_lane_extraction_bound(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["scatter"],
+        profiles=["avx2"],
+        type_tags=("si32",),
+        backends=["rust"],
+    )
+
+    assert not has_errors(result.diagnostics), result.diagnostics
+    source = "\n".join(
+        artifact.content
+        for artifact in result.artifacts.artifacts
+        if artifact.logical_path.endswith("/src/tsl_avx2.rs")
+    )
+    assert (
+        "IndicesType: StaticSimdVector + "
+        "detail::primitives::To_arrayImpl + "
+        "detail::primitives::Extract_value_atImpl"
+    ) in source
+    assert "extract_value_at::<IndicesType>(index, __tsl_lane)" in source
+
+
 @pytest.fixture(scope="module")
 def checked_lane_cpp_project(
     data_root: Path,

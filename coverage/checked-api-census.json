@@ -1490,7 +1490,7 @@
       "reasons": [
         "raw_pointer"
       ],
-      "implementation_count": 17,
+      "implementation_count": 18,
       "family": "mask_memory_contract",
       "checked_source_status": "coverage_gap",
       "preconditions": [],
@@ -1510,7 +1510,7 @@
         "raw_memory",
         "raw_pointer"
       ],
-      "implementation_count": 17,
+      "implementation_count": 18,
       "family": "mask_memory_contract",
       "checked_source_status": "coverage_gap",
       "preconditions": [],
@@ -1528,7 +1528,7 @@
       "reasons": [
         "raw_pointer"
       ],
-      "implementation_count": 17,
+      "implementation_count": 18,
       "family": "mask_memory_contract",
       "checked_source_status": "coverage_gap",
       "preconditions": [],
@@ -1548,7 +1548,7 @@
         "raw_memory",
         "raw_pointer"
       ],
-      "implementation_count": 17,
+      "implementation_count": 18,
       "family": "mask_memory_contract",
       "checked_source_status": "coverage_gap",
       "preconditions": [],
@@ -1589,7 +1589,7 @@
         "raw_memory",
         "raw_pointer"
       ],
-      "implementation_count": 15,
+      "implementation_count": 16,
       "family": "contiguous_memory_contract",
       "checked_source_status": "declared",
       "preconditions": [
@@ -1609,7 +1609,7 @@
         "raw_memory",
         "raw_pointer"
       ],
-      "implementation_count": 14,
+      "implementation_count": 15,
       "family": "contiguous_memory_contract",
       "checked_source_status": "declared",
       "preconditions": [
@@ -1724,9 +1724,10 @@
       "result_target": [],
       "reasons": [
         "intrinsic",
+        "raw_memory",
         "raw_pointer"
       ],
-      "implementation_count": 20,
+      "implementation_count": 21,
       "family": "selected_memory_contract",
       "checked_source_status": "declared",
       "preconditions": [
@@ -1746,9 +1747,10 @@
       "result_target": [],
       "reasons": [
         "intrinsic",
+        "raw_memory",
         "raw_pointer"
       ],
-      "implementation_count": 22,
+      "implementation_count": 23,
       "family": "selected_memory_contract",
       "checked_source_status": "declared",
       "preconditions": [
@@ -1769,7 +1771,7 @@
       "reasons": [
         "raw_pointer"
       ],
-      "implementation_count": 17,
+      "implementation_count": 18,
       "family": "mask_memory_contract",
       "checked_source_status": "coverage_gap",
       "preconditions": [],
@@ -1789,7 +1791,7 @@
         "raw_memory",
         "raw_pointer"
       ],
-      "implementation_count": 17,
+      "implementation_count": 18,
       "family": "mask_memory_contract",
       "checked_source_status": "coverage_gap",
       "preconditions": [],
@@ -1807,7 +1809,7 @@
       "reasons": [
         "raw_pointer"
       ],
-      "implementation_count": 17,
+      "implementation_count": 18,
       "family": "mask_memory_contract",
       "checked_source_status": "coverage_gap",
       "preconditions": [],
@@ -1827,7 +1829,7 @@
         "raw_memory",
         "raw_pointer"
       ],
-      "implementation_count": 17,
+      "implementation_count": 18,
       "family": "mask_memory_contract",
       "checked_source_status": "coverage_gap",
       "preconditions": [],
@@ -1868,7 +1870,7 @@
         "raw_memory",
         "raw_pointer"
       ],
-      "implementation_count": 14,
+      "implementation_count": 15,
       "family": "contiguous_memory_contract",
       "checked_source_status": "declared",
       "preconditions": [
@@ -1910,9 +1912,10 @@
       "result_target": [],
       "reasons": [
         "intrinsic",
+        "raw_memory",
         "raw_pointer"
       ],
-      "implementation_count": 21,
+      "implementation_count": 22,
       "family": "indexed_memory_contract",
       "checked_source_status": "declared",
       "preconditions": [
@@ -1930,9 +1933,10 @@
       "result_target": [],
       "reasons": [
         "intrinsic",
+        "raw_memory",
         "raw_pointer"
       ],
-      "implementation_count": 29,
+      "implementation_count": 30,
       "family": "indexed_memory_contract",
       "checked_source_status": "declared",
       "preconditions": [
@@ -1964,9 +1968,10 @@
       "result_target": [],
       "reasons": [
         "intrinsic",
+        "raw_memory",
         "raw_pointer"
       ],
-      "implementation_count": 29,
+      "implementation_count": 30,
       "family": "indexed_memory_contract",
       "checked_source_status": "declared",
       "preconditions": [
@@ -1981,9 +1986,10 @@
       "attributes": {},
       "result_target": [],
       "reasons": [
+        "raw_memory",
         "raw_pointer"
       ],
-      "implementation_count": 17,
+      "implementation_count": 18,
       "family": "indexed_memory_contract",
       "checked_source_status": "coverage_gap",
       "preconditions": [],
@@ -1997,9 +2003,10 @@
       "result_target": [],
       "reasons": [
         "intrinsic",
+        "raw_memory",
         "raw_pointer"
       ],
-      "implementation_count": 18,
+      "implementation_count": 19,
       "family": "indexed_memory_contract",
       "checked_source_status": "declared",
       "preconditions": [
@@ -2021,7 +2028,7 @@
         "raw_memory",
         "raw_pointer"
       ],
-      "implementation_count": 74,
+      "implementation_count": 75,
       "family": "conversion_input_contract",
       "checked_source_status": "declared",
       "preconditions": [
@@ -2039,7 +2046,7 @@
         "raw_memory",
         "raw_pointer"
       ],
-      "implementation_count": 34,
+      "implementation_count": 35,
       "family": "raw_copy_contract",
       "checked_source_status": "coverage_gap",
       "preconditions": [],
@@ -2071,9 +2078,10 @@
       "result_target": [],
       "reasons": [
         "intrinsic",
+        "raw_memory",
         "raw_pointer"
       ],
-      "implementation_count": 29,
+      "implementation_count": 30,
       "family": "indexed_memory_contract",
       "checked_source_status": "declared",
       "preconditions": [

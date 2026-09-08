@@ -7,6 +7,7 @@ from dataclasses import dataclass, replace
 
 from tslc.backend.primitive_rendering import body_for as _body_for
 from tslc.backend.checked_api import (
+    CheckedApiPlan,
     CheckedConditionPlan,
     applicable_checked_api_plan,
     checked_api_plan,
@@ -441,6 +442,43 @@ def _rust_public_wrapper_facts(
     )
 
 
+def _rust_checked_generic_parameters(
+    shape: LoweredSpecialization,
+    facts: _RustPublicWrapperFacts,
+    plan: CheckedApiPlan,
+) -> tuple[RustGenericParameter, ...]:
+    """Add checked-guard dependencies owned by a free SIMD type parameter."""
+
+    if not shape.type_params:
+        return facts.generic_parameters
+    index_owner = shape.type_params[0].name
+    index_bounds: list[str] = []
+    for condition in plan.conditions:
+        if condition.kind is not PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID:
+            continue
+        if (
+            PreconditionCheckPrimitive.VECTOR_EXTRACT_LANE
+            in condition.check_primitives
+        ):
+            primitive = PreconditionCheckPrimitive.VECTOR_EXTRACT_LANE
+            index_bounds.append(
+                f"{_PRIMITIVE_TRAIT_PREFIX}"
+                f"{rust_primitive_trait_name(primitive.value)}"
+            )
+    if not index_bounds:
+        return facts.generic_parameters
+    return tuple(
+        rust_type_parameter(
+            parameter.name,
+            *parameter.bounds,
+            *(bound for bound in index_bounds if bound not in parameter.bounds),
+        )
+        if parameter.name == index_owner
+        else parameter
+        for parameter in facts.generic_parameters
+    )
+
+
 def _rust_overload_identity(
     specializations: tuple[LoweredSpecialization, ...], surface: str
 ) -> str:
@@ -543,7 +581,7 @@ def _rust_checked_wrapper_declaration(
         visibility="pub",
         generic_parameters=(
             rust_type_parameter("S", facts.vector_bound),
-            *facts.generic_parameters,
+            *_rust_checked_generic_parameters(shape, facts, plan),
         ),
         parameters=parameters,
         where_predicates=checked_where or index_where,

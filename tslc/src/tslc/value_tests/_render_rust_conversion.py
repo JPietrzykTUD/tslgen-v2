@@ -108,9 +108,10 @@ def _lane_convert(case: ValueTestCasePlan) -> str:
                 f"        let source = {from_array}::<Vec>(&source_array);",
             ]
         )
+    call = f"{rust_raw_identifier(case.call_name)}::<Vec, ToVec>(source)"
     lines.extend(
         [
-            f"        let result = {rust_raw_identifier(case.call_name)}::<Vec, ToVec>(source);",
+            f"        let result = {public_call(case, call)};",
             f"        let expected: [{target}; {case.lanes}] = [{expected}];",
             f"        for i in 0..{case.lanes} {{ assert!(result[i].lane_eq(expected[i]), "
             f'"{case.case_name} lane {{}}: expected {{:?}}, got {{:?}}", '

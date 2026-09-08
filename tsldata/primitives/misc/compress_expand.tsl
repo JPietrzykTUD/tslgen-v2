@@ -242,6 +242,39 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
               }
               complete(result);
             """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [raw_memory]
+        implementation:
+          tsil """
+            let<type>(Base, base::in);
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<runtime_array>(Base, values, lanes);
+            var<runtime_array>(Base, active_values, lanes);
+            var<runtime_array>(Base, result, lanes);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(values, data);
+            var<const_infer>(active, call<primitive=select[Vec]>(
+              mask,
+              call<primitive=set1[Vec]>(cast<static>(Base, 1)),
+              call<primitive=set_zero[Vec]>()
+            ));
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(active_values, active);
+            loop<backend>(i, 0, lanes, 1) {
+              result[i] = cast<static>(Base, 0);
+            }
+            var<infer>(out_idx, 0);
+            loop<backend>(i, 0, lanes, 1) {
+              if (active_values[i] != cast<static>(Base, 0)) {
+                result[out_idx] = values[i];
+                out_idx = out_idx + 1;
+              }
+            }
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
+          """
 prim<v:=(m,v,v)>[mask=pass_through, op=expand] expand(mask, to_keep, to_expand):
   cross_lane true
   brief_description "Expands packed source lanes into active mask lanes and keeps inactive lanes."
@@ -547,3 +580,37 @@ prim<v:=(m,v,v)>[mask=pass_through, op=expand] expand(mask, to_keep, to_expand):
                 complete(to_keep);
               }
             """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [raw_memory]
+        implementation:
+          tsil """
+            let<type>(Base, base::in);
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<runtime_array>(Base, keep_values, lanes);
+            var<runtime_array>(Base, expand_values, lanes);
+            var<runtime_array>(Base, active_values, lanes);
+            var<runtime_array>(Base, result, lanes);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(keep_values, to_keep);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(expand_values, to_expand);
+            var<const_infer>(active, call<primitive=select[Vec]>(
+              mask,
+              call<primitive=set1[Vec]>(cast<static>(Base, 1)),
+              call<primitive=set_zero[Vec]>()
+            ));
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(active_values, active);
+            var<infer>(in_idx, 0);
+            loop<backend>(i, 0, lanes, 1) {
+              if (active_values[i] != cast<static>(Base, 0)) {
+                result[i] = expand_values[in_idx];
+                in_idx = in_idx + 1;
+              } else {
+                result[i] = keep_values[i];
+              }
+            }
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
+          """

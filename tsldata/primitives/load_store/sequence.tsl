@@ -397,6 +397,37 @@ prim<v:=()> sequence():
               indexes
             ));
           """
+    rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(IndexBase, base::unsigned_of(base::in));
+            let<type>(IndexVec, vector::as_base(IndexBase));
+            var<const_infer>(indexes, intrin<vid, build[infix="v", infix_sep="_", suffix=IndexBase]>(
+              value(vector::runtime_length)
+            ));
+            complete(call<primitive=reinterpret[IndexVec, Vec]>(indexes));
+          """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(IndexBase, base::unsigned_of(base::in));
+            let<type>(IndexVec, vector::as_base(IndexBase));
+            var<const_infer>(indexes, intrin<vid, build[infix="v", infix_sep="_", suffix=IndexBase]>(
+              value(vector::runtime_length)
+            ));
+            complete(call<primitive=cast[IndexVec, base::in]>(indexes));
+          """
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
         requires []
@@ -558,6 +589,23 @@ prim<v:=(s,s)> custom_sequence(start, stepwidth):
               call<primitive=set1[Vec]>(start),
               call<primitive=mul[Vec]>(
                 scale,
+                call<primitive=set1[Vec]>(stepwidth)
+              )
+            ));
+          """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(call<primitive=add[Vec]>(
+              call<primitive=set1[Vec]>(start),
+              call<primitive=mul[Vec]>(
+                call<primitive=sequence[Vec]>(),
                 call<primitive=set1[Vec]>(stepwidth)
               )
             ));

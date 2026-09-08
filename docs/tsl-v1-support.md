@@ -272,7 +272,7 @@ This conservative default prevents incomplete semantic annotations from
 silently weakening the quality gate. A fallback in that set is forbidden
 unless its exact identity is a
 reviewed exception with correctness and performance evidence. There are
-currently 37 exceptions.
+currently 48 exceptions.
 Their review record is `supplementary/release/tsl-v1-fallback-review.md`.
 
 The coarse implementation-state meanings are:

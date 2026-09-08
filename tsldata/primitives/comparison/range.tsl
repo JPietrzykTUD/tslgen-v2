@@ -241,6 +241,20 @@ prim<m:=(v,v,v)> between_inclusive(x, left, right):
               )
             );
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(call<primitive=mask_binary_and[Vec]>(
+              call<primitive=less_than_or_equal[Vec]>(left, x),
+              call<primitive=less_than_or_equal[Vec]>(x, right)
+            ));
+          """
 
 prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
   brief_description "Tests whether each lane of x lies in the left-inclusive range left <= x < right."
@@ -482,6 +496,20 @@ prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
                 call<primitive=less_than>(x, right)
               )
             );
+          """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(call<primitive=mask_binary_and[Vec]>(
+              call<primitive=less_than_or_equal[Vec]>(left, x),
+              call<primitive=less_than[Vec]>(x, right)
+            ));
           """
 
 prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
@@ -725,6 +753,20 @@ prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
               )
             );
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(call<primitive=mask_binary_and[Vec]>(
+              call<primitive=less_than[Vec]>(left, x),
+              call<primitive=less_than_or_equal[Vec]>(x, right)
+            ));
+          """
 
 prim<m:=(v,v,v)> between_exclusive(x, left, right):
   brief_description "Tests whether each lane of x lies in the exclusive range left < x < right."
@@ -966,6 +1008,20 @@ prim<m:=(v,v,v)> between_exclusive(x, left, right):
                 call<primitive=less_than>(x, right)
               )
             );
+          """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(call<primitive=mask_binary_and[Vec]>(
+              call<primitive=less_than[Vec]>(left, x),
+              call<primitive=less_than[Vec]>(x, right)
+            ));
           """
 
 prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
@@ -1219,6 +1275,20 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
               )
             );
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(call<primitive=mask_binary_and[Vec]>(
+              mask,
+              call<primitive=between_inclusive[Vec]>(x, left, right)
+            ));
+          """
 
 prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
   brief_description "Tests active lanes for the left-inclusive range left <= x < right and clears inactive lanes in the result mask."
@@ -1470,6 +1540,20 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
                 call<primitive=between_left_inclusive>(x, left, right)
               )
             );
+          """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(call<primitive=mask_binary_and[Vec]>(
+              mask,
+              call<primitive=between_left_inclusive[Vec]>(x, left, right)
+            ));
           """
 
 prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
@@ -1723,6 +1807,20 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
               )
             );
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(call<primitive=mask_binary_and[Vec]>(
+              mask,
+              call<primitive=between_right_inclusive[Vec]>(x, left, right)
+            ));
+          """
 
 prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
   brief_description "Tests active lanes for the exclusive range left < x < right and clears inactive lanes in the result mask."
@@ -1787,6 +1885,20 @@ prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
                 call<primitive=between_exclusive>(x, left, right)
               )
             );
+          """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(call<primitive=mask_binary_and[Vec]>(
+              mask,
+              call<primitive=between_exclusive[Vec]>(x, left, right)
+            ));
           """
     oneapi_fpga:
       arith:

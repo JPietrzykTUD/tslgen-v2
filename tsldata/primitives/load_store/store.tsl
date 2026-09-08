@@ -542,6 +542,49 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask_repr(ptr, mask):
               );
             }
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            if<generation>(value(primitive::attribute(packed))) {
+              let<type>(UBase, base::unsigned_of(base::in));
+              let<type>(UVec, vector::as_base(UBase));
+              var<const_infer>(idx, call<primitive=sequence[UVec]>());
+              var<const_infer>(lanes, value(generic::runtime_length(UVec)));
+              var<const_infer>(nbytes, ((lanes + 7) >> 3));
+              var<const_infer>(bytes, cast<reinterpret, type=ptr>(scalar::ui8, ptr));
+
+              loop<backend>(i, 0, nbytes, 1) {
+                *ptr_add_mut(bytes, i) = cast<static>(scalar::ui8, 0);
+              }
+
+              loop<backend>(lane, 0, lanes, 1) {
+                var<const_infer>(one, call<primitive=equal[UVec]>(
+                  idx,
+                  call<primitive=set1[UVec]>(cast<static>(UBase, lane))
+                ));
+                if (call<primitive=mask_population_count[UVec]>(
+                  call<primitive=mask_binary_and[UVec]>(one, mask)
+                ) != 0) {
+                  *ptr_add_mut(bytes, lane >> 3) =
+                    *ptr_add(bytes, lane >> 3) |
+                    cast<static>(scalar::ui8, (1 << (lane & 7)));
+                }
+              }
+            } else<generation> {
+              let<type>(MaskWord, base::unsigned_of(base::in));
+              let<type>(MaskVec, vector::as_base(MaskWord));
+              call<primitive=store[MaskVec], attrs[aligned=value(primitive::attribute(aligned))], discharge[contiguous_memory_extent, selected_memory_alignment]>(
+                cast<reinterpret, type=ptr>(MaskWord, ptr),
+                call<primitive=to_vector[MaskVec]>(mask)
+              );
+            }
+          """
 prim<void:=(ptr,s)>[aligned=*] store(ptr, scalar):
   operation store
   operand_roles:
@@ -607,7 +650,7 @@ prim<void:=(ptr,s)>[aligned=*] store(ptr, scalar):
     - {tags [scalar, edge], attrs [aligned=false], type "f64", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
   # avx512 omits this to avoid duplicates when scalar equals mask.
   impls:
-    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool,avx2,sse,neon,scalar,generic,oneapi_fpga,wasm128]:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool,avx2,sse,neon,scalar,generic,oneapi_fpga,wasm128,rvv]:
       arith:
         prefer_fixed_native true
         requires:
@@ -624,6 +667,7 @@ prim<void:=(ptr,s)>[aligned=*] store(ptr, scalar):
           generic []
           oneapi_fpga []
           wasm128 [simd128]
+          rvv [v]
         safety:
           internal_unsafe true
           caller_unsafe true

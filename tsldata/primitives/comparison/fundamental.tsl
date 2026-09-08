@@ -2501,6 +2501,16 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
               )
             );
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(call<primitive=mask_binary_and[Vec]>(mask, call<primitive=equal[Vec]>(left, right)));"
+
 prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
   operation compare_not_equal
   operand_roles:
@@ -2743,6 +2753,16 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
               )
             );
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(call<primitive=mask_binary_and[Vec]>(mask, call<primitive=nequal[Vec]>(left, right)));"
+
 prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
   operation compare_less
   operand_roles:
@@ -2984,6 +3004,16 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
               )
             );
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(call<primitive=mask_binary_and[Vec]>(mask, call<primitive=less_than[Vec]>(left, right)));"
+
 prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
   operation compare_greater
   operand_roles:
@@ -3225,6 +3255,16 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
               )
             );
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(call<primitive=mask_binary_and[Vec]>(mask, call<primitive=greater_than[Vec]>(left, right)));"
+
 prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
   operation compare_less_equal
   operand_roles:
@@ -3466,6 +3506,16 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
               )
             );
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(call<primitive=mask_binary_and[Vec]>(mask, call<primitive=less_than_or_equal[Vec]>(left, right)));"
+
 prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
   operation compare_greater_equal
   operand_roles:
@@ -3707,3 +3757,12 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
               )
             );
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(call<primitive=mask_binary_and[Vec]>(mask, call<primitive=greater_than_or_equal[Vec]>(left, right)));"

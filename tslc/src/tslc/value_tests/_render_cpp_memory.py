@@ -435,27 +435,43 @@ def _scalable_indexed_store(case: ValueTestCasePlan) -> str:
     assert case.invocation.immediate is not None
     values = _append_runtime_vector_input((lines := _scalable_header(case)), case, 0)
     _indices_type, indices = _scalable_index_setup(lines, case)
-    expected_values = cpp_literal_list(case.expectation.values, case.type_tag)
     lines.extend(
         [
             f"  std::vector<{case.base_spelling}> actual({_buffer_length(case)});",
-            f"  static const {case.base_spelling} expected[{_buffer_length(case)}] = "
-            f"{{{expected_values}}};",
+            f"  std::vector<{case.base_spelling}> expected({_buffer_length(case)});",
         ]
     )
     args: list[str] = []
+    active = "true"
     if case.inputs.masks:
         lines.append(
             f"  typename Vec::mask_type mask = {_scalable_mask_from_bits(case, 0)};"
         )
         args.append("mask")
+        assert scalable.mask_bits
+        active = (
+            f"(({scalable.mask_bits[0]}ull >> "
+            f"({_runtime_tile_index('i', case.lanes)})) & 1u) != 0"
+        )
+    lines.extend(
+        [
+            "  for (std::size_t i = 0; i < lanes; ++i) {",
+            f"    if ({active}) {{",
+            "      auto* destination = reinterpret_cast<"
+            f"{case.base_spelling}*>(reinterpret_cast<unsigned char*>(expected.data()) + "
+            f"static_cast<std::ptrdiff_t>(index_values[i]) * {case.invocation.immediate});",
+            "      *destination = in0[i];",
+            "    }",
+            "  }",
+        ]
+    )
     args.extend(("actual.data()", indices, values))
     lines.extend(
         [
             f"  tsl::{case.call_name}<Vec, Indices, {case.invocation.immediate}>("
             f"{', '.join(args)});",
             f'  return tsl::test::check_lanes<{case.base_spelling}>('
-            f'"{case.case_name}", actual.data(), expected, {_buffer_length(case)});',
+            f'"{case.case_name}", actual.data(), expected.data(), {_buffer_length(case)});',
             "}",
         ]
     )

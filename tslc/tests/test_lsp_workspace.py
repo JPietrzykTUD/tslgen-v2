@@ -247,7 +247,11 @@ def test_invalid_precondition_overlay_keeps_exact_live_authoring_spans(
     path = data_root / "primitives" / "load_store" / "array.tsl"
     original = path.read_text(encoding="utf-8")
     typo = "lane_index_in_ragne"
-    edited = original.replace("lane_index_in_range", typo, 1)
+    edited = original.replace(
+        "preconditions [lane_index_in_range]",
+        f"preconditions [{typo}]",
+        1,
+    )
 
     generation = workspace.open(path, edited, 1)
     snapshot = workspace.check(generation)

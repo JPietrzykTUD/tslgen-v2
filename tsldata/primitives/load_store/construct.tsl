@@ -302,6 +302,23 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
                  )
                );
             """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=select, attrs[mask=pass_through]>(
+                mask,
+                call<primitive=set1[Vec]>(scalar),
+                data
+              )
+            );
+          """
     [generic, oneapi_fpga]:
       arith:
         requires:
@@ -630,6 +647,15 @@ prim<v:=()>[value=undef] set_undef():
               intrin<svundef, build[suffix=base::in]>()
             );
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(call<primitive=set_zero[Vec]>());"
 
 prim<v:=(lanes<s>)> set(values):
   brief_description "Creates a vector register from an explicit list of lane values."

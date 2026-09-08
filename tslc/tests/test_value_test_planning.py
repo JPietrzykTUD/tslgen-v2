@@ -539,6 +539,33 @@ def test_differential_renderers_support_runtime_lane_scalar_kinds() -> None:
     assert "to_integral::<Hw>(unsafe { set_mask_lane::<Hw>" in rust_mask
 
 
+def test_rust_lane_conversion_frames_its_unchecked_contract() -> None:
+    case = ValueTestCasePlan(
+        "lane_convert",
+        "test_convert_lanes",
+        "convert_lanes_si32_to_f32",
+        "convert_lanes",
+        "si32",
+        "i32",
+        4,
+        vector_inputs=(("1", "2", "3", "4"),),
+        expected=("1.0", "2.0", "3.0", "4.0"),
+        expected_type_tag="f32",
+        target_base_spelling="f32",
+        target_lanes=4,
+        result_kind="v",
+        param_kinds=("v",),
+        caller_unsafe=True,
+    )
+
+    source = RUST_VALUE_TEST_RENDERER.render_case(case)
+
+    assert (
+        "let result = unsafe { convert_lanes::<Vec, ToVec>(source) };"
+        in source
+    )
+
+
 def test_masked_immediate_cases_plan_and_render_for_both_backends(
     render_assets: RenderAssets,
 ) -> None:
@@ -3376,6 +3403,48 @@ def test_scalable_indexed_lane_uses_one_runtime_lane() -> None:
     assert "expected[i] = authored0[i % 4];" in source
     assert "if (3 < lanes) expected[3] = authored_expected[3];" in source
     assert "authored_expected[i % 4]" not in source
+
+
+def test_scalable_scatter_renders_a_runtime_lane_oracle() -> None:
+    case = ValueTestCasePlan(
+        "scalable_indexed_store",
+        "test_scalable_scatter",
+        "scatter_repeat",
+        "scatter",
+        "ui32",
+        "std::uint32_t",
+        8,
+        vector_inputs=(
+            ("1", "2", "3", "4", "5", "6", "7", "8"),
+            ("0", "0", "1", "1", "2", "2", "3", "3"),
+        ),
+        mask_inputs=("170",),
+        expected=("0", "4", "0", "8"),
+        immediate_value="4",
+        buffer_length=4,
+        index_type_tag="ui32",
+        index_base_spelling="std::uint32_t",
+        index_lanes=8,
+        index_style="register",
+        source_extension="rvv",
+        runtime_lanes_template="runtime_lanes()",
+        mask_from_bits_template="make_mask<{vec}>({mask_bits}, {authored_lanes}, {lanes})",
+        mask_bits=(170,),
+        load_name="load",
+        store_name="store",
+        result_kind="void",
+        param_kinds=("m", "ptr", "vidx", "v", "sImm"),
+    )
+
+    source = CPP_VALUE_TEST_RENDERER.render_case(case)
+
+    assert "std::vector<std::uint32_t> expected(4);" in source
+    assert "for (std::size_t i = 0; i < lanes; ++i)" in source
+    assert "((170ull >> (i % 8)) & 1u) != 0" in source
+    assert "static_cast<std::ptrdiff_t>(index_values[i]) * 4" in source
+    assert "*destination = in0[i];" in source
+    assert "expected.data(), 4" in source
+    assert "static const std::uint32_t expected" not in source
 
 
 def test_scalable_plan_facts_stay_backend_neutral_for_sve_case() -> None:

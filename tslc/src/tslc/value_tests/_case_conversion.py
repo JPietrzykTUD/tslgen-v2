@@ -312,6 +312,11 @@ def lane_convert_case(
             values=case.expected,
             comparison=case.comparison,
         ),
+        invocation=ValueTestInvocation(
+            result_kind=match.result_kind,
+            param_kinds=match.param_kinds,
+            caller_unsafe=public_call_requires_unsafe(specs),
+        ),
         target=ValueTestTarget(
             type_tag=case.to_type,
             base_spelling=target_param.base_type_binding_spelling,

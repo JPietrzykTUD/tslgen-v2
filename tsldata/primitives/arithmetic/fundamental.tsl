@@ -1132,6 +1132,22 @@ prim<v:=(m,v,v,v)>[mask=pass_through] blend_add(mask, left, right, adder):
               )
             );
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(call<primitive=mov[Vec], attrs[mask=pass_through]>(
+              mask,
+              call<primitive=add[Vec]>(right, adder),
+              left
+            ));
+          """
+
 prim<v:=v> neg(data):
   arithmetic:
     operations [negation]

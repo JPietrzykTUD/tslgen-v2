@@ -272,6 +272,34 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
                 *ptr = a;
               }
             """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_memory, raw_pointer]
+        implementation:
+          tsil """
+            let<type>(Base, base::in);
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<runtime_array>(Base, values, lanes);
+            var<runtime_array>(Base, active_values, lanes);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(values, a);
+            var<const_infer>(active, call<primitive=select[Vec]>(
+              m,
+              call<primitive=set1[Vec]>(cast<static>(Base, 1)),
+              call<primitive=set_zero[Vec]>()
+            ));
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(active_values, active);
+            var<infer>(offset, 0);
+            loop<backend>(i, 0, lanes, 1) {
+              if (active_values[i] != cast<static>(Base, 0)) {
+                *ptr_add_mut(ptr, offset) = values[i];
+                offset += 1;
+              }
+            }
+          """
 prim<v:=(m,cptr)>[aligned=true, op=expand] expand_load(m, ptr):
   operation load
   operand_roles:
@@ -532,6 +560,36 @@ prim<v:=(m,cptr)>[aligned=true, op=expand] expand_load(m, ptr):
                  complete(cast<static>(base::in, 0));
                }
             """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_memory, raw_pointer]
+        implementation:
+          tsil """
+            let<type>(Base, base::in);
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<runtime_array>(Base, active_values, lanes);
+            var<runtime_array>(Base, result, lanes);
+            var<const_infer>(active, call<primitive=select[Vec]>(
+              m,
+              call<primitive=set1[Vec]>(cast<static>(Base, 1)),
+              call<primitive=set_zero[Vec]>()
+            ));
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(active_values, active);
+            var<infer>(offset, 0);
+            loop<backend>(i, 0, lanes, 1) {
+              if (active_values[i] != cast<static>(Base, 0)) {
+                result[i] = *ptr_add(ptr, offset);
+                offset += 1;
+              } else {
+                result[i] = cast<static>(Base, 0);
+              }
+            }
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
+          """
 prim<v:=cptr+> load_convert_up(ptr):
   operation load
   operand_roles:
@@ -1361,6 +1419,24 @@ prim<v:=cptr+> load_convert_up(ptr):
               }
                complete(call<primitive=from_array[OutVec]>(out)) ;
             """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_memory, raw_pointer]
+        implementation:
+          tsil """
+            let<type>(OutVec, vector::as_base(ToBase));
+            let<type>(OutBase, base::generic(OutVec));
+            var<const_infer>(out_lanes, value(generic::runtime_length(OutVec)));
+            var<runtime_array>(OutBase, out, out_lanes);
+            loop<backend>(i, 0, out_lanes, 1) {
+              out[i] = cast<static>(OutBase, *ptr_add(ptr, i));
+            }
+            complete(call<primitive=load[OutVec], attrs[aligned=false], discharge[contiguous_memory_extent]>(out));
+          """
     [generic, oneapi_fpga]:
       arith:
         requires:

@@ -2299,6 +2299,29 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               let<type>(OutVec, vector::window_base(ToBase));
               complete(cast<static>(base::generic(OutVec), data));
             """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [raw_memory]
+        implementation:
+          tsil """
+            let<type>(InBase, base::in);
+            let<type>(OutVec, vector::window_base(ToBase));
+            let<type>(OutBase, base::generic(OutVec));
+            var<const_infer>(source_lanes, value(vector::runtime_length));
+            var<const_infer>(out_lanes, value(generic::runtime_length(OutVec)));
+            var<runtime_array>(InBase, input, source_lanes);
+            var<runtime_array>(OutBase, result, out_lanes);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(input, data);
+            var<const_infer>(start, cast<static>(scalar::size, index) * out_lanes);
+            loop<backend>(i, 0, out_lanes, 1) {
+              result[i] = cast<static>(OutBase, input[start + i]);
+            }
+            complete(call<primitive=load[OutVec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
+          """
     [generic, oneapi_fpga]:
       arith:
         unroll_variants true
@@ -4064,6 +4087,32 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               let<type>(OutVec, vector::window_base(ToBase));
               complete(cast<saturating>(base::generic(OutVec), data));
             """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [raw_memory]
+        implementation:
+          tsil """
+            let<type>(InBase, base::in);
+            let<type>(OutVec, vector::window_base(ToBase));
+            let<type>(OutBase, base::generic(OutVec));
+            var<const_infer>(source_lanes, value(vector::runtime_length));
+            var<const_infer>(out_lanes, value(generic::runtime_length(OutVec)));
+            var<runtime_array>(InBase, input, source_lanes);
+            var<runtime_array>(OutBase, result, out_lanes);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(input, data);
+            loop<backend>(i, 0, out_lanes, 1) {
+              result[i] = cast<static>(OutBase, 0);
+            }
+            var<const_infer>(start, cast<static>(scalar::size, index) * source_lanes);
+            loop<backend>(i, 0, source_lanes, 1) {
+              result[start + i] = cast<saturating>(OutBase, input[i]);
+            }
+            complete(call<primitive=load[OutVec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
+          """
     [generic, oneapi_fpga]:
       arith:
         unroll_variants true

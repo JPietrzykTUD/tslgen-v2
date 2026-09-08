@@ -395,6 +395,35 @@ prim<v:=v> conflict(data):
               var<infer>(_data, data);
               complete(cast<static>(base::in, 0));
             """
+    rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [raw_memory]
+        implementation:
+          tsil """
+            let<type>(Base, base::in);
+            let<type>(ConflictT, scalar::size);
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<runtime_array>(Base, values, lanes);
+            var<runtime_array>(Base, result, lanes);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(values, data);
+            loop<backend>(idx, 0, lanes, 1) {
+              result[idx] = cast<static>(Base, 0);
+            }
+            loop<backend>(idx, 1, lanes, 1) {
+              var<infer>(conflict_bits, cast<static>(ConflictT, 0));
+              loop<backend>(cur, 0, idx, 1) {
+                if ((cur < (sizeof(type(Base)) * 8)) && (values[idx] == values[cur])) {
+                  conflict_bits |= (cast<static>(ConflictT, 1)) << cur;
+                }
+              }
+              result[idx] = cast<static>(Base, conflict_bits);
+            }
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
+          """
 prim<m:=(m,v)> conflict_free(mask, data):
   cross_lane true
   brief_description "Returns active mask lanes whose vector values have no equal earlier active lane."
@@ -464,3 +493,22 @@ prim<m:=(m,v)> conflict_free(mask, data):
                 )
               );
             """
+    rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=mask_binary_and[Vec]>(
+                mask,
+                call<primitive=equal[Vec]>(
+                  call<primitive=conflict[Vec]>(data),
+                  call<primitive=set_zero[Vec]>()
+                )
+              )
+            );
+          """

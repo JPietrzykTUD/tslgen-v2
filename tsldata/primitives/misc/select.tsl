@@ -404,6 +404,15 @@ prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
                 )
               );
             """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(call<primitive=select[Vec], attrs[mask=pass_through]>(mask, src, call<primitive=set_zero[Vec]>()));"
 
 prim<v:=(m,v,v)>[mask=pass_through] mov(mask, src, data):
   brief_description "Copies data lanes where the mask is active and keeps source lanes where the mask is inactive."
@@ -534,3 +543,12 @@ prim<v:=(m,v,v)>[mask=pass_through] mov(mask, src, data):
                 )
               );
             """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(call<primitive=select[Vec], attrs[mask=pass_through]>(mask, data, src));"
