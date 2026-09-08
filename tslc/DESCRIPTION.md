@@ -648,6 +648,19 @@ maintenance path parses or hashes generated target text to reconstruct this
 contract. The schema-v3 release baseline ratchets the reviewed scalar/AVX2
 records in addition to the per-project scope-exact manifests.
 
+The repository release projection is split by ownership across
+[maintenance/release_contract_model.py](src/tslc/maintenance/release_contract_model.py),
+[maintenance/release_contract_policy.py](src/tslc/maintenance/release_contract_policy.py),
+[maintenance/release_contract.py](src/tslc/maintenance/release_contract.py), and
+[maintenance/release_contract_render.py](src/tslc/maintenance/release_contract_render.py).
+It layers only product choices—version lines, release profile selection,
+target-specific/portable exceptions, and fallback policy—over the typed catalog,
+machine profiles, support policy, implementation-state meanings, and public-API
+baseline. The generated JSON and Markdown are projections of the same frozen
+model. Distributable packaging consumes that projection, while CI profile
+sharding reads the same narrow policy file; neither owns a second release
+profile list.
+
 A static substrate ships as assets
 ([backend/assets/tsl_core.hpp](src/tslc/backend/assets/tsl_core.hpp),
 [tsl_core.rs](src/tslc/backend/assets/tsl_core.rs)) defining `simd<T,Ext>` /

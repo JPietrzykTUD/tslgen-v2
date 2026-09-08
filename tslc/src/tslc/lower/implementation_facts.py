@@ -19,6 +19,30 @@ class ImplementationState(Enum):
     UNKNOWN = "unknown"
 
 
+_STATE_DESCRIPTIONS = {
+    ImplementationState.NATIVE: (
+        "the selected body is one direct expression or one target intrinsic"
+    ),
+    ImplementationState.COMPOSED: (
+        "the selected body composes typed primitive calls, control flow, or "
+        "multiple direct operations"
+    ),
+    ImplementationState.FALLBACK: (
+        "the selected extension family or lowered body explicitly uses a portable "
+        "fallback"
+    ),
+    ImplementationState.UNKNOWN: (
+        "opaque target text or incomplete typed evidence prevents a stronger claim"
+    ),
+}
+
+
+def implementation_state_description(state: ImplementationState) -> str:
+    """Return the stable public meaning of one coarse implementation state."""
+
+    return _STATE_DESCRIPTIONS[state]
+
+
 class RegionImplementationEffect(Enum):
     """How a registered TSIL region contributes implementation-state facts."""
 
@@ -111,4 +135,5 @@ __all__ = (
     "ImplementationStateFacts",
     "RegionImplementationEffect",
     "combine_implementation_states",
+    "implementation_state_description",
 )

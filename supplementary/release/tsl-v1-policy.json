@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "product": {
+    "id": "tsl-generated-library",
+    "name": "TSL generated C++/Rust library",
+    "version": "1.0.0",
+    "status": "release-candidate"
+  },
+  "components": [
+    {
+      "id": "tslc",
+      "compatibility": "independent",
+      "required_major": 0
+    },
+    {
+      "id": "vscode-tsl",
+      "compatibility": "independent",
+      "required_major": 0
+    }
+  ],
+  "backend_profiles": {
+    "cpp": {
+      "selection": "all_supported",
+      "profiles": []
+    },
+    "rust": {
+      "selection": "explicit",
+      "profiles": [
+        "sse",
+        "sse2",
+        "sse3",
+        "avx",
+        "avx2",
+        "knl"
+      ]
+    }
+  },
+  "target_scopes": [
+    {
+      "id": "arm-sve",
+      "backend": "cpp",
+      "profiles": [
+        "sve",
+        "sve128",
+        "sve256",
+        "sve512"
+      ],
+      "runtime_scalable_profiles": [
+        "sve"
+      ],
+      "excludes": [
+        "SVE2"
+      ]
+    },
+    {
+      "id": "riscv-vector",
+      "backend": "cpp",
+      "profiles": [
+        "rvv"
+      ],
+      "runtime_scalable_profiles": [
+        "rvv"
+      ],
+      "excludes": [
+        "optional RVV extensions",
+        "LMUL values other than the declared LMUL=1 profile",
+        "stable Rust RVV"
+      ]
+    }
+  ],
+  "target_specific_callables": [
+    {
+      "name": "random_step",
+      "reason": "x86 RDRAND operation with no portable fallback"
+    }
+  ],
+  "accelerated_core": {
+    "selection": "all_except_portable_and_target_specific",
+    "portable_callable_names": [
+      "allocate",
+      "allocate_aligned",
+      "custom_sequence",
+      "deallocate",
+      "memory_cp",
+      "sequence",
+      "to_ostream"
+    ],
+    "fallback_policy": "forbidden_without_reviewed_exception",
+    "fallback_exceptions": []
+  }
+}

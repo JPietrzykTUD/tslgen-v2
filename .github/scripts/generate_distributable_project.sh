@@ -9,27 +9,36 @@ fi
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../.." && pwd)"
 output_root="$1"
-machine_profiles="${TSLC_MACHINE_PROFILES:-supplementary/buildsystem/machine_profiles.json}"
+machine_profiles="supplementary/buildsystem/machine_profiles.json"
 
 cd "$repo_root"
 
-profile_shards="$(
-  jq -c \
-    -f .github/scripts/profile_shards.jq \
-    "$machine_profiles"
+release_contract="$(
+  PYTHONPATH=tslc/src python -m tslc release contract --format json
+)"
+cpp_profiles="$(
+  jq -er '
+    [.backends[] | select(.id == "cpp") | .profiles[].name]
+    | if length > 0 then join(",") else error("C++ release profiles are empty") end
+  ' <<<"$release_contract"
 )"
 rust_profiles="$(
   jq -er '
-    [.[] | select(.backend == "rust" and .purpose == "coexistence")]
-    | if length == 1 and (.[0].profiles | length > 0)
-      then .[0].profiles
-      else error("expected exactly one non-empty Rust coexistence shard")
-      end
-  ' <<<"$profile_shards"
+    [.backends[] | select(.id == "rust") | .profiles[].name]
+    | if length > 0 then join(",") else error("Rust release profiles are empty") end
+  ' <<<"$release_contract"
+)"
+all_profiles="$(
+  jq -er '
+    [.backends[].profiles[].name] | unique
+    | if length > 0 then join(",") else error("release profiles are empty") end
+  ' <<<"$release_contract"
 )"
 
 ./dev.sh generate \
   --machine-profiles "$machine_profiles" \
+  --profiles "$all_profiles" \
+  --backend-profiles "cpp=$cpp_profiles" \
   --backend-profiles "rust=$rust_profiles" \
   --backends cpp,rust \
   --output-root "$output_root"

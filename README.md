@@ -79,6 +79,7 @@ overlay.
 - Package quick start: [tslc/README.md](tslc/README.md)
 - Standalone PIVOT exporter: [tools/pivot/README.md](tools/pivot/README.md)
 - Command-line tools: [docs/tslc-cli.md](docs/tslc-cli.md)
+- Generated-library v1 support contract: [docs/tsl-v1-support.md](docs/tsl-v1-support.md)
 - Editor setup and architecture: [docs/tsl-editor.md](docs/tsl-editor.md)
 - Repository charter: [CHARTER.md](CHARTER.md)
 - Compiler charter: [tslc/CHARTER.md](tslc/CHARTER.md)

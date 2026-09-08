@@ -41,11 +41,17 @@ def backend_profile_shards($name; $profiles):
     rust_profile_chunk_size
   );
 
-def rust_coexistence_shard:
-  {
+def rust_coexistence_shard($release_policy):
+  $release_policy.backend_profiles.rust as $rust
+  | if $rust.selection != "explicit" or ($rust.profiles | length) == 0
+    then error("v1 Rust release profiles must use a non-empty explicit selection")
+    else $rust.profiles
+    end
+  | . as $profiles
+  | {
     backend: "rust",
     name: "rust-x86-coexistence",
-    profiles: "sse,sse2,sse3,avx,avx2,knl",
+    profiles: ($profiles | join(",")),
     purpose: "coexistence"
   };
 
@@ -61,5 +67,5 @@ def rust_coexistence_shard:
         | backend_profile_shards($family + "-" + ($gate | gsub("_"; "-")); .)
       )
   ),
-  rust_coexistence_shard
+  rust_coexistence_shard($release_policy[0])
 ]

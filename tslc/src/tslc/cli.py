@@ -31,6 +31,7 @@ _COMMANDS = (
     "show",
     "audit",
     "coverage",
+    "release",
     "doctor",
     "lsp",
 )
@@ -91,6 +92,8 @@ def main(argv: list[str] | None = None) -> int:
         return _maintenance_group("audit", rest)
     if command == "coverage":
         return _maintenance_group("coverage", rest)
+    if command == "release":
+        return _maintenance_group("release", rest)
     parser = _root_parser()
     parser.error(f"unknown command {command!r}")
 
@@ -119,6 +122,7 @@ def _root_parser() -> argparse.ArgumentParser:
         "show": "describe one catalog entry",
         "audit": "run source-contract audits",
         "coverage": "run coverage maintenance tools",
+        "release": "inspect or ratchet the generated-library release contract",
         "doctor": "probe configured toolchains and runners",
         "lsp": "run the editor-neutral language server",
     }
@@ -441,11 +445,11 @@ def _run_configured_maintenance(
 
 def _maintenance_group(group: str, arguments: list[str]) -> int:
     if not arguments or arguments[0] in ("-h", "--help"):
-        choices = (
-            "metadata, call-preconditions"
-            if group == "audit"
-            else "ratchet, inventory"
-        )
+        choices = {
+            "audit": "metadata, call-preconditions",
+            "coverage": "ratchet, inventory",
+            "release": "contract",
+        }[group]
         print(f"usage: tslc {group} {{{choices.replace(', ', ',')}}} [options]")
         return 0
     action, rest = arguments[0], arguments[1:]
@@ -471,6 +475,10 @@ def _maintenance_group(group: str, arguments: list[str]) -> int:
         from tslc.maintenance.coverage_inventory import main as inventory_main
 
         return inventory_main(rest)
+    if group == "release" and action == "contract":
+        from tslc.maintenance.release_contract_cli import main as release_contract_main
+
+        return release_contract_main(rest)
     print(f"unknown tslc {group} command {action!r}", file=sys.stderr)
     return 2
 

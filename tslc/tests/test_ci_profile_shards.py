@@ -11,7 +11,11 @@ from pathlib import Path
 import pytest
 
 _RUST_COEXISTENCE_NAME = "rust-x86-coexistence"
-_RUST_COEXISTENCE_PROFILES = ("sse", "sse2", "sse3", "avx", "avx2", "knl")
+_RELEASE_POLICY_PATH = Path("supplementary/release/tsl-v1-policy.json")
+_RELEASE_POLICY = json.loads(_RELEASE_POLICY_PATH.read_text(encoding="utf-8"))
+_RUST_COEXISTENCE_PROFILES = tuple(
+    _RELEASE_POLICY["backend_profiles"]["rust"]["profiles"]
+)
 _DISTRIBUTABLE_GENERATOR = (
     "bash .github/scripts/generate_distributable_project.sh"
 )
@@ -28,6 +32,9 @@ def test_generated_profile_shards_preserve_exhaustive_and_coexistence_lanes(
         (
             jq,
             "-c",
+            "--slurpfile",
+            "release_policy",
+            str(_RELEASE_POLICY_PATH),
             "-f",
             ".github/scripts/profile_shards.jq",
             str(machine_profiles_path),
@@ -159,11 +166,19 @@ def test_package_and_docs_generate_a_supported_distributable_profile_set() -> No
     helper = Path(".github/scripts/generate_distributable_project.sh").read_text(
         encoding="utf-8"
     )
-    assert "-f .github/scripts/profile_shards.jq" in helper
-    assert '.purpose == "coexistence"' in helper
+    assert "python -m tslc release contract --format json" in helper
     assert helper.count("./dev.sh generate") == 1
+    assert '--backend-profiles "cpp=$cpp_profiles"' in helper
     assert '--backend-profiles "rust=$rust_profiles"' in helper
+    assert '--profiles "$all_profiles"' in helper
     assert "--backends cpp,rust" in helper
+
+    values_workflow = Path(".github/workflows/generated-values.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "--slurpfile release_policy supplementary/release/tsl-v1-policy.json" in (
+        values_workflow
+    )
 
     package_workflow = Path(".github/workflows/generated-package.yml").read_text(
         encoding="utf-8"

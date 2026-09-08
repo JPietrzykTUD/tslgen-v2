@@ -73,7 +73,9 @@ jobs:
         id: shards
         run: |
           profile_shards="$(
-            jq -c -f .github/scripts/profile_shards.jq \
+            jq -c \
+              --slurpfile release_policy supplementary/release/tsl-v1-policy.json \
+              -f .github/scripts/profile_shards.jq \
               supplementary/buildsystem/machine_profiles.json
           )"
           echo "profile_shards=${profile_shards}" >> "$GITHUB_OUTPUT"

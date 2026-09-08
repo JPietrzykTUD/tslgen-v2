@@ -277,7 +277,19 @@ tslc coverage inventory --profiles scalar,avx2 --backends cpp,rust
 tslc coverage inventory --format json
 tslc coverage inventory --update
 tslc coverage inventory --check
+tslc release contract
+tslc release contract --format json
+tslc release contract --check
 ```
+
+`release contract` projects the generated-library v1 product boundary from the
+typed catalog, machine profiles, support policy, public-API baseline, package
+metadata, and the narrow policy in
+`supplementary/release/tsl-v1-policy.json`. The C++/Rust profile lists printed
+by `--format json` are also consumed by distributable-package generation; CI
+does not maintain a separate package profile list. `--check` compares both
+`coverage/tsl-v1-support.json` and `docs/tsl-v1-support.md` with that projection.
+Use `--update` only after reviewing an intentional support-contract change.
 
 `explain` and the selection/lowered `inspect` stages default to the same
 automatic compiler-capability frontier as ordinary generation. Pass
