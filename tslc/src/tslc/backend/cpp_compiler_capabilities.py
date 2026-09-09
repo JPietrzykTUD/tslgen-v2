@@ -99,6 +99,20 @@ _CPP_COMPILER_CAPABILITIES = (
         )
     ),
     CppCompilerCapability(
+        capability_id="x86_narrow_reductions",
+        condition_macro="TSL_COMPILER_HAS_X86_NARROW_REDUCTIONS",
+        preprocessor_probe=(
+            "!defined(_MSC_VER) && "
+            "(defined(__GNUC__) || defined(__clang__))"
+        ),
+        compile_probe_source=None,
+        diagnostic=(
+            "compiler does not provide the GNU-style x86 8/16-bit "
+            "reduction intrinsics"
+        ),
+        compiler_ids=("GNU", "Clang", "AppleClang", "IntelLLVM"),
+    ),
+    CppCompilerCapability(
         capability_id="reduce_in_order_fadd",
         condition_macro="TSL_COMPILER_HAS_REDUCE_IN_ORDER_FADD",
         preprocessor_probe=(

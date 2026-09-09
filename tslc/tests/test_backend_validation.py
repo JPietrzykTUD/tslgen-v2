@@ -292,6 +292,24 @@ def test_cpp_clang_builtin_capabilities_use_has_builtin_probes() -> None:
         assert capability.preprocessor_probe == f"__has_builtin({builtin})"
 
 
+def test_cpp_x86_narrow_reduction_capability_excludes_msvc_headers() -> None:
+    capability = cpp_compiler_capability("x86_narrow_reductions")
+
+    assert capability.condition_macro == (
+        "TSL_COMPILER_HAS_X86_NARROW_REDUCTIONS"
+    )
+    assert capability.preprocessor_probe == (
+        "!defined(_MSC_VER) && (defined(__GNUC__) || defined(__clang__))"
+    )
+    assert capability.compile_probe_source is None
+    assert capability.compiler_ids == (
+        "GNU",
+        "Clang",
+        "AppleClang",
+        "IntelLLVM",
+    )
+
+
 def test_cpp_capability_header_defaults_resolve_every_probe_to_boolean() -> None:
     capabilities = tuple(CPP_COMPILER_CAPABILITIES)
 

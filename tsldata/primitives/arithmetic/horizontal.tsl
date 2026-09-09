@@ -181,7 +181,13 @@ prim<s:=v> hadd(vec):
           """
     [avx2_vl, sse_vl]:
       [si16, ui16]:
-        requires [avx512bw, avx512vl]
+        requires:
+          target_features [avx512bw, avx512vl]
+          compiler:
+            cpp:
+              capabilities [x86_narrow_reductions]
+            rust:
+              capabilities []
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -622,7 +628,13 @@ prim<s:=v> hmax(vec):
           """
     [avx2_vl, sse_vl]:
       [si8, ui8, si16, ui16]:
-        requires [avx512bw, avx512vl]
+        requires:
+          target_features [avx512bw, avx512vl]
+          compiler:
+            cpp:
+              capabilities [x86_narrow_reductions]
+            rust:
+              capabilities []
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -1033,7 +1045,13 @@ prim<s:=v> hmin(vec):
           """
     [avx2_vl, sse_vl]:
       [si8, ui8, si16, ui16]:
-        requires [avx512bw, avx512vl]
+        requires:
+          target_features [avx512bw, avx512vl]
+          compiler:
+            cpp:
+              capabilities [x86_narrow_reductions]
+            rust:
+              capabilities []
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -1342,7 +1360,13 @@ prim<s:=(m,v)> hadd(mask, vec):
           tsil "complete(intrin<mask_reduce_add, build>(mask, vec));"
     [avx2_vl, sse_vl]:
       [si8, ui8, si16, ui16]:
-        requires [avx512bw, avx512vl]
+        requires:
+          target_features [avx512bw, avx512vl]
+          compiler:
+            cpp:
+              capabilities [x86_narrow_reductions]
+            rust:
+              capabilities []
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -1703,7 +1727,13 @@ prim<s:=(m,v)> hmax(mask, vec):
           """
     [avx2_vl, sse_vl]:
       [si8, ui8, si16, ui16]:
-        requires [avx512bw, avx512vl]
+        requires:
+          target_features [avx512bw, avx512vl]
+          compiler:
+            cpp:
+              capabilities [x86_narrow_reductions]
+            rust:
+              capabilities []
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -2208,7 +2238,13 @@ prim<s:=(m,v)> hmin(mask, vec):
           """
     [avx2_vl, sse_vl]:
       [si8, ui8, si16, ui16]:
-        requires [avx512bw, avx512vl]
+        requires:
+          target_features [avx512bw, avx512vl]
+          compiler:
+            cpp:
+              capabilities [x86_narrow_reductions]
+            rust:
+              capabilities []
         safety:
           internal_unsafe true
           caller_unsafe false

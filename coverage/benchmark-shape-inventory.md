@@ -15,7 +15,7 @@ applicable**.
 
 - **29 C++ machine profiles** are probed.
 - **14138 selected variant slots** are accounted for.
-- **2969 candidate sets** are emitted; compile-time immediate cases may fan one slot out into several sets.
+- **3221 candidate sets** are emitted; compile-time immediate cases may fan one slot out into several sets.
 - **6 signature shapes benchmarked**, **53 not applicable**, **8 gaps**.
 - **10296 strict audit issues**.
 
@@ -46,7 +46,7 @@ applicable**.
 | `s:=(v,s)` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `s:=(v,usize)` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `s:=cptr` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
-| `s:=v` | 5 | 5 | 5 | 5 | 428 | 428 | benchmarked |
+| `s:=v` | 5 | 5 | 5 | 5 | 428 | 680 | benchmarked |
 | `s:=v[idx]` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `s[]:=v` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |
 | `usize:=(ptr)` | 1 | 0 | 0 | 0 | 0 | 0 | not applicable |

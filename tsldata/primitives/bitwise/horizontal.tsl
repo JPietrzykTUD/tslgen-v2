@@ -96,7 +96,13 @@ prim<s:=v> hand(vec):
           tsil "complete(cast<static>(base::in, intrin<reduce_and, build[suffix=base::signed_of(base::in)]>(vec)));"
     [avx2_vl, sse_vl]:
       [si8, ui8, si16, ui16]:
-        requires [avx512bw, avx512vl]
+        requires:
+          target_features [avx512bw, avx512vl]
+          compiler:
+            cpp:
+              capabilities [x86_narrow_reductions]
+            rust:
+              capabilities []
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -502,7 +508,13 @@ prim<s:=v> hor(vec):
           tsil "complete(cast<static>(base::in, intrin<reduce_or, build[suffix=base::signed_of(base::in)]>(vec)));"
     [avx2_vl, sse_vl]:
       [si8, ui8, si16, ui16]:
-        requires [avx512bw, avx512vl]
+        requires:
+          target_features [avx512bw, avx512vl]
+          compiler:
+            cpp:
+              capabilities [x86_narrow_reductions]
+            rust:
+              capabilities []
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -898,7 +910,13 @@ prim<s:=(m,v)> hand(mask, vec):
           """
     [avx2_vl, sse_vl]:
       [si8, ui8, si16, ui16]:
-        requires [avx512bw, avx512vl]
+        requires:
+          target_features [avx512bw, avx512vl]
+          compiler:
+            cpp:
+              capabilities [x86_narrow_reductions]
+            rust:
+              capabilities []
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -1255,7 +1273,13 @@ prim<s:=(m,v)> hor(mask, vec):
           tsil "complete(cast<static>(base::in, intrin<mask_reduce_or, build[suffix=base::signed_of(base::in)]>(mask, vec)));"
     [avx2_vl, sse_vl]:
       [si8, ui8, si16, ui16]:
-        requires [avx512bw, avx512vl]
+        requires:
+          target_features [avx512bw, avx512vl]
+          compiler:
+            cpp:
+              capabilities [x86_narrow_reductions]
+            rust:
+              capabilities []
         safety:
           internal_unsafe true
           caller_unsafe false

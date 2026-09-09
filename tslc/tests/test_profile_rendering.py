@@ -255,6 +255,37 @@ def test_cpp_project_probes_and_retains_compiler_capability_alternatives(
     ) in cmake
 
 
+def test_x86_narrow_reductions_render_capability_fallbacks(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=["hadd", "hand", "hor", "hmax", "hmin"],
+        profiles=["skylake"],
+        type_tags=("ui8", "ui16"),
+        backends=["cpp"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    artifacts = {
+        artifact.logical_path: artifact.content
+        for artifact in result.artifacts.artifacts
+    }
+
+    profile_header = artifacts["cpp/include/tsl_skylake.hpp"]
+    assert "#if TSL_COMPILER_HAS_X86_NARROW_REDUCTIONS" in profile_header
+    assert "_mm256_reduce_add_epi16" in profile_header
+    assert "_mm_mask_reduce_min_epu8" in profile_header
+    assert "#else" in profile_header
+    assert "::tsl::extract<Vec" in profile_header
+    assert "::tsl::select<Vec>" in profile_header
+
+    primitive_tags = artifacts["cpp/include/tsl_primitives.hpp"]
+    assert "#  if !defined(_MSC_VER)" in primitive_tags
+    assert "TSL_COMPILER_HAS_X86_NARROW_REDUCTIONS" in primitive_tags
+
+
 def test_rust_profile_module_is_compiled_only_for_its_target_contract(
     data_root: Path,
     machine_profiles_path: Path,
