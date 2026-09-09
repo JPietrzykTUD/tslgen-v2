@@ -101,6 +101,19 @@ def test_empty_file_and_primitive_header_complete_declarations_and_shapes(
             {"kind", "requires"},
         ),
         (
+            "prim<v:=(v,sImm)> probe(value, index):\n"
+            "  params:\n"
+            "    index:\n"
+            "      type si32\n",
+            "prim<v:=(v,sImm)> probe(value, index):\n"
+            "  params:\n"
+            "    index:\n"
+            "      type si32\n"
+            "      ",
+            {"value_range", "valid_range", "dispatch"},
+            {"type", "requires"},
+        ),
+        (
             "extension sample:\n  active_when:\n    target_features [sse]\n",
             "extension sample:\n  active_when:\n    target_features [sse]\n    ",
             {"compile_modes"},

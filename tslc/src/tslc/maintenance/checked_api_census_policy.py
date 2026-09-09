@@ -14,7 +14,7 @@ Classification = Literal[
     "tooling-only validation",
 ]
 
-BASELINE_VERSION = 4
+BASELINE_VERSION = 5
 DECLARATION_ROOT = Path("tslc/tests/fixtures/checked_api")
 CPP_DECLARATIONS = DECLARATION_ROOT / "cpp_declarations.snap"
 RUST_DECLARATIONS = DECLARATION_ROOT / "rust_declarations.snap"
@@ -90,6 +90,13 @@ FAMILIES = (
         "Rust emits a const assertion; invalid authored immediates do not reach a call.",
         "no checked twin; keep a compile-time diagnostic",
         "The operand is an immediate rather than caller-controlled runtime data.",
+    ),
+    SemanticFamily(
+        "static_immediate_range",
+        "static well-formedness constraint",
+        "C++ and Rust emit a compile-time assertion for an invalid conversion chunk index.",
+        "no checked twin; keep a compile-time diagnostic",
+        "The source-authored valid range is resolved from the selected source and target base widths.",
     ),
     SemanticFamily(
         "integer_zero_divisor",

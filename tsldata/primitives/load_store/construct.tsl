@@ -530,10 +530,9 @@ prim<v:=()>[value=undef] set_undef():
           caller_unsafe false
           reasons []
         implementation:
-          tsil """
-              var<typed>(base::in, result, value(uninit::scalar));
-              complete(result);
-            """
+          # The contract leaves the value unspecified; choosing zero for the scalar
+          # representation avoids reading an indeterminate C++ scalar.
+          tsil "complete(cast<static>(base::in, 0));"
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
         prefer_fixed_native true

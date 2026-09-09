@@ -157,6 +157,7 @@ def test_generated_profile_shards_preserve_exhaustive_and_coexistence_lanes(
     values_workflow = Path(".github/workflows/generated-values.yml").read_text(
         encoding="utf-8"
     )
+    assert 'quality_args+=(--quality)' in values_workflow
     assert 'TSLC_QEMU_RISCV64="/usr/bin/qemu-riscv64"' in values_workflow
     assert "vlen=256,elen=64" not in values_workflow
     assert "timeout --signal=KILL 60s /usr/bin/qemu-riscv64" not in values_workflow
@@ -170,6 +171,65 @@ def test_generated_profile_shards_preserve_exhaustive_and_coexistence_lanes(
         rvv["runner"]["vector_bits"],
         *(variant["vector_bits"] for variant in rvv["runner"]["variants"]),
     ] == [128, 256, 512]
+
+
+def test_clang_and_msvc_quality_matrices_cover_non_oneapi_x86_profiles(
+    machine_profiles_path: Path,
+) -> None:
+    jq = shutil.which("jq")
+    if jq is None:
+        pytest.skip("jq is required to exercise the GitHub Actions profile shard script")
+    completed = subprocess.run(
+        (
+            jq,
+            "-c",
+            "--slurpfile",
+            "release_policy",
+            str(_RELEASE_POLICY_PATH),
+            "-f",
+            ".github/scripts/profile_shards.jq",
+            str(machine_profiles_path),
+        ),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    shards = json.loads(completed.stdout)
+    quality_shards = [
+        shard
+        for shard in shards
+        if shard["backend"] == "cpp"
+        and shard["name"].startswith("cpp-x86-")
+        and "oneapi-fpga" not in shard["name"]
+    ]
+    matrix_profiles = {
+        profile
+        for shard in quality_shards
+        for profile in shard["profiles"].split(",")
+    }
+    source = json.loads(machine_profiles_path.read_text(encoding="utf-8"))
+    expected = {
+        profile["name"]
+        for profile in source["x86"]
+        if profile.get("backend_compiler_roles", {}).get("cpp") is None
+        and _supports_backend(profile, "cpp")
+    }
+    assert matrix_profiles == expected
+
+    workflow = Path(".github/workflows/generated-values.yml").read_text(
+        encoding="utf-8"
+    )
+    assert 'x86_quality_shards="$(' in workflow
+    assert 'and ((.name | contains("oneapi-fpga")) | not)' in workflow
+    for job, runner, compiler in (
+        ("generated-msvc-quality", "windows-2022", "cl.exe"),
+        ("generated-clang-quality", "ubuntu-latest", "/usr/bin/clang++-21"),
+    ):
+        section = workflow.split(f"  {job}:\n", 1)[1].split("\n  generated-", 1)[0]
+        assert f"runs-on: {runner}" in section
+        assert "fromJson(needs['profile-shards'].outputs.x86_quality_shards)" in section
+        assert f"--compiler cpp={compiler}" in section
+        assert "--quality" in section
 
 
 def test_package_and_docs_generate_a_supported_distributable_profile_set() -> None:
@@ -205,6 +265,11 @@ def test_package_and_docs_generate_a_supported_distributable_profile_set() -> No
         "supplementary/ci/verify_generated_consumers.sh"
     ).read_text(encoding="utf-8")
     assert 'default-features = false, features = ["scalar"]' not in consumer_verifier
+    for profile in ("scalar", "avx2", "sve", "rvv"):
+        assert f"build_cpp_consumer {profile}" in consumer_verifier
+    assert "  wasm32-simd128 \\\n" in consumer_verifier
+    assert "load_checked<Vec, false>" in consumer_verifier
+    assert "store_checked<Vec, false>" in consumer_verifier
 
 
 def test_rust_examples_use_static_profile_selection_api() -> None:

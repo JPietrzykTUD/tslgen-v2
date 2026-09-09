@@ -97,6 +97,50 @@ class TestFailureReason(StrEnum):
     """Closed language-neutral reasons authored failure cases may expect."""
 
     INTEGER_ZERO_DIVISOR = "integer_zero_divisor"
+    CONVERSION_CHUNK_INDEX_OUT_OF_RANGE = "conversion_chunk_index_out_of_range"
+
+
+IMMEDIATE_CONVERSION_CHUNK_INDEX_MARKER = (
+    "TSL_CONVERSION_CHUNK_INDEX_OUT_OF_RANGE"
+)
+
+
+class ImmediateRangeUpperKind(StrEnum):
+    """Closed source expressions accepted as an immediate range's upper bound."""
+
+    LITERAL = "literal"
+    SOURCE_BASE_BIT_WIDTH = "source_base_bit_width"
+    CONVERSION_CHUNK_COUNT = "conversion_chunk_count"
+
+
+@dataclass(frozen=True, slots=True)
+class ImmediateRangeUpper:
+    """Typed upper bound retained after parsing a ``value_range`` declaration."""
+
+    kind: ImmediateRangeUpperKind
+    literal: int | None = None
+
+    def __post_init__(self) -> None:
+        if (self.kind is ImmediateRangeUpperKind.LITERAL) != (self.literal is not None):
+            raise ValueError("only a literal immediate upper bound carries a value")
+
+    @property
+    def source_text(self) -> str:
+        if self.kind is ImmediateRangeUpperKind.LITERAL:
+            assert self.literal is not None
+            return str(self.literal)
+        if self.kind is ImmediateRangeUpperKind.SOURCE_BASE_BIT_WIDTH:
+            return "base_bit_width(data)"
+        return "conversion_chunk_count(data, ToBase)"
+
+
+@dataclass(frozen=True, slots=True)
+class ImmediateValueRange:
+    """A source-declared legal interval for one compile-time immediate."""
+
+    lower: int
+    upper: ImmediateRangeUpper
+    inclusive: bool = False
 
 
 MaskPolicyKind = Literal[
@@ -374,17 +418,18 @@ class ImmediateParam:
 
     - ``type_tag``: the immediate's public type (C++ non-type template param / Rust const
       generic), e.g. ``ui32``/``si32``.
-    - ``value_range``: the legal value range as ``(lo, hi_expr, inclusive)`` — ``lo`` is an
-      int, ``hi_expr`` is an int-literal string or the symbolic token ``base_bit_width(data)``
-      resolved at lowering against the selected type; ``inclusive`` distinguishes ``a..b``
-      (half-open) from ``a..=b``. None when undeclared.
+    - ``value_range``: the typed finite dispatch domain used by a backend strategy such as
+      Rust ``literal_match``. Values outside it may still have defined primitive semantics.
+    - ``valid_range``: an optional static well-formedness interval. Values outside it must
+      be rejected at compile time rather than clamped, wrapped, or checked at runtime.
     - ``dispatch``: backend-id -> forwarding strategy pairs (e.g. ``(("rust", "literal_match"),)``).
       A backend with no entry passes the immediate as a positional const arg.
     """
 
     name: str
     type_tag: str = "ui32"
-    value_range: tuple[int, str, bool] | None = None
+    value_range: ImmediateValueRange | None = None
+    valid_range: ImmediateValueRange | None = None
     dispatch: tuple[tuple[str, str], ...] = ()
     source: SourceSpan | None = None
 

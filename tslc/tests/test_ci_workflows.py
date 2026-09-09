@@ -35,10 +35,13 @@ def test_generated_workflows_reuse_content_addressed_images() -> None:
 
 def test_generated_values_subsume_the_profile_build_matrix() -> None:
     values = _workflow("generated-values.yml")
+    value_test_job = values.split("\n  generated-value-tests:\n", 1)[1].split(
+        "\n  generated-", 1
+    )[0]
 
     assert "Generated build and values" in values
-    assert "./dev.sh test" in values
-    assert "./dev.sh build" not in values
+    assert "./dev.sh test" in value_test_job
+    assert "./dev.sh build" not in value_test_job
     assert "Generated Clang overlay build and values" in values
     assert "Generated benchmarks (x86 policy and ARM smoke)" in values
     assert not Path(".github/workflows/generated-build.yml").exists()

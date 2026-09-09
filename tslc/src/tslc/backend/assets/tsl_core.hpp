@@ -491,7 +491,8 @@ inline void lane_set_unchecked(
 
 inline void require_same_lanes(std::size_t source_lanes, std::size_t target_lanes) {
     if (source_lanes != target_lanes) {
-#if defined(__SYCL_DEVICE_ONLY__) || defined(__wasm__) || \
+#if defined(__SYCL_DEVICE_ONLY__) || defined(__wasm__) || defined(__wasm32__) || \
+    defined(__wasm64__) || \
     (!defined(__cpp_exceptions) && !defined(_CPPUNWIND))
         __builtin_trap();
 #else

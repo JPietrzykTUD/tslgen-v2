@@ -41,7 +41,11 @@ esac
 
 rm -rf \
   "$scratch_root/cpp-consumer" \
-  "$scratch_root/cpp-build" \
+  "$scratch_root/cpp-build-scalar" \
+  "$scratch_root/cpp-build-avx2" \
+  "$scratch_root/cpp-build-sve" \
+  "$scratch_root/cpp-build-rvv" \
+  "$scratch_root/cpp-build-wasm32-simd128" \
   "$scratch_root/examples-build" \
   "$scratch_root/rust-examples"
 mkdir -p "$scratch_root/cpp-consumer" "$scratch_root/rust-examples"
@@ -51,21 +55,80 @@ cmake_minimum_required(VERSION 3.20)
 project(tsl_cpp_consumer_check LANGUAGES CXX)
 
 include(FetchContent)
-set(TSL_PROFILE scalar CACHE STRING "TSL profile" FORCE)
+set(TSL_CONSUMER_PROFILE scalar CACHE STRING "TSL consumer profile")
+set(TSL_PROFILE "\${TSL_CONSUMER_PROFILE}" CACHE STRING "TSL profile" FORCE)
+set(TSL_BUILD_TESTS OFF CACHE BOOL "TSL generated tests" FORCE)
 FetchContent_Declare(tsl SOURCE_DIR "$generated_root/cpp")
 FetchContent_MakeAvailable(tsl)
 
-add_executable(tsl_cpp_consumer main.cpp)
+if(CMAKE_CROSSCOMPILING)
+  add_library(tsl_cpp_consumer OBJECT main.cpp)
+else()
+  add_executable(tsl_cpp_consumer main.cpp)
+endif()
 target_link_libraries(tsl_cpp_consumer PRIVATE tsl::tsl)
+if(MSVC)
+  target_compile_options(tsl_cpp_consumer PRIVATE /W4 /WX)
+else()
+  target_compile_options(tsl_cpp_consumer PRIVATE -Wall -Wextra -Werror)
+endif()
 EOF
 
 cat >"$scratch_root/cpp-consumer/main.cpp" <<'EOF'
+#include <cstddef>
 #include <cstdint>
+#include <cstdlib>
+
 #include <tsl.hpp>
 
 int main() {
-  using Vec = tsl::simd<std::int32_t, tsl::scalar>;
-  return tsl::add<Vec>(1, 2) == 3 ? 0 : 1;
+  using Vec =
+      tsl::dataparallel::simd_for_t<tsl::dataparallel::native, std::int32_t>;
+  const std::size_t lanes = Vec::lane_count();
+  const std::size_t bytes = lanes * sizeof(std::int32_t);
+  auto* left = static_cast<std::int32_t*>(std::malloc(bytes));
+  auto* right = static_cast<std::int32_t*>(std::malloc(bytes));
+  auto* output = static_cast<std::int32_t*>(std::malloc(bytes));
+  if (left == nullptr || right == nullptr || output == nullptr) {
+    std::free(left);
+    std::free(right);
+    std::free(output);
+    return 4;
+  }
+  for (std::size_t index = 0; index < lanes; ++index) {
+    left[index] = 2;
+    right[index] = 3;
+    output[index] = 0;
+  }
+
+  const int status = [&]() {
+    const auto ordinary_left = tsl::load<Vec, false>(left);
+    const auto ordinary_right = tsl::load<Vec, false>(right);
+    tsl::store<Vec, false>(
+        output, tsl::add<Vec>(ordinary_left, ordinary_right));
+
+    tsl::precondition_error error = tsl::precondition_error::none;
+    const auto checked_left = tsl::load_checked<Vec, false>(
+        tsl::span<std::int32_t const>(left, lanes), error);
+    if (error != tsl::precondition_error::none) {
+      return 1;
+    }
+    const auto checked_right = tsl::load_checked<Vec, false>(
+        tsl::span<std::int32_t const>(right, lanes), error);
+    if (error != tsl::precondition_error::none) {
+      return 2;
+    }
+    return tsl::store_checked<Vec, false>(
+               tsl::span<std::int32_t>(output, lanes),
+               tsl::add<Vec>(checked_left, checked_right)) ==
+                   tsl::precondition_error::none
+               ? 0
+               : 3;
+  }();
+  std::free(left);
+  std::free(right);
+  std::free(output);
+  return status;
 }
 EOF
 
@@ -189,8 +252,45 @@ cargo run --quiet --manifest-path "$scratch_root/rust-examples/Cargo.toml" --bin
 cargo run --quiet --manifest-path "$scratch_root/rust-examples/Cargo.toml" --bin selected_refinement_operator </dev/null
 cargo run --quiet --manifest-path "$scratch_root/rust-examples/Cargo.toml" --bin selected_aggregate_consume_operator </dev/null
 
-cmake -S "$scratch_root/cpp-consumer" -B "$scratch_root/cpp-build"
-cmake --build "$scratch_root/cpp-build" --target tsl_cpp_consumer
+build_cpp_consumer() {
+  local profile="$1"
+  local compiler="$2"
+  local system_name="${3:-}"
+  local system_processor="${4:-}"
+  local compiler_target="${5:-}"
+  local build_root="$scratch_root/cpp-build-$profile"
+  local configure=(
+    cmake
+    -S "$scratch_root/cpp-consumer"
+    -B "$build_root"
+    -DTSL_CONSUMER_PROFILE="$profile"
+    -DCMAKE_CXX_COMPILER="$compiler"
+  )
+  if [[ -n "$system_name" ]]; then
+    configure+=(
+      -DCMAKE_SYSTEM_NAME="$system_name"
+      -DCMAKE_SYSTEM_PROCESSOR="$system_processor"
+      -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY
+    )
+  fi
+  if [[ -n "$compiler_target" ]]; then
+    configure+=( -DCMAKE_CXX_COMPILER_TARGET="$compiler_target" )
+  fi
+  command -v "$compiler" >/dev/null
+  "${configure[@]}"
+  cmake --build "$build_root" --target tsl_cpp_consumer
+}
+
+build_cpp_consumer scalar c++
+build_cpp_consumer avx2 c++
+build_cpp_consumer sve aarch64-linux-gnu-g++ Linux aarch64
+build_cpp_consumer rvv riscv64-linux-gnu-g++ Linux riscv64
+build_cpp_consumer \
+  wasm32-simd128 \
+  /opt/wasi-sdk/bin/clang++ \
+  WASI \
+  wasm32 \
+  wasm32-wasip1
 
 cmake \
   -S "$repo_root/examples/cpp" \

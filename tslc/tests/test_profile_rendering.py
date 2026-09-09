@@ -15,7 +15,11 @@ from tslc.benchmark.identity import (
     implementation_body_hash,
     implementation_choice_body_hash,
 )
-from tslc.backend.cpp_build_policy import cpp_profile_flags, cpp_profile_target
+from tslc.backend.cpp_build_policy import (
+    cpp_profile_compile_options,
+    cpp_profile_flags,
+    cpp_profile_target,
+)
 from tslc.backend.cpp_detection import x86_profile_detection_source
 from tslc.backend.rust_verification import (
     rust_linker,
@@ -83,6 +87,34 @@ def test_backend_selection_is_honored(data_root: Path, machine_profiles_path: Pa
     assert _roots(cpp_only) == {"cpp", "docs"}
     # verify description only covers the requested backend
     assert [b.backend_id for b in cpp_only.rendered.verify.backends] == ["cpp"]
+
+
+def test_cpp_dataparallel_inference_excludes_target_only_vectors(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=["add", "insert_imask"],
+        profiles=["avx2"],
+        type_tags=["si32"],
+        backends=["cpp"],
+    )
+
+    assert not has_errors(result.diagnostics), result.diagnostics
+    cpp = next(
+        artifact.content
+        for artifact in result.artifacts.artifacts
+        if artifact.logical_path == "cpp/include/tsl_avx2.hpp"
+    )
+    assert "struct simd<T, avx512>" in cpp
+    assert (
+        "struct simd_for<native, int32_t> {\n"
+        "    using type = ::tsl::simd<int32_t, ::tsl::avx2>;"
+        in cpp
+    )
+    assert "struct simd_for<fixed<16>, int32_t>" not in cpp
 
 
 def test_unknown_requested_compiler_capability_is_diagnosed(
@@ -273,15 +305,15 @@ def test_representative_project_shape_is_byte_stable(
         backends=["cpp", "rust"],
     )
     expected = {
-        "cpp/CMakeLists.txt": "604faf64cad28a98bf597e66bea58661a544ab13f0ffe8815aae360018a3ba6c",
-        "cpp/docs/input/tsl_api_docs.hpp": "351742bbf68e9946e533d29acdf8982a7fd49b10899fd45e53e46ce8c2ca1a94",
+        "cpp/CMakeLists.txt": "6068c515739bf8489a705fee3a791d4e4a785498e34780653e93d5584acc5a95",
+        "cpp/docs/input/tsl_api_docs.hpp": "698b236f80bd4c8000fb1ace21a144ea61db887378ddf44d2568cdd2bc7c43de",
         "cpp/include/tsl.hpp": "fdebd390b5777e6806b13f994ec33e3289bbf163cd91f9a3a6b183bbbc5ae5cb",
         "cpp/include/tsl_primitives.hpp": "1ed6539e2285a7af59dbd5212e32e931b19620fa96387c833dacb882d986d743",
-        "cpp/include/tsl_scalar.hpp": "8ac972235dcebcdc4c612880af1d9cb73bafc2acaf528bad778c105568fbc765",
+        "cpp/include/tsl_scalar.hpp": "7d728ed75c1c8a04ff43bd4f8bf80cce4a6c44af2a173b8bb1769715e7513e2c",
         "cpp/tests/smoke_scalar.cpp": "43046adfe06468b6eb75f351dc8883cb1e35635e66f40fc3f033d41651554a1e",
         "rust/Cargo.toml": "994e9d912db23d0ba8d6f4763b54bdea83c838f6b8427af8e038be42b2f5f860",
         "rust/src/lib.rs": "0a57fa83b8458be54a2313e7ffc3b77c798accc546089acfda6c41f1421e25ad",
-        "rust/src/tsl_documentation.rs": "c5bba386d00bcde0e2cff0da9788ba66f88d21dec502cc57acdae1b069bb7916",
+        "rust/src/tsl_documentation.rs": "9b67bf0a87556f23e8b0e4d4b5c1d6215c46367d4c1b6e1bbfa76ba8a27cf089",
         "rust/src/tsl_scalar.rs": "47b89acd99eac174a1c446eef07327d5fb47a573d4e9385faacaa6b982467707",
         "rust/tests/smoke.rs": "a4d108f502689e7f29ba5259e22779e8ef0afa36ab83c239022e2772d68d6b44",
     }
@@ -311,6 +343,7 @@ def test_clang_vector_overlay_is_split_guarded_and_uses_hardware_facade(
     overlay = by["cpp/include/tsl_avx2_clang.hpp"]
     dispatch = by["cpp/include/tsl.hpp"]
     cmake = by["cpp/CMakeLists.txt"]
+    consumer = by["cpp/tests/consumer.cpp"]
     base_smoke = by["cpp/tests/smoke_avx2.cpp"]
     overlay_smoke = by["cpp/tests/smoke_avx2_clang.cpp"]
     manifest_records = json.loads(by["cpp/public-api.json"])["declarations"]
@@ -331,6 +364,18 @@ def test_clang_vector_overlay_is_split_guarded_and_uses_hardware_facade(
     assert "clang_v128" not in base_smoke
     assert "clang_fixed" not in base
     assert "clang_v128" in overlay_smoke
+    assert "#include <tsl.hpp>" in consumer
+    assert "load_checked<Vec, false>" in consumer
+    assert "store_checked<Vec, false>" in consumer
+    assert "option(TSL_STRICT_WARNINGS" in cmake
+    assert "-Wall -Wextra -Werror" in cmake
+    assert "GNU|Clang|AppleClang|IntelLLVM" in cmake
+    assert "/W4 /WX" in cmake
+    assert "add_executable(tsl_consumer tests/consumer.cpp)" in cmake
+    assert "add_custom_target(tsl_quality DEPENDS tsl_smoke tsl_consumer)" in cmake
+    core = by["cpp/include/tsl_core.hpp"]
+    assert "defined(__wasm32__)" in core
+    assert "defined(__wasm64__)" in core
     assert "struct clang_v128 {};" in overlay
     assert "struct clang_v256 {};" in overlay
     assert "struct clang_v512 {};" in overlay
@@ -697,6 +742,37 @@ def test_cpp_profile_flags_are_profile_family_owned() -> None:
 
     assert cpp_profile_flags(profile, capability) == ("-march=armv8-a+sve",)
     assert cpp_profile_target(profile, capability) == "aarch64-linux-gnu"
+
+
+@pytest.mark.parametrize(
+    ("features", "expected"),
+    [
+        ({"sse"}, "/arch:SSE2"),
+        ({"sse", "sse2", "sse4_2"}, "/arch:SSE4.2"),
+        ({"sse", "sse2", "avx"}, "/arch:AVX"),
+        ({"sse", "sse2", "avx", "avx2"}, "/arch:AVX2"),
+        ({"sse", "sse2", "avx", "avx2", "avx512f"}, "/arch:AVX512"),
+    ],
+)
+def test_cpp_x86_profiles_map_to_msvc_architecture_option(
+    features: set[str],
+    expected: str,
+) -> None:
+    profile = MachineProfile(
+        name="x86-test",
+        family="x86",
+        features=frozenset(features),
+        alternatives={},
+    )
+    capability = ProfileFamilyCapability(
+        "x86",
+        backends={"cpp": BackendProfileFamily(feature_flags=True)},
+    )
+
+    options = cpp_profile_compile_options(profile, capability)
+
+    assert options[-1].flag == expected
+    assert options[-1].compiler_ids == ("MSVC",)
 
 
 def test_rust_profile_toolchain_is_profile_family_owned() -> None:

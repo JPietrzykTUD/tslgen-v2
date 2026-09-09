@@ -7,7 +7,11 @@ from enum import Enum, auto
 from typing import Literal
 
 from tslc.catalog.arithmetic import ARITHMETIC_INTEGER_IMMEDIATE_ZERO_MARKER
-from tslc.catalog.model import TestComparison, TestFailureReason
+from tslc.catalog.model import (
+    IMMEDIATE_CONVERSION_CHUNK_INDEX_MARKER,
+    TestComparison,
+    TestFailureReason,
+)
 from tslc.catalog.preconditions import (
     PRECONDITION_DESCRIPTORS,
     PreconditionErrorKind,
@@ -133,6 +137,8 @@ class ValueTestFailure:
                 if self.phase == "compile"
                 else "TSL_ARITH_INTEGER_ZERO_DIVISOR"
             )
+        if self.reason is TestFailureReason.CONVERSION_CHUNK_INDEX_OUT_OF_RANGE:
+            return IMMEDIATE_CONVERSION_CHUNK_INDEX_MARKER
         raise AssertionError(f"unhandled value-test failure reason {self.reason!r}")
 
 

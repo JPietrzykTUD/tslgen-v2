@@ -11,6 +11,7 @@ from tslc.backend.signature_types import RUST_SIGNATURE_TYPES, rust_free_type
 from tslc.backend.target_capability import rust_extension_tag
 from tslc.catalog.arithmetic import ArithmeticNumericDomain
 from tslc.catalog.memory import MemoryAccess
+from tslc.catalog.model import IMMEDIATE_CONVERSION_CHUNK_INDEX_MARKER
 from tslc.lower.lowerer import (
     LoweredArithmeticPrecondition,
     LoweredArithmeticPreconditionKind,
@@ -136,6 +137,20 @@ def arithmetic_preconditions(spec: LoweredSpecialization) -> str:
     return "".join(
         f"        {_arithmetic_precondition(precondition)}\n"
         for precondition in spec.arithmetic_preconditions
+    )
+
+
+def immediate_precondition(spec: LoweredSpecialization) -> str:
+    if spec.immediate is None or spec.immediate_valid_range is None:
+        return ""
+    name = spec.immediate[0]
+    lower, upper, inclusive = spec.immediate_valid_range
+    upper_operator = "<=" if inclusive else "<"
+    return (
+        "        const { assert!("
+        f"(({name} as i128) >= {lower}) && "
+        f"(({name} as i128) {upper_operator} {upper}), "
+        f'"{IMMEDIATE_CONVERSION_CHUNK_INDEX_MARKER}"); }};\n'
     )
 
 

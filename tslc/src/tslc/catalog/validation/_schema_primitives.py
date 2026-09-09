@@ -56,7 +56,9 @@ KNOWN_IMMEDIATE_DISPATCH = frozenset({"literal_match"})
 KNOWN_GENERIC_PARAM_FIELDS = frozenset(
     {"kind", "default", "base_types", "specialize_base", "constraints"}
 )
-KNOWN_IMMEDIATE_PARAM_FIELDS = frozenset({"type", "value_range", "dispatch"})
+KNOWN_IMMEDIATE_PARAM_FIELDS = frozenset(
+    {"type", "value_range", "valid_range", "dispatch"}
+)
 KNOWN_RETURN_TYPE_FIELDS = RESULT_DIMENSIONS
 KNOWN_PRIMITIVE_OVERLOAD_FIELDS = frozenset({"axis", "value", "primary"})
 KNOWN_PRIMITIVE_FIELDS = frozenset(

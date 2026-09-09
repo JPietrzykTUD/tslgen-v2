@@ -213,6 +213,44 @@ def test_cpp_verifier_accepts_explicit_compiler(tmp_path: Path) -> None:
     assert _env(seen[2])["CXX"] == "/usr/bin/c++"
 
 
+def test_cpp_quality_gate_builds_normal_include_consumer_with_strict_warnings(
+    tmp_path: Path,
+) -> None:
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="cpp",
+                root_path="cpp",
+                profiles=(VerifyProfile(profile_name="avx2", file_stem="avx2"),),
+            ),
+        )
+    )
+    seen: list[BuildCommand] = []
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        return BuildCommandResult(command=command, returncode=0)
+
+    report = verify_generated_project(
+        tmp_path,
+        project,
+        runner,
+        config=_config(cpp_compiler="/usr/bin/c++", run_quality_checks=True),
+    )
+
+    assert report.diagnostics == ()
+    assert [command.step for command in seen] == [
+        "preflight",
+        "configure",
+        "build",
+        "check-warnings",
+    ]
+    configure = seen[1]
+    quality = seen[3]
+    assert "-DTSL_STRICT_WARNINGS=ON" in configure.argv
+    assert quality.argv[-1] == "tsl_quality"
+
+
 def test_expected_compile_failure_requires_nonzero_status_and_exact_marker(
     tmp_path: Path,
 ) -> None:

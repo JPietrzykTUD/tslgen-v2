@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from tslc.catalog.model import TestCase
+from tslc.catalog.model import TestCase, TestFailureReason
 from tslc.catalog.scalar_types import scalar_bit_width_or_default
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.value_tests._case_common import ordinary_base_spelling as _ordinary_base_spelling
 from tslc.value_tests.case_helpers import (
     args_match as _args_match,
     base_spelling as _base_spelling,
+    convert_match as _convert_match,
     effective_lanes as _effective_lanes,
     immediate_value as _immediate_value,
     mask_inputs as _mask_inputs,
@@ -255,6 +256,35 @@ def compile_failure_case(
 ) -> ValueTestCasePlan | None:
     if case.role != "compile_failure" or case.failure is None or case.lanes is None:
         return None
+    if (
+        case.failure is TestFailureReason.CONVERSION_CHUNK_INDEX_OUT_OF_RANGE
+        and case.index is not None
+    ):
+        match = _convert_match(case, specs)
+        vector_inputs = _vector_inputs(case)
+        if (
+            match is None
+            or match.target is None
+            or match.target.lane_parameter is None
+            or len(vector_inputs) != 1
+            or len(vector_inputs[0]) != case.lanes
+        ):
+            return None
+        return _plan(
+            "compile_failure",
+            name,
+            index,
+            case,
+            (match,),
+            match.base_type_spelling,
+            vector_inputs=vector_inputs,
+            expected=(),
+            immediate_value=str(case.index),
+            expected_type_tag=case.to_type,
+            target_base_spelling=match.target.base_spelling,
+            target_lanes=int(match.target.lane_parameter),
+            failure=ValueTestFailure(reason=case.failure, phase="compile"),
+        )
     if not _args_match(case, specs[0].param_kinds):
         return None
     base_spelling = _base_spelling(specs, case.type_tag)

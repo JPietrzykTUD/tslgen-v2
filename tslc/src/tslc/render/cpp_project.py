@@ -78,6 +78,11 @@ def cpp_artifacts(
             cpp_public_api_manifest(profiles, model=model).serialize(),
             media_type="application/json",
         ),
+        text(
+            "cpp/tests/consumer.cpp",
+            assets.text("cpp_consumer.cpp.tmpl"),
+            media_type=media_type,
+        ),
     ]
     for profile_model in model.profiles:
         base = profile_model.base_header

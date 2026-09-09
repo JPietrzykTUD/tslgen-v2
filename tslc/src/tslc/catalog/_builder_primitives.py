@@ -19,8 +19,12 @@ from tslc.catalog.model import (
     GenericParamBaseWidthConstraint,
     GenericParamKind,
     ImmediateParam,
+    ImmediateRangeUpper,
+    ImmediateRangeUpperKind,
+    ImmediateValueRange,
     ParamTypeRule,
     Primitive,
+    RESULT_DIM_BASE,
     RESULT_DIMENSIONS,
     RESULT_DIM_VECTOR,
 )
@@ -74,10 +78,10 @@ def _build_primitives(
     attribute_keys = tuple(attribute.key.text for attribute in declaration.attributes)
     base_attributes = {a.key.text: _attribute_value(a) for a in declaration.attributes}
 
-    # Per-parameter `sImm` immediate metadata from the `params:` block (type, value_range,
-    # per-backend dispatch strategy), keyed by the signature parameter name.
+    # Per-parameter `sImm` immediate metadata from the `params:` block (type, dispatch
+    # domain, static valid range, and per-backend strategy), keyed by parameter name.
     param_type_rules = _param_type_rules(declaration)
-    immediate_params = _immediate_params(declaration, diagnostics)
+    immediate_params = _immediate_params(declaration, result_target, diagnostics)
     generic_params = _generic_params(declaration)
     tests = build_test_cases(declaration, diagnostics)
     benchmark = build_benchmark_spec(declaration)
@@ -292,13 +296,15 @@ def _result_target(
 
 def _immediate_params(
     declaration: ParsedPrimitiveDeclaration,
+    result_target: tuple[str, str] | None,
     diagnostics: list[Diagnostic],
 ) -> tuple[ImmediateParam, ...]:
     """The `params:` block -> per-name `ImmediateParam` metadata for `sImm` operands.
 
     Each entry refines a named `sImm` parameter from the signature with its public `type`,
-    a `value_range`, and a per-language `dispatch` strategy. Entries that name a non-`sImm`
-    parameter, an unknown parameter, or duplicate a name are diagnosed and dropped.
+    a dispatch `value_range`, a static `valid_range`, and a per-language `dispatch`
+    strategy. Entries that name a non-`sImm` parameter, an unknown parameter, or duplicate
+    a name are diagnosed and dropped.
     """
 
     fields = declaration.fields_by_name("params")
@@ -353,6 +359,52 @@ def _immediate_params(
                 f"{name!r} (expected `lo..hi` or `lo..=hi`)",
                 _source_span(range_source),
             )
+        valid_range_field = _child(entry, "valid_range")
+        valid_range_text = _field_text(valid_range_field)
+        valid_range = _parse_value_range(valid_range_text)
+        if valid_range_text is not None and valid_range is None:
+            range_source = (
+                valid_range_field.source
+                if valid_range_field is not None
+                else entry.source
+            )
+            reject(
+                "TSL-PARAMS-BAD-RANGE",
+                f"malformed `valid_range` {valid_range_text!r} for {param_name!r} on "
+                f"{name!r} (expected `lo..hi` or `lo..=hi`)",
+                _source_span(range_source),
+            )
+        for field_name, declared_range, declared_field in (
+            ("value_range", value_range, range_field),
+            ("valid_range", valid_range, valid_range_field),
+        ):
+            if (
+                declared_range is None
+                or declared_range.upper.kind
+                is not ImmediateRangeUpperKind.CONVERSION_CHUNK_COUNT
+            ):
+                continue
+            if field_name != "valid_range":
+                reject(
+                    "TSL-PARAMS-BAD-RANGE",
+                    "`conversion_chunk_count(data, ToBase)` is a static validity "
+                    "constraint and must be declared as `valid_range`",
+                    _source_span(
+                        declared_field.source if declared_field is not None else entry.source
+                    ),
+                )
+                value_range = None
+                continue
+            if result_target != (RESULT_DIM_BASE, "ToBase"):
+                reject(
+                    "TSL-PARAMS-BAD-RANGE",
+                    "`conversion_chunk_count(data, ToBase)` is only valid on a "
+                    "primitive with `return_type: base: ToBase`",
+                    _source_span(
+                        declared_field.source if declared_field is not None else entry.source
+                    ),
+                )
+                valid_range = None
         dispatch = tuple(
             (child.key.text, _field_text(child) or "")
             for child in _children(_child(entry, "dispatch"))
@@ -362,6 +414,7 @@ def _immediate_params(
                 name=param_name,
                 type_tag=_field_text(_child(entry, "type")) or "ui32",
                 value_range=value_range,
+                valid_range=valid_range,
                 dispatch=dispatch,
                 source=_source_span(entry.source),
             )
@@ -370,10 +423,8 @@ def _immediate_params(
 
 
 
-def _parse_value_range(text: str | None) -> tuple[int, str, bool] | None:
-    """`"0..base_bit_width(data)"` / `"1..=32"` -> `(lo, hi_expr, inclusive)`. `hi_expr` is
-    kept symbolic (an int-literal string or a token like `base_bit_width(data)`) and resolved
-    at lowering against the selected type. None when malformed."""
+def _parse_value_range(text: str | None) -> ImmediateValueRange | None:
+    """Promote one closed source range expression into typed catalog data."""
 
     if text is None:
         return None
@@ -386,6 +437,17 @@ def _parse_value_range(text: str | None) -> tuple[int, str, bool] | None:
     else:
         return None
     lo_text, hi_text = lo_text.strip(), hi_text.strip()
-    if not lo_text.lstrip("-").isdigit() or not hi_text:
+    if not lo_text.lstrip("-").isdigit():
         return None
-    return (int(lo_text), hi_text, inclusive)
+    if hi_text.lstrip("-").isdigit():
+        upper = ImmediateRangeUpper(
+            ImmediateRangeUpperKind.LITERAL,
+            int(hi_text),
+        )
+    elif hi_text == "base_bit_width(data)":
+        upper = ImmediateRangeUpper(ImmediateRangeUpperKind.SOURCE_BASE_BIT_WIDTH)
+    elif hi_text == "conversion_chunk_count(data, ToBase)":
+        upper = ImmediateRangeUpper(ImmediateRangeUpperKind.CONVERSION_CHUNK_COUNT)
+    else:
+        return None
+    return ImmediateValueRange(int(lo_text), upper, inclusive)

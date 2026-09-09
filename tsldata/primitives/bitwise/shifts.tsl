@@ -724,7 +724,7 @@ prim<v:=(v,s)> shift_left(data, shift):
         implementation:
           tsil """
               let<type>(CountVec, vector::as(sse, si64));
-              if ((shift < 0) || (shift >= value(type::size_bits(base::in)))) {
+              if (cast<static>(ui64, shift) >= value(type::size_bits(base::in))) {
                 complete(call<primitive=set_zero[Vec]>());
               }
               var<const_infer>(count, call<primitive=set1[CountVec]>(cast<static>(si64, shift)));
@@ -889,7 +889,7 @@ prim<v:=(v,s)> shift_left(data, shift):
         implementation:
           tsil """
               let<type>(CountVec, vector::as(sse, si64));
-              if ((shift < 0) || (shift >= value(type::size_bits(base::in)))) {
+              if (cast<static>(ui64, shift) >= value(type::size_bits(base::in))) {
                 complete(call<primitive=set_zero[Vec]>());
               }
               var<const_infer>(count, call<primitive=set1[CountVec]>(cast<static>(si64, shift)));
@@ -3115,11 +3115,13 @@ prim<v:=(v,s)> shift_right(data, shift):
               let<type>(UBase, base::unsigned_of(base::in));
               let<type>(UVec, vector::as_base(UBase));
               let<type>(CountVec, vector::as(sse, si64));
-              var<const_infer>(sign_mask, call<primitive=to_vector[Vec]>(
-                call<primitive=greater_than[Vec]>(
-                  call<primitive=set_zero[Vec]>(), data
-                )
-              ));
+              if<generation>(value(type::is_signed(base::in))) {
+                var<const_infer>(sign_mask, call<primitive=to_vector[Vec]>(
+                  call<primitive=greater_than[Vec]>(
+                    call<primitive=set_zero[Vec]>(), data
+                  )
+                ));
+              }
               if (cast<static>(ui64, shift) >= 8) {
                 if<generation>(value(type::is_signed(base::in))) {
                   if<compile>(PreserveSign) {
@@ -3338,11 +3340,13 @@ prim<v:=(v,s)> shift_right(data, shift):
               let<type>(UBase, base::unsigned_of(base::in));
               let<type>(UVec, vector::as_base(UBase));
               let<type>(CountVec, vector::as(sse, si64));
-              var<const_infer>(sign_mask, call<primitive=to_vector[Vec]>(
-                call<primitive=greater_than[Vec]>(
-                  call<primitive=set_zero[Vec]>(), data
-                )
-              ));
+              if<generation>(value(type::is_signed(base::in))) {
+                var<const_infer>(sign_mask, call<primitive=to_vector[Vec]>(
+                  call<primitive=greater_than[Vec]>(
+                    call<primitive=set_zero[Vec]>(), data
+                  )
+                ));
+              }
               if (cast<static>(ui64, shift) >= 8) {
                 if<generation>(value(type::is_signed(base::in))) {
                   if<compile>(PreserveSign) {
@@ -3534,11 +3538,13 @@ prim<v:=(v,s)> shift_right(data, shift):
               let<type>(UBase, base::unsigned_of(base::in));
               let<type>(UVec, vector::as_base(UBase));
               let<type>(CountVec, vector::as(sse, si64));
-              var<const_infer>(sign_mask, call<primitive=to_vector[Vec]>(
-                call<primitive=greater_than[Vec]>(
-                  call<primitive=set_zero[Vec]>(), data
-                )
-              ));
+              if<generation>(value(type::is_signed(base::in))) {
+                var<const_infer>(sign_mask, call<primitive=to_vector[Vec]>(
+                  call<primitive=greater_than[Vec]>(
+                    call<primitive=set_zero[Vec]>(), data
+                  )
+                ));
+              }
               if (cast<static>(ui64, shift) >= 8) {
                 if<generation>(value(type::is_signed(base::in))) {
                   if<compile>(PreserveSign) {

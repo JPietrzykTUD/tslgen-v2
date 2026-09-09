@@ -751,7 +751,7 @@
         "checked_companion": false,
         "semantic_categories": [],
         "fixed_shape_only": false,
-        "source_contract_sha256": "a77dba130c31a7122b8f780a7923272c5a3d9e896830d100c7303f5c28d6c382"
+        "source_contract_sha256": "765cbb6f6f20d76b372af8290d9e820b43cdee793c0d43ea7aa9ed7c46da52f3"
       },
       {
         "identity": "allocate#ptr:=(usize)",
@@ -1187,7 +1187,7 @@
         "checked_companion": false,
         "semantic_categories": [],
         "fixed_shape_only": false,
-        "source_contract_sha256": "9f1efa76393f557e5867e6d77bb5b4629955643159c5e24bb16f463d3cceb0cc"
+        "source_contract_sha256": "8229565a90f9845ba095b39f3d6cfa8bbfa527495bf7c4477c353fbe276e41b5"
       },
       {
         "identity": "convert_lanes#v:=v->vector:ToVec",
@@ -1223,7 +1223,7 @@
         "checked_companion": false,
         "semantic_categories": [],
         "fixed_shape_only": false,
-        "source_contract_sha256": "a5a72f394e2918c9c4a3a7c6478eb16bcd928bb8446f1d057fa2ed810fb24d50"
+        "source_contract_sha256": "86e731dbb76ca4e1152823de58f37ab2b677fb3dbdd84dd869db0088f4f5ae76"
       },
       {
         "identity": "count_matches#s:=(v,s)",
@@ -1385,7 +1385,7 @@
         "checked_companion": false,
         "semantic_categories": [],
         "fixed_shape_only": false,
-        "source_contract_sha256": "4e4086e4181df2bb6ee7313fd5c37c20d468f025f8244906b1b2619d58231c51"
+        "source_contract_sha256": "1c5089cac44443cf919df4d51232c0a299176bf5ec0329e8693b2c1e18b5074e"
       },
       {
         "identity": "extract_imask#im:=(im,usize)->base:ToBase",
@@ -1733,7 +1733,7 @@
         "checked_companion": false,
         "semantic_categories": [],
         "fixed_shape_only": false,
-        "source_contract_sha256": "010bba742e43e9b3ab2b41b87e9b4886310a060657c52bbe85e6b62150dcdf76"
+        "source_contract_sha256": "5f66fe2a1ef4071b6fe67fe4bdecf16013aba8313a91c728b13ac7821495303d"
       },
       {
         "identity": "insert_imask#im:=(imt,im,usize)->base:ToBase",
@@ -2597,7 +2597,7 @@
         "checked_companion": false,
         "semantic_categories": [],
         "fixed_shape_only": false,
-        "source_contract_sha256": "9770f32e72240a457322322c646456f87e2f75e0850630473656ad49f5dee2f6"
+        "source_contract_sha256": "14595178d5f71e4c833601ca537cb11129479907fa731242df9faeaed7c682e7"
       },
       {
         "identity": "permute_lanes#v:=(v,vidx)",
@@ -2911,7 +2911,7 @@
           "operation"
         ],
         "fixed_shape_only": false,
-        "source_contract_sha256": "0b5c884b193796ae4f69d4894a673574a1a11bc1327a055ef1fdb44ceb76c688"
+        "source_contract_sha256": "2a6381f14f19a7652fed4d36af58e4a9b7317b679e74d30614210a8380238fba"
       },
       {
         "identity": "shift_left#v:=(v,v)@count_distribution=per_lane",
@@ -2949,7 +2949,7 @@
           "operation"
         ],
         "fixed_shape_only": false,
-        "source_contract_sha256": "2c117812f4e6e424e914a7e844e068e1a71ec5f0f4395df583a67f8ff994cf72"
+        "source_contract_sha256": "4015b9d55ff4fac1598eba65c53249335af4eee8ffe3fcdc8e4b3f67cf983335"
       },
       {
         "identity": "shift_left_imask#im:=(im,usize)",
@@ -3035,7 +3035,7 @@
           "operation"
         ],
         "fixed_shape_only": false,
-        "source_contract_sha256": "d4630888b5a451889cb1c6ca025c53e22f5d6d7bf71202e96165f75a14d77a1d"
+        "source_contract_sha256": "53b1fd07ca2c987f8d996b3fafa672415c8e5723d87f2ed0eea9c82f3a8366b1"
       },
       {
         "identity": "shift_right#v:=(v,v)@count_distribution=per_lane",
@@ -3765,11 +3765,11 @@
     ],
     "public_api_baseline": {
       "path": "coverage/tsl-v1-public-api.json",
-      "schema_version": 3,
-      "sha256": "bbdc52b9f06e8796fca91d512db02eeb907fddc2e568c7163f7364e5de16136a",
+      "schema_version": 4,
+      "sha256": "ccaea29682671529b7d0a51207afb1a73f28b9a7153f36fe59aa2cb42c172214",
       "exact_declaration_counts": {
-        "cpp": 815,
-        "rust": 4955
+        "cpp": 8015,
+        "rust": 7201
       }
     }
   },

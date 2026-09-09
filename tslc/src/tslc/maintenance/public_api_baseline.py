@@ -31,7 +31,8 @@ from tslc.backend.rust_public_api import (
 )
 from tslc.backend.rust_static_selection import plan_rust_static_selection
 from tslc.catalog.arithmetic import ArithmeticOperandBinding
-from tslc.catalog.model import Primitive
+from tslc.catalog.machine_profiles import load_machine_profiles_checked
+from tslc.catalog.model import Catalog, Primitive
 from tslc.catalog.preconditions import (
     PRECONDITION_DESCRIPTORS,
     PreconditionErrorKind,
@@ -40,9 +41,14 @@ from tslc.catalog.semantics import OperandBinding
 from tslc.maintenance import _repo_context
 from tslc.maintenance._catalog import load_repository_catalog
 from tslc.maintenance._repo_context import RepoContext
+from tslc.maintenance.release_contract import (
+    canonical_policy_path,
+    select_release_profiles,
+)
+from tslc.maintenance.release_contract_policy import load_release_policy
 
 
-_EXACT_DECLARATION_PROFILES = ("scalar", "avx2")
+_EXACT_DECLARATION_BACKENDS = ("cpp", "rust")
 
 
 def canonical_baseline_path(context: RepoContext) -> Path:
@@ -83,8 +89,21 @@ def _primitive_family(primitive: Primitive) -> dict[str, object]:
                 "name": parameter.name,
                 "type": parameter.type_tag,
                 "value_range": (
-                    list(parameter.value_range)
+                    [
+                        parameter.value_range.lower,
+                        parameter.value_range.upper.source_text,
+                        parameter.value_range.inclusive,
+                    ]
                     if parameter.value_range is not None
+                    else None
+                ),
+                "valid_range": (
+                    [
+                        parameter.valid_range.lower,
+                        parameter.valid_range.upper.source_text,
+                        parameter.valid_range.inclusive,
+                    ]
+                    if parameter.valid_range is not None
                     else None
                 ),
                 "dispatch": [list(item) for item in parameter.dispatch],
@@ -310,15 +329,63 @@ def _checked_error_contract() -> dict[str, object]:
     }
 
 
-def _exact_backend_declarations(context: RepoContext) -> dict[str, object]:
+def _exact_backend_declarations(
+    context: RepoContext,
+    catalog: Catalog,
+) -> dict[str, object]:
     """Build the reviewed exact declaration scope through normal lowering."""
+
+    loaded_profiles = load_machine_profiles_checked(
+        context.machine_profiles_path,
+        catalog.target_families,
+    )
+    profile_errors = tuple(
+        diagnostic
+        for diagnostic in loaded_profiles.diagnostics
+        if diagnostic.severity == "error"
+    )
+    if profile_errors:
+        raise RuntimeError(
+            "exact public declaration profile loading failed: "
+            + "; ".join(item.message for item in profile_errors)
+        )
+    policy = load_release_policy(canonical_policy_path(context))
+    policy_by_backend = {
+        item.backend_id: item for item in policy.backend_profiles
+    }
+    missing = sorted(set(_EXACT_DECLARATION_BACKENDS) - set(policy_by_backend))
+    if missing:
+        raise RuntimeError(
+            "exact public declaration policy is missing backends: "
+            + ", ".join(missing)
+        )
+    profiles_by_backend = {
+        backend_id: tuple(
+            profile.name
+            for profile in select_release_profiles(
+                policy_by_backend[backend_id],
+                loaded_profiles.profiles,
+            )
+        )
+        for backend_id in _EXACT_DECLARATION_BACKENDS
+    }
+    all_profiles = tuple(
+        sorted(
+            {
+                profile
+                for profiles in profiles_by_backend.values()
+                for profile in profiles
+            }
+        )
+    )
 
     result = generate_project(
         (context.data_root,),
         machine_profiles_path=context.machine_profiles_path,
-        profiles=_EXACT_DECLARATION_PROFILES,
+        profiles=all_profiles,
+        backend_profiles=profiles_by_backend,
         type_tags=_ARITH_TYPE_TAGS,
-        backends=("cpp", "rust"),
+        backends=_EXACT_DECLARATION_BACKENDS,
         render_artifacts=False,
     )
     errors = tuple(
@@ -333,7 +400,10 @@ def _exact_backend_declarations(context: RepoContext) -> dict[str, object]:
     facade = plan_rust_facade(result.emitted_profiles, static_selection)
     dispatch = plan_rust_dispatch(result.emitted_profiles, static_selection, facade)
     return {
-        "profiles": list(_EXACT_DECLARATION_PROFILES),
+        "profiles_by_backend": {
+            backend_id: list(profiles_by_backend[backend_id])
+            for backend_id in _EXACT_DECLARATION_BACKENDS
+        },
         "cpp": cpp_public_api_manifest(result.emitted_profiles).payload(),
         "rust": rust_public_api_manifest(
             result.emitted_profiles,
@@ -357,7 +427,7 @@ def build_public_api_baseline(context: RepoContext) -> dict[str, object]:
         )
     )
     return {
-        "version": 3,
+        "version": 4,
         "compatibility": {
             "cpp": (
                 "names reachable through tsl.hpp, excluding detail namespaces, "
@@ -369,7 +439,8 @@ def build_public_api_baseline(context: RepoContext) -> dict[str, object]:
             ),
             "identity_level": (
                 "typed source callable-family contracts plus backend-owned exact "
-                "declaration records for the reviewed scalar/AVX2 release scope; "
+                "declaration records for every backend/profile in the reviewed "
+                "release policy; "
                 "each generated project also carries its scope-exact manifest"
             ),
         },
@@ -385,7 +456,7 @@ def build_public_api_baseline(context: RepoContext) -> dict[str, object]:
         "checked_algorithm_contracts": _checked_algorithm_contracts(),
         "cpp_checked_algorithm_families": sorted(cpp_checked_algorithm_families()),
         "rust_algorithm_callables": sorted(RUST_ALGORITHM_RESERVED_NAMES),
-        "exact_backend_declarations": _exact_backend_declarations(context),
+        "exact_backend_declarations": _exact_backend_declarations(context, catalog),
     }
 
 

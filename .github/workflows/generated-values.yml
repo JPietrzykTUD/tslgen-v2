@@ -64,6 +64,7 @@ jobs:
     if: needs.scope.outputs.generated_profiles == 'true'
     outputs:
       profile_shards: ${{ steps.shards.outputs.profile_shards }}
+      x86_quality_shards: ${{ steps.shards.outputs.x86_quality_shards }}
 
     steps:
       - name: Check out repository
@@ -78,7 +79,21 @@ jobs:
               -f .github/scripts/profile_shards.jq \
               supplementary/buildsystem/machine_profiles.json
           )"
+          x86_quality_shards="$(
+            jq -c '
+              [
+                .[]
+                | select(
+                    .backend == "cpp"
+                    and (.name | startswith("cpp-x86-"))
+                    and ((.name | contains("oneapi-fpga")) | not)
+                  )
+                | {name, profiles}
+              ]
+            ' <<<"${profile_shards}"
+          )"
           echo "profile_shards=${profile_shards}" >> "$GITHUB_OUTPUT"
+          echo "x86_quality_shards=${x86_quality_shards}" >> "$GITHUB_OUTPUT"
 
   generated-value-tests:
     name: Generated build and values (${{ matrix.profile_shard.name }})
@@ -135,6 +150,10 @@ jobs:
               -- \
               bash -lc '
                 set -e
+                quality_args=()
+                if [[ "${TSLC_BACKENDS}" == "cpp" ]]; then
+                  quality_args+=(--quality)
+                fi
                 preserve_attestation_and_clean() {
                   attestation="${TSLC_CI_OUTPUT}/.tslctmp/verification/attestation.json"
                   if [[ -f "${attestation}" ]]; then
@@ -147,7 +166,8 @@ jobs:
                 ./dev.sh test \
                   --backends "${TSLC_BACKENDS}" \
                   --profiles "${TSLC_PROFILES}" \
-                  --output-root "${TSLC_CI_OUTPUT}"
+                  --output-root "${TSLC_CI_OUTPUT}" \
+                  "${quality_args[@]}"
               '
 
       - name: Append generated value-test summary
@@ -249,6 +269,104 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  generated-msvc-quality:
+    name: Generated MSVC warnings (${{ matrix.profile_group.name }})
+    runs-on: windows-2022
+    timeout-minutes: 120
+    needs:
+      - scope
+      - profile-shards
+    if: needs.scope.outputs.generated_profiles == 'true'
+
+    strategy:
+      fail-fast: false
+      matrix:
+        profile_group: ${{ fromJson(needs['profile-shards'].outputs.x86_quality_shards) }}
+
+    env:
+      CMAKE_GENERATOR: Ninja
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            tslc/pyproject.toml
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install compiler dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install --no-deps -e ./tslc
+
+      - name: Compile normal-include consumers with strict MSVC warnings
+        shell: bash
+        run: |
+          ./dev.sh build \
+            --backends cpp \
+            --profiles "${{ matrix.profile_group.profiles }}" \
+            --compiler cpp=cl.exe \
+            --quality \
+            --no-format \
+            --output-root "./tslctmp/msvc-${{ matrix.profile_group.name }}"
+
+  generated-clang-quality:
+    name: Generated Clang warnings (${{ matrix.profile_group.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    needs:
+      - scope
+      - ci-image
+      - profile-shards
+    if: needs.scope.outputs.generated_profiles == 'true'
+
+    strategy:
+      fail-fast: false
+      matrix:
+        profile_group: ${{ fromJson(needs['profile-shards'].outputs.x86_quality_shards) }}
+
+    env:
+      TSLC_CI_IMAGE: ${{ needs.scope.outputs.ci_image }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull CI image
+        run: docker pull "${TSLC_CI_IMAGE}"
+
+      - name: Compile normal-include consumers with strict Clang warnings
+        run: |
+          bash supplementary/ci/run_tslc_ci_container.sh \
+            -- \
+            bash -lc '
+              set -e
+              ./dev.sh build \
+                --backends cpp \
+                --profiles "${{ matrix.profile_group.profiles }}" \
+                --compiler cpp=/usr/bin/clang++-21 \
+                --quality \
+                --no-format \
+                --output-root "./tslctmp/clang-${{ matrix.profile_group.name }}"
+            '
+
   generated-benchmarks:
     name: Generated benchmarks (x86 policy and ARM smoke)
     runs-on: ubuntu-latest
@@ -322,6 +440,8 @@ jobs:
       - ci-image
       - profile-shards
       - generated-clang-overlay
+      - generated-clang-quality
+      - generated-msvc-quality
       - generated-benchmarks
       - generated-value-tests
     if: always()
@@ -335,5 +455,7 @@ jobs:
             ci-image "${{ needs.scope.outputs.generated_profiles == 'true' || needs.scope.outputs.clang_overlay == 'true' || needs.scope.outputs.benchmarks == 'true' }}" "${{ needs['ci-image'].result }}" \
             profile-shards "${{ needs.scope.outputs.generated_profiles }}" "${{ needs['profile-shards'].result }}" \
             generated-value-tests "${{ needs.scope.outputs.generated_profiles }}" "${{ needs['generated-value-tests'].result }}" \
+            generated-clang-quality "${{ needs.scope.outputs.generated_profiles }}" "${{ needs['generated-clang-quality'].result }}" \
+            generated-msvc-quality "${{ needs.scope.outputs.generated_profiles }}" "${{ needs['generated-msvc-quality'].result }}" \
             generated-clang-overlay "${{ needs.scope.outputs.clang_overlay }}" "${{ needs['generated-clang-overlay'].result }}" \
             generated-benchmarks "${{ needs.scope.outputs.benchmarks }}" "${{ needs['generated-benchmarks'].result }}"

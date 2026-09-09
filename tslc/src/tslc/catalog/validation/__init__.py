@@ -19,6 +19,7 @@ from tslc.catalog.validation.invariants import (
     validate_generic_param_base_constraints,
     validate_primitive_signatures,
     validate_primitive_arithmetic_contracts,
+    validate_primitive_test_failures,
     validate_primitive_overload_families,
     validate_primitive_semantic_contracts,
     validate_required_backends,
@@ -55,6 +56,7 @@ def validate_catalog(
     validate_required_backends(catalog, backends, supported, diagnostics)
     validate_primitive_signatures(catalog, diagnostics)
     validate_primitive_arithmetic_contracts(catalog, diagnostics)
+    validate_primitive_test_failures(catalog, diagnostics)
     validate_primitive_semantic_contracts(catalog, diagnostics)
     validate_primitive_overload_families(catalog, diagnostics)
     validate_call_precondition_dispositions(catalog, diagnostics)

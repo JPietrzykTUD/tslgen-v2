@@ -296,6 +296,11 @@ def _classify_runtime_site(
         or "requires an integral mask storage type" in lowered
     ):
         return "static_representation_or_lane_shape"
+    if path.endswith("backend/rust_signatures.py") and (
+        "immediate_precondition(" in context
+        or "tsl_conversion_chunk_index_out_of_range" in context.lower()
+    ):
+        return "static_immediate_range"
     if "tsl_arith_integer_immediate_nonzero" in lowered or (
         path.endswith("backend/rust_signatures.py") and "const {{ assert!" in lowered
     ):

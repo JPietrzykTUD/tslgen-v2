@@ -42,6 +42,7 @@ class GenerationCommandSettings:
     output_root: str | Path | None
     verify: bool
     run_value_tests: bool
+    run_quality_checks: bool
     fuzz: bool
     coverage: bool
     value_test_warnings: bool
@@ -72,6 +73,13 @@ def run_generation_command(
         print(
             "[error] --test requires --output-root so generated artifacts can "
             "be written before value-test verification",
+            file=sys.stderr,
+        )
+        return 1
+    if settings.run_quality_checks and settings.output_root is None:
+        print(
+            "[error] --quality requires --output-root so generated artifacts can "
+            "be written before quality verification",
             file=sys.stderr,
         )
         return 1
@@ -160,7 +168,11 @@ def run_generation_command(
                     write_summary_once()
                     return 1
 
-        if (settings.verify or settings.run_value_tests) and result.rendered is not None:
+        if (
+            settings.verify
+            or settings.run_value_tests
+            or settings.run_quality_checks
+        ) and result.rendered is not None:
             if settings.run_value_tests:
                 runners = _configured_runner_labels(settings.runner_paths)
                 if runners:
@@ -177,6 +189,7 @@ def run_generation_command(
                 runner_paths=settings.runner_paths,
                 tool_paths=settings.tool_paths,
                 run_value_tests=settings.run_value_tests,
+                run_quality_checks=settings.run_quality_checks,
             )
             for note in verify_report.skipped:
                 print(f"[verify-skip] {note}", file=sys.stderr)

@@ -49,6 +49,42 @@ def _cpp_used_vector_type_specs(
     return tuple(sorted(facts))
 
 
+def _cpp_inference_vector_type_specs(
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
+) -> tuple[tuple[str, str, str], ...]:
+    """Return source vectors that public dataparallel policies may select.
+
+    Target-only vector types still need concrete ``simd`` declarations (for
+    example, ``insert_imask`` can describe a wider result mask), but they are
+    not available implementations of the selected machine profile. Letting
+    those bookkeeping targets participate here can otherwise make an AVX2
+    profile advertise AVX-512 as ``native``.
+    """
+
+    facts = {
+        (spec.extension_name, spec.type_tag, spec.base_type_spelling)
+        for specializations in by_primitive.values()
+        for spec in specializations
+        if not DEFAULT_SUPPORT_POLICY.is_free_function_signature(
+            spec.result_kind,
+            spec.param_kinds,
+        )
+    }
+    facts.update(
+        (
+            spec.extension_name,
+            param.base_type_binding,
+            param.base_type_binding_spelling,
+        )
+        for specializations in by_primitive.values()
+        for spec in specializations
+        for param in spec.type_params
+        if param.base_type_binding is not None
+        and param.base_type_binding_spelling is not None
+    )
+    return tuple(sorted(facts))
+
+
 def cpp_extension_availability_condition(extension: Extension | None) -> str | None:
     """Optional backend-owned compiler capabilities for one extension."""
 
@@ -353,7 +389,7 @@ def _cpp_inferred_simd_registrations(
 
     candidates: dict[tuple[str, int], tuple[tuple[int, int, str], str]] = {}
     native_candidates: dict[str, tuple[tuple[int, int, str], str]] = {}
-    for ext, type_tag, base in _cpp_used_vector_type_specs(by_primitive):
+    for ext, type_tag, base in _cpp_inference_vector_type_specs(by_primitive):
         extension = extensions.get(ext)
         if extension is None or not cpp_participates_in_dataparallel_inference(
             extension, type_tag
@@ -407,7 +443,7 @@ def _cpp_overlay_fixed_registrations(
     """Expose an explicit fixed-lane policy for one opt-in header overlay."""
 
     candidates: dict[tuple[str, str, int], tuple[tuple[int, str], str]] = {}
-    for ext, type_tag, base in _cpp_used_vector_type_specs(by_primitive):
+    for ext, type_tag, base in _cpp_inference_vector_type_specs(by_primitive):
         extension = extensions.get(ext)
         metadata = (
             None

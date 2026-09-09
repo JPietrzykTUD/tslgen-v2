@@ -392,7 +392,6 @@ prim<v:=v> conflict(data):
           reasons []
         implementation:
           tsil """
-              var<infer>(_data, data);
               complete(cast<static>(base::in, 0));
             """
     rvv:

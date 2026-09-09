@@ -7,8 +7,6 @@ from collections.abc import Hashable
 from tslc.catalog.arithmetic import (
     ARITHMETIC_GUARANTEE_SPECS,
     ArithmeticGuarantee,
-    ArithmeticOperandRole,
-    ArithmeticOperation,
     matches_numeric_domain,
 )
 from tslc.catalog.model import Catalog, Primitive
@@ -26,8 +24,6 @@ def validate_arithmetic_contracts(
 
     for name in sorted(families):
         declarations = _unique_source_declarations(families[name])
-        for primitive in declarations:
-            _validate_failure_cases(primitive, diagnostics)
         annotated = tuple(
             primitive for primitive in declarations if primitive.arithmetic is not None
         )
@@ -103,87 +99,6 @@ def validate_arithmetic_contracts(
                     )
                 )
             _validate_domains(catalog, primitive, diagnostics)
-
-
-def _validate_failure_cases(
-    primitive: Primitive,
-    diagnostics: list[Diagnostic],
-) -> None:
-    for case in primitive.tests:
-        if case.role not in {"runtime_failure", "compile_failure"}:
-            continue
-        contract = primitive.arithmetic
-        source = case.failure_source or case.source or primitive.source
-        if case.role == "runtime_failure":
-            diagnostics.append(
-                diagnostic_at(
-                    severity="error",
-                    code="TSL-CATALOG-RUNTIME-FAILURE-IS-PRECONDITION",
-                    message=(
-                        f"primitive {primitive.name!r} test {case.name!r}: "
-                        "runtime integer-zero-divisor cases must be expressed by "
-                        "the active_divisor_nonzero precondition and checked tests"
-                    ),
-                    source=source,
-                )
-            )
-            continue
-        if contract is None or not contract.operations.intersection(
-            {ArithmeticOperation.DIVISION, ArithmeticOperation.REMAINDER}
-        ):
-            diagnostics.append(
-                diagnostic_at(
-                    severity="error",
-                    code="TSL-CATALOG-TEST-FAILURE-CONTRACT",
-                    message=(
-                        f"primitive {primitive.name!r} test {case.name!r}: "
-                        "integer-zero-divisor compile failure requires an "
-                        "arithmetic division or remainder operation"
-                    ),
-                    source=source,
-                )
-            )
-            continue
-        binding = contract.binding(ArithmeticOperandRole.DIVISOR)
-        if binding is None:
-            diagnostics.append(
-                diagnostic_at(
-                    severity="error",
-                    code="TSL-CATALOG-TEST-FAILURE-DIVISOR",
-                    message=(
-                        f"primitive {primitive.name!r} test {case.name!r}: "
-                        "integer-zero-divisor failure requires a resolved divisor role"
-                    ),
-                    source=source,
-                )
-            )
-            continue
-        info = SCALAR_TYPE_INFOS.get(case.type_tag)
-        if info is not None and info.floating:
-            diagnostics.append(
-                diagnostic_at(
-                    severity="error",
-                    code="TSL-CATALOG-TEST-FAILURE-DOMAIN",
-                    message=(
-                        f"primitive {primitive.name!r} test {case.name!r}: "
-                        "integer-zero-divisor failure requires an integer lane type"
-                    ),
-                    source=source,
-                )
-            )
-        if binding.parameter_kind != "sImm":
-            diagnostics.append(
-                diagnostic_at(
-                    severity="error",
-                    code="TSL-CATALOG-TEST-FAILURE-PHASE",
-                    message=(
-                        f"primitive {primitive.name!r} test {case.name!r}: role "
-                        f"{case.role!r} requires a compile-time sImm divisor binding, got "
-                        f"{binding.parameter_kind!r}"
-                    ),
-                    source=source,
-                )
-            )
 
 
 def _validate_domains(

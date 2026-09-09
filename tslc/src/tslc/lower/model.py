@@ -100,6 +100,8 @@ class LoweredSpecialization:
     lane_parameter: str | None = None
     axis: tuple[tuple[str, str], ...] = ()
     immediate: tuple[str, str] | None = None
+    immediate_range: tuple[int, int, bool] | None = None
+    immediate_valid_range: tuple[int, int, bool] | None = None
     arithmetic_preconditions: tuple[LoweredArithmeticPrecondition, ...] = ()
     generic_params: tuple[tuple[str, str, str], ...] = ()
     type_params: tuple[LoweredTypeParam, ...] = ()

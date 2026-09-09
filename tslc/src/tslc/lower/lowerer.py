@@ -26,6 +26,8 @@ from tslc.catalog.model import (
     BOOLEAN_WILDCARD_ATTRIBUTES,
     Catalog,
     ImmediateParam,
+    ImmediateRangeUpperKind,
+    ImmediateValueRange,
     Primitive,
     RESULT_DIM_VECTOR,
 )
@@ -243,7 +245,12 @@ class Lowerer:
         resolved_immediate = _resolve_immediate(selected, shape, backend, self._support)
         if isinstance(resolved_immediate, LoweringResult):
             return resolved_immediate
-        immediate, immediate_dispatch, immediate_range = resolved_immediate
+        (
+            immediate,
+            immediate_dispatch,
+            immediate_range,
+            immediate_valid_range,
+        ) = resolved_immediate
         immediate_name = immediate[0] if immediate is not None else None
         arithmetic_preconditions = _arithmetic_preconditions(selected, immediate)
 
@@ -520,6 +527,8 @@ class Lowerer:
                 if key in BOOLEAN_WILDCARD_ATTRIBUTES
             ),
             immediate=immediate,
+            immediate_range=immediate_range,
+            immediate_valid_range=immediate_valid_range,
             arithmetic_preconditions=arithmetic_preconditions,
             # `generic_params` split by kind: `bool`/`int` are non-type (const) params; a
             # `simd_type` is a free type param (see `type_params`).
@@ -672,23 +681,27 @@ def _checked_precondition_dependencies(
 
 
 def _resolve_immediate_range(
-    imm_param: ImmediateParam, type_tag: str
+    value_range: ImmediateValueRange,
+    selected: SelectedImplementation,
 ) -> tuple[int, int, bool] | None:
-    """Resolve an `ImmediateParam.value_range` to concrete `(lo, hi, inclusive)` for the
-    selected type. `hi_expr` is an int literal or the symbolic `base_bit_width(data)` (the
-    selected type's bit width, from its tag's digits, e.g. `si32` -> 32). None when undeclared
-    or unresolvable — the literal-match bridge then has no range and falls back to positional."""
+    """Resolve a typed source interval for one concrete source/target slot."""
 
-    if imm_param.value_range is None:
-        return None
-    lo, hi_expr, inclusive = imm_param.value_range
-    if hi_expr == "base_bit_width(data)":
-        hi = scalar_bit_width_or_default(type_tag)
-    elif hi_expr.lstrip("-").isdigit():
-        hi = int(hi_expr)
+    upper = value_range.upper
+    if upper.kind is ImmediateRangeUpperKind.LITERAL:
+        assert upper.literal is not None
+        hi = upper.literal
+    elif upper.kind is ImmediateRangeUpperKind.SOURCE_BASE_BIT_WIDTH:
+        hi = scalar_bit_width_or_default(selected.type_tag)
     else:
-        return None
-    return (lo, hi, inclusive)
+        if selected.to_target is None:
+            return None
+        source_bits = scalar_bit_width_or_default(selected.type_tag)
+        target_bits = scalar_bit_width_or_default(selected.to_target)
+        narrower, wider = sorted((source_bits, target_bits))
+        if narrower <= 0 or wider % narrower:
+            return None
+        hi = wider // narrower
+    return (value_range.lower, hi, value_range.inclusive)
 
 
 def _lane_list_param_map(
@@ -726,19 +739,24 @@ def _resolve_immediate(
     shape: SignatureShape,
     backend: BackendDialect,
     support: SupportPolicy = DEFAULT_SUPPORT_POLICY,
-) -> tuple[tuple[str, str] | None, str | None, tuple[int, int, bool] | None] | LoweringResult:
-    """Resolve an `sImm` operand into ``(operand, dispatch, value_range)``.
+) -> tuple[
+    tuple[str, str] | None,
+    str | None,
+    tuple[int, int, bool] | None,
+    tuple[int, int, bool] | None,
+] | LoweringResult:
+    """Resolve an `sImm` operand and its dispatch/validity intervals.
 
     ``operand`` is the ``(name, backend type spelling)`` the backend emits as a
     template/const-generic param (NOT a runtime arg); ``dispatch``/``value_range`` are the
     per-backend forwarding facts. All come from the `params:` block (`immediate_param`);
-    absent metadata defaults to `ui32` with positional forwarding. Returns ``(None, None,
-    None)`` when the signature has no `sImm`, or a :class:`LoweringResult` error when the
-    immediate type has no backend spelling.
+    absent metadata defaults to `ui32` with positional forwarding. Returns four ``None``
+    values when the signature has no `sImm`, or a :class:`LoweringResult` error when the
+    immediate type or a declared static interval cannot be resolved.
     """
 
     if not support.has_immediate_operand(shape):
-        return (None, None, None)
+        return (None, None, None, None)
     imm_name = selected.primitive.parameters[
         shape.param_kinds.index(support.immediate_kind)
     ]
@@ -757,11 +775,29 @@ def _resolve_immediate(
             ),
         )
     if imm_param is None:
-        return ((imm_name, imm_spelling), None, None)
+        return ((imm_name, imm_spelling), None, None, None)
+    value_range = (
+        _resolve_immediate_range(imm_param.value_range, selected)
+        if imm_param.value_range is not None
+        else None
+    )
+    valid_range = (
+        _resolve_immediate_range(imm_param.valid_range, selected)
+        if imm_param.valid_range is not None
+        else None
+    )
+    if imm_param.valid_range is not None and valid_range is None:
+        return _error(
+            "TSL-LOWER-INVALID-IMMEDIATE-RANGE",
+            f"could not resolve the static immediate range of "
+            f"{selected.primitive.name!r} for {selected.type_tag!r}",
+            source=imm_param.source or _implementation_source(selected),
+        )
     return (
         (imm_name, imm_spelling),
         imm_param.dispatch_for(backend.backend_id),
-        _resolve_immediate_range(imm_param, selected.type_tag),
+        value_range,
+        valid_range,
     )
 
 

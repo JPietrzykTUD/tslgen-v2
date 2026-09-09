@@ -673,6 +673,5 @@ prim<v:=(s,s)> custom_sequence(start, stepwidth):
           reasons []
         implementation:
           tsil """
-            var<infer>(_stepwidth, stepwidth);
             complete(start);
           """

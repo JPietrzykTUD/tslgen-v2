@@ -57,6 +57,7 @@ from tslc.backend.rust_signatures import (
     concrete_type as _rust_concrete,
     generic_decls as _generic_decls,
     impl_generic_parts as _impl_generic_parts,
+    immediate_precondition as _rust_immediate_precondition,
     kind_type as _kind_type,
     param_kind_type as _param_kind_type,
     params as _params,
@@ -1542,7 +1543,10 @@ class RustBackend:
             if implementation_trait_variant is not None
             else variant_name,
         )
-        preconditions = _rust_arithmetic_preconditions(spec)
+        preconditions = (
+            _rust_immediate_precondition(spec)
+            + _rust_arithmetic_preconditions(spec)
+        )
         return (
             (f"{doc}\n" if doc else "")
             + f"impl{impl_generics} {trait_name}"

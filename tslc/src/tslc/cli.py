@@ -224,6 +224,11 @@ def _generation_parser(
     parser.add_argument("--output-root", default=None, help="write artifacts under this root")
     parser.add_argument("--verify", action="store_true", help="build-verify after writing")
     parser.add_argument(
+        "--quality",
+        action="store_true",
+        help="run strict generated-product warning, lint, and documentation checks",
+    )
+    parser.add_argument(
         "--test",
         action="store_true",
         help="build and run generated value tests (implies --verify)",
@@ -335,6 +340,7 @@ def _generation_command_settings(
         output_root=output_root,
         verify=args.verify or command == "build",
         run_value_tests=args.test or command == "test" or args.fuzz,
+        run_quality_checks=args.quality,
         fuzz=args.fuzz,
         coverage=args.coverage,
         value_test_warnings=args.value_test_warnings,

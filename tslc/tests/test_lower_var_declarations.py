@@ -30,6 +30,10 @@ def test_uninit_scalar_routes_to_the_scalar_uninit_template(
     catalog: Catalog, machine_profiles
 ) -> None:
     slot = _scalar_slot(catalog, machine_profiles, "set_undef")
+    slot = _with_body(
+        slot,
+        "var<typed>(base::in, result, value(uninit::scalar));\ncomplete(result);",
+    )
 
     lowered = Lowerer().lower(
         slot, catalog, create_backend_dialect(catalog, "cpp")
@@ -63,6 +67,10 @@ def test_rust_uninit_scalar_lowers_to_a_valid_default_value(
     catalog: Catalog, machine_profiles
 ) -> None:
     slot = _scalar_slot(catalog, machine_profiles, "set_undef")
+    slot = _with_body(
+        slot,
+        "var<typed>(base::in, result, value(uninit::scalar));\ncomplete(result);",
+    )
 
     lowered = Lowerer().lower(
         slot, catalog, create_backend_dialect(catalog, "rust")

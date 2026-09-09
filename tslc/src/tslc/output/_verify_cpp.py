@@ -172,6 +172,23 @@ def _cpp_command_groups(
                 ),
             ]
         )
+        if config.run_quality_checks:
+            commands.append(
+                BuildCommand(
+                    backend_id="cpp",
+                    profile_name=profile.profile_name,
+                    step="check-warnings",
+                    argv=(
+                        "cmake",
+                        "--build",
+                        str(build_dir),
+                        "--target",
+                        "tsl_quality",
+                    ),
+                    cwd=root,
+                    env=env,
+                )
+            )
         if config.run_value_tests:
             commands.append(
                 BuildCommand(
@@ -271,6 +288,8 @@ def _cpp_configure_args(
         str(build_dir),
         f"-DTSL_PROFILE={profile.profile_name}",
     ]
+    if config.run_quality_checks:
+        args.append("-DTSL_STRICT_WARNINGS=ON")
     target = cpp_target(profile, config)
     if target is not None:
         args.extend(_cpp_cross_target_cmake_args(profile, target, compiler))

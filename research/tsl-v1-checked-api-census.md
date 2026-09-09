@@ -15,7 +15,7 @@ This generated maintenance report tracks reviewed evidence for the implemented d
 
 ## Inventory summary
 
-- Exact generated runtime-failure sites: 154
+- Exact generated runtime-failure sites: 155
 - Exact typed public callable identities with at least one `caller_unsafe` implementation: 33
 - Checked source-contract coverage gaps among those identities: 11
 - Applicable source safety-metadata gaps: 138 (26 require caller unsafety)
@@ -24,7 +24,7 @@ Runtime sites by classification:
 
 - dynamic precondition: 6
 - implementation hazard: 8
-- static well-formedness constraint: 22
+- static well-formedness constraint: 23
 - tooling-only validation: 118
 
 ## Reviewed semantic families
@@ -34,6 +34,7 @@ Runtime sites by classification:
 | `tooling_only` | tooling-only validation | Failure is confined to generated tests, builds, documentation stubs, or benchmarks. | not applicable |
 | `static_representation_or_lane_shape` | static well-formedness constraint | C++ or Rust currently diagnoses an impossible compiler-selected representation at runtime. | no checked twin; validate statically |
 | `static_immediate_nonzero` | static well-formedness constraint | Rust emits a const assertion; invalid authored immediates do not reach a call. | no checked twin; keep a compile-time diagnostic |
+| `static_immediate_range` | static well-formedness constraint | C++ and Rust emit a compile-time assertion for an invalid conversion chunk index. | no checked twin; keep a compile-time diagnostic |
 | `integer_zero_divisor` | dynamic precondition | Unchecked C++ and unsafe Rust assume nonzero active integer divisors; checked companions report a typed zero-divisor error before invocation. | implemented for runtime integer division/remainder; checks active divisor lanes |
 | `lane_index` | dynamic precondition | Rust facade calls panic today; an unchecked C++ or Rust primitive may access outside its logical lanes. | complete from the runtime index and typed logical lane count |
 | `contiguous_extent` | dynamic precondition | Rust slice facades panic when a contiguous input or output is too short. | complete with a valid slice/span signature; not honest for a bare pointer |
@@ -196,8 +197,8 @@ Sizes, lane counts, and mask-storage capacity are compiler-owned specialization 
 - `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6134` — owner `transform_unary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_unary requires a vector with at least one lane", );`
 - `tslc/src/tslc/backend/assets/tsl_algorithm.rs:662` — owner `validate_integral_mask_vector` — `assert` — `assert!( lanes <= <V::ImaskType as IntegralMaskWord>::BITS, "{} requires an integral mask storage type with at least one bit per lane", helper_name, );`
 - `tslc/src/tslc/backend/assets/tsl_algorithm.rs:657` — owner `validate_integral_mask_vector` — `assert` — `assert!( lanes > 0, "{} requires a vector with at least one lane", helper_name, );`
-- `tslc/src/tslc/backend/assets/tsl_core.hpp:498` — owner `require_same_lanes` — `throw` — `throw std::invalid_argument( "lane-preserving conversion requires equal source and target lane counts" );`
-- `tslc/src/tslc/backend/assets/tsl_core.hpp:496` — owner `require_same_lanes` — `trap` — `__builtin_trap();`
+- `tslc/src/tslc/backend/assets/tsl_core.hpp:499` — owner `require_same_lanes` — `throw` — `throw std::invalid_argument( "lane-preserving conversion requires equal source and target lane counts" );`
+- `tslc/src/tslc/backend/assets/tsl_core.hpp:497` — owner `require_same_lanes` — `trap` — `__builtin_trap();`
 - `tslc/src/tslc/backend/assets/tsl_core.rs:301` — owner `bit_cast` — `assert_eq` — `assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());`
 - `tslc/src/tslc/backend/assets/tsl_core.rs:315` — owner `reinterpret_unchecked` — `assert_eq` — `assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());`
 - `tslc/src/tslc/backend/assets/tsl_core.rs:764` — owner `require_same_lanes` — `assert_eq` — `assert_eq!( source_lanes, target_lanes, "lane-preserving conversion requires equal source and target lane counts" );`
@@ -207,7 +208,13 @@ Sizes, lane counts, and mask-storage capacity are compiler-owned specialization 
 The operand is an immediate rather than caller-controlled runtime data.
 
 - `tslc/src/tslc/backend/assets/tsl_algorithm.rs:680` — owner `selected_row_scale` — `assert` — `assert!(scale > 0, "tsl::algo selected-row scale must be nonzero");`
-- `tslc/src/tslc/backend/rust_signatures.py:150` — owner `_arithmetic_precondition` — `assert` — `f"const {{ assert!(({precondition.parameter_name} as "`
+- `tslc/src/tslc/backend/rust_signatures.py:165` — owner `_arithmetic_precondition` — `assert` — `f"const {{ assert!(({precondition.parameter_name} as "`
+
+### `static_immediate_range` (1)
+
+The source-authored valid range is resolved from the selected source and target base widths.
+
+- `tslc/src/tslc/backend/rust_signatures.py:150` — owner `immediate_precondition` — `assert` — `" const { assert!("`
 
 ### `lane_index` (4)
 

@@ -823,6 +823,70 @@ def test_arithmetic_checked_and_immediate_corpus_cases_have_typed_coverage(
     )
 
 
+def test_conversion_chunk_indices_have_static_failure_evidence(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["convert_up", "convert_down"],
+        profiles=["scalar"],
+        backends=["cpp", "rust"],
+        test_harness=True,
+        value_test_warnings=True,
+    )
+    assert result.rendered is not None
+    plan = result.rendered.value_tests
+    for backend in ("cpp", "rust"):
+        failures = [
+            case
+            for profile in plan.profiles_for(backend)
+            for case in profile.compile_failure_cases
+            if case.call_name in {"convert_up", "convert_down"}
+        ]
+        assert len(failures) == 2
+        assert {case.invocation.immediate for case in failures} == {"2"}
+        assert all(case.target is not None for case in failures)
+        assert all(
+            case.failure
+            == ValueTestFailure(
+                FailureReason.CONVERSION_CHUNK_INDEX_OUT_OF_RANGE,
+                phase="compile",
+            )
+            for case in failures
+        )
+
+    artifacts = {
+        artifact.logical_path: artifact.content
+        for artifact in result.artifacts.artifacts
+    }
+    cpp_failures = [
+        content
+        for path, content in artifacts.items()
+        if path.startswith("cpp/tests/tsl_compile_failure_")
+        and "convert_" in path
+    ]
+    rust_failures = [
+        content
+        for path, content in artifacts.items()
+        if path.startswith("rust/examples/tsl_compile_failure_")
+        and "convert_" in path
+    ]
+    assert len(cpp_failures) == 2
+    assert len(rust_failures) == 2
+    assert all("using ToVec =" in source for source in cpp_failures)
+    assert all("type ToVec =" in source for source in rust_failures)
+    assert "TSL_CONVERSION_CHUNK_INDEX_OUT_OF_RANGE" in artifacts[
+        "cpp/include/tsl_scalar.hpp"
+    ]
+    assert "TSL_CONVERSION_CHUNK_INDEX_OUT_OF_RANGE" in artifacts[
+        "rust/src/tsl_scalar.rs"
+    ]
+    assert "convert_up_checked" not in artifacts["cpp/include/tsl_scalar.hpp"]
+    assert "convert_down_checked" not in artifacts["rust/src/tsl_scalar.rs"]
+
+
 def test_emitted_name_split_preserves_source_primitive_identity() -> None:
     runtime = _spec("shift", "shift", param_kinds=("v", "v"))
     immediate = _spec(

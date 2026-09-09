@@ -48,6 +48,7 @@ from tslc.catalog.memory import (
     MemoryIndexedLaneExtent,
     MemoryPayloadExtent,
 )
+from tslc.catalog.model import IMMEDIATE_CONVERSION_CHUNK_INDEX_MARKER
 from tslc.lower.lowerer import (
     LoweredArithmeticPrecondition,
     LoweredArithmeticPreconditionKind,
@@ -774,11 +775,12 @@ class CppBackend:
                 continue
             seen.add(signature)
             index_type = spec.type_params[0].name if spec.type_params else None
-            parameter_attribute = (
-                "[[maybe_unused]] "
-                if spec.primitive_semantics.preconditions
-                else ""
-            )
+            # Implementation specializations preserve the primitive's uniform
+            # parameter list even where a degenerate representation (most often
+            # scalar) does not need every operand.  Mark that generated ABI fact
+            # at the declaration instead of requiring source bodies to manufacture
+            # dummy reads or forcing consumers to suppress library warnings.
+            parameter_attribute = "[[maybe_unused]] "
             params = ", ".join(
                 f"{parameter_attribute}"
                 f"{_param_type_for(spec, i, kind, index_type)} {name}"
@@ -794,7 +796,10 @@ class CppBackend:
             )
             doc = _cpp_doc(spec, context=doc_context, indent="    ")
             prefix = f"{doc}\n" if doc else ""
-            preconditions = _cpp_arithmetic_preconditions(spec)
+            preconditions = (
+                _cpp_immediate_precondition(spec)
+                + _cpp_arithmetic_preconditions(spec)
+            )
             applies.append(
                 f"{prefix}"
                 f"    static inline {_apply_result_type(spec)} apply({params}) {{\n"
@@ -1721,6 +1726,20 @@ def _cpp_arithmetic_preconditions(spec: LoweredSpecialization) -> str:
     return "".join(
         f"        {_cpp_arithmetic_precondition(precondition)}\n"
         for precondition in spec.arithmetic_preconditions
+    )
+
+
+def _cpp_immediate_precondition(spec: LoweredSpecialization) -> str:
+    if spec.immediate is None or spec.immediate_valid_range is None:
+        return ""
+    name = spec.immediate[0]
+    lower, upper, inclusive = spec.immediate_valid_range
+    upper_operator = "<=" if inclusive else "<"
+    return (
+        "        static_assert("
+        f"(static_cast<std::intmax_t>({name}) >= {lower}) && "
+        f"(static_cast<std::intmax_t>({name}) {upper_operator} {upper}), "
+        f'"{IMMEDIATE_CONVERSION_CHUNK_INDEX_MARKER}");\n'
     )
 
 

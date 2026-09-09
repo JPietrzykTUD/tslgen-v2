@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "policy": {
     "checked_suffix": "_checked",
     "eligibility": "catastrophic dynamic caller precondition; complete pre-side-effect check must be expressible from the checked signature",
@@ -46,6 +46,13 @@
       "backend_consequence": "Rust emits a const assertion; invalid authored immediates do not reach a call.",
       "checked_feasibility": "no checked twin; keep a compile-time diagnostic",
       "review": "The operand is an immediate rather than caller-controlled runtime data."
+    },
+    {
+      "id": "static_immediate_range",
+      "classification": "static well-formedness constraint",
+      "backend_consequence": "C++ and Rust emit a compile-time assertion for an invalid conversion chunk index.",
+      "checked_feasibility": "no checked twin; keep a compile-time diagnostic",
+      "review": "The source-authored valid range is resolved from the selected source and target base widths."
     },
     {
       "id": "integer_zero_divisor",
@@ -939,6 +946,14 @@
       "kind": "assert",
       "excerpt": "f\"const {{ assert!(({precondition.parameter_name} as \"",
       "family": "static_immediate_nonzero"
+    },
+    {
+      "id": "tslc/src/tslc/backend/rust_signatures.py|immediate_precondition|assert|73d778959cf08afe|0",
+      "path": "tslc/src/tslc/backend/rust_signatures.py",
+      "owner": "immediate_precondition",
+      "kind": "assert",
+      "excerpt": "\" const { assert!(\"",
+      "family": "static_immediate_range"
     },
     {
       "id": "tslc/src/tslc/benchmark/render_cpp.py|_render_policy_read|throw|898c346ad524f331|0",

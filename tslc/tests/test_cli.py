@@ -127,6 +127,7 @@ def test_cli_test_flag_enables_existing_value_test_paths(
             "--output-root",
             str(tmp_path),
             "--test",
+            "--quality",
             "--runner",
             "sde=/tmp/sde64",
         ]
@@ -140,6 +141,7 @@ def test_cli_test_flag_enables_existing_value_test_paths(
     assert generate_kwargs["value_test_warnings"] is True
     _, _, verify_kwargs = calls["verify"]
     assert verify_kwargs["run_value_tests"] is True
+    assert verify_kwargs["run_quality_checks"] is True
     assert verify_kwargs["runner_paths"] == {"sde": "/tmp/sde64"}
     assert "building and running generated value tests" in captured.out
     assert "through sde: /tmp/sde64" in captured.out
@@ -567,6 +569,7 @@ def test_cli_build_command_implies_verify_as_derived_setting(
     assert rc == 0
     _, _, verify_kwargs = calls["verify"]
     assert verify_kwargs["run_value_tests"] is False
+    assert verify_kwargs["run_quality_checks"] is False
     assert "build-verified 0 commands" in captured.out
 
 
@@ -583,6 +586,7 @@ def _core_settings(**overrides: object) -> GenerationCommandSettings:
         output_root=None,
         verify=False,
         run_value_tests=False,
+        run_quality_checks=False,
         fuzz=False,
         coverage=False,
         value_test_warnings=False,

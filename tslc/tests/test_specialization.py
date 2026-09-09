@@ -481,7 +481,8 @@ def test_cpp_static_lane_mismatch_traps_on_non_unwinding_targets(
     assert "!defined(__cpp_exceptions) && !defined(_CPPUNWIND)" in core
     assert (
         "if (source_lanes != target_lanes) {\n"
-            "#if defined(__SYCL_DEVICE_ONLY__) || defined(__wasm__) || \\\n"
+            "#if defined(__SYCL_DEVICE_ONLY__) || defined(__wasm__) || defined(__wasm32__) || \\\n"
+            "    defined(__wasm64__) || \\\n"
             "    (!defined(__cpp_exceptions) && !defined(_CPPUNWIND))\n"
         "        __builtin_trap();"
         in core

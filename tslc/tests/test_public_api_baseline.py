@@ -73,9 +73,21 @@ def test_public_api_matches_reviewed_v1_baseline() -> None:
         ],
     }
     assert baseline["cpp_checked_algorithm_families"]
-    assert baseline["version"] == 3
+    assert baseline["version"] == 4
     exact = baseline["exact_backend_declarations"]
-    assert exact["profiles"] == ["scalar", "avx2"]
+    profiles_by_backend = exact["profiles_by_backend"]
+    assert set(profiles_by_backend) == {"cpp", "rust"}
+    assert profiles_by_backend["rust"] == [
+        "avx",
+        "avx2",
+        "knl",
+        "sse",
+        "sse2",
+        "sse3",
+    ]
+    assert {"scalar", "sve", "sve128", "sve256", "sve512", "rvv"} <= set(
+        profiles_by_backend["cpp"]
+    )
     assert exact["cpp"]["schema_version"] == 1
     assert exact["rust"]["schema_version"] == 1
     for backend in ("cpp", "rust"):
