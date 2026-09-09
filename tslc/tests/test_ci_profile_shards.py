@@ -195,6 +195,23 @@ def test_rust_release_quality_runs_msrv_and_current_stable() -> None:
     assert 'rustup toolchain install "${RUST_MSRV}"' in dockerfile
 
 
+def test_scalable_showcase_is_a_required_generated_profile_gate() -> None:
+    workflow = Path(".github/workflows/generated-values.yml").read_text(
+        encoding="utf-8"
+    )
+    section = workflow.split("  generated-scalable-showcase:\n", 1)[1].split(
+        "\n  generated-", 1
+    )[0]
+    required = workflow.split("  required-generated:\n", 1)[1]
+
+    assert "needs.scope.outputs.generated_profiles == 'true'" in section
+    assert "tslc/tests/test_scalable_release_showcase.py" in section
+    assert "tslc/tests/test_chorys_rvv_consumer.py" in section
+    assert "--run-generated-builds" in section
+    assert "generated-scalable-showcase" in required
+    assert "needs['generated-scalable-showcase'].result" in required
+
+
 def test_clang_and_msvc_quality_matrices_cover_non_oneapi_x86_profiles(
     machine_profiles_path: Path,
 ) -> None:
@@ -297,6 +314,20 @@ def test_package_and_docs_generate_a_supported_distributable_profile_set() -> No
     assert "package_paths_before" in consumer_verifier
     assert "package_paths_after" in consumer_verifier
     assert "tsl-v1-package-probe.txt" in consumer_verifier
+
+    archive_verifier = Path(
+        "supplementary/ci/verify_release_archive_consumers.sh"
+    ).read_text(encoding="utf-8")
+    assert "tar -xzf" in archive_verifier
+    assert "archive_cpp_consumer" in archive_verifier
+    assert "cargo new" in archive_verifier
+    assert 'cargo run --quiet --locked' in archive_verifier
+    assert "Consume the packaged archive from clean projects" in package_workflow
+    assert "verify_release_archive_consumers.sh" in package_workflow
+    assert '-e TSLC_RELEASE_ARCHIVE="tslctmp/artifacts/tsl-generated-${GITHUB_SHA}.tar.gz"' in (
+        package_workflow
+    )
+    assert '"${TSLC_RELEASE_ARCHIVE}"' in package_workflow
 
 
 def test_rust_examples_use_static_profile_selection_api() -> None:

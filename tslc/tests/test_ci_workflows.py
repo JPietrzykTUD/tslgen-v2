@@ -45,6 +45,9 @@ def test_generated_values_subsume_the_profile_build_matrix() -> None:
     assert "Generated Clang overlay build and values" in values
     assert "Generated benchmarks (x86 policy and ARM smoke)" in values
     assert not Path(".github/workflows/generated-build.yml").exists()
+    readme = Path("README.md").read_text(encoding="utf-8")
+    assert "actions/workflows/generated-build.yml" not in readme
+    assert "actions/workflows/docs.yml" not in readme
 
 
 def test_python_shard_paths_are_not_interpolated_as_shell_code() -> None:

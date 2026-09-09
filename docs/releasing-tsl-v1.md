@@ -90,6 +90,50 @@ execution attestations, not inputs that affect selection or lowering. The
 release manifest links their hashes, compiler-input identity, generated
 manifest identity, and reviewer to the source commit and product asset set.
 
+Start from the non-accepted examples in
+`supplementary/release/attestation-templates/`. Copy them to the exact filenames
+configured by `supplementary/release/tsl-v1-production.json` only after replacing
+every placeholder with observed evidence. The release validator requires:
+
+- the exact generated-manifest digest and one shared compiler-input digest
+  across the SVE and RVV records;
+- native machine identity, feature report, OS, compiler version, exact flags,
+  and observed vector length(s);
+- non-empty generated-value and differential suites with every planned case
+  passed and no failure or skip;
+- the filter/gather/transform showcase, its binary digest, scalar-oracle and
+  canary results, and one exact run record for every observed vector length; and
+- for RVV, a passing run in the actual CHORYS project with its repository,
+  revision, command, scalar-oracle comparison, and canary result.
+
+The checked-in CHORYS-shaped QEMU fixture is a portability regression test. It
+does not satisfy `actual_project: true` and cannot be substituted for the
+native upstream CHORYS record.
+
+The evidence does not contain the final Git commit: doing so would be circular,
+because committing that evidence changes the commit. Instead, the compiler-
+input digest proves that both native runs used the same generation inputs, the
+generated-manifest digest proves that they used the package artifact inventory,
+and the release manifest hashes both evidence files alongside the final source
+commit. Adding the completed attestations must not change either tested digest.
+
+The showcase is a generated-library consumer rather than compiler semantics:
+
+```bash
+PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds \
+  tslc/tests/test_scalable_release_showcase.py
+```
+
+It cross-builds one SVE binary and one RVV binary, then reuses each binary at
+the three vector lengths owned by the machine-profile catalog. On native
+hardware, run the same fixture against the release-candidate archive, record
+the executable SHA-256 before every invocation, and report the observed vector
+length in the corresponding native evidence file.
+
+The generated package archive itself is consumed after extraction by clean
+CMake and Cargo projects in the package workflow. This tests the bytes that are
+staged for release rather than relying only on the pre-archive generation tree.
+
 Until the native evidence exists and the product status is changed to
 `stable`, `v1.0.0` fails before publication. Do not weaken that gate to turn
 QEMU evidence into a native claim.

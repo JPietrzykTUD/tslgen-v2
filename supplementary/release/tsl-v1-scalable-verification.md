@@ -41,6 +41,17 @@ runner, skipped profile, timeout, failed command, or other incomplete profile
 causes `tslc test` to fail rather than being counted as release evidence. Each
 direct scalable execution has a 60-second verifier-owned timeout.
 
+The required scalable showcase is an external generated-library consumer. It
+filters positive `si32` values, reverse-gathers the selection, applies an affine
+transform, and checks every element against a scalar oracle. Its masked tail
+uses deliberately invalid inactive gather indices and a pass-through canary,
+so an implementation that evaluates inactive addresses or corrupts inactive
+lanes fails. Input, intermediate, and output buffers also carry boundary
+canaries. CI compiles one SVE and one RVV binary and reuses each at the catalog-
+owned 128-, 256-, and 512-bit executions. The two generated-build tests pass,
+covering six executions with runtime lane counts 4, 8, and 16 and a one-lane
+tail in every execution.
+
 The full local RVV corpus generated 19,643 specializations and 4,448 value
 cases. The same binary passed at VLEN 128, 256, and 512. The scalable SVE
 corpus generated 19,648 specializations and 4,280 value cases; its one binary
@@ -92,7 +103,8 @@ runners:
 ./dev.sh test --profiles rvv --backends cpp \
   --output-root ./tslctmp/v1-rvv
 PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds \
-  tslc/tests/test_algorithm_checked_api.py::test_cpp_transform_checked_pilot_preserves_outputs_on_failure
+  tslc/tests/test_algorithm_checked_api.py::test_cpp_transform_checked_pilot_preserves_outputs_on_failure \
+  tslc/tests/test_scalable_release_showcase.py
 ```
 
 The attestation files under each output root are the run records. QEMU results

@@ -35,6 +35,8 @@ class ReleaseProductionError(RuntimeError):
 class NativeEvidenceSpec:
     evidence_id: str
     filename: str
+    target: str
+    requires_chorys: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,13 +84,38 @@ def load_config(
             raise ReleaseProductionError("native_evidence entries must be objects")
         evidence_id = _required_string(item, "id")
         filename = _required_string(item, "filename")
+        target = _required_string(item, "target")
+        requires_chorys = item.get("requires_chorys")
         if Path(filename).name != filename:
             raise ReleaseProductionError("native evidence filenames must be basenames")
-        evidence.append(NativeEvidenceSpec(evidence_id, filename))
+        if target not in {"sve", "rvv"}:
+            raise ReleaseProductionError(
+                "native evidence target must be 'sve' or 'rvv'"
+            )
+        if not isinstance(requires_chorys, bool):
+            raise ReleaseProductionError(
+                "native evidence requires_chorys must be a boolean"
+            )
+        if requires_chorys and target != "rvv":
+            raise ReleaseProductionError(
+                "only RVV native evidence may require CHORYS integration"
+            )
+        evidence.append(
+            NativeEvidenceSpec(evidence_id, filename, target, requires_chorys)
+        )
     if len({item.evidence_id for item in evidence}) != len(evidence):
         raise ReleaseProductionError("native evidence IDs must be unique")
     if len({item.filename for item in evidence}) != len(evidence):
         raise ReleaseProductionError("native evidence filenames must be unique")
+    if len({item.target for item in evidence}) != len(evidence):
+        raise ReleaseProductionError("native evidence targets must be unique")
+    if {item.target: item.requires_chorys for item in evidence} != {
+        "sve": False,
+        "rvv": True,
+    }:
+        raise ReleaseProductionError(
+            "native evidence must require exactly SVE and RVV/CHORYS targets"
+        )
     return ReleaseProductionConfig(
         release_policy=_rooted(root, payload, "release_policy"),
         generated_config=_rooted(root, payload, "generated_config"),
@@ -374,6 +401,7 @@ def assemble_release(
         _copy_new(source, output_dir / spec.filename)
         payloads.append((spec.evidence_id, spec.filename, "application/json"))
         evidence_records.append(evidence)
+    _verify_shared_native_input_identity(evidence_records)
 
     artifact_records = [
         {
@@ -567,6 +595,7 @@ def verify_release_assets(
                 generated_manifest_sha256=generated_manifest_sha256,
             )
         )
+    _verify_shared_native_input_identity(expected_evidence)
     if manifest.get("native_evidence") != expected_evidence:
         raise ReleaseProductionError("release native-evidence records are stale")
     expected_files = set(filenames) | {"release-manifest.json", "SHA256SUMS"}
@@ -598,6 +627,7 @@ def _validate_native_evidence(
     required = {
         "schema_version": 1,
         "id": spec.evidence_id,
+        "target": spec.target,
         "product_version": metadata.product_version,
         "generated_manifest_sha256": generated_manifest_sha256,
         "result": "passed",
@@ -615,17 +645,220 @@ def _validate_native_evidence(
     skips = payload.get("skips")
     if skips != []:
         raise ReleaseProductionError(f"native evidence {path.name} contains skips")
-    reviewer = payload.get("reviewer")
-    if not isinstance(reviewer, str) or not reviewer.strip():
-        raise ReleaseProductionError(f"native evidence {path.name} has no reviewer")
+    reviewer = _evidence_string(payload, "reviewer", path)
+
+    machine = _evidence_object(payload, "machine", path)
+    for field in ("manufacturer", "model", "architecture", "feature_report"):
+        _evidence_string(machine, field, path)
+    expected_architecture = "aarch64" if spec.target == "sve" else "riscv64"
+    if machine.get("architecture") != expected_architecture:
+        raise ReleaseProductionError(
+            f"native evidence {path.name} architecture must be "
+            f"{expected_architecture!r}"
+        )
+    software = _evidence_object(payload, "software", path)
+    _evidence_string(software, "operating_system", path)
+    compiler = _evidence_object(software, "compiler", path)
+    for field in ("executable", "version"):
+        _evidence_string(compiler, field, path)
+    compiler_flags = compiler.get("flags")
+    if not isinstance(compiler_flags, list) or any(
+        not _valid_evidence_text(flag) for flag in compiler_flags
+    ):
+        raise ReleaseProductionError(
+            f"native evidence {path.name} has invalid compiler flags"
+        )
+
+    vector_bits = payload.get("runtime_vector_bits")
+    if (
+        not isinstance(vector_bits, list)
+        or not vector_bits
+        or any(
+            isinstance(bits, bool)
+            or not isinstance(bits, int)
+            or bits <= 0
+            or not _valid_native_vector_bits(spec.target, bits)
+            for bits in vector_bits
+        )
+        or vector_bits != sorted(set(vector_bits))
+    ):
+        raise ReleaseProductionError(
+            f"native evidence {path.name} has invalid runtime_vector_bits"
+        )
+
+    suites = _evidence_object(payload, "suites", path)
+    for suite_name in ("generated_values", "differential_values"):
+        _validate_native_value_suite(
+            _evidence_object(suites, suite_name, path),
+            suite_name=suite_name,
+            path=path,
+        )
+    showcase = _evidence_object(suites, "scalable_showcase", path)
+    showcase_binary = showcase.get("binary_sha256")
+    if (
+        showcase.get("result") != "passed"
+        or showcase.get("same_binary") is not True
+        or showcase.get("scalar_oracle") is not True
+        or showcase.get("canaries_preserved") is not True
+        or not isinstance(showcase_binary, str)
+        or HEX_DIGEST.fullmatch(showcase_binary) is None
+    ):
+        raise ReleaseProductionError(
+            f"native evidence {path.name} has invalid scalable_showcase result"
+        )
+    _validate_native_showcase_runs(
+        showcase.get("runs"), vector_bits=vector_bits, path=path
+    )
+
+    chorys_revision: str | None = None
+    if spec.requires_chorys:
+        chorys = _evidence_object(suites, "chorys_integration", path)
+        if (
+            chorys.get("result") != "passed"
+            or chorys.get("actual_project") is not True
+            or chorys.get("scalar_oracle") is not True
+            or chorys.get("canaries_preserved") is not True
+        ):
+            raise ReleaseProductionError(
+                f"native evidence {path.name} has invalid CHORYS integration result"
+            )
+        _evidence_string(chorys, "source_repository", path)
+        chorys_revision = _evidence_string(chorys, "source_revision", path)
+        _evidence_string(chorys, "command", path)
+
     return {
         "id": spec.evidence_id,
         "filename": spec.filename,
         "sha256": _file_sha256(path),
+        "target": spec.target,
         "compiler_input_sha256": input_digest,
         "generated_manifest_sha256": generated_manifest_sha256,
+        "runtime_vector_bits": vector_bits,
+        "showcase_binary_sha256": showcase_binary,
+        **(
+            {"chorys_source_revision": chorys_revision}
+            if chorys_revision is not None
+            else {}
+        ),
         "reviewer": reviewer,
     }
+
+
+def _validate_native_value_suite(
+    suite: Mapping[str, Any], *, suite_name: str, path: Path
+) -> None:
+    counts = {
+        field: suite.get(field)
+        for field in ("planned_cases", "passed_cases", "failed_cases", "skipped_cases")
+    }
+    commands = suite.get("commands")
+    if (
+        suite.get("result") != "passed"
+        or any(
+            isinstance(count, bool) or not isinstance(count, int)
+            for count in counts.values()
+        )
+        or counts["planned_cases"] <= 0
+        or counts["passed_cases"] != counts["planned_cases"]
+        or counts["failed_cases"] != 0
+        or counts["skipped_cases"] != 0
+        or not isinstance(commands, list)
+        or not commands
+        or any(not _valid_evidence_text(command) for command in commands)
+    ):
+        raise ReleaseProductionError(
+            f"native evidence {path.name} has invalid {suite_name} suite"
+        )
+
+
+def _validate_native_showcase_runs(
+    value: object, *, vector_bits: list[int], path: Path
+) -> None:
+    if not isinstance(value, list) or len(value) != len(vector_bits):
+        raise ReleaseProductionError(
+            f"native evidence {path.name} has invalid scalable_showcase runs"
+        )
+    observed_bits: list[int] = []
+    for run in value:
+        if not isinstance(run, dict):
+            raise ReleaseProductionError(
+                f"native evidence {path.name} has invalid scalable_showcase run"
+            )
+        bits = run.get("vector_bits")
+        lanes = run.get("runtime_lanes")
+        count_values = tuple(
+            run.get(field) for field in ("input_count", "selected", "tail")
+        )
+        if (
+            isinstance(bits, bool)
+            or not isinstance(bits, int)
+            or isinstance(lanes, bool)
+            or not isinstance(lanes, int)
+            or any(
+                isinstance(count, bool) or not isinstance(count, int)
+                for count in count_values
+            )
+            or lanes != bits // 32
+            or run.get("input_count") != lanes * 3 + 2
+            or run.get("selected") != lanes * 2 + 1
+            or run.get("tail") != 1
+            or isinstance(run.get("output_digest"), bool)
+            or not isinstance(run.get("output_digest"), int)
+            or run["output_digest"] <= 0
+            or not _valid_evidence_text(run.get("command"))
+        ):
+            raise ReleaseProductionError(
+                f"native evidence {path.name} has invalid scalable_showcase run"
+            )
+        observed_bits.append(bits)
+    if observed_bits != vector_bits:
+        raise ReleaseProductionError(
+            f"native evidence {path.name} showcase vector lengths do not match"
+        )
+
+
+def _evidence_object(
+    payload: Mapping[str, Any], field: str, path: Path
+) -> Mapping[str, Any]:
+    value = payload.get(field)
+    if not isinstance(value, dict):
+        raise ReleaseProductionError(
+            f"native evidence {path.name} has invalid {field} object"
+        )
+    return value
+
+
+def _evidence_string(payload: Mapping[str, Any], field: str, path: Path) -> str:
+    value = payload.get(field)
+    if not _valid_evidence_text(value):
+        raise ReleaseProductionError(
+            f"native evidence {path.name} has invalid {field}"
+        )
+    assert isinstance(value, str)
+    return value
+
+
+def _valid_evidence_text(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and bool(value.strip())
+        and "REPLACE_WITH" not in value
+    )
+
+
+def _valid_native_vector_bits(target: str, bits: int) -> bool:
+    if target == "sve":
+        return 128 <= bits <= 2048 and bits % 128 == 0
+    return 128 <= bits <= 65536 and bits & (bits - 1) == 0
+
+
+def _verify_shared_native_input_identity(
+    records: Sequence[Mapping[str, object]],
+) -> None:
+    if len({record["compiler_input_sha256"] for record in records}) > 1:
+        raise ReleaseProductionError(
+            "native evidence records do not share one compiler-input identity"
+        )
 
 
 def _verify_generated_package_metadata(

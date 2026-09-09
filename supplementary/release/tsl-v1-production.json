@@ -15,11 +15,15 @@
   "native_evidence": [
     {
       "id": "sve-native",
-      "filename": "tsl-v1-native-sve.json"
+      "filename": "tsl-v1-native-sve.json",
+      "target": "sve",
+      "requires_chorys": false
     },
     {
       "id": "rvv-chorys-native",
-      "filename": "tsl-v1-native-rvv-chorys.json"
+      "filename": "tsl-v1-native-rvv-chorys.json",
+      "target": "rvv",
+      "requires_chorys": true
     }
   ]
 }

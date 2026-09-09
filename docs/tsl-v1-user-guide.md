@@ -27,6 +27,42 @@ Every matrix row supports the ten stable scalar element types. That does not
 mean every callable accepts every type: a primitive's source-owned type group,
 result-target constraints, and the reviewed exact exclusions still apply.
 
+## Consume the release archive
+
+The v1 generated-library tarball is a source package, not a system-prefix
+installer. Verify it with the published `SHA256SUMS`, extract its single
+`tsl-generated-1.0.0/` root, and consume only the backend subdirectory needed by
+the application.
+
+For C++, point CMake `FetchContent` at the extracted `cpp/` directory and link
+the stable `tsl::tsl` target:
+
+```cmake
+include(FetchContent)
+set(TSL_PROFILE scalar CACHE STRING "Generated TSL profile" FORCE)
+set(TSL_BUILD_TESTS OFF CACHE BOOL "Generated TSL tests" FORCE)
+FetchContent_Declare(
+  tsl
+  SOURCE_DIR "/path/to/tsl-generated-1.0.0/cpp"
+)
+FetchContent_MakeAvailable(tsl)
+target_link_libraries(my_target PRIVATE tsl::tsl)
+```
+
+For Rust, use the extracted crate as a path dependency. Profile selection comes
+from Rust compile-target features as described below; do not add a profile-named
+Cargo feature.
+
+```toml
+[dependencies]
+tsl = { path = "/path/to/tsl-generated-1.0.0/rust" }
+```
+
+The release package workflow performs these steps from a fresh extraction and
+builds/runs independent C++ and Rust consumers. Moving the extracted directory
+after CMake configuration or Cargo resolution requires reconfiguration, as for
+any source/path dependency.
+
 ## C++ consumption and profile selection
 
 The stable C++ entry point is `#include <tsl.hpp>` and the stable namespace is

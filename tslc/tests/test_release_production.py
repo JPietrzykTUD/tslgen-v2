@@ -51,6 +51,93 @@ def _write_vsix(path: Path, *, target: str, commit: str) -> None:
         )
 
 
+def _native_evidence_payload(
+    *,
+    evidence_id: str,
+    target: str,
+    product_version: str = "1.0.0",
+    compiler_input_sha256: str = "b" * 64,
+    generated_manifest_sha256: str = "c" * 64,
+    requires_chorys: bool = False,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "schema_version": 1,
+        "id": evidence_id,
+        "target": target,
+        "product_version": product_version,
+        "compiler_input_sha256": compiler_input_sha256,
+        "generated_manifest_sha256": generated_manifest_sha256,
+        "result": "passed",
+        "skips": [],
+        "reviewer": "TSL release reviewer",
+        "machine": {
+            "manufacturer": "Example Systems",
+            "model": "Native target",
+            "architecture": "aarch64" if target == "sve" else "riscv64",
+            "feature_report": "native scalable vector extension present",
+        },
+        "software": {
+            "operating_system": "Example Linux 1",
+            "compiler": {
+                "executable": "g++",
+                "version": "g++ 15.2",
+                "flags": ["-O2"],
+            },
+        },
+        "runtime_vector_bits": [128, 256],
+        "suites": {
+            "generated_values": {
+                "result": "passed",
+                "planned_cases": 10,
+                "passed_cases": 10,
+                "failed_cases": 0,
+                "skipped_cases": 0,
+                "commands": ["./dev.sh test --profiles scalable"],
+            },
+            "differential_values": {
+                "result": "passed",
+                "planned_cases": 4,
+                "passed_cases": 4,
+                "failed_cases": 0,
+                "skipped_cases": 0,
+                "commands": ["./tsl_values --differential"],
+            },
+            "scalable_showcase": {
+                "result": "passed",
+                "same_binary": True,
+                "binary_sha256": "d" * 64,
+                "scalar_oracle": True,
+                "canaries_preserved": True,
+                "runs": [
+                    {
+                        "vector_bits": bits,
+                        "runtime_lanes": bits // 32,
+                        "input_count": bits // 32 * 3 + 2,
+                        "selected": bits // 32 * 2 + 1,
+                        "tail": 1,
+                        "output_digest": bits + 1,
+                        "command": f"./scalable-showcase --vector-bits {bits}",
+                    }
+                    for bits in (128, 256)
+                ],
+            },
+        },
+    }
+    if requires_chorys:
+        suites = payload["suites"]
+        assert isinstance(suites, dict)
+        suites["chorys_integration"] = {
+            "result": "passed",
+            "actual_project": True,
+            "source_repository": "https://example.invalid/chorys",
+            "source_revision": "chorys-native-revision",
+            "command": "cmake --build build && ctest --test-dir build",
+            "scalar_oracle": True,
+            "canaries_preserved": True,
+        }
+    return payload
+
+
 def test_release_metadata_keeps_product_and_component_versions_distinct() -> None:
     config = release_production.load_config()
 
@@ -192,12 +279,14 @@ def test_release_assembly_is_exact_verified_and_never_replaced(tmp_path: Path) -
 
 def test_final_release_fails_closed_without_native_evidence(tmp_path: Path) -> None:
     config = release_production.load_config()
-    candidate = release_production.release_metadata("v1.0.0-rc.1", config=config)
-    final = replace(
-        candidate,
-        tag="v1.0.0",
-        release_kind="final",
-        product_status="stable",
+    policy = json.loads(config.release_policy.read_text(encoding="utf-8"))
+    policy["product"]["status"] = "stable"
+    stable_policy = tmp_path / "stable-policy.json"
+    stable_policy.write_text(json.dumps(policy), encoding="utf-8")
+    config = replace(config, release_policy=stable_policy)
+    final = release_production.release_metadata(
+        "v1.0.0",
+        config=config,
     )
     generated_source = tmp_path / "generated"
     generated_source.mkdir()
@@ -244,6 +333,169 @@ def test_final_release_fails_closed_without_native_evidence(tmp_path: Path) -> N
             editor_assets=editor,
             evidence_dir=None,
             output_dir=tmp_path / "final",
+        )
+
+    evidence_dir = tmp_path / "evidence"
+    evidence_dir.mkdir()
+    generated_manifest_sha256 = release_production._generated_manifest_digest(
+        generated_archive
+    )
+    for spec in config.native_evidence:
+        payload = _native_evidence_payload(
+            evidence_id=spec.evidence_id,
+            target=spec.target,
+            generated_manifest_sha256=generated_manifest_sha256,
+            requires_chorys=spec.requires_chorys,
+        )
+        (evidence_dir / spec.filename).write_text(
+            json.dumps(payload), encoding="utf-8"
+        )
+    complete = tmp_path / "complete-final"
+    release_production.assemble_release(
+        metadata=final,
+        config=config,
+        commit="a" * 40,
+        epoch=1,
+        generated_archive=generated_archive,
+        docs_archive=docs_archive,
+        editor_assets=editor,
+        evidence_dir=evidence_dir,
+        output_dir=complete,
+    )
+    release_production.verify_release_assets(
+        complete, tag="v1.0.0", config=config
+    )
+    manifest = json.loads(
+        (complete / "release-manifest.json").read_text(encoding="utf-8")
+    )
+    assert [item["target"] for item in manifest["native_evidence"]] == [
+        "sve",
+        "rvv",
+    ]
+
+
+def test_native_evidence_requires_reproducible_suites_and_actual_chorys(
+    tmp_path: Path,
+) -> None:
+    config = release_production.load_config()
+    metadata = replace(
+        release_production.release_metadata("v1.0.0-rc.1", config=config),
+        tag="v1.0.0",
+        release_kind="final",
+        product_status="stable",
+    )
+    records: list[dict[str, object]] = []
+    for spec in config.native_evidence:
+        path = tmp_path / spec.filename
+        payload = _native_evidence_payload(
+            evidence_id=spec.evidence_id,
+            target=spec.target,
+            requires_chorys=spec.requires_chorys,
+        )
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        records.append(
+            release_production._validate_native_evidence(
+                path,
+                spec=spec,
+                metadata=metadata,
+                generated_manifest_sha256="c" * 64,
+            )
+        )
+
+    release_production._verify_shared_native_input_identity(records)
+    assert [record["target"] for record in records] == ["sve", "rvv"]
+    assert records[1]["chorys_source_revision"] == "chorys-native-revision"
+
+    rvv_spec = next(spec for spec in config.native_evidence if spec.target == "rvv")
+    invalid = _native_evidence_payload(
+        evidence_id=rvv_spec.evidence_id,
+        target=rvv_spec.target,
+        requires_chorys=False,
+    )
+    invalid_path = tmp_path / "invalid-rvv.json"
+    invalid_path.write_text(json.dumps(invalid), encoding="utf-8")
+    with pytest.raises(
+        release_production.ReleaseProductionError,
+        match="chorys_integration",
+    ):
+        release_production._validate_native_evidence(
+            invalid_path,
+            spec=rvv_spec,
+            metadata=metadata,
+            generated_manifest_sha256="c" * 64,
+        )
+
+
+def test_native_evidence_must_share_compiler_input_identity() -> None:
+    with pytest.raises(
+        release_production.ReleaseProductionError,
+        match="do not share one compiler-input identity",
+    ):
+        release_production._verify_shared_native_input_identity(
+            [
+                {"compiler_input_sha256": "a" * 64},
+                {"compiler_input_sha256": "b" * 64},
+            ]
+        )
+
+
+@pytest.mark.parametrize(
+    ("failure", "message"),
+    (
+        ("architecture", "architecture must be"),
+        ("vector_bits", "runtime_vector_bits"),
+        ("skipped_case", "generated_values suite"),
+        ("showcase_binary", "scalable_showcase result"),
+        ("showcase_shape", "scalable_showcase run"),
+        ("placeholder", "invalid reviewer"),
+    ),
+)
+def test_native_evidence_rejects_incomplete_or_placeholder_claims(
+    failure: str, message: str, tmp_path: Path
+) -> None:
+    config = release_production.load_config()
+    metadata = replace(
+        release_production.release_metadata("v1.0.0-rc.1", config=config),
+        tag="v1.0.0",
+        release_kind="final",
+        product_status="stable",
+    )
+    spec = next(spec for spec in config.native_evidence if spec.target == "sve")
+    payload = _native_evidence_payload(
+        evidence_id=spec.evidence_id,
+        target=spec.target,
+    )
+    machine = payload["machine"]
+    suites = payload["suites"]
+    assert isinstance(machine, dict)
+    assert isinstance(suites, dict)
+    generated = suites["generated_values"]
+    showcase = suites["scalable_showcase"]
+    assert isinstance(generated, dict)
+    assert isinstance(showcase, dict)
+    runs = showcase["runs"]
+    assert isinstance(runs, list) and isinstance(runs[0], dict)
+    if failure == "architecture":
+        machine["architecture"] = "x86_64"
+    elif failure == "vector_bits":
+        payload["runtime_vector_bits"] = [192]
+    elif failure == "skipped_case":
+        generated["skipped_cases"] = 1
+    elif failure == "showcase_binary":
+        showcase["binary_sha256"] = "not-a-digest"
+    elif failure == "showcase_shape":
+        runs[0]["tail"] = 2
+    else:
+        payload["reviewer"] = "REPLACE_WITH_REVIEWER"
+    path = tmp_path / f"invalid-{failure}.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(release_production.ReleaseProductionError, match=message):
+        release_production._validate_native_evidence(
+            path,
+            spec=spec,
+            metadata=metadata,
+            generated_manifest_sha256="c" * 64,
         )
 
 

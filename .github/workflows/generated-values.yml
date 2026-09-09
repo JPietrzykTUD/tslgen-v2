@@ -448,6 +448,59 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  generated-scalable-showcase:
+    name: Scalable release showcase
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs:
+      - scope
+      - ci-image
+    if: needs.scope.outputs.generated_profiles == 'true'
+
+    env:
+      TSLC_CI_IMAGE: ${{ needs.scope.outputs.ci_image }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull CI image
+        run: |
+          bash .github/scripts/run_with_log.sh \
+            "tslctmp/ci-logs/scalable-showcase/docker-pull.log" \
+            docker pull "${TSLC_CI_IMAGE}"
+
+      - name: Run SVE, RVV, and CHORYS-shaped generated consumers
+        run: |
+          bash .github/scripts/run_with_log.sh \
+            "tslctmp/ci-logs/scalable-showcase/tests.log" \
+            bash supplementary/ci/run_tslc_ci_container.sh \
+              -- \
+              bash -lc '
+                set -e
+                trap "rm -rf tslctmp/pytest" EXIT
+                PYTHONPATH=tslc/src python -m pytest -q \
+                  --run-generated-builds \
+                  tslc/tests/test_scalable_release_showcase.py \
+                  tslc/tests/test_chorys_rvv_consumer.py
+              '
+
+      - name: Upload scalable-showcase logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-logs-scalable-showcase
+          path: tslctmp/ci-logs/scalable-showcase
+          if-no-files-found: ignore
+          retention-days: 14
+
   generated-benchmarks:
     name: Generated benchmarks (x86 policy and ARM smoke)
     runs-on: ubuntu-latest
@@ -524,6 +577,7 @@ jobs:
       - generated-clang-quality
       - generated-msvc-quality
       - generated-rust-release-quality
+      - generated-scalable-showcase
       - generated-benchmarks
       - generated-value-tests
     if: always()
@@ -540,5 +594,6 @@ jobs:
             generated-clang-quality "${{ needs.scope.outputs.generated_profiles }}" "${{ needs['generated-clang-quality'].result }}" \
             generated-msvc-quality "${{ needs.scope.outputs.generated_profiles }}" "${{ needs['generated-msvc-quality'].result }}" \
             generated-rust-release-quality "${{ needs.scope.outputs.generated_profiles }}" "${{ needs['generated-rust-release-quality'].result }}" \
+            generated-scalable-showcase "${{ needs.scope.outputs.generated_profiles }}" "${{ needs['generated-scalable-showcase'].result }}" \
             generated-clang-overlay "${{ needs.scope.outputs.clang_overlay }}" "${{ needs['generated-clang-overlay'].result }}" \
             generated-benchmarks "${{ needs.scope.outputs.benchmarks }}" "${{ needs['generated-benchmarks'].result }}"
