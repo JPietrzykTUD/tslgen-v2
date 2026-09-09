@@ -64,7 +64,7 @@ jobs:
         run: |
           bash .github/scripts/run_with_log.sh \
             "tslctmp/ci-logs/coverage-ratchet/target-ratchet.log" \
-            bash dev.sh target-ratchet
+            bash dev.sh target-ratchet --require-complete
 
       - name: Run benchmark coverage ratchet
         run: |

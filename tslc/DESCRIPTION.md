@@ -565,6 +565,14 @@ latter does not itself prove that the callee's own condition was forwarded or
 discharged. Typed `forward[...]` and `discharge[...]` call dispositions own
 that proof independently, and unresolved obligations make checked admission
 fail closed through the live ordinary call graph.
+
+This two-path surface is implemented and release-ratcheted; it is not pending
+refactor work. In particular, `internal_unsafe` describes the implementation
+boundary needed by generated Rust, while `caller_unsafe` describes the public
+call contract. A `raw_memory` mechanism without a `raw_pointer` or another
+outstanding catastrophic caller obligation does not make the public function
+unsafe. The unsuffixed operation remains direct in both languages, and the
+optional checked companion never changes its behavior.
 [catalog/memory.py](src/tslc/catalog/memory.py) also owns whether indexed
 operations consume one address per result-vector lane or per index-vector lane;
 catalog validation requires that fact for indexed memory, and checked wrappers
@@ -871,7 +879,10 @@ verification, so the attestation identifies the bytes that were compiled.
   [target_support_ratchet.py](src/tslc/maintenance/target_support_ratchet.py)
   filters those facts through the typed v1 support contract and serializes the
   exact SVE/SVE128/SVE256/SVE512/RVV baseline; it never selects or infers a
-  body itself.
+  body itself. Release CI uses `--require-complete`, so a previously recorded
+  absent, selected-only, deferred, or pruned applicable slot is still a
+  failure; impossible source/target pairs must be declared as reviewed typed
+  exclusions rather than hidden in the baseline.
 - **Honest edges**: [support_policy.py](src/tslc/support_policy.py) centralizes
   what the compiler can emit today; some keyword forms are *recognized so a
   body skips cleanly* rather than leaking through as raw text.

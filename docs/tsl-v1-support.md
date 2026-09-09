@@ -18,12 +18,55 @@ their own `0.x` version lines.
 | `tslc` | `0.1.0a1` | independent |
 | `vscode-tsl` | `0.1.1` | independent |
 
-## Backend/profile matrix
+## Backend/profile/type matrix
 
-| Backend | Release profile rule | Profiles |
-| --- | --- | --- |
-| `cpp` | `all_supported` | `neon`, `sve`, `sve128`, `sve256`, `sve512`, `scalar`, `rvv`, `wasm32-simd128`, `avx`, `avx2`, `cannonlake`, `cascadelake`, `cascadelake-oneapi`, `cooperlake`, `cooperlake-oneapi`, `icelake_rockerlake`, `icelake_rockerlake-oneapi`, `kml`, `knl`, `sapphire_emerald_granite_rapids`, `sapphire_emerald_granite_rapids-oneapi`, `skylake`, `skylake-oneapi`, `sse`, `sse2`, `sse3`, `tigerlake`, `zen4`, `zen5` |
-| `rust` | `explicit` | `avx`, `avx2`, `knl`, `sse`, `sse2`, `sse3` |
+Every listed profile supports the stable scalar element domain shown in
+its row. Individual primitive signatures can narrow that domain through
+their source-owned type groups; the exact callable table and reviewed slot
+exclusions below remain authoritative for those cases.
+
+| Backend | Release profile rule | Profile | Target family | Shape | Stable scalar element types |
+| --- | --- | --- | --- | --- | --- |
+| `cpp` | `all_supported` | `neon` | `aarch64` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `sve` | `aarch64` | runtime-scalable | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `sve128` | `aarch64` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `sve256` | `aarch64` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `sve512` | `aarch64` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `scalar` | `generic` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `rvv` | `riscv` | runtime-scalable | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `wasm32-simd128` | `wasm32` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `avx` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `avx2` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `cannonlake` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `cascadelake` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `cascadelake-oneapi` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `cooperlake` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `cooperlake-oneapi` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `icelake_rockerlake` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `icelake_rockerlake-oneapi` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `kml` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `knl` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `sapphire_emerald_granite_rapids` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `sapphire_emerald_granite_rapids-oneapi` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `skylake` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `skylake-oneapi` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `sse` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `sse2` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `sse3` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `tigerlake` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `zen4` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `zen5` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `rust` | `explicit` | `avx` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `rust` | `explicit` | `avx2` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `rust` | `explicit` | `knl` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `rust` | `explicit` | `sse` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `rust` | `explicit` | `sse2` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `rust` | `explicit` | `sse3` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+
+The Rust rows name emitted physical profiles. Every generated Rust package
+also contains the compiler-created generic fallback selected when no emitted
+target-feature predicate matches; it is not a separately requested machine
+profile or Cargo feature.
 
 C++ v1 includes the declared SVE, fixed-width SVE, and RV64 Vector 1.0
 profiles below. These claims do not imply SVE2, undeclared optional RVV
@@ -250,19 +293,34 @@ Public-API baseline SHA-256: `ccaea29682671529b7d0a51207afb1a73f28b9a7153f36fe59
 
 ### Reviewed target-slot exclusions
 
-- `TSL-V1-RUNTIME-SCALABLE-FIXED-WIDTH-REPRESENTATION` (sve, rvv/cpp; concat#v:=(v,v)->extension:ToExtension, extract[cast=reinterpret]#v:=(v,sImm)->extension:ToExtension, extract_imask#im:=(im,usize)->base:ToBase, extract_imask#im:=(im,usize)->extension:ToExtension, insert[cast=reinterpret]#v:=(vt,v,sImm)->extension:ToExtension, insert_imask#im:=(imt,im,usize)->base:ToBase, insert_imask#im:=(imt,im,usize)->extension:ToExtension, resize_down#v:=v->extension:ToExtension, resize_up_undef[value=undef]#v:=v->extension:ToExtension, resize_up_zero[value=zero]#v:=v->extension:ToExtension; types all): The callable changes between statically ordered register widths or fixed mask windows and has no truthful meaning for one runtime-scalable register type..
-- `TSL-V1-NO-WIDER-SCALAR-TYPE` (sve, rvv/cpp; convert_up[cast=convert,direction=up]#v:=(v,sImm)->base:ToBase, load_convert_up#v:=cptr+->base:ToBase; types si64, ui64, f64): The stable scalar domain has no wider target lane type for these source types..
-- `TSL-V1-NO-NARROWER-SCALAR-TYPE` (sve, rvv/cpp; convert_down[cast=convert,direction=down]#v:=(v,sImm)->base:ToBase; types si8, ui8, f32): The stable scalar domain has no supported narrower target lane type for these source types..
+- `TSL-V1-RUNTIME-SCALABLE-FIXED-WIDTH-REPRESENTATION` (sve, rvv/cpp; concat#v:=(v,v)->extension:ToExtension, extract[cast=reinterpret]#v:=(v,sImm)->extension:ToExtension, extract_imask#im:=(im,usize)->base:ToBase, extract_imask#im:=(im,usize)->extension:ToExtension, insert[cast=reinterpret]#v:=(vt,v,sImm)->extension:ToExtension, insert_imask#im:=(imt,im,usize)->base:ToBase, insert_imask#im:=(imt,im,usize)->extension:ToExtension, resize_down#v:=v->extension:ToExtension, resize_up_undef[value=undef]#v:=v->extension:ToExtension, resize_up_zero[value=zero]#v:=v->extension:ToExtension; types all): The callable changes between statically ordered register widths or fixed mask windows and has no truthful meaning for one runtime-scalable register type.
+- `TSL-V1-FIXED-SVE-NO-COMPATIBLE-WIDTH` (sve128, sve256, sve512/cpp; concat#v:=(v,v)->extension:ToExtension, extract[cast=reinterpret]#v:=(v,sImm)->extension:ToExtension, extract_imask#im:=(im,usize)->extension:ToExtension, insert[cast=reinterpret]#v:=(vt,v,sImm)->extension:ToExtension, insert_imask#im:=(imt,im,usize)->extension:ToExtension, resize_down#v:=v->extension:ToExtension, resize_up_undef[value=undef]#v:=v->extension:ToExtension, resize_up_zero[value=zero]#v:=v->extension:ToExtension; types all): A fixed-SVE profile emits exactly one fixed-SVE register width, so no distinct same-family source or destination width exists for this representation-change callable.
+- `TSL-V1-NO-WIDER-SCALAR-TYPE` (sve, sve128, sve256, sve512, rvv/cpp; convert_up[cast=convert,direction=up]#v:=(v,sImm)->base:ToBase, load_convert_up#v:=cptr+->base:ToBase; types si64, ui64, f64): The stable scalar domain has no wider target lane type for these source types.
+- `TSL-V1-NO-WIDER-SCALAR-TYPE` (sve128, sve256, sve512/cpp; extract_imask#im:=(im,usize)->base:ToBase; types si64, ui64, f64): The stable scalar domain has no wider target lane type for these source types.
+- `TSL-V1-NO-NARROWER-SCALAR-TYPE` (sve, sve128, sve256, sve512, rvv/cpp; convert_down[cast=convert,direction=down]#v:=(v,sImm)->base:ToBase; types si8, ui8, f32): The stable scalar domain has no supported narrower target lane type for these source types.
+- `TSL-V1-NO-NARROWER-SCALAR-TYPE` (sve128, sve256, sve512/cpp; insert_imask#im:=(imt,im,usize)->base:ToBase; types si8, ui8): The stable scalar domain has no supported narrower target lane type for these source types.
 
 ## Safety API
 
-Unchecked calls perform the operation directly and do not sanitize inputs.
+Unsuffixed calls perform the operation directly and do not sanitize inputs.
 Documented caller preconditions remain the caller's responsibility. A
 `*_checked` companion exists only when all applicable catastrophic runtime
-preconditions are complete, checkable, and representable. C++ value-returning
-checked calls return the vector/register value directly and report through an
-explicit `precondition_error&`; Rust checked calls return `Result`, while raw
-pointer APIs remain `unsafe`.
+preconditions are complete, checkable, and representable. Operations without
+such a precondition deliberately have no checked twin.
+
+C++ value-returning checked calls return the ordinary scalar/vector/register
+type directly and report through a final `precondition_error&`. On failure the
+ordinary operation is not invoked and the returned object is initialized but
+semantically unspecified: inspect the error before using it. Void checked calls
+return `precondition_error` directly.
+
+Rust checked calls return `Result<T, PreconditionError>` or
+`Result<(), PreconditionError>`. An unsuffixed Rust function is `unsafe` only
+when the caller owns an outstanding catastrophic obligation. Internal raw-memory
+staging (`internal_unsafe`/`raw_memory`) does not by itself make the public Rust
+function unsafe; raw-pointer validity or another typed caller precondition does.
+A checked range or slice cannot prove forged-reference validity, object lifetime,
+provenance, or freedom from concurrent mutation.
 
 ## Implementation quality policy
 
@@ -272,7 +330,7 @@ This conservative default prevents incomplete semantic annotations from
 silently weakening the quality gate. A fallback in that set is forbidden
 unless its exact identity is a
 reviewed exception with correctness and performance evidence. There are
-currently 48 exceptions.
+currently 50 exceptions.
 Their review record is `supplementary/release/tsl-v1-fallback-review.md`.
 
 The coarse implementation-state meanings are:

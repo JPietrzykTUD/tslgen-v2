@@ -165,6 +165,8 @@ replacing or weakening this baseline path.
 
 Exact identities:
 
+- `extract_imask#im:=(im,usize)->base:ToBase`
+- `insert_imask#im:=(imt,im,usize)->base:ToBase`
 - `lzc_imask#usize:=m`
 - `overlay_imask#im:=(im,im,usize)`
 - `shift_left_imask#im:=(im,usize)`
@@ -173,10 +175,14 @@ Exact identities:
 
 These operations manipulate the public integral-mask representation or reduce
 a predicate to a scalar count. They are not data-lane arithmetic and may need
-multiple mask chunks for scalable vectors. Their structural cost is bounded by
-the represented mask width/chunk count and is visible as fallback rather than
-being mislabeled target-native. Edge tests cover zero, width-sized shifts, and
-runtime predicate lengths.
+multiple mask chunks for scalable vectors. Fixed-SVE base-width extraction and
+insertion walk the source predicate and rebuild the destination predicate with
+typed mask operations; this is required because SVE's integral-mask policy is
+the native predicate rather than a scalar bitset. Their structural cost is
+bounded by the represented lane or mask-chunk count and is visible as fallback
+rather than being mislabeled target-native. Edge tests cover zero, width-sized
+shifts, runtime predicate lengths, replacement, clipping, and base-width
+changes.
 
 Decision: acceptable. Native measurements should confirm that these helpers do
 not dominate mask-heavy algorithms.
@@ -203,8 +209,7 @@ The review is backed by these repository-root commands:
 ```bash
 ./dev.sh check --profile sve --backend cpp --strict
 ./dev.sh check --profile rvv --backend cpp --strict
-./dev.sh target-ratchet --require-complete --profile sve
-./dev.sh target-ratchet --require-complete --profile rvv
+./dev.sh target-ratchet --require-complete
 ./dev.sh test --primitives gather,gather_narrow_partial,scatter,extract_value_at,insert_value_at,set_mask_lane,load,store --profiles sve --backends cpp
 ./dev.sh test --profiles rvv --backends cpp --output-root ./tslctmp/rvv-slice7
 PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds tslc/tests/test_value_tests.py -k sve_runtime_semantics

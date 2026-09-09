@@ -5,7 +5,6 @@ from __future__ import annotations
 from tslc.catalog.model import Catalog, TestCase
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.value_tests._case_scalable_common import (
-    mask_bits_value as _mask_bits_value,
     scalable_case_facts,
     scalable_function_name,
     tiling_is_safe,
@@ -16,7 +15,7 @@ from tslc.value_tests.case_helpers import (
     vector_inputs as _vector_inputs,
     scalar_inputs as _scalar_inputs,
 )
-from tslc.value_tests.literals import token_truthy
+from tslc.value_tests.literals import mask_bits_value as _mask_bits_value, token_truthy
 from tslc.value_tests.model import (
     HarnessPrimitiveNames,
     ValueTestBackendSupport,

@@ -174,6 +174,9 @@ def test_declared_lane_precondition_produces_unsafe_and_checked_facade_methods()
     assert "pub fn extract_value_at_checked(self, index: usize)" in rendered
     assert "if index >=" in rendered
     assert "PreconditionError::IndexOutOfBounds" in rendered
+    assert "# Call form" in rendered
+    assert "```text" in rendered
+    assert "```ignore" not in rendered
 
 
 def test_compacted_checked_facade_checks_extent_and_conditional_alignment() -> None:

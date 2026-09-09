@@ -46,6 +46,7 @@ from tslc.value_tests.case_components import (
     ValueTestRepresentation,
     ValueTestScalable,
     ValueTestTarget,
+    ValueTestTargetImaskHarness,
 )
 from tslc.value_tests.case_plan import ValueTestCasePlan
 from tslc.value_tests.model import ValueTestCoverageEntry
@@ -382,6 +383,9 @@ def _serialize_value_test_case(case: ValueTestCasePlan) -> dict[str, object]:
         "index": _serialize_value_test_index(case.index),
         "memory": _serialize_value_test_memory(case.memory),
         "representation": _serialize_value_test_representation(case.representation),
+        "target_imask_harness": _serialize_value_test_target_imask_harness(
+            case.target_imask_harness
+        ),
         "scalable": _serialize_value_test_scalable(case.scalable),
         "differential": _serialize_value_test_differential(case.differential),
         "header_group": case.header_group,
@@ -485,6 +489,20 @@ def _serialize_value_test_representation(
         "target_extension": value.target_extension,
         "from_array_name": value.from_array_name,
         "to_array_name": value.to_array_name,
+    }
+
+
+def _serialize_value_test_target_imask_harness(
+    value: ValueTestTargetImaskHarness | None,
+) -> dict[str, object] | None:
+    if value is None:
+        return None
+    return {
+        "source_mask_from_bits_template": value.source_mask_from_bits_template,
+        "target_mask_from_bits_template": value.target_mask_from_bits_template,
+        "target_mask_check_template": value.target_mask_check_template,
+        "mask_bits": value.mask_bits,
+        "expected_mask_bits": value.expected_mask_bits,
     }
 
 

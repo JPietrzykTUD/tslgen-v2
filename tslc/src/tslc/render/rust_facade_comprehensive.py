@@ -482,7 +482,13 @@ def _method_docs(
         checked=checked,
         caller_unsafe=caller_unsafe,
     )
-    lines.extend(("///", "/// # Examples", "/// ```ignore", f"/// {call_form}", "/// ```"))
+    # This is intentionally a signature-shaped call illustration: its parameter
+    # identifiers are documented above and are not locally constructed values.
+    # Keep executable examples in the crate overview, where the compiler can run
+    # them as real doctests rather than silently ignoring thousands of fragments.
+    lines.extend(
+        ("///", "/// # Call form", "/// ```text", f"/// {call_form}", "/// ```")
+    )
     if method.panic_conditions:
         lines.extend(("///", "/// # Panics", "///"))
         lines.extend(f"/// {condition}" for condition in method.panic_conditions)

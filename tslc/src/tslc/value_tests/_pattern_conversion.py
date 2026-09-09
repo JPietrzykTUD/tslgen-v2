@@ -165,6 +165,7 @@ class _TargetImaskPattern(_BasePattern):
             context.case,
             context.specs,
             context.catalog,
+            context.backend,
         )
         return (plan,) if plan is not None else ()
 

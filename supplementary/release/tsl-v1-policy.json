@@ -105,7 +105,24 @@
       "reason": "The callable changes between statically ordered register widths or fixed mask windows and has no truthful meaning for one runtime-scalable register type."
     },
     {
-      "profiles": ["sve", "rvv"],
+      "profiles": ["sve128", "sve256", "sve512"],
+      "backend": "cpp",
+      "callable_identities": [
+        "concat#v:=(v,v)->extension:ToExtension",
+        "extract[cast=reinterpret]#v:=(v,sImm)->extension:ToExtension",
+        "extract_imask#im:=(im,usize)->extension:ToExtension",
+        "insert[cast=reinterpret]#v:=(vt,v,sImm)->extension:ToExtension",
+        "insert_imask#im:=(imt,im,usize)->extension:ToExtension",
+        "resize_down#v:=v->extension:ToExtension",
+        "resize_up_undef[value=undef]#v:=v->extension:ToExtension",
+        "resize_up_zero[value=zero]#v:=v->extension:ToExtension"
+      ],
+      "type_tags": [],
+      "reason_id": "TSL-V1-FIXED-SVE-NO-COMPATIBLE-WIDTH",
+      "reason": "A fixed-SVE profile emits exactly one fixed-SVE register width, so no distinct same-family source or destination width exists for this representation-change callable."
+    },
+    {
+      "profiles": ["sve", "sve128", "sve256", "sve512", "rvv"],
       "backend": "cpp",
       "callable_identities": [
         "convert_up[cast=convert,direction=up]#v:=(v,sImm)->base:ToBase",
@@ -116,12 +133,32 @@
       "reason": "The stable scalar domain has no wider target lane type for these source types."
     },
     {
-      "profiles": ["sve", "rvv"],
+      "profiles": ["sve128", "sve256", "sve512"],
+      "backend": "cpp",
+      "callable_identities": [
+        "extract_imask#im:=(im,usize)->base:ToBase"
+      ],
+      "type_tags": ["si64", "ui64", "f64"],
+      "reason_id": "TSL-V1-NO-WIDER-SCALAR-TYPE",
+      "reason": "The stable scalar domain has no wider target lane type for these source types."
+    },
+    {
+      "profiles": ["sve", "sve128", "sve256", "sve512", "rvv"],
       "backend": "cpp",
       "callable_identities": [
         "convert_down[cast=convert,direction=down]#v:=(v,sImm)->base:ToBase"
       ],
       "type_tags": ["si8", "ui8", "f32"],
+      "reason_id": "TSL-V1-NO-NARROWER-SCALAR-TYPE",
+      "reason": "The stable scalar domain has no supported narrower target lane type for these source types."
+    },
+    {
+      "profiles": ["sve128", "sve256", "sve512"],
+      "backend": "cpp",
+      "callable_identities": [
+        "insert_imask#im:=(imt,im,usize)->base:ToBase"
+      ],
+      "type_tags": ["si8", "ui8"],
       "reason_id": "TSL-V1-NO-NARROWER-SCALAR-TYPE",
       "reason": "The stable scalar domain has no supported narrower target lane type for these source types."
     }
@@ -155,12 +192,14 @@
       "expand[mask=pass_through,op=expand]#v:=(m,v,v)",
       "expand_load[aligned=true,op=expand]#v:=(m,cptr)",
       "extract[cast=reinterpret]#v:=(v,sImm)->extension:ToExtension",
+      "extract_imask#im:=(im,usize)->base:ToBase",
       "gather#v:=(cptr,vidx,sImm)",
       "gather[mask=pass_through]#v:=(m,cptr,vidx,v,sImm)",
       "gather_narrow#v:=(cptr,cptr,sImm)",
       "gather_narrow_partial#v:=(cptr,vidx,sImm)",
       "hmax#s:=(m,v)",
       "hmin#s:=(m,v)",
+      "insert_imask#im:=(imt,im,usize)->base:ToBase",
       "interleave_lo#v:=(v,v)",
       "load_convert_up#v:=cptr+->base:ToBase",
       "lzc#v:=v",

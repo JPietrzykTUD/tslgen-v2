@@ -49,6 +49,27 @@ def test_release_contract_matches_both_canonical_projections() -> None:
     assert [item["id"] for item in payload["implementation_states"]] == [
         state.value for state in ImplementationState
     ]
+    safety = payload["safety_api"]
+    assert "semantically unspecified" in safety["cpp_failure_result"]
+    assert "only when a catastrophic caller obligation remains" in safety["rust"]
+    assert "do not by themselves" in safety["internal_unsafety"]
+    markdown = render_markdown(contract)
+    assert "## Backend/profile/type matrix" in markdown
+    assert (
+        "| `cpp` | `all_supported` | `sve` | `aarch64` | runtime-scalable |"
+        in markdown
+    )
+    assert (
+        "| `cpp` | `all_supported` | `rvv` | `riscv` | runtime-scalable |"
+        in markdown
+    )
+    assert (
+        "| `rust` | `explicit` | `avx2` | `x86` | fixed/static |"
+        in markdown
+    )
+    assert "Internal raw-memory" in markdown
+    assert "does not by itself make the public Rust" in markdown
+    assert "semantically unspecified" in markdown
 
 
 def test_release_profiles_are_projections_of_typed_machine_capabilities() -> None:

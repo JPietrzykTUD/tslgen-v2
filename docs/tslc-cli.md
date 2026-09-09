@@ -32,7 +32,7 @@ output_root = "tslctmp/generated"
 
 [tslc.rust_package]
 name = "tsl"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 rust_version = "1.89"
 license = "Apache-2.0"
@@ -50,6 +50,14 @@ capabilities = ["elementwise_clzg"]
 qemu-aarch64 = "/usr/bin/qemu-aarch64"
 qemu-riscv64 = "/usr/bin/qemu-riscv64"
 ```
+
+The generated C++/Rust library, the Python compiler, and the VS Code extension
+are independently versioned components. In this repository configuration the
+generated library is `1.0.0`, while `tslc --version` reports the compiler's
+current `0.x` package version and the extension retains its own `0.x` version.
+Changing the generated Cargo version does not rename or imply a matching
+compiler/editor release. The exact current versions are projected into the
+[generated-library support contract](tsl-v1-support.md).
 
 The Rust package table is optional as a whole; when present, it supplies the
 complete release metadata rendered into the generated Cargo package. Toolchain

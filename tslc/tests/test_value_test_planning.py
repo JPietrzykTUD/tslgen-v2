@@ -15,6 +15,7 @@ from tslc.catalog.model import (
     Catalog,
     Extension,
     ExtensionMetadata,
+    ImaskPolicy,
     ParamTypeExpression,
     ParamTypeRule,
     Primitive,
@@ -1122,6 +1123,86 @@ def test_target_imask_case_uses_source_and_target_mask_layouts() -> None:
     assert "tsl::insert_imask<Vec, ToVec>(a0, a1, a2)" in cpp_source
     assert "<ToVec as SimdVector>::ImaskType" in rust_source
     assert "insert_imask::<Vec, ToVec>(a0, a1, a2)" in rust_source
+
+
+def test_target_imask_case_uses_predicate_harness_for_fixed_sve() -> None:
+    primitive = Primitive(
+        "extract_imask",
+        "im:=(im,usize)",
+        ("data", "position"),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="sve_fixed_base",
+                type_tag="ui32",
+                tags=("sve_fixed",),
+                extension="sve256",
+                to_type="ui64",
+                inputs=(
+                    TslTestArg("mask", mask_bits="176"),
+                    TslTestArg("scalar", scalar="4"),
+                ),
+                expected=("11",),
+            ),
+        ),
+    )
+    mask_from_bits = "mask_from_bits<{vec}>({mask_bits}, {authored_lanes}, {lanes})"
+    mask_check = (
+        "check_mask_bits<{vec}>({case_name}, {mask}, {expected_bits}, "
+        "{authored_lanes}, {lanes})"
+    )
+    extension = Extension(
+        "sve256",
+        "sve256",
+        "arm",
+        {},
+        {},
+        backend_supported={"cpp": True},
+        vector_bits=256,
+        imask_policy=ImaskPolicy(kind="same_as_mask_type"),
+        test_mask_from_bits={"cpp": mask_from_bits},
+        test_mask_check={"cpp": mask_check},
+    )
+    catalog = Catalog(
+        primitives=(primitive, *_harness_primitives()),
+        type_groups={},
+        extensions={"sve256": extension},
+        type_spellings={},
+        translations={},
+    )
+    spec = replace(
+        _spec(
+            "extract_imask",
+            "extract_imask",
+            param_kinds=("im", "usize"),
+            result_kind="im",
+            extension_name="sve256",
+            uses_sized_vector=False,
+            lane_parameter=None,
+        ),
+        type_tag="ui32",
+        base_type_spelling="std::uint32_t",
+        target=TargetVector(
+            "target-vector",
+            "target-register",
+            "sve256",
+            "ui64",
+            "std::uint64_t",
+        ),
+    )
+
+    plan = ValueTestPlanner(catalog, _VALUE_TEST_SUPPORTS).plan(
+        _inputs(_profile(cpp={"extract_imask": (spec,)}))
+    )
+
+    assert plan.diagnostics == ()
+    case = plan.profiles_for("cpp")[0].cases[0]
+    assert case.target_imask_harness is not None
+    source = CPP_VALUE_TEST_RENDERER.render_case(case)
+    assert "mask_from_bits<Vec>(176ull, 8, 8)" in source
+    assert 'check_mask_bits<ToVec>("sve_fixed_base", result, 11ull, 4, 4)' in source
+    assert "static_cast<typename Vec::imask_type>" not in source
 
 
 def test_different_arity_leading_mask_form_gets_portable_emitted_name() -> None:
@@ -2605,6 +2686,13 @@ def test_value_test_case_plan_validates_kind_requirements() -> None:
         param_kinds=(),
     )
     assert zero_arg.inputs.vectors == ()
+
+    with pytest.raises(ValueError, match="header_group must be non-empty"):
+        replace(zero_arg, header_group="")
+    with pytest.raises(ValueError, match="compiler capabilities must be non-empty"):
+        replace(zero_arg, required_compiler_capabilities=("",))
+    with pytest.raises(ValueError, match="sorted and unique"):
+        replace(zero_arg, required_compiler_capabilities=("sve", "sve"))
 
     aligned_free = ValueTestCasePlan(
         kind="pointer_free",

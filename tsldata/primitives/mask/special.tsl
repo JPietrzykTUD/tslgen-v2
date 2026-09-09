@@ -340,6 +340,9 @@ prim<im:=(imt,im,usize)> insert_imask(orig, data, position):
     - {tags [extension_insert], extension "sse", type "ui32", to_extension "avx2", case {inputs [0, 11, 4], expected 176}}
     - {tags [extension_clipped], extension "sse", type "ui32", to_extension "avx2", case {inputs [0, 15, 6], expected 192}}
     - {tags [clang], extension "clang_v128", type "ui32", to_extension "clang_v256", case {inputs [255, 0, 2], expected 195}}
+    - {tags [sve_fixed, base_replace], extension "sve128", type "ui64", to_type "ui32", case {inputs [15, 0, 1], expected 9}}
+    - {tags [sve_fixed, base_replace], extension "sve256", type "ui64", to_type "ui32", case {inputs [255, 0, 2], expected 195}}
+    - {tags [sve_fixed, base_replace], extension "sve512", type "ui64", to_type "ui32", case {inputs [65535, 0, 4], expected 61455}}
   impls:
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx512, avx2_vl, sse_vl, avx2, sse, neon, wasm128]:
       qword:
@@ -446,6 +449,45 @@ prim<im:=(imt,im,usize)> insert_imask(orig, data, position):
                     value(vector::length), value(generic::length(OutVec))
                   ));
                 """
+    [sve128, sve256, sve512]:
+      arith:
+        requires:
+          sve128 [sve]
+          sve256 [sve]
+          sve512 [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsl """
+            let<type>(OutVec, vector::as_base(ToBase));
+            var<infer>(result, orig);
+            var<const_infer>(source_empty, call<primitive=mask_false[Vec]>());
+            var<const_infer>(target_lanes, value(generic::runtime_length(OutVec)));
+            if (position >= target_lanes) {
+              complete(result);
+            }
+            loop<backend>(i, 0, value(vector::runtime_length), 1) {
+              if (position + i >= target_lanes) {
+                complete(result);
+              }
+              result = call<primitive=set_mask_lane[OutVec], discharge[lane_index_in_range]>(
+                result, position + i, 0
+              );
+              var<const_infer>(source_lane, call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(
+                source_empty, i, 1
+              ));
+              if (call<primitive=mask_population_count[Vec]>(
+                call<primitive=mask_binary_and[Vec]>(data, source_lane)
+              ) != 0) {
+                result = call<primitive=set_mask_lane[OutVec], discharge[lane_index_in_range]>(
+                  result, position + i, 1
+                );
+              }
+            }
+            complete(result);
+          """
 
 prim<im:=(imt,im,usize)> insert_imask(orig, data, position):
   brief_description "Replaces a target-mask window with the bits from a smaller source mask."
@@ -512,6 +554,9 @@ prim<im:=(im,usize)> extract_imask(data, position):
     - {tags [extension_low], extension "avx2", type "ui32", to_extension "sse", case {inputs [171, 0], expected 11}}
     - {tags [extension_clipped], extension "avx2", type "ui32", to_extension "sse", case {inputs [192, 6], expected 3}}
     - {tags [clang], extension "clang_v256", type "ui32", to_extension "clang_v128", case {inputs [176, 4], expected 11}}
+    - {tags [sve_fixed, base], extension "sve128", type "ui32", to_type "ui64", case {inputs [12, 2], expected 3}}
+    - {tags [sve_fixed, base], extension "sve256", type "ui32", to_type "ui64", case {inputs [176, 4], expected 11}}
+    - {tags [sve_fixed, base], extension "sve512", type "ui32", to_type "ui64", case {inputs [2816, 8], expected 11}}
   impls:
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx512, avx2_vl, sse_vl, avx2, sse, neon, wasm128]:
       ?i8:
@@ -618,6 +663,42 @@ prim<im:=(im,usize)> extract_imask(data, position):
                     value(vector::length), value(generic::length(OutVec))
                   ));
                 """
+    [sve128, sve256, sve512]:
+      arith:
+        requires:
+          sve128 [sve]
+          sve256 [sve]
+          sve512 [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsl """
+            let<type>(OutVec, vector::as_base(ToBase));
+            var<infer>(result, call<primitive=mask_false[OutVec]>());
+            var<const_infer>(source_empty, call<primitive=mask_false[Vec]>());
+            var<const_infer>(source_lanes, value(vector::runtime_length));
+            if (position >= source_lanes) {
+              complete(result);
+            }
+            loop<backend>(i, 0, value(generic::runtime_length(OutVec)), 1) {
+              if (position + i >= source_lanes) {
+                complete(result);
+              }
+              var<const_infer>(source_lane, call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(
+                source_empty, position + i, 1
+              ));
+              if (call<primitive=mask_population_count[Vec]>(
+                call<primitive=mask_binary_and[Vec]>(data, source_lane)
+              ) != 0) {
+                result = call<primitive=set_mask_lane[OutVec], discharge[lane_index_in_range]>(
+                  result, i, 1
+                );
+              }
+            }
+            complete(result);
+          """
 
 prim<im:=(im,usize)> extract_imask(data, position):
   brief_description "Extracts a smaller target mask from a larger source mask."

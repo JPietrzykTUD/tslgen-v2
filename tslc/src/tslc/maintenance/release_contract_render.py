@@ -43,16 +43,29 @@ def render_markdown(contract: ReleaseContract) -> str:
             for component in contract.components
         ),
         "",
-        "## Backend/profile matrix",
+        "## Backend/profile/type matrix",
         "",
-        "| Backend | Release profile rule | Profiles |",
-        "| --- | --- | --- |",
+        "Every listed profile supports the stable scalar element domain shown in",
+        "its row. Individual primitive signatures can narrow that domain through",
+        "their source-owned type groups; the exact callable table and reviewed slot",
+        "exclusions below remain authoritative for those cases.",
+        "",
+        "| Backend | Release profile rule | Profile | Target family | Shape | Stable scalar element types |",
+        "| --- | --- | --- | --- | --- | --- |",
         *(
             f"| `{backend.backend_id}` | `{backend.selection.value}` | "
-            + ", ".join(f"`{profile.name}`" for profile in backend.profiles)
+            f"`{profile.name}` | `{profile.family}` | "
+            f"{_profile_shape(contract, backend.backend_id, profile.name)} | "
+            + ", ".join(f"`{tag}`" for tag in DEFAULT_SCALAR_TYPE_TAGS)
             + " |"
             for backend in contract.backends
+            for profile in backend.profiles
         ),
+        "",
+        "The Rust rows name emitted physical profiles. Every generated Rust package",
+        "also contains the compiler-created generic fallback selected when no emitted",
+        "target-feature predicate matches; it is not a separately requested machine",
+        "profile or Cargo feature.",
         "",
         "C++ v1 includes the declared SVE, fixed-width SVE, and RV64 Vector 1.0",
         "profiles below. These claims do not imply SVE2, undeclared optional RVV",
@@ -131,19 +144,31 @@ def render_markdown(contract: ReleaseContract) -> str:
             f"- `{item.reason_id}` ({', '.join(item.profiles)}/{item.backend_id}; "
             f"{', '.join(item.callable_identities)}; "
             f"types {', '.join(item.type_tags) if item.type_tags else 'all'}): "
-            f"{item.reason}."
+            f"{item.reason.rstrip('.')}."
             for item in contract.policy.target_slot_exclusions
         ),
         "",
         "## Safety API",
         "",
-        "Unchecked calls perform the operation directly and do not sanitize inputs.",
+        "Unsuffixed calls perform the operation directly and do not sanitize inputs.",
         "Documented caller preconditions remain the caller's responsibility. A",
         "`*_checked` companion exists only when all applicable catastrophic runtime",
-        "preconditions are complete, checkable, and representable. C++ value-returning",
-        "checked calls return the vector/register value directly and report through an",
-        "explicit `precondition_error&`; Rust checked calls return `Result`, while raw",
-        "pointer APIs remain `unsafe`.",
+        "preconditions are complete, checkable, and representable. Operations without",
+        "such a precondition deliberately have no checked twin.",
+        "",
+        "C++ value-returning checked calls return the ordinary scalar/vector/register",
+        "type directly and report through a final `precondition_error&`. On failure the",
+        "ordinary operation is not invoked and the returned object is initialized but",
+        "semantically unspecified: inspect the error before using it. Void checked calls",
+        "return `precondition_error` directly.",
+        "",
+        "Rust checked calls return `Result<T, PreconditionError>` or",
+        "`Result<(), PreconditionError>`. An unsuffixed Rust function is `unsafe` only",
+        "when the caller owns an outstanding catastrophic obligation. Internal raw-memory",
+        "staging (`internal_unsafe`/`raw_memory`) does not by itself make the public Rust",
+        "function unsafe; raw-pointer validity or another typed caller precondition does.",
+        "A checked range or slice cannot prove forged-reference validity, object lifetime,",
+        "provenance, or freedom from concurrent mutation.",
         "",
         "## Implementation quality policy",
         "",
@@ -165,6 +190,23 @@ def render_markdown(contract: ReleaseContract) -> str:
         "",
     ]
     return "\n".join(lines)
+
+
+def _profile_shape(
+    contract: ReleaseContract,
+    backend_id: str,
+    profile_name: str,
+) -> str:
+    runtime_scalable = {
+        (scope.backend_id, name)
+        for scope in contract.policy.target_scopes
+        for name in scope.runtime_scalable_profiles
+    }
+    return (
+        "runtime-scalable"
+        if (backend_id, profile_name) in runtime_scalable
+        else "fixed/static"
+    )
 
 
 __all__ = ("render_markdown", "serialize_json")

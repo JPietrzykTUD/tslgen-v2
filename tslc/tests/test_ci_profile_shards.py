@@ -292,6 +292,8 @@ def test_package_and_docs_generate_a_supported_distributable_profile_set() -> No
     assert "  wasm32-simd128 \\\n" in consumer_verifier
     assert "load_checked<Vec, false>" in consumer_verifier
     assert "store_checked<Vec, false>" in consumer_verifier
+    assert "supplementary/docs/site/checked_api_example.cpp" in consumer_verifier
+    assert "tsl_cpp_documented_checked_example" in consumer_verifier
     assert "package_paths_before" in consumer_verifier
     assert "package_paths_after" in consumer_verifier
     assert "tsl-v1-package-probe.txt" in consumer_verifier

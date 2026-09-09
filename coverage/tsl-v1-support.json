@@ -3541,7 +3541,31 @@
       },
       {
         "profiles": [
+          "sve128",
+          "sve256",
+          "sve512"
+        ],
+        "backend": "cpp",
+        "callable_identities": [
+          "concat#v:=(v,v)->extension:ToExtension",
+          "extract[cast=reinterpret]#v:=(v,sImm)->extension:ToExtension",
+          "extract_imask#im:=(im,usize)->extension:ToExtension",
+          "insert[cast=reinterpret]#v:=(vt,v,sImm)->extension:ToExtension",
+          "insert_imask#im:=(imt,im,usize)->extension:ToExtension",
+          "resize_down#v:=v->extension:ToExtension",
+          "resize_up_undef[value=undef]#v:=v->extension:ToExtension",
+          "resize_up_zero[value=zero]#v:=v->extension:ToExtension"
+        ],
+        "type_tags": [],
+        "reason_id": "TSL-V1-FIXED-SVE-NO-COMPATIBLE-WIDTH",
+        "reason": "A fixed-SVE profile emits exactly one fixed-SVE register width, so no distinct same-family source or destination width exists for this representation-change callable."
+      },
+      {
+        "profiles": [
           "sve",
+          "sve128",
+          "sve256",
+          "sve512",
           "rvv"
         ],
         "backend": "cpp",
@@ -3559,7 +3583,28 @@
       },
       {
         "profiles": [
+          "sve128",
+          "sve256",
+          "sve512"
+        ],
+        "backend": "cpp",
+        "callable_identities": [
+          "extract_imask#im:=(im,usize)->base:ToBase"
+        ],
+        "type_tags": [
+          "si64",
+          "ui64",
+          "f64"
+        ],
+        "reason_id": "TSL-V1-NO-WIDER-SCALAR-TYPE",
+        "reason": "The stable scalar domain has no wider target lane type for these source types."
+      },
+      {
+        "profiles": [
           "sve",
+          "sve128",
+          "sve256",
+          "sve512",
           "rvv"
         ],
         "backend": "cpp",
@@ -3570,6 +3615,23 @@
           "si8",
           "ui8",
           "f32"
+        ],
+        "reason_id": "TSL-V1-NO-NARROWER-SCALAR-TYPE",
+        "reason": "The stable scalar domain has no supported narrower target lane type for these source types."
+      },
+      {
+        "profiles": [
+          "sve128",
+          "sve256",
+          "sve512"
+        ],
+        "backend": "cpp",
+        "callable_identities": [
+          "insert_imask#im:=(imt,im,usize)->base:ToBase"
+        ],
+        "type_tags": [
+          "si8",
+          "ui8"
         ],
         "reason_id": "TSL-V1-NO-NARROWER-SCALAR-TYPE",
         "reason": "The stable scalar domain has no supported narrower target lane type for these source types."
@@ -3777,7 +3839,9 @@
     "unchecked": "direct operation with no hidden sanitization; documented caller preconditions remain the caller's responsibility",
     "checked_companion": "exists only when every applicable catastrophic runtime precondition is complete, checkable, and representable",
     "cpp_value_result": "returns the operation value directly and reports through precondition_error&",
-    "rust": "returns Result; unchecked pointer APIs remain unsafe"
+    "cpp_failure_result": "the operation is not invoked; an initialized but semantically unspecified value placeholder must not be used before inspecting the error",
+    "rust": "checked calls return Result; an unsuffixed function is unsafe only when a catastrophic caller obligation remains",
+    "internal_unsafety": "internal_unsafe and raw_memory implementation mechanisms do not by themselves make a public Rust function unsafe"
   },
   "implementation_states": [
     {
@@ -3826,12 +3890,14 @@
       "expand[mask=pass_through,op=expand]#v:=(m,v,v)",
       "expand_load[aligned=true,op=expand]#v:=(m,cptr)",
       "extract[cast=reinterpret]#v:=(v,sImm)->extension:ToExtension",
+      "extract_imask#im:=(im,usize)->base:ToBase",
       "gather#v:=(cptr,vidx,sImm)",
       "gather[mask=pass_through]#v:=(m,cptr,vidx,v,sImm)",
       "gather_narrow#v:=(cptr,cptr,sImm)",
       "gather_narrow_partial#v:=(cptr,vidx,sImm)",
       "hmax#s:=(m,v)",
       "hmin#s:=(m,v)",
+      "insert_imask#im:=(imt,im,usize)->base:ToBase",
       "interleave_lo#v:=(v,v)",
       "load_convert_up#v:=cptr+->base:ToBase",
       "lzc#v:=v",

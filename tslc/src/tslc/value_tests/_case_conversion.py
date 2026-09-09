@@ -28,8 +28,10 @@ from tslc.value_tests.case_helpers import (
     vector_inputs as _vector_inputs,
 )
 from tslc.value_tests.lane_math import SEED_MIX_64, whole_lanes as _whole_lanes
+from tslc.value_tests.literals import mask_bits_value
 from tslc.value_tests.model import (
     HarnessPrimitiveNames,
+    ValueTestBackendSupport,
     ValueTestCasePlan,
     ValueTestDifferential,
     ValueTestExpectation,
@@ -38,6 +40,7 @@ from tslc.value_tests.model import (
     ValueTestInvocation,
     ValueTestRepresentation,
     ValueTestTarget,
+    ValueTestTargetImaskHarness,
 )
 
 
@@ -402,6 +405,7 @@ def target_imask_case(
     case: TestCase,
     specs: tuple[LoweredSpecialization, ...],
     catalog: Catalog,
+    backend: ValueTestBackendSupport,
 ) -> ValueTestCasePlan | None:
     """Plan a direct integral-mask operation whose result belongs to ToVec."""
 
@@ -450,6 +454,36 @@ def target_imask_case(
     scalar_inputs = _scalar_inputs(case)
     if source_lanes is None or target_lanes is None or len(scalar_inputs) != 1:
         return None
+    source_extension = catalog.extensions.get(match.extension_name)
+    target_extension = catalog.extensions.get(match.target.extension_isa)
+    if source_extension is None or target_extension is None:
+        return None
+    predicate_harness: ValueTestTargetImaskHarness | None = None
+    source_is_predicate = source_extension.imask_policy.kind == "same_as_mask_type"
+    target_is_predicate = target_extension.imask_policy.kind == "same_as_mask_type"
+    if source_is_predicate != target_is_predicate:
+        return None
+    if source_is_predicate:
+        source_template = source_extension.test_mask_from_bits.get(backend.backend_id)
+        target_template = target_extension.test_mask_from_bits.get(backend.backend_id)
+        check_template = target_extension.test_mask_check.get(backend.backend_id)
+        parsed_masks = tuple(mask_bits_value(value) for value in mask_inputs)
+        expected_bits = mask_bits_value(case.expected[0])
+        if (
+            source_template is None
+            or target_template is None
+            or check_template is None
+            or expected_bits is None
+            or any(value is None for value in parsed_masks)
+        ):
+            return None
+        predicate_harness = ValueTestTargetImaskHarness(
+            source_mask_from_bits_template=source_template,
+            target_mask_from_bits_template=target_template,
+            target_mask_check_template=check_template,
+            mask_bits=tuple(value for value in parsed_masks if value is not None),
+            expected_mask_bits=expected_bits,
+        )
     return ValueTestCasePlan(
         kind="target_imask",
         function_name=_function_name(name, index, case),
@@ -476,6 +510,7 @@ def target_imask_case(
             source_extension=match.extension_name,
             target_extension=match.target.extension_isa,
         ),
+        target_imask_harness=predicate_harness,
     )
 
 

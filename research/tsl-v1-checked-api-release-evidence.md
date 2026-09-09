@@ -1,15 +1,18 @@
 # TSL v1 checked-API release evidence
 
-Date: 2026-09-06
-Reviewed implementation: Slice 8 completion `cb32a29e`
+Date: 2026-09-06; reconciled with the 2026-09-09 v1 release branch
+Reviewed implementation: historical Slice 8 measurement at `cb32a29e`, with
+the later Slice 9/10 proof closures summarized below
 Pre-refactor source: `08954770`
 
-This report records the documentation, typed-contract compatibility, package,
-and mechanism measurement results produced by Slice 8. The later
-post-implementation review supersedes it as a release-readiness decision:
-transitive-precondition accounting and exact backend declaration compatibility
-remain open. It is also not a claim that one workstation microbenchmark
-predicts application performance.
+This report preserves the documentation, typed-contract compatibility, package,
+and mechanism measurements produced by Slice 8. Its two former proof gaps are
+now closed: Slice 9 added exact transitive-precondition dispositions, and Slice
+10 froze scope-exact C++/Rust declaration manifests and reachability. The later
+[post-implementation review](tsl-v1-checked-api-post-implementation-review.md)
+is the current design-readiness decision. The measurements below remain
+historical and are not a claim that one workstation microbenchmark predicts
+application performance.
 
 ## Public contract and inventory
 

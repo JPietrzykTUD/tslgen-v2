@@ -1,408 +1,333 @@
-# TSL v1.0.0 generated API and documentation audit
+# TSL v1.0 generated API and documentation audit
 
-Date: 2026-09-02
+Initial audit: 2026-09-02
 
-Status: release-readiness review; no implementation changes are included
+Release-candidate re-audit: 2026-09-09
 
-Related plan: [TSL unchecked and checked API refactoring plan](tsl-v1-checked-api-refactor-plan.md)
+Status: no high-severity API or documentation finding remains
+
+Related material:
+
+- [TSL v1 user guide](../docs/tsl-v1-user-guide.md)
+- [exact generated support contract](../docs/tsl-v1-support.md)
+- [pre-v1 migration guide](../docs/migrating-to-tsl-v1.md)
+- [checked-API design review](tsl-v1-checked-api-post-implementation-review.md)
+- [C++ quality evidence](../supplementary/release/tsl-v1-cpp-consumer-quality.md)
+- [Rust quality evidence](../supplementary/release/tsl-v1-rust-quality.md)
 
 ## Executive verdict
 
-The generated TSL product is not ready to be labeled v1.0.0. The compiler
-architecture and the generated Rust facade are strong foundations, but one
-confirmed C++ semantic defect, one C++ consumer-integration defect, and major
-documentation/public-boundary gaps must be resolved first.
+The generated TSL library is API/documentation-ready for a v1.0 release
+candidate within its published support boundary. The initial audit's critical
+signed-arithmetic defect, public-header warning failure, undefined stability
+boundary, incomplete references, incorrect Rust profile guidance, package
+contamination, pointer-result documentation error, and undocumented algorithm
+preconditions have been corrected and ratcheted.
 
-| Surface | Verdict | Principal reason |
+| Surface | Verdict | Principal evidence |
 | --- | --- | --- |
-| Generated C++ API | Blocked | Signed integer wrapping invokes undefined behavior, and GCC non-scalar headers fail under `-Werror` |
-| Generated Rust API | Conditional | The opaque facade is promising, but the stable public boundary and package contents are not controlled |
-| Generated C++ documentation | Blocked | Core types, policies, algorithms, and important overload contracts are absent |
-| Generated Rust documentation | Blocked | The landing page contradicts implementation, public documentation is incomplete, and examples are not compiled |
+| Generated C++ API | Ready within contract | 8,015 exact classified declaration records over 29 profiles; ordinary-include consumers; defined signed wrapping; explicit checked/error ABI |
+| Generated Rust API | Ready within contract | 7,201 exact classified declaration records over six profiles; opaque facade; exact `unsafe` projection; Rust 1.89/current-stable gates |
+| Generated C++ documentation | Ready | Strict typed-manifest/Doxygen identity coverage includes core types, policies, primitives, overloads, ordinary/checked algorithms, and a CI-compiled example |
+| Generated Rust documentation | Ready | Strict missing-doc/link gates; correct target-feature selection model; two executable crate doctests; signature-only fragments labeled as text call forms |
+
+This verdict does not authorize the final tag. Native SVE and RVV/CHORYS
+attestations and atomic reproducible release production remain separate release
+gates in Slices 13 and 14.
 
 ## Scope and method
 
-The review covered the current source corpus, compiler/backend ownership,
-release-style generated artifacts, generated consumer projects, Doxygen input,
-rustdoc output, and package construction. The principal generated audit tree is
-workspace-local at `tslctmp/audit-v1/generated` and is intentionally not
-tracked.
+The re-audit followed the four generated product surfaces from typed owners to
+rendered artifacts:
 
-The review exercised:
+1. source declarations, semantics, preconditions, safety, and extension facts;
+2. typed catalog, selection, lowering, dependency closure, and backend plans;
+3. exact backend declaration/reachability manifests and generated entry points;
+4. C++/Rust consumer builds, strict documentation gates, package contents, and
+   checked-in examples.
 
-- release-style C++ and Rust generation;
-- the repository's generated-consumer verification script;
-- minimal scalar, AVX2, and Clang-overlay C++ consumers;
-- GCC and Clang warnings-as-errors probes;
-- a C++ UBSan signed-overflow probe;
-- strict Rust compiler warnings;
-- the repository's intended Clippy correctness/suspicious gate;
-- a full `-D warnings` Clippy diagnostic run;
-- rustdoc warning and missing-documentation checks;
-- Rust doctests;
-- clean and post-documentation Cargo packaging; and
-- the complete generated documentation build.
+No target-language parser was used to manufacture semantic facts. Generated
+source inspection was used only to confirm that the backend projections and
+public manifests were rendered as planned.
 
-The release-style generation produced 678,053 specializations across 439
-artifacts. It is useful evidence that the pipeline completes, but successful
-generation alone does not prove the API contract.
+The exact support universe is generated from the catalog, machine profiles,
+release policy, public-API baseline, and package metadata. It contains 185
+primitive callable families, 44 algorithm families, ten scalar element types,
+29 C++ profiles, six stable Rust profiles, and explicit runtime-scalable slot
+exclusions. The final exact SVE/RVV target ratchet contains 9,239 applicable
+slots and 9,994 realization outcomes: every applicable outcome is emitted, and
+130 impossible combinations are separately recorded as reviewed exclusions.
+Each generated project also carries a scope-exact `public-api.json`.
 
-## Findings
+## Findings, ordered by severity
 
-### F-01 — Critical: scalar C++ violates the integer-wrapping contract
+No critical or high-severity API/documentation finding remains.
 
-TSL declares `integer_wrapping` for addition and related operations in
-[`fundamental.tsl`](../tsldata/primitives/arithmetic/fundamental.tsl#L2), but
-the generated scalar C++ specialization evaluates signed addition as ordinary
-`left + right`. Signed overflow is undefined behavior in C++.
+### A-01 — Medium: native scalable hardware evidence remains a final-release gate
 
-The generated evidence is visible in
-`tslctmp/audit-v1/generated/cpp/include/tsl_scalar.hpp` around line 8217. A
-small UBSan consumer calling `tsl::add` with `INT_MAX` and `1` reported signed
-integer overflow at runtime. Rust explicitly implements the same contract with
-`wrapping_add` in
-[`tsl_core.rs`](../tslc/src/tslc/backend/assets/tsl_core.rs#L272).
+Full SVE and RVV C++ projects cross-compile and their value suites pass under
+QEMU at multiple vector lengths. That establishes compilation and functional
+evidence, not native performance or a real CHORYS deployment. Before the final
+tag, the same release-candidate artifacts must pass on native SVE and native
+RVV/CHORYS machines. If either cannot be obtained, that profile must be labeled
+experimental rather than silently retaining the stable claim.
 
-The generated CMake project adds `-fwrapv` only to its own value-test target in
-[`cpp_cmakelists.txt.tmpl`](../tslc/src/tslc/backend/assets/cpp_cmakelists.txt.tmpl#L192).
-That makes the differential test agree with hardware SIMD but does not change
-the semantics seen by a normal header-library consumer.
+This is a release-evidence gap, not an API/documentation inconsistency: the
+support guide and scalable evidence already disclose it.
 
-This is not a safety-check policy question. Wrapping is a declared operation
-semantic and the ordinary function must implement it without relying on a
-consumer compiler flag. The same audit must cover subtraction, multiplication,
-negation, reductions, and masked variants carrying the guarantee.
+### A-02 — Medium: the all-profile C++ tree is a poor default distribution unit
 
-Smallest correction:
+The measured all-profile C++ output is roughly 1.73 GB extracted and 50.7 MB as
+a gzip archive. Representative consumer translation units still compile in
+roughly two to three seconds, so the issue is distribution/indexing cost rather
+than an immediate use defect.
 
-- lower signed wrapping operations through defined unsigned-bit arithmetic or
-  an equivalent backend-owned helper;
-- remove the test-only assumption that `-fwrapv` represents consumer behavior;
-- add scalar/generic UBSan cases at minimum, maximum, and masked inactive-lane
-  edges; and
-- require C++ and Rust differential agreement on the declared modular result.
+The v1 user contract now recommends profile/type/primitive slices and labels the
+monolithic tree a reference/stress ceiling. Slice 13 must make the archive
+layout match that stated boundary; documentation alone does not make a large
+monolithic release artifact acceptable.
 
-Release evidence required: the overflow probe must return the modular value
-without a sanitizer diagnostic under an ordinary consumer build.
+### A-03 — Low: C++ compatibility is bounded by the verified compiler matrix
 
-### F-02 — High: GCC non-scalar public headers are not warning-clean
+Generated C++ requires C++17 and its generated CMake project requires CMake
+3.16. GCC 15.2, Clang 21, WASI Clang 22.1, cross GCC for SVE/RVV, and the CI
+MSVC/IntelLLVM lanes define current evidence. The project does not promise that
+arbitrarily older compiler releases work. This is now stated as a tested matrix
+rather than an implied universal minimum-version guarantee.
 
-A minimal AVX2 consumer built with GCC 15 emits repeated
-`-Wignored-attributes` diagnostics and fails when the application enables
-`-Werror`. The immediate source is a standard type-trait instantiation on an
-intrinsic vector mask type in
-[`tsl_core.hpp`](../tslc/src/tslc/backend/assets/tsl_core.hpp#L592):
+### A-04 — Low: advanced Rust substrate modules remain publicly reachable
 
-```cpp
-using MaskT = typename Vec::mask_type;
-if constexpr (std::is_integral_v<MaskT>) {
-```
+`tsl_core` and `tsl_algorithm` remain public because generated signatures depend
+on them. They are hidden from the stable landing page and are classified as
+advanced substrate rather than representation-stable ABI. The exact manifest
+distinguishes stable entry points and implementation detail. Making these
+modules physically private would require a larger signature redesign and is
+not justified for v1.
 
-Types such as `__m256i` trigger the diagnostic. The same AVX2/Clang-overlay
-probe passed with Clang 21 and `-Werror`, so this is a GCC-facing public-header
-problem rather than a general inability to compile the profile.
+## 1. Generated C++ API
 
-The external generated-consumer check currently selects only the scalar C++
-profile in
-[`verify_generated_consumers.sh`](../supplementary/ci/verify_generated_consumers.sh#L49).
-It therefore cannot detect warning failures in advertised native profiles.
+### Public boundary and compatibility
 
-Smallest correction:
+The stable entry point is `tsl.hpp`. The compatibility surface contains the
+reachable `tsl` vector/span/error types, primitive wrappers, checked companions,
+data-parallel policies, algorithm functions, and public policy tags. Physical
+profile headers, implementation structs, `detail` namespaces, and selection
+macros are excluded.
 
-- classify mask representation without instantiating inappropriate standard
-  traits on intrinsic vector types; and
-- add external GCC and Clang consumers for scalar and at least one native
-  profile with warnings treated as errors.
+The schema-v3 typed baseline records 8,015 exact declarations across the 29 C++
+release profiles. It includes owner, callable identity, template parameters,
+runtime parameters and roles, result, qualifiers, overload identity,
+checked/ordinary relationship, reachability, stable members, and stability
+classification. CI compares these facts rather than hashing formatted C++.
 
-### F-03 — High: the C++ reference omits most of the public API
+### Semantics and safety
 
-Doxygen consumes only a synthetic primitive-declaration header. The configured
-input boundary is visible in
-[`Doxyfile.in`](../supplementary/docs/cpp/Doxyfile.in#L1), and
-[`test_maintenance_documentation.py`](../tslc/tests/test_maintenance_documentation.py#L61)
-explicitly asserts that the real generated include directory is not an input.
+Signed wrapping arithmetic uses defined modular semantics under an ordinary
+consumer build; it no longer depends on the generated value test's historical
+`-fwrapv` setting. Scalar/generic edge tests, sanitizer probes, and C++/Rust
+differential cases cover overflow boundaries.
 
-The resulting Doxygen index contains one namespace, one file, and 210 function
-entries, but no documented classes or structs. It consequently omits central
-public concepts such as:
+Unsuffixed operations perform no hidden sanitization. C++ keeps the ordinary
+zero-overhead convention and documents caller obligations. A generated checked
+twin exists only for a complete catastrophic runtime condition. Value-returning
+checked functions preserve the ordinary return type and append
+`precondition_error&`; void functions return the error. Failure occurs before
+ordinary dispatch and yields only an initialized, semantically unspecified
+placeholder for value results.
 
-- `tsl::simd` and `tsl::reg_param`;
-- `dataparallel::native`, `fixed`, `generic`, and compiler overlays;
-- alignment and mask-layout policies;
-- the complete `tsl::algo` API;
-- mask/storage helper types; and
-- public preconditions and result/error conventions.
+The chosen form avoids `checked_result<register_type>` and therefore avoids
+imposing an aggregate-return ABI that could force vector register spilling. The
+compiler cannot force callers to inspect an error reference, so documentation,
+`[[nodiscard]]`, examples, and review remain part of correct use.
 
-The algorithm API begins in
-[`tsl_algorithm.hpp`](../tslc/src/tslc/backend/assets/tsl_algorithm.hpp#L1), but
-none of it appears in the generated C++ reference. There is also no generated
-C++ README or equivalent getting-started guide.
+### Profiles and scalable vectors
 
-Primitive documentation is generally useful: it contains a brief description,
-detailed semantics, pseudocode, parameters, feature requirements, and safety
-facts. That good primitive projection should be retained while the actual
-public type and algorithm surface is added.
+The generated CMake interface exports `tsl::tsl` and selects one generated
+profile. Native `auto` selection probes ungated profiles; cross builds use the
+fallback unless the consumer supplies `TSL_PROFILE` explicitly. Target features
+and compiler-capability probes are separate typed decisions.
 
-Smallest correction:
+Runtime-scalable SVE and RVV use runtime lane and predicate semantics. The fixed
+SVE128/SVE256/SVE512 profiles are separate fixed-shape compatibility contracts.
+The exact support projection excludes only reviewed operations whose signatures
+intrinsically require ordered fixed register widths/fixed arrays, fixed-SVE
+representation changes for which the compilation mode contains no distinct
+same-family width, or source types with no wider/narrower target scalar. It does
+not fabricate a static lane count or return an uncontracted heap container.
 
-- define the intended stable C++ surface first;
-- project its types, policies, algorithms, overloads, and preconditions into a
-  typed documentation model;
-- keep implementation-detail headers excluded; and
-- add a completeness gate over exact intended public identities rather than an
-  aggregate Doxygen count.
-
-### F-04 — High: Rust documentation states the wrong profile-selection model
-
-The Rust landing page says that normal builds select a machine profile through
-Cargo features and that target-feature auto-selection is not implemented in
-[`rust_api.rst.in`](../supplementary/docs/site/rust_api.rst.in#L12).
-
-The generated crate instead selects a profile using compile-target
-`cfg(target_feature)` branches with an exact generic fallback. This is also the
-documented compiler contract in
-[`DESCRIPTION.md`](../tslc/DESCRIPTION.md#L503). The generated Cargo feature
-set contains `default`, `std`, and runtime-dispatch controls, not one feature
-per machine profile.
-
-This is a user-visible correctness defect: following the documentation leads
-to the wrong integration model.
-
-Smallest correction: generate the Rust landing-page selection explanation from
-the same backend-owned profile-selection facts used by `lib.rs`, or keep a
-short hand-authored description with a test that asserts the relevant claims
-against the generated feature and cfg model.
-
-### F-05 — High: the v1 public compatibility boundary is undefined
-
-The generated Rust crate publicly exposes `tsl_core`, `tsl_algorithm`, the
-opaque facade, `profile`, and optional runtime dispatch. The public module and
-re-export boundary is assembled by the Rust project renderer and templates;
-the intended facade ownership is described in
-[`DESCRIPTION.md`](../tslc/DESCRIPTION.md#L521).
-
-In the audited artifact, the root facade exported 44 free functions while the
-profile-neutral primitive module exported 142. `tsl_core` and `tsl_algorithm`
-also expose large public trait and helper surfaces. It is not stated which of
-these names are covered by the future 1.x compatibility promise.
-
-C++ similarly exposes primitive wrappers, core helpers, policy types,
-algorithms, and macros without a formal stability classification or API
+The re-audit initially found 292 no-candidate records in the three fixed-SVE
+profiles. Of these, 247 represented the impossible combinations above and are
+now typed policy exclusions. The remaining 45 source slots were a real gap in
+base-width `extract_imask`/`insert_imask`. Fixed SVE now implements those
+operations by walking and rebuilding native predicates through typed mask
+primitives. That path is explicitly classified as reviewed fallback, and
+predicate-aware authored cases compile and pass under QEMU for SVE128, SVE256,
+and SVE512. CI now runs the target ratchet with `--require-complete`, preventing
+recorded gaps from being accepted merely because they appeared in the prior
 baseline.
 
-The opaque Rust `Simd<T, N>` and `Mask<T, N>` facade is the strongest current
-candidate for the stable Rust interface. It provides owned logical values,
-operator integration, checked slice conveniences, `#[must_use]`, and explicit
-unsafe raw-pointer boundaries. The lower-level profile and substrate APIs may
-still be valuable, but they should be explicitly stable, experimental, or
-private rather than accidentally becoming a semver commitment.
+### C++ API verdict
 
-Smallest correction:
-
-- publish a backend-specific stable-surface manifest;
-- hide or clearly classify everything outside it; and
-- ratchet exact generated declarations/signatures in CI before assigning
-  version 1.0.0.
-
-### F-06 — High: Rust package contents depend on local documentation history
-
-The documentation task writes rustdoc output below the crate at
-`rust/docs/target`, as shown in
-[`documentation.py`](../tslc/src/tslc/maintenance/documentation.py#L333). The
-Cargo manifest template has neither an `include` whitelist nor an `exclude`
-rule in
-[`rust_cargo.toml.tmpl`](../tslc/src/tslc/backend/assets/rust_cargo.toml.tmpl#L1).
-
-Measured package contents were:
-
-| State | Files | Unpacked | Compressed |
-| --- | ---: | ---: | ---: |
-| Clean generated crate | 78 | 144.0 MiB | 3.8 MiB |
-| After official docs build | 1,141 | 387.5 MiB | 30.5 MiB |
-
-The same source therefore creates materially different packages depending on
-whether documentation was built in place. This is a release-reproducibility
+No blocking finding remains. The residual risks are release packaging size and
+native scalable attestation, not an untracked C++ declaration or semantic
 defect.
 
-Smallest correction:
+## 2. Generated Rust API
 
-- build rustdoc outside the package root;
-- define explicit Cargo package contents;
-- test `cargo package --list` before and after documentation generation; and
-- add missing package metadata, including a description.
+### Public boundary and representation
 
-### F-07 — High: the generated distribution is exceptionally large
+The stable Rust surface is the opaque root `Simd<T, N>`/`Mask<T, N>` facade,
+reviewed root re-exports, and the compile-target-selected `profile` primitive
+surface. Private representations are sealed behind traits; normal users cannot
+construct invalid vector storage through the stable facade.
 
-The audited release tree contained approximately:
+The exact typed baseline records 7,201 declarations for `sse`, `sse2`, `sse3`,
+`avx`, `avx2`, and `knl`, including their shared generic fallback. Stable Rust
+SVE/RVV is explicitly unsupported because the current implementation would
+depend on unstable/private compiler facilities. This is a deliberate v1 scope,
+not a silent generation gap.
 
-- 1.4 GiB and 36.6 million lines of C++ headers;
-- 145–149 MiB of Rust source;
-- 38 MiB and 1.23 million formatted lines in `tsl_facade.rs` alone; and
-- individual C++ overlay headers near 33 MiB.
+### Safety boundary
 
-Formatting the full generated project remained CPU-bound for more than eleven
-minutes. Minimal selected-profile compilation was much smaller in practice:
-approximately 0.70 seconds for scalar C++, 1.27 seconds for GCC AVX2, and 2.65
-seconds for the Clang AVX2/overlay probe on the audit host.
+Rust `unsafe fn` is driven by an outstanding `caller_unsafe` obligation after
+dependency closure. It is not driven merely by implementation mechanics. The
+current checked census contains 33 exact source callable identities with at
+least one caller-unsafe implementation. Every caller-unsafe path carrying
+`raw_memory` also carries `raw_pointer`; implementations that use raw-memory
+staging internally without an outstanding caller obligation remain publicly
+safe. Other unsafe public paths arise from typed catastrophic conditions such
+as unchecked runtime lane indices or invalid integer division operands.
 
-This is not automatically a correctness blocker, but it is a v1 product and
-maintenance risk for downloads, source indexing, package registries, release
-CI, and compiler diagnostics. Adding a naive checked twin for every concrete
-specialization would make it materially worse.
+This separation is important:
 
-Smallest correction: choose and document whether v1 ships a monolithic
-all-profile SDK, per-profile products, or consumer-selected slices. Checked
-wrappers should be emitted once per public callable family and delegate to the
-ordinary implementation rather than duplicate specialization bodies.
+- `internal_unsafe` says generated Rust needs a local unsafe-operation frame;
+- `caller_unsafe` says correctness depends on the public caller;
+- `raw_memory` describes a mechanism and is not sufficient for the second; and
+- `raw_pointer` records a caller-owned validity/provenance boundary.
 
-### F-08 — Medium: all Rust documentation examples are disabled
+When every catastrophic runtime condition is representable, the safe checked
+twin returns `Result<T, PreconditionError>` or
+`Result<(), PreconditionError>`. Range/slice checks cannot validate forged
+references, object lifetime, provenance, or concurrent invalidation. Honest
+omissions remain explicit in the census.
 
-`cargo test --doc` discovered 3,156 examples, of which zero ran and all 3,156
-were ignored. The comprehensive facade renderer emits every example as
-` ```ignore ` in
-[`rust_facade_comprehensive.py`](../tslc/src/tslc/render/rust_facade_comprehensive.py#L376).
+### Profile selection, MSRV, and packaging
 
-Smallest correction:
+Normal Cargo builds use compile-target `cfg(target_feature)` selection with an
+exact generated generic fallback. There are no per-profile Cargo features;
+`runtime-dispatch` is a separate optional `std` feature. The crate declares
+edition 2021 and Rust 1.89 as its MSRV. Both 1.89 and current stable pass the
+release build/lint/doc/value matrix.
 
-- provide hidden setup for representative examples;
-- use ordinary doctests when they can execute generically;
-- use `no_run` when the compile check is meaningful but execution is target
-  dependent; and
-- reserve `ignore` for explicitly justified cases.
+Cargo uses an explicit include list. Its package-owned file list is identical
+before and after local documentation generation, so generated Rustdoc and
+checkout-local files cannot contaminate the crate archive.
 
-### F-09 — Medium: 227 public Rust documentation obligations are missing
+### Rust API verdict
 
-`RUSTDOCFLAGS='-D missing_docs' cargo doc` failed with 227 diagnostics. They
-include the crate root, public core/algorithm modules, traits, functions, and
-helper modules. The crate also has no `//!` overview and its generated README is
-only a short package description.
+No blocking finding remains within the six-profile stable scope. Rust
+scalable-vector support is a disclosed future capability, not an implied v1
+promise.
 
-This count depends on the unresolved public-boundary decision. Hiding internal
-substrates may remove legitimate obligations; anything retained in the stable
-surface should pass `-D missing_docs`.
+## 3. Generated C++ documentation
 
-### F-10 — Medium: pointer result documentation adds an extra pointer level
+Doxygen consumes a documentation-only primitive facade plus the stable core,
+data-parallel, algorithm-tag, ordinary-algorithm, and checked-algorithm headers.
+Strict validation joins generated identities to typed public manifests and
+rejects missing prose, duplicate identities, incomplete overloads, invalid
+checked relationships, or absent stable type/algorithm records.
 
-The generated C++ allocation signature returns `void*`, while its prose says
-`void**`. Rust similarly returns `*mut c_void` while documenting
-`*mut *mut c_void`.
+The reference states parameter/result types from the same backend projection as
+the actual declarations. Pointer-return documentation therefore no longer adds
+an erroneous pointer level. Each overload owns its own documentation record,
+and repeated free specializations are deduplicated by callable identity rather
+than rendered text.
 
-The documentation result projection calls the free-result type formatter
-without preserving the original pointer base identity in
-[`cpp_documentation.py`](../tslc/src/tslc/backend/cpp_documentation.py#L123) and
-[`rust_documentation.py`](../tslc/src/tslc/backend/rust_documentation.py#L101).
+Algorithm documentation states secondary-range, mask, selected-index, output
+capacity, alignment, and overlap preconditions. The shared checked API page
+documents direct calls, error handling, failure placeholders, and residual C++
+object obligations. Its literal C++ example is compiled warning-clean against
+the generated scalar library by the package consumer workflow.
 
-Smallest correction: use the same typed result projection as the actual
-signature renderers and add pointer/free-function equivalence tests for both
-backends.
+### C++ documentation verdict
 
-### F-11 — Medium: C++ overload documentation is incomplete and duplicated
+The complete promised stable surface is reachable from `tsl.hpp` and present in
+the generated reference. No blocking documentation finding remains.
 
-The canonical vector primitive declaration receives documentation, while the
-adjacent policy overload does not. The behavior originates in
-[`cpp.py`](../tslc/src/tslc/backend/cpp.py#L439), which attaches one block only
-to the vector declaration.
+## 4. Generated Rust documentation
 
-Free functions such as allocation are also emitted repeatedly for different
-specialization contexts. The C++ documentation renderer deduplicates complete
-rendered strings rather than callable identity in
-[`cpp_project.py`](../tslc/src/tslc/render/cpp_project.py#L252), so Doxygen
-merges repeated declarations and prose into noisy entries.
+Rustdoc presents the opaque facade and selected `profile` API as the stable
+surface. The landing page correctly describes compile-target feature selection,
+the generic fallback, the distinction from runtime dispatch, unsuffixed unsafe
+calls, checked `Result`, and the status of lower-level substrate modules.
 
-Smallest correction: create one documentation record per public callable
-identity, attach overload-specific facts, and reject conflicting duplicate
-records before formatting.
+Strict builds deny Rustdoc warnings, missing public documentation, broken
+intra-doc links, and bare URLs. The two crate-level ordinary/checked examples
+are complete executable doctests. The former 3,524 context-free fragments were
+not executable examples: they referred to parameter names without constructing
+values and were silently marked `ignore`. They are now labeled `Call form` and
+rendered as text. This leaves no ignored snippet masquerading as a tested
+example.
 
-### F-12 — Medium: C++ range-algorithm preconditions are unstated
+Checked functions have `# Errors`; unsafe functions have `# Safety`; panic
+conditions are separate. The documentation-only union emits each callable once
+without implying that every concrete profile implements every declaration.
+Concrete availability and implementation state remain in the specialization
+reference.
 
-Range overloads obtain a count from the first input and pass raw data pointers
-for secondary inputs and outputs. For example, `transform_unary` in
-[`tsl_algorithm.hpp`](../tslc/src/tslc/backend/assets/tsl_algorithm.hpp#L215)
-uses the input size without checking output capacity. Binary, predicate, and
-masked families have analogous relationships.
+### Rust documentation verdict
 
-An unchecked C++ algorithm is a legitimate design, but its preconditions must
-be part of the public contract. The current C++ documentation omits the
-algorithm API entirely, so a caller is not told that secondary inputs, masks,
-or outputs must be large enough.
+Every actual generated example runs under the doctest gate, and every stable
+declaration is represented through the stable reference boundary. No blocking
+documentation finding remains.
 
-The agreed direction is to retain a zero-overhead unchecked form and add an
-explicit checked variant. The detailed design and necessary limitations are in
-the related refactoring plan.
+## Initial finding resolution table
 
-## Positive evidence
-
-- Release-style generation completed successfully for the requested
-  profile/backend matrix.
-- The repository consumer workflow passed a minimal scalar CMake consumer, 21
-  Rust examples, and 21 C++ examples/tests.
-- A Clang AVX2/overlay consumer passed with warnings treated as errors.
-- Rust passed `-D warnings`, `-D invalid-value`, private-interface/bounds
-  warnings, and rustdoc `-D warnings`.
-- The intended Clippy gate for `correctness` and `suspicious` passed.
-- Rust's opaque value facade has a strong safety boundary and idiomatic owned
-  `Simd`/`Mask` types.
-- Primitive prose and semantic pseudocode are generally useful.
-- The compiler already carries typed arithmetic, operation, memory, conversion,
-  shift, safety, profile, and target facts through lowering. Corrections can be
-  additive to these owners rather than based on parsing generated target text.
-
-## Validation results
-
-| Check | Result |
+| Initial finding | Re-audit disposition |
 | --- | --- |
-| Release-style generation | Passed; 678,053 specializations, 439 artifacts |
-| Full generated documentation build | Passed |
-| Generated C++/Rust consumer workflow | Passed |
-| Minimal scalar C++ consumer | Passed |
-| Minimal GCC AVX2 consumer | Compiled with repeated warnings; failed under `-Werror` |
-| Minimal Clang AVX2/overlay consumer | Passed under `-Werror` |
-| C++ signed-overflow UBSan probe | Failed with signed-overflow diagnostic |
-| Rust strict compiler warnings | Passed |
-| Intended Rust Clippy correctness/suspicious gate | Passed |
-| Full Clippy `-D warnings` | Failed with 2,523 generated-code style diagnostics |
-| Rustdoc `-D warnings` | Passed |
-| Rustdoc `-D missing_docs` | Failed with 227 diagnostics |
-| Rust doctests | 3,156 ignored; zero compiled as tests |
-| `git diff --check` | Passed |
+| F-01 critical — C++ signed wrapping UB | Fixed with defined modular lowering and sanitizer/differential gates |
+| F-02 high — GCC native headers fail `-Werror` | Fixed; all-profile ordinary-include quality target added |
+| F-03 high — C++ reference omits stable types/algorithms | Fixed through typed stable documentation manifests and expanded Doxygen input |
+| F-04 high — Rust docs claim Cargo profile features | Fixed; all user surfaces describe compile-target `cfg` selection |
+| F-05 high — compatibility boundary undefined | Fixed by exact backend declaration/reachability manifests and stability classes |
+| F-06 high — Cargo contents depend on docs history | Fixed by explicit package contents and before/after package-list gate |
+| F-07 high — monolithic distribution size | Reduced to A-02: measured, disclosed, and assigned to Slice 13 archive design |
+| F-08 medium — all Rust examples ignored | Fixed: two real doctests execute; signature fragments are non-example text |
+| F-09 medium — missing Rust public docs | Fixed under `-D missing-docs` |
+| F-10 medium — pointer results documented with extra indirection | Fixed by shared typed result projection |
+| F-11 medium — incomplete/duplicated C++ overload docs | Fixed by exact callable documentation identities |
+| F-12 medium — C++ algorithm preconditions unstated | Fixed by ordinary/checked algorithm contracts and reference coverage |
 
-The full Clippy style count is technical debt rather than a demonstrated
-correctness defect because the repository deliberately enforces a narrower
-correctness/suspicious lint contract today.
+## Validation evidence
 
-## Audit limitations
+The four-way conclusion is supported by the maintained release gates, not only
+manual inspection:
 
-- The audit compiled representative scalar and x86 native profiles rather than
-  executing every generated target/profile combination.
-- Hardware-specific ARM, SVE, WASM, FPGA, and emulator paths were not executed.
-- The artifact-size observations are measurements on the selected release
-  matrix, not a package-registry compatibility claim.
-- No API compatibility baseline exists yet, so stability was assessed from
-  exposed declarations and repository documentation rather than versioned
-  historical comparisons.
+| Gate | Result |
+| --- | --- |
+| Exact public family and backend declaration baselines | 185 primitive families; 44 algorithms; 8,015 C++; 7,201 Rust |
+| Full ordinary compiler suite after Slice 12 | 2,827 passed; 126 expected skips |
+| C++ representative all-family quality matrix | 49 verifier commands passed |
+| Rust 1.89 and current-stable release matrices | 93 commands per toolchain passed |
+| Full Rust generated facade doctests before call-form correction | 2 executable examples passed; 3,524 non-executable fragments identified |
+| Slice 12 full-corpus scalar C++/Rust quality and values | 21,802 specializations, 77 artifacts, 26 commands; 1,657 Rust values and two doctests passed |
+| Slice 12 strict generated documentation | Doxygen, Rustdoc, specialization site, and Sphinx passed; documented C++ checked example compiled under `-Werror` |
+| Exact SVE/RVV support | 9,239 applicable slots; 9,994 emitted outcomes; zero absent/deferred/pruned outcomes; 130 reviewed impossible combinations |
+| Fixed-SVE integral-mask conversions | Predicate-aware extraction/insertion values passed under QEMU for SVE128, SVE256, and SVE512 |
+| Scalable values | SVE and RVV passed under QEMU at three vector lengths; native attestations pending |
+| External checked/unchecked consumers | C++ family matrix and Rust path/archive consumers passed |
+| Strict generated references | Doxygen identity validation and Rustdoc warning/missing-doc/link gates passed |
 
-## Decisions required before v1.0.0
+Slice 12 additionally reruns the focused release-contract, Rust facade,
+documentation, declaration-manifest, generated quality, doctest, C++ documented
+example, corpus, type-checking, and full Python gates after the documentation
+changes. The committed slice records the final command results in
+[`todo/v1-0.md`](../todo/v1-0.md).
 
-1. Which Rust names are stable: only the opaque facade, or also `profile`,
-   `tsl_core`, `tsl_algorithm`, and runtime dispatch?
-2. Which C++ helpers, policies, algorithms, and macros are stable?
-3. Is the distributed product monolithic, profile-specific, or generated per
-   requested application slice?
-4. What exact compiler/version/profile matrix is supported and warning-clean?
-5. Which dynamic preconditions receive generated checked variants, and which
-   obligations cannot honestly be checked?
+## Recommendation
 
-## Release recommendation
-
-Do not assign v1.0.0 until at least the following gates pass:
-
-1. declared C++ arithmetic semantics pass sanitizer and cross-backend tests;
-2. supported external C++ consumers are warning-clean on scalar and native
-   profiles;
-3. both stable public surfaces are explicitly enumerated and ratcheted;
-4. C++ and Rust documentation cover those surfaces and describe actual profile
-   selection;
-5. checked and unchecked preconditions are explicit and tested;
-6. representative documentation examples compile;
-7. Cargo package contents are identical before and after docs generation; and
-8. the intended distribution size and profile packaging policy are recorded.
+Accept the four generated API/documentation surfaces for the v1 release
+candidate. Do not cut the final tag until Slice 13 proves deterministic atomic
+artifacts and Slice 14 supplies native SVE and RVV/CHORYS attestations. If those
+hardware gates cannot be met, narrow the corresponding release status rather
+than weakening the documented contract.

@@ -61,6 +61,17 @@ set(TSL_BUILD_TESTS OFF CACHE BOOL "TSL generated tests" FORCE)
 FetchContent_Declare(tsl SOURCE_DIR "$generated_root/cpp")
 FetchContent_MakeAvailable(tsl)
 
+if(TSL_CONSUMER_PROFILE STREQUAL "scalar")
+  add_library(tsl_cpp_documented_checked_example OBJECT
+    "$repo_root/supplementary/docs/site/checked_api_example.cpp")
+  target_link_libraries(tsl_cpp_documented_checked_example PRIVATE tsl::tsl)
+  if(MSVC)
+    target_compile_options(tsl_cpp_documented_checked_example PRIVATE /W4 /WX)
+  else()
+    target_compile_options(tsl_cpp_documented_checked_example PRIVATE -Wall -Wextra -Werror)
+  endif()
+endif()
+
 if(CMAKE_CROSSCOMPILING)
   add_library(tsl_cpp_consumer OBJECT main.cpp)
 else()

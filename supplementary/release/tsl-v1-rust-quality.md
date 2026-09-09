@@ -64,11 +64,14 @@ build/lint/Rustdoc/value matrix with no failed command. The full Rust 1.89 run
 used Intel SDE 10.8.0 and passed all generated suites, including 2,367 AVX,
 2,543 AVX2, 2,706 KNL, and 2,240 value cases for each of SSE, SSE2, and SSE3.
 
-The full generated facade also passed 3,526 doctests on each toolchain: two
-crate examples executed and 3,524 API signature examples compiled as ignored
-examples by their authored policy. After the final compatibility fixes, focused
-current-stable and Rust 1.89 runs each passed all 13 scheduled commands and 412
-SSE generated value cases, including the doctest command.
+The full generated facade's doctest gate succeeded on each toolchain: two
+complete crate examples executed. At the time, 3,524 context-free API call
+fragments were also labeled as ignored examples even though they only
+illustrated parameterized call syntax. Slice 12 relabels those fragments as
+non-executable `Call form` text, so ignored snippets no longer masquerade as
+tested examples. After the final compatibility fixes, focused current-stable
+and Rust 1.89 runs each passed all 13 scheduled commands and 412 SSE generated
+value cases, including the doctest command.
 
 Two MSRV defects were removed rather than suppressed globally:
 

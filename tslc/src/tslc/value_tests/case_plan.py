@@ -22,6 +22,7 @@ from tslc.value_tests.case_components import (
     ValueTestRepresentation,
     ValueTestScalable,
     ValueTestTarget,
+    ValueTestTargetImaskHarness,
 )
 
 
@@ -45,6 +46,7 @@ class ValueTestCasePlan:
     index: ValueTestIndex | None = None
     memory: ValueTestMemory | None = None
     representation: ValueTestRepresentation | None = None
+    target_imask_harness: ValueTestTargetImaskHarness | None = None
     scalable: ValueTestScalable | None = None
     differential: ValueTestDifferential | None = None
     failure: ValueTestFailure | None = None
@@ -69,6 +71,7 @@ class ValueTestCasePlan:
         self._validate_inputs(requirements)
         self._validate_fuzz(requirements)
         self._validate_differential_helpers(requirements)
+        self._validate_target_imask_harness()
         self._validate_checked_precondition()
 
     def _validate_common_fields(self) -> None:
@@ -103,6 +106,17 @@ class ValueTestCasePlan:
             raise ValueError(
                 f"value-test case {self.function_name!r} compiler capabilities must be "
                 "sorted and unique"
+            )
+
+    def _validate_target_imask_harness(self) -> None:
+        harness = self.target_imask_harness
+        if harness is None:
+            return
+        if self.kind != "target_imask":
+            raise ValueError("target-imask predicate harness requires target_imask kind")
+        if len(harness.mask_bits) != len(self.inputs.masks):
+            raise ValueError(
+                "target-imask predicate harness mask bits must match mask inputs"
             )
 
     def _validate_required_facts(

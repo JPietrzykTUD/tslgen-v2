@@ -279,6 +279,31 @@ class ValueTestRepresentation:
 
 
 @dataclass(frozen=True, slots=True)
+class ValueTestTargetImaskHarness:
+    """Backend templates for a target-imask case whose ``im`` is a predicate."""
+
+    source_mask_from_bits_template: str
+    target_mask_from_bits_template: str
+    target_mask_check_template: str
+    mask_bits: tuple[int, ...]
+    expected_mask_bits: int
+
+    def __post_init__(self) -> None:
+        if not all(
+            (
+                self.source_mask_from_bits_template,
+                self.target_mask_from_bits_template,
+                self.target_mask_check_template,
+            )
+        ):
+            raise ValueError("target-imask predicate harness requires complete templates")
+        if not self.mask_bits or any(bits < 0 for bits in self.mask_bits):
+            raise ValueError("target-imask predicate harness requires mask bits")
+        if self.expected_mask_bits < 0:
+            raise ValueError("target-imask predicate harness requires expected mask bits")
+
+
+@dataclass(frozen=True, slots=True)
 class ValueTestScalable:
     """Backend-neutral scalable-extension facts.
 

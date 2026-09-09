@@ -28,6 +28,7 @@ from tslc.value_tests.case_components import (
     ValueTestRepresentation,
     ValueTestScalable,
     ValueTestTarget,
+    ValueTestTargetImaskHarness,
 )
 from tslc.value_tests.case_plan import ValueTestCasePlan
 
@@ -153,4 +154,5 @@ __all__ = (
     "ValueTestRepresentation",
     "ValueTestScalable",
     "ValueTestTarget",
+    "ValueTestTargetImaskHarness",
 )

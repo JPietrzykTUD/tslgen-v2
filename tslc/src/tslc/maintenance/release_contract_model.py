@@ -266,7 +266,19 @@ class ReleaseContract:
                     "returns the operation value directly and reports through "
                     "precondition_error&"
                 ),
-                "rust": "returns Result; unchecked pointer APIs remain unsafe",
+                "cpp_failure_result": (
+                    "the operation is not invoked; an initialized but semantically "
+                    "unspecified value placeholder must not be used before inspecting "
+                    "the error"
+                ),
+                "rust": (
+                    "checked calls return Result; an unsuffixed function is unsafe "
+                    "only when a catastrophic caller obligation remains"
+                ),
+                "internal_unsafety": (
+                    "internal_unsafe and raw_memory implementation mechanisms do not "
+                    "by themselves make a public Rust function unsafe"
+                ),
             },
             "implementation_states": [
                 {

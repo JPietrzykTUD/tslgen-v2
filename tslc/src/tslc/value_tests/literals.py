@@ -73,6 +73,16 @@ def token_truthy(token: str) -> bool:
             return True
 
 
+def mask_bits_value(token: str) -> int | None:
+    """The non-negative integer value of one authored mask-bits token, or None."""
+
+    try:
+        value = int(token.strip().strip('"'), 0)
+    except ValueError:
+        return None
+    return value if value >= 0 else None
+
+
 def _wrapped_int(token: str, type_tag: str) -> str | None:
     bits = _type_bits(type_tag)
     if bits is None:
@@ -102,6 +112,7 @@ def _type_bits(type_tag: str) -> int | None:
 __all__ = (
     "cpp_literal",
     "cpp_literal_list",
+    "mask_bits_value",
     "rust_literal",
     "rust_literal_list",
     "token_truthy",
