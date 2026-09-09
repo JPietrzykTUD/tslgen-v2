@@ -157,7 +157,6 @@ def create_server(
                 server,
                 state,
                 workspace.generation,
-                debounce=False,
             )
 
     @server.feature(types.TEXT_DOCUMENT_DID_OPEN)

@@ -14,6 +14,9 @@ from typing import Any, BinaryIO, Callable
 from tslc.version import package_version
 
 
+_INITIAL_INDEX_TIMEOUT_SECONDS = 60.0
+
+
 class _LspClient:
     def __init__(self, process: subprocess.Popen[bytes]) -> None:
         self.process = process
@@ -139,7 +142,10 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
                 "params": {"textDocument": {"uri": path.as_uri()}},
             }
         )
-        lenses = client.read_until(lambda item: item.get("id") == 20)["result"]
+        lenses = client.read_until(
+            lambda item: item.get("id") == 20,
+            timeout=_INITIAL_INDEX_TIMEOUT_SECONDS,
+        )["result"]
         assert lenses
         assert len(lenses) == len(
             {
