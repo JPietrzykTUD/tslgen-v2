@@ -446,6 +446,51 @@ def test_clang_vector_shift_left_uses_builtin_vector_operator(
     assert "to_array" not in cpp.body_text
 
 
+@pytest.mark.parametrize("signature", ["v:=(v,sImm)", "v:=(v,s)"])
+def test_clang_uniform_shift_left_preserves_vector_result(
+    catalog: Catalog,
+    machine_profiles,
+    signature: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles["avx2"], "shift_left", ("ui16",))
+        .selected
+        if selected.extension.name == "clang_v256"
+        and selected.primitive.signature == signature
+    )
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert cpp is not None
+    assert "auto const ures = ua <<" in cpp.body_text
+    assert "auto const ures = static_cast" not in cpp.body_text
+
+
+@pytest.mark.parametrize("signature", ["v:=(v,sImm)", "v:=(v,s)"])
+def test_scalar_uniform_shift_left_keeps_narrowing_cast(
+    catalog: Catalog,
+    machine_profiles,
+    signature: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles["scalar"], "shift_left", ("ui16",))
+        .selected
+        if selected.extension.name == "scalar"
+        and selected.primitive.signature == signature
+    )
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert cpp is not None
+    assert "auto const ures = static_cast<uint16_t>" in cpp.body_text
+
+
 def test_clang_vector_shift_right_uses_builtin_vector_operator(
     catalog: Catalog,
     machine_profiles,

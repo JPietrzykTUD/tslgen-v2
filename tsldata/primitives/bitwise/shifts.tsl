@@ -49,7 +49,7 @@ prim<v:=(v,sImm)> shift_left(data, shift):
     - {tags [imm, neon], extension "neon", type "f32", case {inputs [[1.40129846e-45, 1.40129846e-45, 1.40129846e-45, 1.40129846e-45], 1], expected [2.80259693e-45, 2.80259693e-45, 2.80259693e-45, 2.80259693e-45]}}
     - {tags [imm, neon], extension "neon", type "f64", case {inputs [[5e-324, 5e-324], 1], expected [1e-323, 1e-323]}}
   impls:
-    [scalar, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
+    scalar:
       arith:
         prefer_fixed_native true
         requires []
@@ -69,6 +69,25 @@ prim<v:=(v,sImm)> shift_left(data, shift):
               var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<UBase>]>(data));
               var<const_infer>(ures, cast<static>(UBase, ua << cast<static>(UBase, shift)));
               complete(call<primitive=reinterpret[Vec<UBase>, Vec]>(ures));
+            """
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
+      arith:
+        prefer_fixed_native true
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              if (cast<static>(ui64, shift) >= value(type::size_bits(base::in))) {
+                complete(call<primitive=set_zero[Vec]>());
+              }
+              let<type>(UBase, base::unsigned_of(base::in));
+              let<type>(UVec, vector::as_base(UBase));
+              var<const_infer>(ua, call<primitive=reinterpret[Vec, UVec]>(data));
+              var<const_infer>(ures, ua << cast<static>(UBase, shift));
+              complete(call<primitive=reinterpret[UVec, Vec]>(ures));
             """
     [generic, oneapi_fpga]:
       arith:
@@ -661,7 +680,7 @@ prim<v:=(v,s)> shift_left(data, shift):
     - {tags [basic], type "f32", case {inputs [[1.40129846e-45, 1.40129846e-45, 1.40129846e-45, 1.40129846e-45], 1], expected [2.80259693e-45, 2.80259693e-45, 2.80259693e-45, 2.80259693e-45]}}
     - {tags [basic], type "f64", case {inputs [[5e-324, 5e-324], 1], expected [1e-323, 1e-323]}}
   impls:
-    [scalar, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
+    scalar:
       arith:
         prefer_fixed_native true
         requires []
@@ -681,6 +700,25 @@ prim<v:=(v,s)> shift_left(data, shift):
               var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<UBase>]>(data));
               var<const_infer>(ures, cast<static>(UBase, ua << cast<static>(UBase, shift)));
               complete(call<primitive=reinterpret[Vec<UBase>, Vec]>(ures));
+            """
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
+      arith:
+        prefer_fixed_native true
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              if (cast<static>(ui64, shift) >= value(type::size_bits(base::in))) {
+                complete(call<primitive=set_zero[Vec]>());
+              }
+              let<type>(UBase, base::unsigned_of(base::in));
+              let<type>(UVec, vector::as_base(UBase));
+              var<const_infer>(ua, call<primitive=reinterpret[Vec, UVec]>(data));
+              var<const_infer>(ures, ua << cast<static>(UBase, shift));
+              complete(call<primitive=reinterpret[UVec, Vec]>(ures));
             """
     [generic, oneapi_fpga]:
       arith:
