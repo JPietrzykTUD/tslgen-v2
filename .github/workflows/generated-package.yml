@@ -4,9 +4,8 @@ on:
   push:
     branches:
       - main
-    tags:
-      - "v*"
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -113,7 +112,20 @@ jobs:
             bash -lc '
               set -e
               mkdir -p tslctmp/artifacts
-              tar -C "${TSLC_CI_OUTPUT}" -czf "tslctmp/artifacts/tsl-generated-${GITHUB_SHA}.tar.gz" .
+              source_epoch="$(git show -s --format=%ct "${GITHUB_SHA}")"
+              python .github/scripts/release_production.py archive \
+                --kind generated \
+                --source "${TSLC_CI_OUTPUT}" \
+                --output "tslctmp/artifacts/tsl-generated-${GITHUB_SHA}.tar.gz" \
+                --epoch "${source_epoch}"
+              python .github/scripts/release_production.py archive \
+                --kind generated \
+                --source "${TSLC_CI_OUTPUT}" \
+                --output "tslctmp/artifacts/tsl-generated-${GITHUB_SHA}-repro.tar.gz" \
+                --epoch "${source_epoch}"
+              cmp \
+                "tslctmp/artifacts/tsl-generated-${GITHUB_SHA}.tar.gz" \
+                "tslctmp/artifacts/tsl-generated-${GITHUB_SHA}-repro.tar.gz"
             '
 
       - name: Upload generated artifact package
@@ -201,7 +213,20 @@ jobs:
             bash -lc '
               set -e
               mkdir -p tslctmp/artifacts
-              tar -C "${TSLC_CI_OUTPUT}/docs/site" -czf "tslctmp/artifacts/tsl-docs-${GITHUB_SHA}.tar.gz" .
+              source_epoch="$(git show -s --format=%ct "${GITHUB_SHA}")"
+              python .github/scripts/release_production.py archive \
+                --kind docs \
+                --source "${TSLC_CI_OUTPUT}/docs/site" \
+                --output "tslctmp/artifacts/tsl-docs-${GITHUB_SHA}.tar.gz" \
+                --epoch "${source_epoch}"
+              python .github/scripts/release_production.py archive \
+                --kind docs \
+                --source "${TSLC_CI_OUTPUT}/docs/site" \
+                --output "tslctmp/artifacts/tsl-docs-${GITHUB_SHA}-repro.tar.gz" \
+                --epoch "${source_epoch}"
+              cmp \
+                "tslctmp/artifacts/tsl-docs-${GITHUB_SHA}.tar.gz" \
+                "tslctmp/artifacts/tsl-docs-${GITHUB_SHA}-repro.tar.gz"
             '
 
       - name: Upload docs artifact

@@ -25,6 +25,9 @@ VS Code extension have independent version lines.
 
 - The generated library package version is `1.0.0`; compiler and editor package
   versions remain independent `0.x` components.
+- Release production is single-owner and draft-first, with normalized
+  reproducible archives, exact checksums/manifests, and fail-closed native
+  evidence requirements for the final tag.
 - Unsuffixed calls have an explicit no-hidden-sanitization contract. C++ states
   caller obligations in documentation; Rust exposes an `unsafe fn` exactly when
   a catastrophic obligation remains with the caller.

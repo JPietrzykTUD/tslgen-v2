@@ -327,7 +327,8 @@ changes. The committed slice records the final command results in
 ## Recommendation
 
 Accept the four generated API/documentation surfaces for the v1 release
-candidate. Do not cut the final tag until Slice 13 proves deterministic atomic
-artifacts and Slice 14 supplies native SVE and RVV/CHORYS attestations. If those
+candidate. Slice 13 now provides deterministic, exact, draft-first release
+production; its remote RC dry run still needs to execute. Do not cut the final
+tag until Slice 14 supplies native SVE and RVV/CHORYS attestations. If those
 hardware gates cannot be met, narrow the corresponding release status rather
 than weakening the documented contract.

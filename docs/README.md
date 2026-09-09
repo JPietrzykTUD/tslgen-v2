@@ -11,6 +11,7 @@ Generated documentation inputs live in `supplementary/docs/`.
 | Use the generated TSL v1 C++ or Rust library | [TSL v1 user guide](tsl-v1-user-guide.md) |
 | Move a pre-v1 generated consumer to v1 | [Migrating to TSL v1](migrating-to-tsl-v1.md) |
 | Review generated-library release changes | [Changelog](../CHANGELOG.md) |
+| Produce and verify a v1 release | [TSL v1 release production](releasing-tsl-v1.md) |
 | Check the exact v1 backend/profile/type contract | [TSL v1 support contract](tsl-v1-support.md) |
 | Use `tslc` validation, discovery, generation, and doctor commands | [TSLC command-line tools](tslc-cli.md) |
 | Configure, use, build, or troubleshoot the editor extension | [TSL editor support](tsl-editor.md) |

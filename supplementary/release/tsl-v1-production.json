@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "release_policy": "supplementary/release/tsl-v1-policy.json",
+  "generated_config": "tslc.toml",
+  "compiler_project": "tslc/pyproject.toml",
+  "editor_package": "editors/vscode-tsl/package.json",
+  "changelog": "CHANGELOG.md",
+  "editor_targets": [
+    "linux-x64",
+    "linux-arm64",
+    "win32-x64",
+    "darwin-x64",
+    "darwin-arm64"
+  ],
+  "native_evidence": [
+    {
+      "id": "sve-native",
+      "filename": "tsl-v1-native-sve.json"
+    },
+    {
+      "id": "rvv-chorys-native",
+      "filename": "tsl-v1-native-rvv-chorys.json"
+    }
+  ]
+}

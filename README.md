@@ -78,6 +78,7 @@ overlay.
 
 - Package quick start: [tslc/README.md](tslc/README.md)
 - Standalone PIVOT exporter: [tools/pivot/README.md](tools/pivot/README.md)
+- TSL v1 release production: [docs/releasing-tsl-v1.md](docs/releasing-tsl-v1.md)
 - Command-line tools: [docs/tslc-cli.md](docs/tslc-cli.md)
 - Generated-library v1 user guide: [docs/tsl-v1-user-guide.md](docs/tsl-v1-user-guide.md)
 - Migration from pre-v1 generated output: [docs/migrating-to-tsl-v1.md](docs/migrating-to-tsl-v1.md)
