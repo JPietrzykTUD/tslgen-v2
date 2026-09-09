@@ -543,7 +543,8 @@ def test_primitive_explorer_projects_file_slots_counts_and_dependencies(
     assert "add" in names
     assert "load" not in names
     add = next(item for item in explorer.primitives if item.name == "add")
-    assert 0 < add.available_slots < add.total_slots
+    assert add.available_slots == add.total_slots
+    assert add.total_slots > 0
     assert add.calls
     assert "mov" in add.calls
     assert "mul" in add.called_by
@@ -560,15 +561,7 @@ def test_primitive_explorer_projects_file_slots_counts_and_dependencies(
     assert avx2_si32.implementations
     assert all(item.source.path.is_absolute() for item in avx2_si32.implementations)
 
-    avx512_si32 = next(
-        slot
-        for slot in explorer.slots
-        if slot.extension == "avx512" and slot.type_tag == "si32"
-    )
-    assert avx512_si32.available is False
-    assert avx512_si32.status == "not-selected"
-    assert avx512_si32.implementations
-    assert "does not select it" in (avx512_si32.detail or "")
+    assert all(slot.extension != "avx512" for slot in explorer.slots)
     rust = primitive_explorer(
         snapshot.catalog,
         snapshot.index,
@@ -677,20 +670,20 @@ def test_primitive_explorer_carries_selector_rejection_reasons(
         workspace.config.profiles,
         workspace.config.backends,
         mode="resolved",
-        profile="avx2",
+        profile="avx",
         backend="cpp",
         selected_primitive="add",
     )
-    avx512_si32 = next(
+    avx2_si32 = next(
         slot
         for slot in explorer.slots
-        if slot.extension == "avx512" and slot.type_tag == "si32"
+        if slot.extension == "avx2" and slot.type_tag == "si32"
     )
-    assert avx512_si32.status == "not-selected"
-    assert avx512_si32.implementations
-    detail = avx512_si32.detail or ""
+    assert avx2_si32.status == "not-selected"
+    assert avx2_si32.implementations
+    detail = avx2_si32.detail or ""
     assert (
-        "requires [avx512f] not satisfied by profile 'avx2' (missing: avx512f)"
+        "requires [avx, avx2] not satisfied by profile 'avx' (missing: avx2)"
         in detail
     )
     assert "No implementation is authored" not in detail
@@ -891,7 +884,8 @@ def test_primitive_explorer_keeps_representation_targets_as_distinct_slots(
         for slot in avx2_si64
         if slot.target is not None
     }
-    assert {("base", "ui8"), ("extension", "avx512")} <= targets
+    assert ("base", "ui8") in targets
+    assert ("extension", "avx512") not in targets
     assert all(len(slot.implementations) == 1 for slot in avx2_si64)
 
 
