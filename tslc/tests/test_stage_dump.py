@@ -245,10 +245,14 @@ def test_lowered_shows_resolved_intrinsic_and_register(
         extension="avx2",
     )
     assert errors == []
+    assert payload["fact_scope"] == "direct-lowering"
     spec = next(s for s in payload["specializations"] if s["slot"].startswith("add<avx2"))
     assert spec["lowered"] is True
     assert spec["register"] == "typename tsl::simd<int32_t, tsl::avx2>::register_type"
     assert spec["body"] == "return _mm256_add_epi32(left, right);"
+    assert spec["implementation_state"] == "native"
+    assert spec["implementation_state_scope"] == "direct"
+    assert "implementation_state=native (direct)" in text
     assert "epi32" in text
 
 

@@ -9,11 +9,18 @@ use core::marker::PhantomData;
 use core::ops::{Index, IndexMut};
 
 /// How a selected primitive specialization is implemented.
+///
+/// This is a coarse structural classification, not an instruction-count or
+/// performance guarantee. `Unknown` means typed evidence is incomplete.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ImplementationState {
+    /// One direct expression or one target intrinsic.
     Native,
+    /// Typed calls, control flow, or multiple direct operations are composed.
     Composed,
+    /// The extension family or lowered body explicitly uses a portable fallback.
     Fallback,
+    /// Typed evidence is incomplete, so no stronger claim is valid.
     Unknown,
 }
 
@@ -56,7 +63,12 @@ macro_rules! impl_checked_integer_lane {
 }
 impl_checked_integer_lane!(i8, i16, i32, i64, u8, u16, u32, u64);
 
+/// Compile-time implementation-state query implemented by generated profiles.
+///
+/// `Args` carries target-vector, overload, and const-generic identity where the
+/// callable needs it. Unsupported query shapes intentionally have no impl.
 pub trait ImplementationStateOf<Primitive, Vec, Args = ()> {
+    /// Propagated implementation state for this profile and callable identity.
     const VALUE: ImplementationState;
 }
 

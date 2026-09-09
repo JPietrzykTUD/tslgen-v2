@@ -494,6 +494,10 @@ class Lowerer:
             param_names=parameters,
             param_kinds=shape.param_kinds,
             body=body,
+            source_signature=selected.primitive.signature,
+            source_attributes=tuple(
+                sorted(selected.primitive.attributes.items())
+            ),
             primitive_semantics=LoweredPrimitiveSemantics(
                 overload=catalog.resolve_primitive_overload(selected.primitive),
                 arithmetic=selected.primitive.arithmetic,

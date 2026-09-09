@@ -442,6 +442,9 @@ def test_cpp_fetch_content_consumer_builds(
 
             int main() {
               using Vec = tsl::simd<std::int32_t, tsl::scalar>;
+              static_assert(
+                  tsl::implementation_state_v<tsl::primitive::add, Vec> ==
+                  tsl::implementation_state::fallback);
               return tsl::add<Vec>(1, 2) == 3 ? 0 : 1;
             }
             """
@@ -507,10 +510,21 @@ def test_rust_path_dependency_consumer_builds(
     (consumer / "src" / "main.rs").write_text(
         textwrap.dedent(
             """
+            use tsl::primitive::Add;
             use tsl::{Mask, PreconditionError, Simd};
-            use tsl::tsl_core::{Scalar, Simd as LowerSimd};
+            use tsl::tsl_core::{
+                ImplementationState, ImplementationStateOf, Scalar,
+                Simd as LowerSimd,
+            };
 
             fn main() {
+                assert_eq!(
+                    <tsl::profile::Profile as ImplementationStateOf<
+                        Add,
+                        LowerSimd<i32, Scalar>,
+                    >>::VALUE,
+                    ImplementationState::Fallback,
+                );
                 let sum = tsl::profile::add::<LowerSimd<i32, Scalar>>(1, 2);
                 assert_eq!(sum, 3);
 

@@ -33,12 +33,17 @@ import argparse
 from collections.abc import Collection, Sequence
 from pathlib import Path
 
-from tslc._pipeline_closure import dependency_label
+from tslc._pipeline_closure import (
+    LoweringTraceSlot,
+    dependency_label,
+    unresolved_trace_reason,
+)
 from tslc._cli_options import split_csv
 from tslc.api import _expand_sources
 from tslc.backend.registry import create_backend_dialect, registered_backend_ids
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog
+from tslc.concrete_analysis import ConcreteAnalysisContext
 from tslc.diagnostics import Diagnostic, SourceLocation, SourceSpan
 from tslc.ir.scan import scan
 from tslc.maintenance import _repo_context
@@ -51,6 +56,11 @@ from tslc.lower.dependencies import (
     is_concrete_call_dependency,
 )
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer
+from tslc.lower.implementation_facts import (
+    ImplementationState,
+    combine_implementation_states,
+    implementation_state_description,
+)
 from tslc.pipeline import (
     BackendCompilerCapabilitySet,
     GenerationRequest,
@@ -155,6 +165,7 @@ def explain(
             else (BackendCompilerCapabilitySet(backend, compiler_capabilities),)
         ),
         render_artifacts=False,
+        collect_lowering_trace=True,
     )
     inputs, diagnostics = _load_inputs(request)
     if inputs is None:
@@ -217,7 +228,9 @@ def explain(
 
     # Authoritative outcome from the real pipeline (its dependency closure + prune fixpoint).
     pipeline_result = _generate_loaded(request, inputs, diagnostics)
-    verdicts = _PipelineVerdicts.from_result(pipeline_result, primitive, backend)
+    verdicts = _PipelineVerdicts.from_result(
+        pipeline_result, primitive, profile, backend
+    )
 
     if selected_slots:
         for slot in selected_slots:
@@ -337,7 +350,7 @@ def _explain_selected_slot(
             missing_consequence="checked companion is not emitted",
         )
     out.blank()
-    _print_verdict(out, verdicts, extension_tag, slot.type_tag)
+    _print_verdict(out, verdicts, slot)
 
 
 def _print_ranking(out: "_Writer", evaluation: CandidateEvaluation) -> None:
@@ -469,6 +482,7 @@ def _print_specialization(out: "_Writer", spec: LoweredSpecialization) -> None:
     out.line(f"      register   : {spec.register_spelling}")
     out.line(f"      base type  : {spec.base_type_spelling}")
     out.line(f"      result kind: {spec.result_kind}   params: {', '.join(spec.param_kinds) or '(none)'}")
+    out.line(f"      direct state: {spec.implementation_state.value}")
     if spec.mask_policy is not None:
         out.line(f"      mask policy: {spec.mask_policy}")
     if spec.target is not None:
@@ -567,12 +581,19 @@ def _print_call_preconditions(
 
 
 def _print_verdict(
-    out: "_Writer", verdicts: "_PipelineVerdicts", extension_tag: str, type_tag: str
+    out: "_Writer",
+    verdicts: "_PipelineVerdicts",
+    slot: SelectedImplementation,
 ) -> None:
-    if verdicts.is_emitted(verdicts.primitive, extension_tag, type_tag):
+    if verdicts.selected_is_emitted(slot):
         out.line("    VERDICT: COMPILES — emitted in the generated project for this profile.")
+        state = verdicts.implementation_state(slot)
+        out.line(
+            f"    FINAL IMPLEMENTATION STATE: {state.value} — "
+            f"{implementation_state_description(state)}."
+        )
         return
-    reason = verdicts.skip_reason(extension_tag, type_tag)
+    reason = verdicts.selected_skip_reason(slot)
     if reason is not None:
         out.line(f"    VERDICT: SKIPPED — {reason}")
     else:
@@ -610,18 +631,25 @@ class _PipelineVerdicts:
     def __init__(
         self,
         primitive: str,
+        profile: str,
+        backend: str,
         emitted: set[tuple[str, str, str]],
         skips: dict[tuple[str, str], str],
+        trace_slots: tuple[LoweringTraceSlot, ...],
     ) -> None:
         self.primitive = primitive
+        self.profile = profile
+        self.backend = backend
         self._emitted = emitted  # (primitive, extension, type_tag)
         self._skips = skips  # (extension, type_tag) -> reason, for this primitive
+        self._trace_slots = trace_slots
 
     @classmethod
     def from_result(
         cls,
         result: GenerationResult,
         primitive: str,
+        profile: str,
         backend: str,
     ) -> "_PipelineVerdicts":
         emitted = {
@@ -634,13 +662,66 @@ class _PipelineVerdicts:
             for entry in result.skipped
             if entry.backend == backend and entry.primitive == primitive
         }
-        return cls(primitive, emitted, skips)
+        trace = result.lowering_trace
+        trace_slots = () if trace is None else trace.slots
+        return cls(primitive, profile, backend, emitted, skips, trace_slots)
 
     def is_emitted(self, primitive: str, extension: str, type_tag: str) -> bool:
         return (primitive, extension, type_tag) in self._emitted
 
     def skip_reason(self, extension: str, type_tag: str) -> str | None:
         return self._skips.get((extension, type_tag))
+
+    def implementation_state(
+        self, selected: SelectedImplementation
+    ) -> ImplementationState:
+        """Return the propagated state for the selected authored callable."""
+
+        states = [
+            trace_slot.specialization.implementation_state
+            for trace_slot in self._matching_trace_slots(selected)
+            if trace_slot.emitted
+        ]
+        return combine_implementation_states(states)
+
+    def selected_is_emitted(self, selected: SelectedImplementation) -> bool:
+        return any(
+            trace_slot.emitted
+            for trace_slot in self._matching_trace_slots(selected)
+        )
+
+    def selected_skip_reason(
+        self, selected: SelectedImplementation
+    ) -> str | None:
+        reasons = sorted(
+            {
+                unresolved_trace_reason(trace_slot)
+                for trace_slot in self._matching_trace_slots(selected)
+                if not trace_slot.emitted
+            }
+        )
+        if reasons:
+            return "; ".join(reasons)
+        return self.skip_reason(selected.extension.isa_name, selected.type_tag)
+
+    def _matching_trace_slots(
+        self, selected: SelectedImplementation
+    ) -> tuple[LoweringTraceSlot, ...]:
+        context = ConcreteAnalysisContext(
+            primitive=selected.primitive.name,
+            profile=self.profile,
+            backend=self.backend,
+            extension=selected.extension.isa_name,
+            type_tag=selected.type_tag,
+            to_target=selected.to_target,
+            signature=selected.primitive.signature,
+            attributes=tuple(sorted(selected.primitive.attributes.items())),
+        )
+        return tuple(
+            trace_slot
+            for trace_slot in self._trace_slots
+            if context.matches(trace_slot)
+        )
 
     def missing_callees(self, callees: frozenset[CallDependency]) -> list[str]:
         missing: list[str] = []

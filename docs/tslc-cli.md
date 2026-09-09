@@ -137,24 +137,39 @@ tslc analyze --primitive add --profile avx2 --extension avx2 --type si32 --backe
 The result is identified by the loaded input digest and labels the final state
 as native, composed, fallback, or unknown. Its tree includes only dependencies
 recorded by the lowered specialization, terminates cycles explicitly, and
-retains the compiler's reason for unresolved edges. This command is intended
-for explicit editor and terminal inspection; it does not render, write, build,
-or run a project.
+retains symbolic trait-constrained calls and the compiler's reason for
+unresolved edges. A name-only invocation conservatively aggregates every
+callable form in that family. Add the exact authored `--signature` and repeat
+`--attribute KEY=VALUE` for one callable identity; the VS Code explorer always
+supplies those filters. This command is intended for explicit editor and
+terminal inspection; it does not render, write, build, or run a project.
 
-Analyze the implementation state and active lowered dependency closure without
-rendering:
+Generated profiles expose the same final coarse state at compile time. The
+ordinary C++ and Rust query forms are:
 
-```bash
-tslc analyze --primitive add --profile avx2 --extension avx2 --type si32 --backend cpp
-tslc analyze --primitive add --profile avx2 --extension avx2 --type si32 --backend cpp --format json
+```cpp
+using Vec = tsl::simd<std::int32_t, tsl::avx2>;
+constexpr auto state =
+    tsl::implementation_state_v<tsl::primitive::add, Vec>;
 ```
 
-The result is identified by the loaded input digest and labels the final state
-as native, composed, fallback, or unknown. Its tree includes only dependencies
-recorded by the lowered specialization, terminates cycles explicitly, and
-retains the compiler's reason for unresolved edges. This command is intended
-for explicit editor and terminal inspection; it does not render, write, build,
-or run a project.
+```rust
+use tsl::primitive::Add;
+use tsl::profile::{Avx2, Profile};
+use tsl::tsl_core::{ImplementationStateOf, Simd};
+
+type Vec = Simd<i32, Avx2>;
+const STATE: tsl::tsl_core::ImplementationState =
+    <Profile as ImplementationStateOf<Add, Vec>>::VALUE;
+```
+
+Target types, overload argument types, Boolean axes, and immediate values are
+encoded in the query's remaining arguments; the generated API reference shows
+the exact order for each callable. The C++ primary template returns `unknown`
+for an unsupported query. Rust intentionally has no trait implementation for
+an unsupported query, so such a query fails to compile. These states describe
+typed implementation structure and transitive dependencies; `native` is not a
+promise of one instruction or of better performance.
 
 Use the focused catalog commands before writing selectors or invoking
 `explain`:
@@ -310,6 +325,9 @@ automatic compiler-capability frontier as ordinary generation. Pass
 `--compiler-capabilities elementwise_clzg` to inspect a known toolchain, or
 `--compiler-capabilities ''` to inspect the exact no-capabilities fallback.
 Target-feature selection remains profile-owned in every mode.
+The `lowered` stage is explicitly a `direct-lowering` snapshot: its state,
+safety, and requirements precede transitive call-graph propagation. Use
+`analyze` or `explain`'s final verdict for emitted, post-closure facts.
 
 `audit call-preconditions` validates the complete corpus and emits the exact,
 source-located `forward`/`discharge` inventory. A successful report always has

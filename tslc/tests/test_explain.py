@@ -51,6 +51,8 @@ def test_compiling_slot_shows_intrinsic_and_verdict(
         extension="avx2",
     )
     assert "VERDICT: COMPILES" in report
+    assert "direct state: native" in report
+    assert "FINAL IMPLEMENTATION STATE: native" in report
     assert "_mm256_add_epi32" in report  # the resolved intrinsic name
     assert "avx2:?i?" in report  # the winning body's extension:type-group
     # the float body is a rejected on-chain candidate, with the reason

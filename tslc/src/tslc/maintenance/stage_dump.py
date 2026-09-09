@@ -12,10 +12,10 @@ running the rest. Where ``explain`` tells the *narrative* of one slot across all
                       "Did `loop<…>` get captured, or leak through as raw text?"
   --stage selection   the slots a profile selects (primitive × extension × type [× target]) and the
                       chosen body's source. "What does profile X actually emit for primitive Y?"
-  --stage lowered     the resolved ``LoweredSpecialization`` — register/type spellings, intrinsic
-                      names in the body, semantic contracts, mask policy, and required features —
-                      before the backend wraps it. "Did `base::signed_of(base::in)` resolve to the
-                      right suffix?"
+  --stage lowered     the direct, pre-closure ``LoweredSpecialization`` — register/type spellings,
+                      intrinsic names in the body, semantic contracts, mask policy, and declared
+                      requirements — before dependency propagation and backend wrapping. "Did
+                      `base::signed_of(base::in)` resolve to the right suffix?"
 
 Run from the repository with ``tslc/src`` on ``PYTHONPATH``:
 
@@ -525,6 +525,7 @@ def _dump_lowered(
         "\n".join(lines),
         {
             "stage": "lowered",
+            "fact_scope": "direct-lowering",
             "profile": machine_profile.name,
             "backend": backend,
             "specializations": specs_json,
@@ -543,6 +544,9 @@ def _lowered_text(header: str, spec: LoweredSpecialization) -> list[str]:
     lines = [f"  {header}:"]
     lines.append(f"      register={spec.register_spelling}  base={spec.base_type_spelling}")
     lines.append(f"      result={spec.result_kind}  params=({', '.join(spec.param_kinds)})")
+    lines.append(
+        f"      implementation_state={spec.implementation_state.value} (direct)"
+    )
     semantics = spec.primitive_semantics
     if semantics.overload is not None:
         lines.append(
@@ -618,6 +622,8 @@ def _lowered_json(spec: LoweredSpecialization) -> dict:
         "base_type": spec.base_type_spelling,
         "result_kind": spec.result_kind,
         "param_kinds": list(spec.param_kinds),
+        "implementation_state": spec.implementation_state.value,
+        "implementation_state_scope": "direct",
         "primitive_semantics": _lowered_semantics_json(spec),
         "mask_policy": spec.mask_policy,
         "immediate": list(spec.immediate) if spec.immediate else None,

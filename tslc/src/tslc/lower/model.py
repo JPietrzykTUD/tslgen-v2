@@ -88,6 +88,10 @@ class LoweredSpecialization:
     param_names: tuple[str, ...]
     param_kinds: tuple[str, ...]
     body: LoweredBody
+    # Exact authored callable identity retained independently of emitted naming.
+    # Synthetic lowered values may omit it; production lowering always supplies it.
+    source_signature: str | None = None
+    source_attributes: tuple[tuple[str, str], ...] = ()
     primitive_semantics: LoweredPrimitiveSemantics = field(
         default_factory=LoweredPrimitiveSemantics
     )

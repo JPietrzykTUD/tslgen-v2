@@ -439,6 +439,8 @@ def test_cpp_core_vectors_expose_metadata_constants(
     core = specialization_artifacts["cpp/include/tsl_core.hpp"]
 
     assert "enum class implementation_state" in core
+    assert "not an instruction-count or" in core
+    assert "An unsupported or unrecognized query remains" in core
     assert "template <auto Value>" in core
     assert "struct implementation_state_of" in core
     assert "inline constexpr implementation_state implementation_state_v" in core
@@ -1441,6 +1443,8 @@ def test_rust_specialization_structure(specialization_artifacts: dict[str, str])
     lib = specialization_artifacts["rust/src/lib.rs"]
 
     assert "pub enum ImplementationState" in core
+    assert "coarse structural classification" in core
+    assert "Unsupported query shapes intentionally have no impl" in core
     assert "pub trait ImplementationStateOf<Primitive, Vec, Args = ()>" in core
     assert "pub struct BoolArg<const VALUE: bool>;" in core
     assert "pub struct U32Arg<const VALUE: u32>;" in core

@@ -175,7 +175,8 @@ while the replacement projection loads, and slot actions reject stale rows.
 Slot context actions also provide **Go to Implementation**, **Analyze Concrete
 Specialization**, and **Preview Specialization**. Analysis and preview are
 available only for a selected row and receive the exact
-profile/backend/extension/type tuple from the tree without another prompt. A missing or
+profile/backend/extension/type tuple plus the authored callable signature and
+attributes from the tree without another prompt. A missing or
 backend-unsupported slot explains why it has no target rather than pretending
 to have a definition, while a profile-rejected row can still navigate to its
 authored source.
@@ -345,6 +346,8 @@ artifact. The command retains the pipeline's own post-pruning closure trace,
 including propagated implementation state, and returns a structured active
 dependency tree identified by the loaded input digest. All open TSL documents
 must be saved because the child loads the complete corpus from disk.
+Symbolic trait-constrained calls remain visible as symbolic nodes; the client
+does not guess a concrete vector or reinterpret their `unknown` state.
 
 There is no formatter in Version 1. The outer parser is not lossless, so the
 server intentionally advertises no formatting capability.

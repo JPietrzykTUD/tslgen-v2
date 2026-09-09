@@ -16,6 +16,8 @@ describe("concrete analysis cache", () => {
     extension: "avx2",
     type: "si32",
     toTarget: null,
+    signature: "v := (v, v)",
+    attributes: {},
   };
 
   it("reuses only an unchanged complete context and workspace generation", () => {
@@ -38,6 +40,8 @@ describe("concrete analysis cache", () => {
       { ...context, extension: "sse" },
       { ...context, type: "f32" },
       { ...context, toTarget: "sse" },
+      { ...context, signature: "m := (v, v)" },
+      { ...context, attributes: { mask: "zero" } },
     ]) {
       assert.equal(cache.valid(changed, 7), undefined);
       assert.equal(cache.latest(changed, 7), undefined);

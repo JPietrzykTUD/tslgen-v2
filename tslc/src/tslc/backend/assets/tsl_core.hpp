@@ -45,7 +45,13 @@
 
 namespace tsl {
 
-/** Describes whether a selected specialization is native, composed, or a fallback. */
+/**
+ * Coarse compiler-owned realization state for a selected specialization.
+ *
+ * `unknown` is the fail-closed result when typed evidence is incomplete. The
+ * state describes implementation structure; it is not an instruction-count or
+ * performance guarantee.
+ */
 @{core_declaration_implementation_state}
 
 /** Error written or returned before a checked operation invokes its ordinary twin. */
@@ -87,7 +93,10 @@ struct value_arg {
     static constexpr auto value = Value;
 };
 
-/** Compile-time implementation-state query; generated profiles specialize it. */
+/**
+ * Compile-time implementation-state query; generated profiles specialize it.
+ * An unsupported or unrecognized query remains `implementation_state::unknown`.
+ */
 template <class Primitive, class... Args>
 struct implementation_state_of {
     static constexpr implementation_state value = implementation_state::unknown;
