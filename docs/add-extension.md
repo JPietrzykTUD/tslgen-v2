@@ -155,6 +155,30 @@ ID to build-system modes and probes. Do not infer either role from a profile
 name or `compile_modes` value. A new C++ gate needs one entry in the backend's
 `CPP_PROFILE_AUTO_GATES` registry; its CMake helper names remain backend-owned.
 
+A scalable target may define named runner executions when one generated binary
+must be tested under several runtime vector lengths:
+
+```json
+"runner": {
+  "kind": "qemu-aarch64",
+  "name": "vl128",
+  "profile": "max,sve=on,sve128=on,sve256=off",
+  "vector_bits": 128,
+  "variants": [
+    {
+      "name": "vl256",
+      "profile": "max,sve=on,sve128=on,sve256=on,sve512=off",
+      "vector_bits": 256
+    }
+  ]
+}
+```
+
+Runner names are unique one-token labels. `vector_bits` is positive run
+metadata; the runner CPU/profile string remains the executable configuration.
+The verifier builds once and records every execution in a versioned run
+attestation. Do not duplicate this matrix in CI shell branches.
+
 ## 5. Add Extension Metadata
 
 Edit `tsldata/extensions/extension.tsl`.

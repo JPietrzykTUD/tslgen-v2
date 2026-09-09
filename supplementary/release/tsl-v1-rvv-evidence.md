@@ -134,9 +134,11 @@ PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds \
   tslc/tests/test_chorys_rvv_consumer.py
 ```
 
-The profile-owned generated test supplies the VLEN=128 run. Slice 8 must move
-all three vector lengths into typed verifier runner variants so these commands
-and CI consume one reusable matrix rather than workflow or shell knowledge.
+The profile-owned verifier now supplies all three vector lengths as typed
+runner variants. The ordinary `dev.sh test` command and CI therefore build once
+and consume one reusable VLEN matrix rather than workflow or shell knowledge.
+Each run writes a verification attestation linked to the compiler-input and
+generated-artifact manifest digests.
 
 ## Open release attestations
 

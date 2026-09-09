@@ -135,17 +135,19 @@ jobs:
               -- \
               bash -lc '
                 set -e
-                trap "rm -rf \"${TSLC_CI_OUTPUT}\" tslctmp/toolchain-preflight tslctmp/zig-local-cache tslctmp/zig-global-cache" EXIT
+                preserve_attestation_and_clean() {
+                  attestation="${TSLC_CI_OUTPUT}/.tslctmp/verification/attestation.json"
+                  if [[ -f "${attestation}" ]]; then
+                    cp "${attestation}" "$(dirname "${TSLC_SUMMARY_FILE}")/attestation.json" || \
+                      echo "failed to preserve verification attestation ${attestation}" >&2
+                  fi
+                  rm -rf "${TSLC_CI_OUTPUT}" tslctmp/toolchain-preflight tslctmp/zig-local-cache tslctmp/zig-global-cache
+                }
+                trap preserve_attestation_and_clean EXIT
                 ./dev.sh test \
                   --backends "${TSLC_BACKENDS}" \
                   --profiles "${TSLC_PROFILES}" \
                   --output-root "${TSLC_CI_OUTPUT}"
-                if [[ ",${TSLC_PROFILES}," == *,rvv,* && "${TSLC_BACKENDS}" == "cpp" ]]; then
-                  timeout --signal=KILL 60s /usr/bin/qemu-riscv64 \
-                    -L /usr/riscv64-linux-gnu \
-                    -cpu "max,v=true,vext_spec=v1.0,vlen=256,elen=64" \
-                    "${TSLC_CI_OUTPUT}/cpp/build/rvv/tsl_values"
-                fi
               '
 
       - name: Append generated value-test summary

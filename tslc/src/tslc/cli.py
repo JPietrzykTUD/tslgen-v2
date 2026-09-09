@@ -8,7 +8,12 @@ from collections.abc import Callable
 from pathlib import Path
 
 from tslc._cli_options import merge_toolchains, parse_assignments, split_csv
-from tslc.api import generate_project, verify_project, write_artifacts
+from tslc.api import (
+    generate_project,
+    refresh_artifact_manifest,
+    verify_project,
+    write_artifacts,
+)
 from tslc.backend.rust_package import DEFAULT_RUST_PACKAGE_CONFIG
 from tslc.generation_command import (
     GenerationCommandSettings,
@@ -149,6 +154,7 @@ def _generation_main(
     pipeline = GenerationPipeline(
         generate=generate_project,
         write=write_artifacts,
+        refresh_manifest=refresh_artifact_manifest,
         verify=verify_project,
     )
     return run_generation_command(settings, pipeline)

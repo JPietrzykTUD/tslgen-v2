@@ -293,8 +293,19 @@ def _profile(item: MachineProfile) -> dict[str, object]:
         "backend_flags": {key: list(value) for key, value in item.backend_flags.items()},
         "runner": None if item.runner is None else {
             "kind": item.runner.kind,
+            "name": item.runner.name,
             "profile": item.runner.profile,
             "args": list(item.runner.args),
+            "vector_bits": item.runner.vector_bits,
+            "variants": [
+                {
+                    "name": variant.name,
+                    "profile": variant.profile,
+                    "args": list(variant.args),
+                    "vector_bits": variant.vector_bits,
+                }
+                for variant in item.runner.variants
+            ],
         },
     }
 

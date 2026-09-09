@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 from tslc.diagnostics import format_diagnostic, has_errors
 from tslc.output.verify_model import BackendToolchain, BuildVerificationReport
-from tslc.output.writer import ArtifactWriteReport
+from tslc.output.writer import ArtifactManifestRefreshReport, ArtifactWriteReport
 from tslc.pipeline import GenerationResult
 from tslc.backend.rust_package import (
     DEFAULT_RUST_PACKAGE_CONFIG,
@@ -55,10 +55,11 @@ class GenerationCommandSettings:
 
 @dataclass(frozen=True, slots=True)
 class GenerationPipeline:
-    """Pipeline seam: generation, artifact writing, and verification entry points."""
+    """Pipeline seam: generation, output identity, and verification entry points."""
 
     generate: Callable[..., GenerationResult]
     write: Callable[..., ArtifactWriteReport]
+    refresh_manifest: Callable[..., ArtifactManifestRefreshReport]
     verify: Callable[..., BuildVerificationReport]
 
 
@@ -148,6 +149,17 @@ def run_generation_command(
             if format_report.formatted:
                 print(f"formatted {', '.join(format_report.formatted)}")
 
+            if format_report.attempted:
+                # An invoked formatter may change some bytes even when it exits
+                # with an error. Reconcile exactly the manifest-owned paths before
+                # those bytes are verified or attested.
+                refresh_report = pipeline.refresh_manifest(settings.output_root)
+                for diagnostic in refresh_report.diagnostics:
+                    print(format_diagnostic(diagnostic), file=sys.stderr)
+                if has_errors(refresh_report.diagnostics):
+                    write_summary_once()
+                    return 1
+
         if (settings.verify or settings.run_value_tests) and result.rendered is not None:
             if settings.run_value_tests:
                 runners = _configured_runner_labels(settings.runner_paths)
@@ -170,6 +182,11 @@ def run_generation_command(
                 print(f"[verify-skip] {note}", file=sys.stderr)
             for diagnostic in verify_report.diagnostics:
                 print(format_diagnostic(diagnostic), file=sys.stderr)
+            if verify_report.attestation_path is not None:
+                print(
+                    "wrote verification attestation to "
+                    f"{verify_report.attestation_path}"
+                )
             if settings.run_value_tests:
                 _print_test_output(verify_report)
             incomplete_value_tests = (
@@ -211,8 +228,13 @@ def _print_test_output(report: BuildVerificationReport) -> None:
         if result.command.step != "test":
             continue
         command = result.command
+        variant = (
+            ""
+            if command.runner_variant is None
+            else f" [{command.runner_variant.name}]"
+        )
         print(
-            f"[test-output] {command.backend_id} {command.profile_name}: "
+            f"[test-output] {command.backend_id} {command.profile_name}{variant}: "
             f"{shlex.join(command.argv)}"
         )
         _print_captured_stream("stdout", result.stdout)

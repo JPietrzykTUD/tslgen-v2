@@ -833,8 +833,21 @@ array↔register round-trip uses auto-discovered "harness primitives"
 [value_tests/harness.py](src/tslc/value_tests/harness.py)). A **differential**
 mode cross-checks each hardware implementation against the portable `generic`
 one. [output/verify.py](src/tslc/output/verify.py) then actually compiles and
-runs them — optionally under **Intel SDE** or **qemu-aarch64** so
-AVX-512/NEON/SVE code runs on hardware that lacks it.
+runs them — optionally under **Intel SDE**, **qemu-aarch64**, or
+**qemu-riscv64** so target code runs on hardware that lacks it. Scalable
+machine profiles may provide typed, named runner variants. The verifier builds
+one value-test binary and executes that exact binary at every declared vector
+length; CI consumes the same profile-owned matrix.
+
+Verification writes mutable run evidence under
+`.tslctmp/verification/attestation.json`, separately from deterministic
+generated artifacts. The versioned attestation references both the compiler
+input digest and `.tslc-manifest.json` digest, then records exact commands,
+explicit command environment, runner CPU/profile and vector length, captured
+outcomes, diagnostics, and skips. QEMU executions are correctness evidence;
+their timings are not performance evidence. When a configured formatter is
+invoked, the artifact writer re-hashes exactly the manifest-owned files before
+verification, so the attestation identifies the bytes that were compiled.
 
 ## State / outcome
 

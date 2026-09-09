@@ -124,6 +124,31 @@ def test_value_test_summary_marks_planned_cases_blocked_when_profile_is_skipped(
     assert "- cpp: profile sve skipped \\| no runner" in markdown
 
 
+def test_value_test_summary_requires_every_runner_variant_to_pass(
+    tmp_path: Path,
+) -> None:
+    plan = ValueTestProjectPlan(
+        profiles=(ValueTestProfilePlan("cpp", "sve", (_case("add", "test_add"),)),)
+    )
+    report = BuildVerificationReport(
+        commands=(
+            _result(tmp_path, "cpp", "sve", "test", 0),
+            _result(tmp_path, "cpp", "sve", "test", 1),
+            _result(tmp_path, "cpp", "sve", "test", 0),
+        ),
+        diagnostics=(),
+    )
+
+    markdown = render_value_test_markdown_summary(
+        plan,
+        report,
+        run_value_tests=True,
+    )
+
+    assert "every runner variant for a profile must pass" in markdown
+    assert "| cpp | sve | 1 | 1 | 0 | 1 | 2/3 | 2/3 | failed |" in markdown
+
+
 def test_append_markdown_summary_creates_parent_and_appends(tmp_path: Path) -> None:
     summary_path = tmp_path / "nested" / "summary.md"
 

@@ -428,6 +428,11 @@ def test_machine_profiles_loaded(machine_profiles) -> None:
     assert machine_profiles["neon"].flags_for_backend("cpp") == ()
     assert machine_profiles["sve"].features == frozenset({"sve"})
     assert machine_profiles["sve"].flags_for_backend("cpp") == ("-mcpu=a64fx",)
+    assert machine_profiles["sve"].runner is not None
+    assert tuple(
+        (variant.name, variant.vector_bits)
+        for variant in machine_profiles["sve"].runner.executions
+    ) == (("vl128", 128), ("vl256", 256), ("vl512", 512))
     assert machine_profiles["sve128"].runner is not None
     assert (
         machine_profiles["sve128"].runner.profile
@@ -461,6 +466,11 @@ def test_machine_profiles_loaded(machine_profiles) -> None:
     assert machine_profiles["wasm32-simd128"].flags_for_backend("cpp") == ()
     assert machine_profiles["wasm32-simd128"].runner is not None
     assert machine_profiles["wasm32-simd128"].runner.kind == "wasmtime"
+    assert machine_profiles["rvv"].runner is not None
+    assert tuple(
+        (variant.name, variant.vector_bits)
+        for variant in machine_profiles["rvv"].runner.executions
+    ) == (("vlen128", 128), ("vlen256", 256), ("vlen512", 512))
 
 
 def test_target_families_promoted(catalog: Catalog) -> None:

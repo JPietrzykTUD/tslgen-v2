@@ -158,8 +158,18 @@ def test_generated_profile_shards_preserve_exhaustive_and_coexistence_lanes(
         encoding="utf-8"
     )
     assert 'TSLC_QEMU_RISCV64="/usr/bin/qemu-riscv64"' in values_workflow
-    assert "vlen=256,elen=64" in values_workflow
-    assert "timeout --signal=KILL 60s /usr/bin/qemu-riscv64" in values_workflow
+    assert "vlen=256,elen=64" not in values_workflow
+    assert "timeout --signal=KILL 60s /usr/bin/qemu-riscv64" not in values_workflow
+    rvv = next(
+        profile
+        for family_profiles in source.values()
+        for profile in family_profiles
+        if profile["name"] == "rvv"
+    )
+    assert [
+        rvv["runner"]["vector_bits"],
+        *(variant["vector_bits"] for variant in rvv["runner"]["variants"]),
+    ] == [128, 256, 512]
 
 
 def test_package_and_docs_generate_a_supported_distributable_profile_set() -> None:

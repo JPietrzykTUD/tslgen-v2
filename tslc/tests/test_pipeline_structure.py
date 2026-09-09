@@ -566,6 +566,7 @@ def test_fake_backend_drives_documentation_and_artifact_media_type(monkeypatch) 
         (profile,),
         ("fake",),
         assets=load_default_render_assets(),
+        input_digest="b" * 64,
     )
     artifacts = {
         artifact.logical_path: artifact for artifact in rendered.artifacts.artifacts
@@ -577,6 +578,7 @@ def test_fake_backend_drives_documentation_and_artifact_media_type(monkeypatch) 
     assert artifacts["fake/lib.fake"].media_type == "text/fake"
     assert "fake-register" in documentation["strings"]
     assert "fake facade" in documentation["strings"]
+    assert rendered.verify.input_digest == "b" * 64
 
 
 def test_render_project_filters_profiles_by_backend_membership(monkeypatch) -> None:

@@ -20,6 +20,7 @@ from tslc.backend.registry import backend_capabilities
 class FormatReport:
     formatted: tuple[str, ...]  # e.g. ("cpp:42 files", "rust:30 files")
     notes: tuple[str, ...]  # skip/failure notes (tool missing, formatter error)
+    attempted: tuple[str, ...] = ()  # tools invoked; bytes may change even on failure
 
 
 def format_generated(
@@ -33,6 +34,7 @@ def format_generated(
     root = Path(output_root)
     formatted: list[str] = []
     notes: list[str] = []
+    attempted: list[str] = []
     tools = {
         "clang-format": clang_format,
         "rustfmt": rustfmt,
@@ -54,8 +56,13 @@ def format_generated(
             files,
             formatted,
             notes,
+            attempted,
         )
-    return FormatReport(formatted=tuple(formatted), notes=tuple(notes))
+    return FormatReport(
+        formatted=tuple(formatted),
+        notes=tuple(notes),
+        attempted=tuple(attempted),
+    )
 
 
 def _run(
@@ -65,6 +72,7 @@ def _run(
     files: list[Path],
     formatted: list[str],
     notes: list[str],
+    attempted: list[str],
 ) -> None:
     if not files:
         return
@@ -72,6 +80,7 @@ def _run(
     if executable is None:
         notes.append(f"{tool} not found; skipped {label} formatting ({len(files)} files)")
         return
+    attempted.append(f"{label}:{len(files)} files")
     completed = subprocess.run(
         [executable, *args, *(str(f) for f in files)],
         capture_output=True,

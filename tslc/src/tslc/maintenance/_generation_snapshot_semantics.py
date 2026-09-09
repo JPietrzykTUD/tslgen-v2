@@ -288,7 +288,10 @@ def _serialize_skipped(entry: SkippedEntry, repo_root: Path) -> dict[str, object
 
 
 def _serialize_verify_project(project: VerifyProject) -> dict[str, object]:
-    return {"backends": [_serialize_verify_backend(item) for item in project.backends]}
+    return {
+        "backends": [_serialize_verify_backend(item) for item in project.backends],
+        "input_digest": project.input_digest,
+    }
 
 
 def _serialize_verify_backend(backend: VerifyBackend) -> dict[str, object]:
@@ -329,7 +332,22 @@ def _serialize_verify_profile(profile: VerifyProfile) -> dict[str, object]:
 def _serialize_verify_runner(runner: VerifyRunner | None) -> dict[str, object] | None:
     if runner is None:
         return None
-    return {"kind": runner.kind, "profile": runner.profile, "args": runner.args}
+    return {
+        "kind": runner.kind,
+        "name": runner.name,
+        "profile": runner.profile,
+        "args": runner.args,
+        "vector_bits": runner.vector_bits,
+        "variants": tuple(
+            {
+                "name": variant.name,
+                "profile": variant.profile,
+                "args": variant.args,
+                "vector_bits": variant.vector_bits,
+            }
+            for variant in runner.variants
+        ),
+    }
 
 
 def _serialize_value_test_coverage(entry: ValueTestCoverageEntry) -> dict[str, object]:

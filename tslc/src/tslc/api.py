@@ -19,7 +19,12 @@ from tslc.output.verify import (
     verify_generated_project,
 )
 from tslc.output.verify_model import BackendToolchain
-from tslc.output.writer import ArtifactWriteMode, ArtifactWriteReport, ArtifactWriter
+from tslc.output.writer import (
+    ArtifactManifestRefreshReport,
+    ArtifactWriteMode,
+    ArtifactWriteReport,
+    ArtifactWriter,
+)
 from tslc.pipeline import (
     BackendCompilerCapabilitySet,
     BackendProfileScope,
@@ -121,6 +126,14 @@ def write_artifacts(
     mode: ArtifactWriteMode = "manifest-clean",
 ) -> ArtifactWriteReport:
     return ArtifactWriter().write(artifacts, output_root, mode)
+
+
+def refresh_artifact_manifest(
+    output_root: Path | str,
+) -> ArtifactManifestRefreshReport:
+    """Reconcile the generator manifest after formatting written artifacts."""
+
+    return ArtifactWriter().refresh_manifest(output_root)
 
 
 def verify_project(

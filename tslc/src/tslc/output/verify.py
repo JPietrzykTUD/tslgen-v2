@@ -19,6 +19,7 @@ from tslc.output.verify_drivers import (
     missing_verify_tool,
     runner_missing_diagnostic,
 )
+from tslc.output.verification_attestation import write_verification_attestation
 from tslc.output.verify_model import (
     BuildCommand,
     BuildCommandEnvironment,
@@ -35,22 +36,43 @@ from tslc.output.verify_model import (
 
 
 def run_subprocess_build_command(command: BuildCommand) -> BuildCommandResult:
-    completed = subprocess.run(  # noqa: S603 - argv is generated, not shell text.
-        command.argv,
-        cwd=command.cwd,
-        input="",
-        capture_output=True,
-        text=True,
-        errors="replace",
-        check=False,
-        env=_subprocess_env(command),
-    )
+    try:
+        completed = subprocess.run(  # noqa: S603 - argv is generated, not shell text.
+            command.argv,
+            cwd=command.cwd,
+            input="",
+            capture_output=True,
+            text=True,
+            errors="replace",
+            check=False,
+            env=_subprocess_env(command),
+            timeout=command.timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as error:
+        timeout_detail = (
+            f"verification command timed out after {command.timeout_seconds} seconds"
+        )
+        stderr = _timeout_stream(error.stderr).rstrip()
+        return BuildCommandResult(
+            command=command,
+            returncode=124,
+            stdout=_timeout_stream(error.stdout),
+            stderr=f"{stderr}\n{timeout_detail}".lstrip(),
+        )
     return BuildCommandResult(
         command=command,
         returncode=completed.returncode,
         stdout=completed.stdout,
         stderr=completed.stderr,
     )
+
+
+def _timeout_stream(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
 
 
 def verify_generated_project(
@@ -74,11 +96,13 @@ def verify_generated_project(
 
     runner_missing = runner_missing_diagnostic(config)
     if runner_missing is not None:
-        return BuildVerificationReport(
+        return _finalize_report(
+            root,
+            project,
             commands=(),
             diagnostics=(runner_missing,),
             skipped=(),
-    )
+        )
 
     for backend in project.backends:
         try:
@@ -122,10 +146,43 @@ def verify_generated_project(
                 results.extend(follow_up.commands)
                 diagnostics.extend(follow_up.diagnostics)
 
-    return BuildVerificationReport(
+    return _finalize_report(
+        root,
+        project,
         commands=tuple(results),
         diagnostics=tuple(diagnostics),
         skipped=tuple(skipped),
+    )
+
+
+def _finalize_report(
+    root: Path,
+    project: VerifyProject,
+    *,
+    commands: tuple[BuildCommandResult, ...],
+    diagnostics: tuple[Diagnostic, ...],
+    skipped: tuple[str, ...],
+) -> BuildVerificationReport:
+    if project.input_digest is None:
+        return BuildVerificationReport(
+            commands=commands,
+            diagnostics=diagnostics,
+            skipped=skipped,
+        )
+    attestation_path, attestation_diagnostic = write_verification_attestation(
+        root,
+        input_digest=project.input_digest,
+        commands=commands,
+        diagnostics=diagnostics,
+        skipped=skipped,
+    )
+    if attestation_diagnostic is not None:
+        diagnostics = (*diagnostics, attestation_diagnostic)
+    return BuildVerificationReport(
+        commands=commands,
+        diagnostics=diagnostics,
+        skipped=skipped,
+        attestation_path=attestation_path,
     )
 
 

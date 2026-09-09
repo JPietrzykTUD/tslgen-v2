@@ -26,7 +26,10 @@ description: Add or change generated build and value-test verification in tslc. 
 4. Add runner-kind command construction in the focused runner boundary and
    validate allowed kinds through target/profile capabilities. If another
    similar addition would extend scattered conditionals, consolidate the
-   runner extension point before adding more branches.
+   runner extension point before adding more branches. Keep multi-execution
+   matrices as typed machine-profile runner variants so local commands, doctor,
+   CI, and attestations consume one source; execute every variant against the
+   same built artifact when that is the target contract.
 5. Preflight compilers and targets before expensive generated builds. Preserve
    complete commands and deterministic diagnostics without leaking secrets or
    ambient host assumptions. Keep `tslc doctor` on the same typed profile
@@ -37,7 +40,12 @@ description: Add or change generated build and value-test verification in tslc. 
    configuration must override ambient discovery.
 7. Keep all generated trees, preflight sources, build directories, and reports
    under the selected workspace output root. Do not introduce hidden network or
-   host dependencies.
+   host dependencies. Keep mutable verification attestations separate from
+   deterministic compiler manifests, but link them with the compiler input and
+   generated-artifact manifest digests. If an output transformer can change
+   written artifact bytes, have the artifact writer reconcile its owned
+   manifest before verification; neither the transformer nor verifier may
+   duplicate or reinterpret the manifest schema.
 8. Update `dev.sh`, container setup, or CI only when the capability is part of
    the supported shared workflow; keep local-only tools optional.
 9. Test command construction, override precedence, tool-role configuration,
@@ -53,6 +61,8 @@ description: Add or change generated build and value-test verification in tslc. 
 - A skipped profile states exactly which capability is unavailable.
 - Native, cross-compiled, and emulated paths cannot silently select one
   another's compiler, target, or runner.
+- Every declared runner variant produces an exact result or an explicit release
+  gap; CI must not carry a second, ad hoc copy of the variant matrix.
 - Hardware/toolchain absence is reported as a validation gap, not hidden as
   success.
 

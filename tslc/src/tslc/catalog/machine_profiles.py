@@ -26,6 +26,26 @@ _NO_SIMD = "NOSIMD-INVALID"
 
 
 @dataclass(frozen=True, slots=True)
+class MachineProfileRunnerVariant:
+    """One named execution configuration for a machine-profile runner."""
+
+    name: str
+    profile: str
+    args: tuple[str, ...] = ()
+    vector_bits: int | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "name", self.name.strip())
+        object.__setattr__(self, "profile", self.profile.strip())
+        object.__setattr__(self, "args", tuple(self.args))
+        _require_runner_variant(
+            self.name,
+            self.profile,
+            self.vector_bits,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class MachineProfileRunner:
     """Runner metadata for after-write value-test execution.
 
@@ -37,6 +57,51 @@ class MachineProfileRunner:
     kind: str
     profile: str
     args: tuple[str, ...] = ()
+    name: str = "default"
+    vector_bits: int | None = None
+    variants: tuple[MachineProfileRunnerVariant, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "kind", self.kind.strip())
+        object.__setattr__(self, "name", self.name.strip())
+        object.__setattr__(self, "profile", self.profile.strip())
+        if not self.kind.strip():
+            raise ValueError("runner kind must be non-empty")
+        object.__setattr__(self, "args", tuple(self.args))
+        object.__setattr__(self, "variants", tuple(self.variants))
+        _require_runner_variant(self.name, self.profile, self.vector_bits)
+        names = tuple(execution.name for execution in self.executions)
+        if len(set(names)) != len(names):
+            raise ValueError("runner execution names must be unique")
+
+    @property
+    def executions(self) -> tuple[MachineProfileRunnerVariant, ...]:
+        return (
+            MachineProfileRunnerVariant(
+                name=self.name,
+                profile=self.profile,
+                args=self.args,
+                vector_bits=self.vector_bits,
+            ),
+            *self.variants,
+        )
+
+
+def _require_runner_variant(
+    name: str,
+    profile: str,
+    vector_bits: int | None,
+) -> None:
+    if len(name.split()) != 1:
+        raise ValueError("runner execution name must be one token")
+    if not profile.strip() or profile.strip().startswith("-"):
+        raise ValueError("runner profile must be non-empty and must not start with '-'")
+    if vector_bits is not None and (
+        isinstance(vector_bits, bool)
+        or not isinstance(vector_bits, int)
+        or vector_bits <= 0
+    ):
+        raise ValueError("runner vector_bits must be a positive integer")
 
 
 @dataclass(frozen=True, slots=True)
@@ -773,7 +838,7 @@ def _runner(
     fields = _object_fields(value, path, diagnostics)
     _unknown_fields(
         fields,
-        {"kind", "profile", "args"},
+        {"kind", "profile", "args", "name", "vector_bits", "variants"},
         path,
         diagnostics,
         owner=f"runner for machine profile {profile_name!r}",
@@ -809,13 +874,119 @@ def _runner(
                     ),
                 )
             )
+    primary = _runner_variant(
+        profile_name,
+        fields,
+        path,
+        diagnostics,
+        default_name="default",
+    )
+    if primary is None:
+        return None
+    variants_value = fields.get("variants", ())
+    variants: list[MachineProfileRunnerVariant] = []
+    if variants_value != ():
+        if not isinstance(variants_value, list):
+            diagnostics.append(
+                _diagnostic(
+                    path,
+                    "TSL-PROFILE-MALFORMED-RUNNER",
+                    (
+                        f"machine profile {profile_name!r} runner variants must "
+                        "be an object list"
+                    ),
+                )
+            )
+            return None
+        for index, variant_value in enumerate(variants_value):
+            if not isinstance(variant_value, _JsonObject):
+                diagnostics.append(
+                    _diagnostic(
+                        path,
+                        "TSL-PROFILE-MALFORMED-RUNNER",
+                        (
+                            f"machine profile {profile_name!r} runner variant "
+                            f"{index} must be an object"
+                        ),
+                    )
+                )
+                return None
+            variant_fields = _object_fields(variant_value, path, diagnostics)
+            _unknown_fields(
+                variant_fields,
+                {"name", "profile", "args", "vector_bits"},
+                path,
+                diagnostics,
+                owner=(
+                    f"runner variant {index} for machine profile {profile_name!r}"
+                ),
+            )
+            variant = _runner_variant(
+                profile_name,
+                variant_fields,
+                path,
+                diagnostics,
+                default_name=None,
+            )
+            if variant is None:
+                return None
+            variants.append(variant)
+    executions = (primary, *variants)
+    names = tuple(item.name for item in executions)
+    if len(set(names)) != len(names):
+        diagnostics.append(
+            _diagnostic(
+                path,
+                "TSL-PROFILE-MALFORMED-RUNNER",
+                f"machine profile {profile_name!r} runner variant names must be unique",
+            )
+        )
+        return None
+    return MachineProfileRunner(
+        kind=kind,
+        profile=primary.profile,
+        args=primary.args,
+        name=primary.name,
+        vector_bits=primary.vector_bits,
+        variants=tuple(variants),
+    )
+
+
+def _runner_variant(
+    profile_name: str,
+    fields: dict[str, Any],
+    path: Path,
+    diagnostics: list[Diagnostic],
+    *,
+    default_name: str | None,
+) -> MachineProfileRunnerVariant | None:
+    name_value = fields.get("name", default_name)
+    if (
+        not isinstance(name_value, str)
+        or not name_value.strip()
+        or len(name_value.split()) != 1
+    ):
+        diagnostics.append(
+            _diagnostic(
+                path,
+                "TSL-PROFILE-MALFORMED-RUNNER",
+                (
+                    f"machine profile {profile_name!r} runner variant name "
+                    "must be one token"
+                ),
+            )
+        )
+        return None
     profile_value = fields.get("profile")
     if not isinstance(profile_value, str) or not profile_value.strip():
         diagnostics.append(
             _diagnostic(
                 path,
                 "TSL-PROFILE-MALFORMED-RUNNER",
-                f"machine profile {profile_name!r} runner profile must be a non-empty string",
+                (
+                    f"machine profile {profile_name!r} runner profile must be "
+                    "a non-empty string"
+                ),
             )
         )
         return None
@@ -835,10 +1006,11 @@ def _runner(
         )
         return None
     args_value = fields.get("args", ())
-    args: tuple[str, ...]
     if args_value == ():
-        args = ()
-    elif isinstance(args_value, list) and all(isinstance(item, str) for item in args_value):
+        args: tuple[str, ...] = ()
+    elif isinstance(args_value, list) and all(
+        isinstance(item, str) for item in args_value
+    ):
         args = tuple(args_value)
     else:
         diagnostics.append(
@@ -848,8 +1020,30 @@ def _runner(
                 f"machine profile {profile_name!r} runner args must be a string list",
             )
         )
-        args = ()
-    return MachineProfileRunner(kind=kind, profile=profile_value.strip(), args=args)
+        return None
+    vector_bits_value = fields.get("vector_bits")
+    if vector_bits_value is not None and (
+        isinstance(vector_bits_value, bool)
+        or not isinstance(vector_bits_value, int)
+        or vector_bits_value <= 0
+    ):
+        diagnostics.append(
+            _diagnostic(
+                path,
+                "TSL-PROFILE-MALFORMED-RUNNER",
+                (
+                    f"machine profile {profile_name!r} runner vector_bits must "
+                    "be a positive integer"
+                ),
+            )
+        )
+        return None
+    return MachineProfileRunnerVariant(
+        name=name_value.strip(),
+        profile=profile_value.strip(),
+        args=args,
+        vector_bits=vector_bits_value,
+    )
 
 
 def _diagnostic(path: Path, code: str, message: str) -> Diagnostic:

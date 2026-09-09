@@ -228,6 +228,17 @@ def _prepare_rust_backend(
                 )
     target_profiles: list[VerifyProfile] = []
     for profile in backend.profiles:
+        if (
+            config.run_value_tests
+            and profile.runner is not None
+            and len(profile.runner.executions) > 1
+        ):
+            skipped.append(
+                f"rust: profile {profile.profile_name} declares "
+                f"{len(profile.runner.executions)} runner variants, but Rust "
+                "multi-variant value-test execution is not supported"
+            )
+            continue
         if profile in host_dependent_profiles:
             if host_target is None:
                 continue

@@ -332,6 +332,15 @@ def _profile_report(
         runner_tool = {
             "kind": runner.kind,
             "profile": runner.profile,
+            "variants": [
+                {
+                    "name": variant.name,
+                    "profile": variant.profile,
+                    "args": list(variant.args),
+                    "vector_bits": variant.vector_bits,
+                }
+                for variant in runner.executions
+            ],
             "configured": path,
             "tool": None if path is None else _tool(path),
         }
@@ -410,7 +419,23 @@ def _format_text(report: dict[str, Any]) -> str:
                 if runner["tool"] is None:
                     lines.append(f"    runner: {runner['kind']} (not configured)")
                 else:
-                    lines.append(_tool_line(f"runner {runner['kind']}", runner["tool"], indent="    "))
+                    lines.append(
+                        _tool_line(
+                            f"runner {runner['kind']}",
+                            runner["tool"],
+                            indent="    ",
+                        )
+                    )
+                for variant in runner["variants"]:
+                    vector_bits = (
+                        ""
+                        if variant["vector_bits"] is None
+                        else f"; vector bits {variant['vector_bits']}"
+                    )
+                    lines.append(
+                        f"      {variant['name']}: {variant['profile']}"
+                        f"{vector_bits}"
+                    )
             for missing in profile["missing"]:
                 lines.append(f"    missing: {missing}")
     return "\n".join(lines) if lines else "no profiles selected"

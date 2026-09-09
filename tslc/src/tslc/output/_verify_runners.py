@@ -6,7 +6,12 @@ from pathlib import Path
 
 from tslc.diagnostics import Diagnostic
 from tslc.output._verify_common import missing_executable
-from tslc.output.verify_model import BuildVerifierConfig, VerifyBackend, VerifyProfile
+from tslc.output.verify_model import (
+    BuildVerifierConfig,
+    VerifyBackend,
+    VerifyProfile,
+    VerifyRunnerVariant,
+)
 
 _QEMU_LINUX_USER_SYSROOTS = {
     "qemu-aarch64": (
@@ -83,6 +88,7 @@ def is_cmake_cross_emulator(kind: str) -> bool:
 def runner_prefix(
     profile: VerifyProfile,
     config: BuildVerifierConfig,
+    variant: VerifyRunnerVariant | None = None,
 ) -> tuple[str, ...]:
     runner = profile.runner
     if runner is None:
@@ -90,18 +96,19 @@ def runner_prefix(
     executable = config.runner_path(runner.kind)
     if executable is None:
         return ()
+    execution = variant or runner.executions[0]
     if runner.kind == "sde":
-        return (executable, f"-{runner.profile}", *runner.args, "--")
+        return (executable, f"-{execution.profile}", *execution.args, "--")
     if runner.kind in _QEMU_LINUX_USER_SYSROOTS:
         return (
             executable,
-            *_qemu_linux_user_sysroot_args(runner.kind, runner.args),
+            *_qemu_linux_user_sysroot_args(runner.kind, execution.args),
             "-cpu",
-            runner.profile,
-            *runner.args,
+            execution.profile,
+            *execution.args,
         )
     if runner.kind == "wasmtime":
-        return (executable, *runner.args)
+        return (executable, *execution.args)
     return ()
 
 

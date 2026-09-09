@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from tslc.backend.cpp_build_policy import cpp_profile_flags, cpp_profile_target
 from tslc.backend.emitted_profile import EmittedProfile, used_extensions
+from tslc.backend.verification import verify_runner
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.target_families import ProfileFamilyCapability
 from tslc.names import identifier_slug
-from tslc.output.verify_model import VerifyProfile, VerifyRunner
+from tslc.output.verify_model import VerifyProfile
 
 
 def _cpp_preflight_headers(profile: EmittedProfile) -> tuple[str, ...]:
@@ -63,17 +64,7 @@ def cpp_verify_profile(
         cmake_system_processor=backend.cmake_system_processor,
         pass_target_to_compiler=backend.pass_target_to_compiler,
         preflight_headers=preflight_headers,
-        runner=_verify_runner(profile),
-    )
-
-
-def _verify_runner(profile: MachineProfile) -> VerifyRunner | None:
-    if profile.runner is None:
-        return None
-    return VerifyRunner(
-        kind=profile.runner.kind,
-        profile=profile.runner.profile,
-        args=profile.runner.args,
+        runner=verify_runner(profile.runner),
     )
 
 

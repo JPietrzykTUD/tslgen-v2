@@ -10,7 +10,11 @@ import pytest
 
 from tslc.backend.registry import registered_compiler_capabilities
 from tslc.catalog.builder import CatalogBuilder
-from tslc.catalog.machine_profiles import load_machine_profiles_checked
+from tslc.catalog.machine_profiles import (
+    MachineProfileRunner,
+    MachineProfileRunnerVariant,
+    load_machine_profiles_checked,
+)
 from tslc.catalog.target_families import (
     ProfileFamilyCapability,
     TargetFamilyCatalog,
@@ -2715,7 +2719,9 @@ def test_machine_profile_valid_runners_are_preserved_verbatim(tmp_path: Path) ->
         '  "aarch64": [\n'
         '    {"name": "neon", "target_features": "neon", '
         '"runner": {"kind": "qemu-aarch64", "profile": "cortex-a76", '
-        '"args": ["-cpu"]}}\n'
+        '"args": ["-cpu"], "name": "vl128", "vector_bits": 128, '
+        '"variants": [{"name": "vl256", "profile": "max,sve=on", '
+        '"vector_bits": 256}]}}\n'
         '  ]\n'
         '}\n',
         encoding="utf-8",
@@ -2731,6 +2737,69 @@ def test_machine_profile_valid_runners_are_preserved_verbatim(tmp_path: Path) ->
         "qemu-aarch64",
         "cortex-a76",
         ("-cpu",),
+    )
+    assert tuple(
+        (variant.name, variant.profile, variant.vector_bits)
+        for variant in qemu.executions
+    ) == (
+        ("vl128", "cortex-a76", 128),
+        ("vl256", "max,sve=on", 256),
+    )
+
+
+def test_machine_profile_runner_variants_reject_invalid_or_duplicate_names(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "machine_profiles.json"
+    path.write_text(
+        '{"aarch64": [{"name": "sve_invalid", "target_features": "sve", '
+        '"runner": {"kind": "qemu-aarch64", "name": "vl128", '
+        '"profile": "max", "vector_bits": 128, "variants": ['
+        '{"name": "vl256", "profile": "max", "vector_bits": 0}]}}, '
+        '{"name": "sve_duplicate", "target_features": "sve", '
+        '"runner": {"kind": "qemu-aarch64", "name": "vl128", '
+        '"profile": "max", "vector_bits": 128, "variants": ['
+        '{"name": "vl128", "profile": "max", "vector_bits": 256}]}}]}\n',
+        encoding="utf-8",
+    )
+
+    result = load_machine_profiles_checked(path, _target_family_catalog())
+
+    assert result.profiles["sve_invalid"].runner is None
+    assert result.profiles["sve_duplicate"].runner is None
+    messages = [
+        diagnostic.message
+        for diagnostic in result.diagnostics
+        if diagnostic.code == "TSL-PROFILE-MALFORMED-RUNNER"
+    ]
+    assert any("vector_bits must be a positive integer" in message for message in messages)
+    assert any("variant names must be unique" in message for message in messages)
+
+
+def test_machine_profile_runner_typed_model_owns_variant_invariants() -> None:
+    with pytest.raises(ValueError, match="positive integer"):
+        MachineProfileRunnerVariant("vl0", "max", vector_bits=0)
+    with pytest.raises(ValueError, match="must not start"):
+        MachineProfileRunnerVariant("vl128", "-cpu max", vector_bits=128)
+    with pytest.raises(ValueError, match="names must be unique"):
+        MachineProfileRunner(
+            kind="qemu-aarch64",
+            name="vl128",
+            profile="max",
+            vector_bits=128,
+            variants=(
+                MachineProfileRunnerVariant("vl128", "max", vector_bits=256),
+            ),
+        )
+    normalized = MachineProfileRunner(
+        kind=" qemu-aarch64 ",
+        name=" vl128 ",
+        profile=" max ",
+    )
+    assert (normalized.kind, normalized.name, normalized.profile) == (
+        "qemu-aarch64",
+        "vl128",
+        "max",
     )
 
 

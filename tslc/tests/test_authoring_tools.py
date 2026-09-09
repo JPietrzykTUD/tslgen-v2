@@ -287,7 +287,7 @@ def test_generate_uses_discovered_backend_defaults_for_formatting(
 
     def fake_format(output_root: object, backends: object) -> object:
         calls["format"] = (output_root, backends)
-        return SimpleNamespace(notes=(), formatted=())
+        return SimpleNamespace(notes=(), formatted=(), attempted=())
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(cli, "generate_project", fake_generate)

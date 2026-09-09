@@ -354,6 +354,7 @@ class _GenerationSession:
                 assets=self.inputs.render_assets,
                 config=self.request.render_config,
                 policy_inputs=self.inputs.policy_inputs,
+                input_digest=self.inputs.input_digest,
             )
             if self.emitted_profiles
             else None

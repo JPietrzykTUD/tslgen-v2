@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from hashlib import sha256
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -15,6 +17,9 @@ from tslc.generation_command import (
     GenerationPipeline,
     run_generation_command,
 )
+from tslc.output.artifacts import Artifact, ArtifactSet
+from tslc.output.format import FormatReport
+from tslc.output.writer import ArtifactWriter
 from tslc.output.verify_model import BackendToolchain
 from tslc.value_tests.model import (
     ValueTestCasePlan,
@@ -62,6 +67,7 @@ def test_cli_test_flag_enables_existing_value_test_paths(
         return SimpleNamespace(
             skipped=(),
             diagnostics=(),
+            attestation_path=None,
             commands=(
                 SimpleNamespace(
                     command=SimpleNamespace(
@@ -69,6 +75,7 @@ def test_cli_test_flag_enables_existing_value_test_paths(
                         profile_name="avx2",
                         step="build-values",
                         argv=("cmake", "--build", "build"),
+                        runner_variant=None,
                     ),
                     returncode=0,
                     stdout="quiet build output",
@@ -80,6 +87,7 @@ def test_cli_test_flag_enables_existing_value_test_paths(
                         profile_name="avx2",
                         step="test",
                         argv=("ctest", "--test-dir", "build", "--output-on-failure"),
+                        runner_variant=None,
                     ),
                     returncode=0,
                     stdout="100% tests passed\n",
@@ -91,6 +99,7 @@ def test_cli_test_flag_enables_existing_value_test_paths(
                         profile_name="avx2",
                         step="test",
                         argv=("cargo", "test", "--features", "value_tests"),
+                        runner_variant=None,
                     ),
                     returncode=0,
                     stdout="test result: ok\n",
@@ -163,7 +172,9 @@ def test_cli_qemu_aarch64_flag_is_forwarded(monkeypatch, tmp_path, capsys) -> No
 
     def fake_verify_project(output_root, verify, **kwargs):
         calls["verify"] = (output_root, verify, kwargs)
-        return SimpleNamespace(skipped=(), diagnostics=(), commands=())
+        return SimpleNamespace(
+            skipped=(), diagnostics=(), commands=(), attestation_path=None
+        )
 
     monkeypatch.setattr(cli, "generate_project", fake_generate_project)
     monkeypatch.setattr(cli, "write_artifacts", fake_write_artifacts)
@@ -333,6 +344,7 @@ def test_cli_test_flag_fails_on_value_test_diagnostic(monkeypatch, tmp_path, cap
                 ),
             ),
             commands=(),
+            attestation_path=None,
         )
 
     monkeypatch.setattr(cli, "generate_project", fake_generate_project)
@@ -381,6 +393,7 @@ def test_cli_test_flag_fails_on_value_test_skip(monkeypatch, tmp_path, capsys) -
             skipped=("cpp: profile neon requires qemu-aarch64",),
             diagnostics=(),
             commands=(),
+            attestation_path=None,
         )
 
     monkeypatch.setattr(cli, "generate_project", fake_generate_project)
@@ -440,6 +453,7 @@ def test_cli_test_flag_fails_when_planned_value_tests_do_not_run(
         return SimpleNamespace(
             skipped=(),
             diagnostics=(),
+            attestation_path=None,
             commands=(
                 SimpleNamespace(
                     command=SimpleNamespace(
@@ -447,6 +461,7 @@ def test_cli_test_flag_fails_when_planned_value_tests_do_not_run(
                         profile_name="wasm32_simd128",
                         step="build-values",
                         argv=("cmake", "--build", "build"),
+                        runner_variant=None,
                     ),
                     returncode=0,
                     stdout="",
@@ -537,7 +552,9 @@ def test_cli_build_command_implies_verify_as_derived_setting(
 
     def fake_verify_project(output_root, verify, **kwargs):
         calls["verify"] = (output_root, verify, kwargs)
-        return SimpleNamespace(skipped=(), diagnostics=(), commands=())
+        return SimpleNamespace(
+            skipped=(), diagnostics=(), commands=(), attestation_path=None
+        )
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(cli, "generate_project", fake_generate_project)
@@ -610,6 +627,7 @@ def test_generation_command_forwards_toolchain_compiler_capabilities(
         GenerationPipeline(
             generate=fake_generate,
             write=fail_write,
+            refresh_manifest=fail_write,
             verify=fail_verify,
         ),
     )
@@ -653,7 +671,12 @@ def test_generation_command_core_writes_artifacts_and_summary_once(
             output_root=str(tmp_path / "out"),
             summary_file=str(summary_file),
         ),
-        GenerationPipeline(generate=fake_generate, write=fake_write, verify=fail_verify),
+        GenerationPipeline(
+            generate=fake_generate,
+            write=fake_write,
+            refresh_manifest=fail_verify,
+            verify=fail_verify,
+        ),
     )
 
     captured = capsys.readouterr()
@@ -687,11 +710,18 @@ def test_generation_command_core_verify_setting_runs_build_verification(
 
     def fake_verify(output_root, verify, **kwargs):
         calls["verify"] = (output_root, verify, kwargs)
-        return SimpleNamespace(skipped=(), diagnostics=(), commands=())
+        return SimpleNamespace(
+            skipped=(), diagnostics=(), commands=(), attestation_path=None
+        )
 
     rc = run_generation_command(
         _core_settings(output_root=str(tmp_path), verify=True),
-        GenerationPipeline(generate=fake_generate, write=fake_write, verify=fake_verify),
+        GenerationPipeline(
+            generate=fake_generate,
+            write=fake_write,
+            refresh_manifest=fake_verify,
+            verify=fake_verify,
+        ),
     )
 
     captured = capsys.readouterr()
@@ -699,6 +729,118 @@ def test_generation_command_core_verify_setting_runs_build_verification(
     _, _, verify_kwargs = calls["verify"]
     assert verify_kwargs["run_value_tests"] is False
     assert "build-verified 0 commands" in captured.out
+
+
+def test_generation_command_refreshes_formatted_bytes_before_verification(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    artifact = Artifact(
+        logical_path="cpp/include/tsl.hpp",
+        content="int answer=42;\n",
+        media_type="text/x-c++hdr",
+    )
+    artifacts = ArtifactSet.create((artifact,))
+    observed_digests: list[str] = []
+
+    def fake_generate(source_paths, **kwargs):
+        return SimpleNamespace(
+            diagnostics=(),
+            coverage=(object(),),
+            artifacts=artifacts,
+            rendered=SimpleNamespace(verify=object()),
+        )
+
+    def fake_format(output_root, backends):
+        (Path(output_root) / artifact.logical_path).write_text(
+            "int answer = 42;\n", encoding="utf-8"
+        )
+        return FormatReport(
+            formatted=("cpp:1 files",),
+            notes=(),
+            attempted=("cpp:1 files",),
+        )
+
+    def fake_verify(output_root, verify, **kwargs):
+        manifest = json.loads(
+            (Path(output_root) / ".tslc-manifest.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        observed_digests.append(manifest["artifacts"][0]["digest"])
+        return SimpleNamespace(
+            skipped=(),
+            diagnostics=(),
+            commands=(),
+            attestation_path=None,
+        )
+
+    monkeypatch.setattr("tslc.output.format.format_generated", fake_format)
+    writer = ArtifactWriter()
+    rc = run_generation_command(
+        _core_settings(output_root=str(tmp_path), verify=True, format_artifacts=True),
+        GenerationPipeline(
+            generate=fake_generate,
+            write=lambda values, root: writer.write(
+                values, root, mode="manifest-clean"
+            ),
+            refresh_manifest=writer.refresh_manifest,
+            verify=fake_verify,
+        ),
+    )
+
+    capsys.readouterr()
+    assert rc == 0
+    assert observed_digests == [sha256(b"int answer = 42;\n").hexdigest()]
+
+
+def test_generation_command_stops_when_formatted_identity_cannot_be_refreshed(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    artifact = Artifact(
+        logical_path="cpp/include/tsl.hpp",
+        content="int answer=42;\n",
+        media_type="text/x-c++hdr",
+    )
+    artifacts = ArtifactSet.create((artifact,))
+
+    def fake_generate(source_paths, **kwargs):
+        return SimpleNamespace(
+            diagnostics=(),
+            coverage=(),
+            artifacts=artifacts,
+            rendered=SimpleNamespace(verify=object()),
+        )
+
+    def destructive_formatter(output_root, backends):
+        (Path(output_root) / artifact.logical_path).unlink()
+        return FormatReport(
+            formatted=(),
+            notes=("formatter removed a file",),
+            attempted=("cpp:1 files",),
+        )
+
+    def fail_verify(*_args, **_kwargs):
+        raise AssertionError("unidentified generated bytes must not be verified")
+
+    monkeypatch.setattr(
+        "tslc.output.format.format_generated", destructive_formatter
+    )
+    writer = ArtifactWriter()
+    rc = run_generation_command(
+        _core_settings(output_root=str(tmp_path), verify=True, format_artifacts=True),
+        GenerationPipeline(
+            generate=fake_generate,
+            write=lambda values, root: writer.write(
+                values, root, mode="manifest-clean"
+            ),
+            refresh_manifest=writer.refresh_manifest,
+            verify=fail_verify,
+        ),
+    )
+
+    captured = capsys.readouterr()
+    assert rc == 1
+    assert "TSL-WRITE-MANIFEST-ARTIFACT-NOT-FILE" in captured.err
 
 
 def test_generation_command_core_generation_errors_exit_one_with_summary(
@@ -731,7 +873,12 @@ def test_generation_command_core_generation_errors_exit_one_with_summary(
             output_root=str(tmp_path / "out"),
             summary_file=str(summary_file),
         ),
-        GenerationPipeline(generate=fake_generate, write=fail_write, verify=fail_verify),
+        GenerationPipeline(
+            generate=fake_generate,
+            write=fail_write,
+            refresh_manifest=fail_write,
+            verify=fail_verify,
+        ),
     )
 
     captured = capsys.readouterr()
@@ -748,7 +895,10 @@ def test_generation_command_core_value_tests_require_output_root(capsys) -> None
     rc = run_generation_command(
         _core_settings(run_value_tests=True),
         GenerationPipeline(
-            generate=fail_generate, write=fail_generate, verify=fail_generate
+            generate=fail_generate,
+            write=fail_generate,
+            refresh_manifest=fail_generate,
+            verify=fail_generate,
         ),
     )
 

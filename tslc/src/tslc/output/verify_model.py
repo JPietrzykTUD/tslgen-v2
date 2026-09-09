@@ -13,10 +13,71 @@ from tslc.diagnostics import Diagnostic, Severity
 
 
 @dataclass(frozen=True, slots=True)
-class VerifyRunner:
-    kind: str  # "sde" | "qemu-aarch64" | "wasmtime"
+class VerifyRunnerVariant:
+    """One exact runner configuration used to execute a built artifact."""
+
+    name: str
     profile: str
     args: tuple[str, ...] = ()
+    vector_bits: int | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "name", self.name.strip())
+        object.__setattr__(self, "profile", self.profile.strip())
+        object.__setattr__(self, "args", tuple(self.args))
+        _require_runner_variant(self.name, self.profile, self.vector_bits)
+
+
+@dataclass(frozen=True, slots=True)
+class VerifyRunner:
+    kind: str  # Validated against the profile family's declared runner kinds.
+    profile: str
+    args: tuple[str, ...] = ()
+    name: str = "default"
+    vector_bits: int | None = None
+    variants: tuple[VerifyRunnerVariant, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "kind", self.kind.strip())
+        object.__setattr__(self, "name", self.name.strip())
+        object.__setattr__(self, "profile", self.profile.strip())
+        if not self.kind.strip():
+            raise ValueError("runner kind must be non-empty")
+        object.__setattr__(self, "args", tuple(self.args))
+        object.__setattr__(self, "variants", tuple(self.variants))
+        _require_runner_variant(self.name, self.profile, self.vector_bits)
+        names = tuple(execution.name for execution in self.executions)
+        if len(set(names)) != len(names):
+            raise ValueError("runner execution names must be unique")
+
+    @property
+    def executions(self) -> tuple[VerifyRunnerVariant, ...]:
+        return (
+            VerifyRunnerVariant(
+                name=self.name,
+                profile=self.profile,
+                args=self.args,
+                vector_bits=self.vector_bits,
+            ),
+            *self.variants,
+        )
+
+
+def _require_runner_variant(
+    name: str,
+    profile: str,
+    vector_bits: int | None,
+) -> None:
+    if len(name.split()) != 1:
+        raise ValueError("runner execution name must be one token")
+    if not profile.strip() or profile.strip().startswith("-"):
+        raise ValueError("runner profile must be non-empty and must not start with '-'")
+    if vector_bits is not None and (
+        isinstance(vector_bits, bool)
+        or not isinstance(vector_bits, int)
+        or vector_bits <= 0
+    ):
+        raise ValueError("runner vector_bits must be a positive integer")
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +119,7 @@ class VerifyBackend:
 @dataclass(frozen=True, slots=True)
 class VerifyProject:
     backends: tuple[VerifyBackend, ...]
+    input_digest: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,6 +236,9 @@ class BuildCommand:
     env: tuple[BuildCommandEnvironment, ...] = ()
     severity_on_failure: Severity = "error"
     expected_failure_marker: str | None = None
+    runner_kind: str | None = None
+    runner_variant: VerifyRunnerVariant | None = None
+    timeout_seconds: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -196,6 +261,7 @@ class BuildVerificationReport:
     commands: tuple[BuildCommandResult, ...]
     diagnostics: tuple[Diagnostic, ...]
     skipped: tuple[str, ...] = field(default=())
+    attestation_path: Path | None = None
 
 
 class BuildCommandRunner(Protocol):
@@ -243,4 +309,5 @@ __all__ = [
     "VerifyProfile",
     "VerifyProject",
     "VerifyRunner",
+    "VerifyRunnerVariant",
 ]

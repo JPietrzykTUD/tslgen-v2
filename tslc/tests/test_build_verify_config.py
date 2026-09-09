@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -30,7 +31,7 @@ from tslc.output._verify_cpp_config import effective_cpp_compiler
 from tslc.output._verify_runners import runner_prefix
 from tslc.output._verify_rust_config import effective_rust_compiler
 from tslc.output.verify_drivers import BackendPreparation, VerifyBackendDriver
-from tslc.output.verify_model import BackendToolchain
+from tslc.output.verify_model import BackendToolchain, VerifyRunnerVariant
 
 _ONEAPI_CPP_TOOL = "/opt/intel/oneapi/compiler/2025.0/bin/icpx"
 _WASI_CPP_TOOL = "/opt/wasi-sdk/bin/clang++"
@@ -124,6 +125,18 @@ def test_backend_capabilities_use_public_verify_driver_surface() -> None:
     assert rust_driver.command_groups.__module__ != verify_module.__name__
     assert not hasattr(verify_module, "cpp_verify_driver")
     assert not hasattr(verify_module, "rust_verify_driver")
+
+
+def test_attestation_requires_the_generated_artifact_manifest(tmp_path: Path) -> None:
+    report = verify_generated_project(
+        tmp_path,
+        VerifyProject(backends=(), input_digest="a" * 64),
+    )
+
+    assert report.attestation_path is None
+    assert [diagnostic.code for diagnostic in report.diagnostics] == [
+        "TSL-BUILD-VERIFY-ATTESTATION-IDENTITY"
+    ]
 
 
 def test_verifier_configuration_has_focused_module_ownership() -> None:
@@ -903,6 +916,36 @@ def test_subprocess_runner_closes_command_stdin(tmp_path: Path) -> None:
     assert result.stdout.strip() == "empty"
 
 
+def test_subprocess_runner_reports_typed_command_timeout(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    command = BuildCommand(
+        backend_id="cpp",
+        profile_name="sve",
+        step="test",
+        argv=("qemu-aarch64", "tsl_values"),
+        cwd=tmp_path,
+        timeout_seconds=60,
+    )
+
+    def time_out(*args, **kwargs):
+        del args, kwargs
+        raise subprocess.TimeoutExpired(
+            command.argv,
+            command.timeout_seconds,
+            output="partial output",
+        )
+
+    monkeypatch.setattr(verify_module.subprocess, "run", time_out)
+
+    result = run_subprocess_build_command(command)
+
+    assert result.returncode == 124
+    assert result.stdout == "partial output"
+    assert "timed out after 60 seconds" in result.stderr
+
+
 def test_subprocess_runner_installs_rustc_stdin_guard_for_cargo(tmp_path: Path) -> None:
     cargo = tmp_path / "cargo"
     cargo.write_text(
@@ -1243,6 +1286,118 @@ def test_cpp_qemu_value_tests_configure_cmake_cross_emulator(
     assert emulator.endswith(";-cpu;cortex-a76")
     assert seen[-1].argv[0] == "ctest"
     assert seen[-1].argv[-2:] == ("--timeout", "60")
+
+
+def test_cpp_runner_variants_execute_one_built_binary_for_every_vector_length(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    (tmp_path / ".tslc-manifest.json").write_text(
+        '{"version": 1, "artifacts": []}\n',
+        encoding="utf-8",
+    )
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="cpp",
+                root_path="cpp",
+                profiles=(
+                    VerifyProfile(
+                        profile_name="sve",
+                        file_stem="sve",
+                        family="aarch64",
+                        target="aarch64-linux-gnu",
+                        runner=VerifyRunner(
+                            kind="qemu-aarch64",
+                            name="vl128",
+                            profile="max,sve128=on,sve256=off",
+                            vector_bits=128,
+                            variants=(
+                                VerifyRunnerVariant(
+                                    "vl256",
+                                    "max,sve128=on,sve256=on,sve512=off",
+                                    vector_bits=256,
+                                ),
+                                VerifyRunnerVariant(
+                                    "vl512",
+                                    "max,sve512=on,sve768=off",
+                                    vector_bits=512,
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+        input_digest="a" * 64,
+    )
+    seen: list[BuildCommand] = []
+    real_which = shutil.which
+
+    def fake_which(executable: str) -> str | None:
+        if executable == "aarch64-linux-gnu-g++":
+            return executable
+        return real_which(executable)
+
+    monkeypatch.setattr(shutil, "which", fake_which)
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        return BuildCommandResult(command=command, returncode=0)
+
+    report = verify_generated_project(
+        tmp_path,
+        project,
+        runner,
+        config=_config(
+            run_value_tests=True,
+            qemu_aarch64_path=sys.executable,
+        ),
+    )
+
+    assert report.diagnostics == ()
+    assert [command.step for command in seen] == [
+        "target-preflight",
+        "clean",
+        "configure",
+        "build",
+        "build-values",
+        "test",
+        "test",
+        "test",
+    ]
+    tests = tuple(command for command in seen if command.step == "test")
+    assert tuple(
+        command.runner_variant.name
+        for command in tests
+        if command.runner_variant is not None
+    ) == ("vl128", "vl256", "vl512")
+    assert tuple(
+        command.runner_variant.vector_bits
+        for command in tests
+        if command.runner_variant is not None
+    ) == (128, 256, 512)
+    assert len({command.argv[-1] for command in tests}) == 1
+    assert tests[0].argv[0] == sys.executable
+    assert all(command.timeout_seconds == 60 for command in tests)
+    assert report.attestation_path == (
+        tmp_path / ".tslctmp/verification/attestation.json"
+    )
+    attestation = json.loads(report.attestation_path.read_text(encoding="utf-8"))
+    assert attestation["schema_version"] == 1
+    assert attestation["identity"]["input_digest"] == "a" * 64
+    assert attestation["run"]["outcome"] == "passed"
+    runner_records = [
+        command["runner"]
+        for command in attestation["run"]["commands"]
+        if command["step"] == "test"
+    ]
+    assert [record["kind"] for record in runner_records] == [
+        "qemu-aarch64",
+        "qemu-aarch64",
+        "qemu-aarch64",
+    ]
+    assert [record["vector_bits"] for record in runner_records] == [128, 256, 512]
 
 
 def test_cpp_qemu_value_tests_fall_back_to_clang_target_when_cross_gpp_missing(
@@ -1606,6 +1761,62 @@ def test_rust_qemu_value_tests_use_target_and_run_binaries(tmp_path: Path) -> No
     run_test = seen[-1]
     assert run_test.argv[0] == sys.executable
     assert run_test.argv[-3:] == ("-cpu", "cortex-a76", executable)
+
+
+def test_rust_multi_variant_runner_is_an_explicit_verification_gap(
+    tmp_path: Path,
+) -> None:
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="rust",
+                root_path="rust",
+                profiles=(
+                    VerifyProfile(
+                        profile_name="future_scalable",
+                        file_stem="future_scalable",
+                        target="aarch64-unknown-linux-musl",
+                        runner=VerifyRunner(
+                            kind="qemu-aarch64",
+                            name="vl128",
+                            profile="max,sve128=on,sve256=off",
+                            vector_bits=128,
+                            variants=(
+                                VerifyRunnerVariant(
+                                    "vl256",
+                                    "max,sve128=on,sve256=on,sve512=off",
+                                    vector_bits=256,
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
+    )
+    seen: list[BuildCommand] = []
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        return BuildCommandResult(command=command, returncode=0)
+
+    report = verify_generated_project(
+        tmp_path,
+        project,
+        runner,
+        config=_config(
+            rust_compiler=sys.executable,
+            run_value_tests=True,
+            qemu_aarch64_path=sys.executable,
+        ),
+    )
+
+    assert report.diagnostics == ()
+    assert [command.step for command in seen] == ["preflight"]
+    assert report.skipped == (
+        "rust: profile future_scalable declares 2 runner variants, but Rust "
+        "multi-variant value-test execution is not supported",
+    )
 
 
 def test_rust_wasm_value_tests_use_wasmtime_runner(tmp_path: Path) -> None:

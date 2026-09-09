@@ -1,8 +1,10 @@
 """Filesystem writer for generated artifact values."""
 
 from dataclasses import dataclass
+from hashlib import sha256
 import json
 from pathlib import Path, PurePosixPath, PureWindowsPath
+import tempfile
 from typing import Literal
 
 from tslc.diagnostics import Diagnostic
@@ -38,6 +40,25 @@ class ArtifactWriteReport:
     written: tuple[ArtifactWriteRecord, ...]
     diagnostics: tuple[Diagnostic, ...]
     removed: tuple[ArtifactRemovalRecord, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ArtifactManifestRecord:
+    """Identity of one manifest-owned artifact as it exists on disk."""
+
+    logical_path: str
+    artifact_path: Path
+    digest: str
+    bytes_read: int
+
+
+@dataclass(frozen=True, slots=True)
+class ArtifactManifestRefreshReport:
+    """Result of reconciling the generator manifest with written bytes."""
+
+    output_root: Path
+    artifacts: tuple[ArtifactManifestRecord, ...]
+    diagnostics: tuple[Diagnostic, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,9 +121,13 @@ class ArtifactWriter:
         written: list[ArtifactWriteRecord] = []
         write_diagnostics: list[Diagnostic] = []
         for item in planned:
+            encoded_content = item.artifact.content.encode("utf-8")
             try:
                 item.target_path.parent.mkdir(parents=True, exist_ok=True)
-                item.target_path.write_text(item.artifact.content, encoding="utf-8")
+                # Preserve the artifact's byte identity on every host.  Text-mode
+                # writes would translate newlines on Windows while retaining the
+                # digest of the pre-translation in-memory value.
+                item.target_path.write_bytes(encoded_content)
             except OSError as exc:
                 write_diagnostics.append(
                     Diagnostic(
@@ -121,7 +146,7 @@ class ArtifactWriter:
                     logical_path=item.artifact.logical_path,
                     written_path=item.target_path,
                     digest=item.artifact.digest,
-                    bytes_written=len(item.artifact.content.encode("utf-8")),
+                    bytes_written=len(encoded_content),
                 )
             )
 
@@ -137,6 +162,109 @@ class ArtifactWriter:
             removed=removed,
         )
 
+    def refresh_manifest(
+        self,
+        output_root: Path | str,
+    ) -> ArtifactManifestRefreshReport:
+        """Re-hash exactly the files already owned by the generator manifest.
+
+        Post-generation tools such as formatters may legitimately change emitted
+        bytes.  This operation keeps the manifest authoritative without scanning
+        or adopting unrelated files from the output tree.
+        """
+
+        root = Path(output_root).resolve()
+        manifest_path = root / _MANIFEST_LOGICAL_PATH
+        if not manifest_path.is_file():
+            return ArtifactManifestRefreshReport(
+                output_root=root,
+                artifacts=(),
+                diagnostics=(
+                    Diagnostic(
+                        severity="error",
+                        code="TSL-WRITE-MISSING-MANIFEST",
+                        message=(
+                            "cannot refresh generated artifact identity because "
+                            f"{manifest_path} is not a file"
+                        ),
+                    ),
+                ),
+            )
+
+        logical_paths, manifest_diagnostics = _read_manifest(root)
+        if manifest_diagnostics:
+            return ArtifactManifestRefreshReport(
+                output_root=root,
+                artifacts=(),
+                diagnostics=manifest_diagnostics,
+            )
+
+        records: list[ArtifactManifestRecord] = []
+        diagnostics: list[Diagnostic] = []
+        for logical_path in logical_paths:
+            artifact_path = root.joinpath(*PurePosixPath(logical_path).parts)
+            resolved_path = artifact_path.resolve(strict=False)
+            if not _is_relative_to(resolved_path, root):
+                diagnostics.append(
+                    Diagnostic(
+                        severity="error",
+                        code="TSL-WRITE-MANIFEST-PATH-ESCAPES-OUTPUT-ROOT",
+                        message=(
+                            f"manifest artifact {logical_path!r} resolves outside "
+                            f"output root {root}"
+                        ),
+                    )
+                )
+                continue
+            if not artifact_path.is_file():
+                diagnostics.append(
+                    Diagnostic(
+                        severity="error",
+                        code="TSL-WRITE-MANIFEST-ARTIFACT-NOT-FILE",
+                        message=(
+                            f"manifest artifact {logical_path!r} is not a file "
+                            f"under output root {root}"
+                        ),
+                    )
+                )
+                continue
+            try:
+                content = artifact_path.read_bytes()
+            except OSError as exc:
+                diagnostics.append(
+                    Diagnostic(
+                        severity="error",
+                        code="TSL-WRITE-FILESYSTEM-ERROR",
+                        message=f"could not read manifest artifact {artifact_path}: {exc}",
+                    )
+                )
+                continue
+            records.append(
+                ArtifactManifestRecord(
+                    logical_path=logical_path,
+                    artifact_path=artifact_path,
+                    digest=sha256(content).hexdigest(),
+                    bytes_read=len(content),
+                )
+            )
+
+        if diagnostics:
+            return ArtifactManifestRefreshReport(
+                output_root=root,
+                artifacts=tuple(records),
+                diagnostics=_sort_diagnostics(diagnostics),
+            )
+
+        manifest_diagnostic = _write_manifest_entries(
+            root,
+            tuple((record.logical_path, record.digest) for record in records),
+        )
+        return ArtifactManifestRefreshReport(
+            output_root=root,
+            artifacts=tuple(records),
+            diagnostics=(manifest_diagnostic,) if manifest_diagnostic is not None else (),
+        )
+
 
 def write_artifacts(
     artifacts: ArtifactSet,
@@ -146,6 +274,14 @@ def write_artifacts(
     """Write generated artifact values under an explicit output root."""
 
     return ArtifactWriter().write(artifacts, output_root, mode)
+
+
+def refresh_artifact_manifest(
+    output_root: Path | str,
+) -> ArtifactManifestRefreshReport:
+    """Refresh manifest digests after an output-owned byte transformation."""
+
+    return ArtifactWriter().refresh_manifest(output_root)
 
 
 def manifest_logical_path() -> str:
@@ -381,22 +517,53 @@ def _remove_stale_manifest_paths(
 
 
 def _write_manifest(output_root: Path, artifacts: ArtifactSet) -> Diagnostic | None:
+    return _write_manifest_entries(
+        output_root,
+        tuple(
+            (artifact.logical_path, artifact.digest)
+            for artifact in sorted(
+                artifacts.artifacts,
+                key=lambda item: item.logical_path,
+            )
+        ),
+    )
+
+
+def _write_manifest_entries(
+    output_root: Path,
+    entries: tuple[tuple[str, str], ...],
+) -> Diagnostic | None:
     manifest = {
         "version": _MANIFEST_VERSION,
         "artifacts": [
             {
-                "logical_path": artifact.logical_path,
-                "digest": artifact.digest,
+                "logical_path": logical_path,
+                "digest": digest,
             }
-            for artifact in artifacts.artifacts
+            for logical_path, digest in entries
         ],
     }
+    manifest_path = output_root / _MANIFEST_LOGICAL_PATH
+    temporary_path: Path | None = None
     try:
-        (output_root / _MANIFEST_LOGICAL_PATH).write_text(
-            json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+        with tempfile.NamedTemporaryFile(
+            mode="w",
             encoding="utf-8",
-        )
+            newline="\n",
+            dir=output_root,
+            prefix=f"{_MANIFEST_LOGICAL_PATH}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary:
+            temporary_path = Path(temporary.name)
+            temporary.write(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+        temporary_path.replace(manifest_path)
     except OSError as exc:
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink(missing_ok=True)
+            except OSError:
+                pass
         return Diagnostic(
             severity="error",
             code="TSL-WRITE-FILESYSTEM-ERROR",

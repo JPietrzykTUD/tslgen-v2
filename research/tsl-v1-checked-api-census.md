@@ -139,18 +139,18 @@ It is not part of a generated runtime API contract.
 - `tslc/src/tslc/render/rust_dispatch.py:575` — owner `_unit_tests` — `unwrap` — `"ops::Add, &left, &right, &mut output).unwrap();"`
 - `tslc/src/tslc/render/rust_dispatch.py:596` — owner `_unit_tests` — `unwrap` — `"ops::Add, &left, &right, &mut output).unwrap();"`
 - `tslc/src/tslc/value_tests/_render_rust_conversion.py:35` — owner `_convert` — `assert` — `f" for i in 0..{target_lanes} {{ assert!(result[i].lane_eq(expected[i]), "`
-- `tslc/src/tslc/value_tests/_render_rust_conversion.py:476` — owner `_differential` — `assert_eq` — `f" for i in 0..{case.lanes} {{ assert_eq!("`
-- `tslc/src/tslc/value_tests/_render_rust_conversion.py:484` — owner `_differential` — `assert` — `" assert!(hw.lane_eq(reference), "`
-- `tslc/src/tslc/value_tests/_render_rust_conversion.py:497` — owner `_differential` — `assert` — `f" for i in 0..{case.lanes} {{ assert!(hw[i].{comparison}(reference[i]), "`
-- `tslc/src/tslc/value_tests/_render_rust_conversion.py:292` — owner `_extension_extract` — `assert` — `f" for i in 0..{out_lanes} {{ assert!(out[i].lane_eq(expected[i]), "`
-- `tslc/src/tslc/value_tests/_render_rust_conversion.py:327` — owner `_extension_insert` — `assert` — `f" for i in 0..{out_lanes} {{ assert!(out[i].lane_eq(expected[i]), "`
-- `tslc/src/tslc/value_tests/_render_rust_conversion.py:367` — owner `_extension_result` — `assert` — `f" for i in 0..{expected_lanes} {{ assert!(out[i].lane_eq(expected[i]), "`
-- `tslc/src/tslc/value_tests/_render_rust_conversion.py:262` — owner `_fixed_extension_load_convert` — `assert` — `f" for i in 0..{target_lanes} {{ assert!(out[i].lane_eq(expected[i]), "`
-- `tslc/src/tslc/value_tests/_render_rust_conversion.py:197` — owner `_fixed_extension_repr_cast` — `assert` — `f" for i in 0..{target_lanes} {{ assert!(out[i].lane_eq(expected[i]), "`
-- `tslc/src/tslc/value_tests/_render_rust_conversion.py:118` — owner `_lane_convert` — `assert` — `f" for i in 0..{case.lanes} {{ assert!(result[i].lane_eq(expected[i]), "`
-- `tslc/src/tslc/value_tests/_render_rust_conversion.py:230` — owner `_load_convert` — `assert` — `f" for i in 0..{target_lanes} {{ assert!(result[i].lane_eq(expected[i]), "`
+- `tslc/src/tslc/value_tests/_render_rust_conversion.py:474` — owner `_differential` — `assert_eq` — `f" for i in 0..{case.lanes} {{ assert_eq!("`
+- `tslc/src/tslc/value_tests/_render_rust_conversion.py:482` — owner `_differential` — `assert` — `" assert!(hw.lane_eq(reference), "`
+- `tslc/src/tslc/value_tests/_render_rust_conversion.py:495` — owner `_differential` — `assert` — `f" for i in 0..{case.lanes} {{ assert!(hw[i].{comparison}(reference[i]), "`
+- `tslc/src/tslc/value_tests/_render_rust_conversion.py:290` — owner `_extension_extract` — `assert` — `f" for i in 0..{out_lanes} {{ assert!(out[i].lane_eq(expected[i]), "`
+- `tslc/src/tslc/value_tests/_render_rust_conversion.py:325` — owner `_extension_insert` — `assert` — `f" for i in 0..{out_lanes} {{ assert!(out[i].lane_eq(expected[i]), "`
+- `tslc/src/tslc/value_tests/_render_rust_conversion.py:365` — owner `_extension_result` — `assert` — `f" for i in 0..{expected_lanes} {{ assert!(out[i].lane_eq(expected[i]), "`
+- `tslc/src/tslc/value_tests/_render_rust_conversion.py:260` — owner `_fixed_extension_load_convert` — `assert` — `f" for i in 0..{target_lanes} {{ assert!(out[i].lane_eq(expected[i]), "`
+- `tslc/src/tslc/value_tests/_render_rust_conversion.py:195` — owner `_fixed_extension_repr_cast` — `assert` — `f" for i in 0..{target_lanes} {{ assert!(out[i].lane_eq(expected[i]), "`
+- `tslc/src/tslc/value_tests/_render_rust_conversion.py:116` — owner `_lane_convert` — `assert` — `f" for i in 0..{case.lanes} {{ assert!(result[i].lane_eq(expected[i]), "`
+- `tslc/src/tslc/value_tests/_render_rust_conversion.py:228` — owner `_load_convert` — `assert` — `f" for i in 0..{target_lanes} {{ assert!(result[i].lane_eq(expected[i]), "`
 - `tslc/src/tslc/value_tests/_render_rust_conversion.py:66` — owner `_repr_cast` — `assert` — `f" for i in 0..{target_lanes} {{ assert!(result[i].lane_eq(expected[i]), "`
-- `tslc/src/tslc/value_tests/_render_rust_conversion.py:164` — owner `_target_imask` — `assert_eq` — `f' assert_eq!(result, expected, "{case.case_name}: expected {{:?}}, got {{:?}}", expected, result);',`
+- `tslc/src/tslc/value_tests/_render_rust_conversion.py:162` — owner `_target_imask` — `assert_eq` — `f' assert_eq!(result, expected, "{case.case_name}: expected {{:?}}, got {{:?}}", expected, result);',`
 - `tslc/src/tslc/value_tests/_render_rust_core.py:448` — owner `_checked_precondition` — `assert` — `f" assert!(matches!(result, Err({error})), "`
 - `tslc/src/tslc/value_tests/_render_rust_core.py:67` — owner `_generic_golden` — `assert_eq` — `f" for i in 0..{case.lanes} {{ assert_eq!(mask_bit(result as u64, i), "`
 - `tslc/src/tslc/value_tests/_render_rust_core.py:509` — owner `_lane_assert` — `assert` — `f" for i in 0..{lanes} {{ assert!({result_name}[i].{comparison}(expected[i]), "`
