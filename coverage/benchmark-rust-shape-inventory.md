@@ -11,7 +11,7 @@ manifest hashes, candidate IDs/body hashes, and policy mapping hashes live in
 
 ## Summary
 
-- **28 Rust machine profiles** are probed.
+- **24 Rust machine profiles** are probed.
 - **4938 selected variant slots** are accounted for.
 - **116 benchmark reports** are emitted.
 - **Policy-mapped reports: 1**; **report-only: 115**.
@@ -103,7 +103,7 @@ manifest hashes, candidate IDs/body hashes, and policy mapping hashes live in
 | generic SIMD-type parameter | 11 | 5 | 1650 | 0 | gap |
 | boolean attribute axis | 23 | 0 | 0 | 0 | not applicable |
 | sized-vector implementation | 176 | 0 | 0 | 0 | not applicable |
-| scalable-vector implementation | 168 | 6 | 781 | 12 | gap |
+| scalable-vector implementation | 175 | 6 | 781 | 12 | gap |
 | opt-in compiler header implementation | 0 | 0 | 0 | 0 | not applicable |
 
 ## Audit issue counts

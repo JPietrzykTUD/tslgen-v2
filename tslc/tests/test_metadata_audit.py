@@ -292,6 +292,9 @@ def _requires_source() -> str:
         "    aarch64:\n"
         "      extension_families [arm]\n"
         '      runner_kinds ["qemu-aarch64"]\n'
+        "      backends:\n"
+        "        cpp:\n"
+        "          feature_flags false\n"
         "    riscv:\n"
         "      extension_families [rvv]\n"
         '      runner_kinds ["qemu-riscv64"]\n'
@@ -350,6 +353,9 @@ def _single_backend_callee_source() -> str:
         "    aarch64:\n"
         "      extension_families [arm]\n"
         '      runner_kinds ["qemu-aarch64"]\n'
+        "      backends:\n"
+        "        cpp:\n"
+        "          feature_flags false\n"
         "    riscv:\n"
         "      extension_families [rvv]\n"
         '      runner_kinds ["qemu-riscv64"]\n'

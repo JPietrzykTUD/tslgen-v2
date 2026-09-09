@@ -106,7 +106,7 @@ def test_rust_backend_produces_typed_plan_and_report_artifacts(
     assert rust_profile is not None
     assert (
         rust_profile.manifest_hash
-        == "d8c51891277d8c2aa14281c7cc832f74d78dbd1d4a7ba4a83556a3991b782dc7"
+        == "70249b3d3619f003e3d8d71b628601623dfa979f63a53cfa5e2182d312772de6"
     )
     assert [candidate.variant_id for candidate in rust_candidate_set.candidates] == [
         "default",
@@ -170,7 +170,7 @@ def test_cpp_and_rust_plans_reuse_correctness_and_scenario_owners(
     )
     assert rust.stable_id == "sse2_mul_sse_si8_0ca8e0838e70"
     assert tuple(candidate.body_hash for candidate in rust.candidates) == (
-        "6071354eaedae27e059fc38432d28795b2e6d85c2214c87eaa37247faf8b18b7",
+        "731814af5f813d0234c58586d9d2dfd283bf3557bbca495539c10ed31caab6a0",
         "e4e9eb419a7aa1c6aff1ecf050ff70083f5e16e40d682612549823f6eddee74a",
     )
 
@@ -269,14 +269,14 @@ def test_cpp_manifest_identity_is_deterministic(
     assert profile is not None
     assert (
         profile.manifest_hash
-        == "e1596076e4c5e3bfe95182609ed302fd54c68c068ed5211aacaf4a1a903cf34b"
+        == "b01c9c62dadac2f013bffc6b4a7e33285a597bd57560ccf7406efc46885c5204"
     )
     candidate_set = _mul_candidate_set(
         rust_benchmark_planning_result.rendered.benchmarks, "cpp"
     )
     assert candidate_set.stable_id == "sse2_mul_sse_si8_7255aba5c341"
     assert tuple(candidate.body_hash for candidate in candidate_set.candidates) == (
-        "f1c4f6a86618ec0606ce0d19c7de7e742a1e3c6d7e7a339d85a748e287239d74",
+        "a9f066cceee43b05e8deabaf96db9ba0bc8b7879176bd28925d41afaab914b4d",
         "f259d2fe8b25f0131c537188b0ea01d2bb73d2af4a9a968c8a681880d4a7caae",
     )
     rendered_manifest = next(
@@ -287,7 +287,7 @@ def test_cpp_manifest_identity_is_deterministic(
     assert len(rendered_manifest.encode("utf-8")) == 4583
     assert (
         sha256(rendered_manifest.encode("utf-8")).hexdigest()
-        == "9a821c2b5060417a26d8507809b791b87cf91a83c012aa898757b8ef1cbd4ac7"
+        == "1f54410763f34c03a9a3cf929dee2a0af56929a26a922637dfc26b8a2866e34e"
     )
 
 

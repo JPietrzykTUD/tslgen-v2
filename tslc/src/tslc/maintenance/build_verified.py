@@ -169,6 +169,12 @@ BUILD_VERIFIED_PRIMITIVE_SETS: Mapping[str, tuple[str, ...]] = MappingProxyType(
             "concat",
             "permute_lanes",
         ),
+        "test_interleave_reverse_builds": (
+            "interleave_lo",
+            "mask_deinterleave_odd",
+            "mask_interleave_lo",
+            "reverse",
+        ),
         "test_mask_binary_and_builds": ("mask_binary_and",),
         "test_range_comparisons_build": (
             "between_inclusive",

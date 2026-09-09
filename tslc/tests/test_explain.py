@@ -115,10 +115,12 @@ def test_segment_tree_names_the_regions(
     assert "region intrin<add, build[suffix=base::signed_of(base::in)]>(...)" in report
 
 
-def test_not_selected_reports_the_missing_flag(
+def test_not_selected_reports_inactive_extension(
     data_root: Path, machine_profiles_path: Path
 ) -> None:
-    # avx512 is a candidate extension on an avx2 profile, but its body needs avx512f.
+    # A real AVX2 profile does not activate AVX-512. Explain must report that
+    # selection fact instead of pretending the AVX-512 body was a candidate
+    # rejected only because one of its feature requirements was absent.
     report = _explain(
         data_root,
         machine_profiles_path,
@@ -129,7 +131,8 @@ def test_not_selected_reports_the_missing_flag(
         extension="avx512",
     )
     assert "NOT selected" in report
-    assert "missing: avx512f" in report
+    assert "not emitted for this profile" in report
+    assert "missing: avx512f" not in report
 
 
 def test_dependency_closure_marks_emitted_callee(
