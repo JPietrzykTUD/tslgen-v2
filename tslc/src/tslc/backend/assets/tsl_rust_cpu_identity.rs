@@ -11,8 +11,15 @@ pub fn precise_x86_cpu_id(value: &str) -> bool {
 pub fn cpu_id() -> String {
     #[cfg(target_arch = "x86_64")]
     {
-        let vendor_leaf = std::arch::x86_64::__cpuid(0);
-        let identity = std::arch::x86_64::__cpuid(1);
+        // Rust 1.89 requires `unsafe`; newer compilers make these calls safe.
+        #[allow(unused_unsafe)]
+        // SAFETY: x86-64 guarantees that basic CPUID leaves 0 and 1 are present.
+        let (vendor_leaf, identity) = unsafe {
+            (
+                std::arch::x86_64::__cpuid(0),
+                std::arch::x86_64::__cpuid(1),
+            )
+        };
         let mut vendor = Vec::with_capacity(12);
         vendor.extend_from_slice(&vendor_leaf.ebx.to_le_bytes());
         vendor.extend_from_slice(&vendor_leaf.edx.to_le_bytes());

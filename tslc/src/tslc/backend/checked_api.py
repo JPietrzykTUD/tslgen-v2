@@ -165,6 +165,12 @@ class CheckedApiPlan:
         if len(set(kinds)) != len(kinds):
             raise ValueError("checked API plans require unique condition kinds")
 
+    def condition(self, kind: PreconditionKind) -> CheckedConditionPlan | None:
+        return next(
+            (condition for condition in self.conditions if condition.kind is kind),
+            None,
+        )
+
 
 def checked_memory_condition(
     conditions: tuple[CheckedConditionPlan, ...],
@@ -535,9 +541,20 @@ def applicable_checked_api_plan(
     return CheckedApiPlan(conditions) if conditions else None
 
 
+def applicable_checked_condition(
+    specializations: tuple[LoweredSpecialization, ...],
+    kind: PreconditionKind,
+) -> CheckedConditionPlan | None:
+    """Return one condition only when the whole callable admits its checked API."""
+
+    plan = applicable_checked_api_plan(specializations)
+    return None if plan is None else plan.condition(kind)
+
+
 __all__ = (
     "CheckedApiPlan",
     "CheckedConditionPlan",
+    "applicable_checked_condition",
     "applicable_checked_api_plan",
     "checked_api_plan",
     "checked_memory_condition",

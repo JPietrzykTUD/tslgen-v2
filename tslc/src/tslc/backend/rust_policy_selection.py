@@ -6,12 +6,17 @@ from collections import Counter
 from dataclasses import dataclass, replace
 from typing import Literal
 
+from tslc.backend.checked_api import (
+    CheckedConditionPlan,
+    applicable_checked_condition,
+)
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.rust_policy_manifest import (
     RustPolicyManifest,
     RustPolicySelectionPilot,
 )
 from tslc.benchmark.model import SpecializationKey
+from tslc.catalog.preconditions import PreconditionKind
 from tslc.diagnostics import Diagnostic
 from tslc.lower.lowerer import LoweredSpecialization
 
@@ -34,6 +39,7 @@ class RustPolicySelection:
     candidate_ids: tuple[str, ...]
     selected_candidate: str
     pilot_id: str
+    checked_precondition: CheckedConditionPlan | None
 
     def __post_init__(self) -> None:
         expected_candidates = ("default", *self.specialization.variant_names)
@@ -49,6 +55,14 @@ class RustPolicySelection:
             )
         if not self.pilot_id:
             raise ValueError("Rust policy selections require a pilot ID")
+        if (
+            self.checked_precondition is not None
+            and self.checked_precondition.kind
+            is not PreconditionKind.ACTIVE_DIVISOR_NONZERO
+        ):
+            raise ValueError(
+                "Rust policy selections only forward active-divisor checks"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -279,6 +293,10 @@ def plan_rust_policy_selection(
                     spec,
                     candidate_ids,
                 )[0].pilot_id,
+                checked_precondition=applicable_checked_condition(
+                    by_primitive[key.primitive_name],
+                    PreconditionKind.ACTIVE_DIVISOR_NONZERO,
+                ),
             )
             selections.append(selection)
             coverage.append(
@@ -323,6 +341,7 @@ def validate_rust_policy_selection_plan(
                 selection.specialization,
                 selection.candidate_ids,
                 selection.pilot_id,
+                selection.checked_precondition,
             )
             for selection in expected_profile.selections
         )
@@ -332,6 +351,7 @@ def validate_rust_policy_selection_plan(
                 selection.specialization,
                 selection.candidate_ids,
                 selection.pilot_id,
+                selection.checked_precondition,
             )
             for selection in actual_profile.selections
         )

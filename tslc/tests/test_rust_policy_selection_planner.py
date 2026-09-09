@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from tslc.api import generate_project
+from tslc.backend.checked_api import CheckedConditionPlan
 from tslc.backend.capability import BackendPolicyInputs
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.rust_capability import RUST_BACKEND
@@ -15,7 +16,12 @@ from tslc.backend.rust_policy_manifest import load_rust_policy_manifest
 from tslc.backend.rust_policy_selection import (
     plan_rust_policy_selection,
     rust_policy_selection_reason,
+    validate_rust_policy_selection_plan,
     validate_rust_policy_manifest_profiles,
+)
+from tslc.catalog.preconditions import (
+    PreconditionErrorKind,
+    PreconditionKind,
 )
 from tslc.diagnostics import has_errors
 
@@ -53,6 +59,7 @@ def test_plan_has_exact_supported_and_report_only_keys(rust_selection_result) ->
     assert selection.candidate_ids == ("default", "generic_fallback")
     assert selection.selected_candidate == "default"
     assert selection.pilot_id == "sse2_mul_sse_si8"
+    assert selection.checked_precondition is None
 
     report = rust_selection_result.rendered.benchmarks.profile("rust", "sse2")
     assert report is not None
@@ -96,6 +103,41 @@ def test_forced_override_is_validated_and_immutable(rust_selection_result) -> No
         default.with_forced_selection(
             replace(selected.key, primitive_name="missing"),
             "default",
+        )
+
+
+def test_policy_plan_validation_rejects_a_stale_checked_condition(
+    rust_selection_result,
+) -> None:
+    plan = plan_rust_policy_selection(
+        rust_selection_result.emitted_profiles,
+        RUST_POLICY_MANIFEST,
+    )
+    profile = plan.profile("sse2")
+    assert profile is not None
+    condition = CheckedConditionPlan(
+        kind=PreconditionKind.ACTIVE_DIVISOR_NONZERO,
+        description="Active integer divisors are nonzero.",
+        unchecked_consequence="A zero divisor may cause undefined behavior.",
+        error=PreconditionErrorKind.ZERO_DIVISOR,
+        additional_errors=(),
+        parameter_name="divisor",
+        parameter_index=1,
+        applicable_type_tags=("si8",),
+    )
+    stale_profile = replace(
+        profile,
+        selections=(
+            replace(profile.selections[0], checked_precondition=condition),
+        ),
+    )
+    stale = replace(plan, profiles=(stale_profile,))
+
+    with pytest.raises(ValueError, match="stale or incomplete"):
+        validate_rust_policy_selection_plan(
+            rust_selection_result.emitted_profiles,
+            stale,
+            RUST_POLICY_MANIFEST,
         )
 
 

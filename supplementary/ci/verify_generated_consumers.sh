@@ -252,6 +252,39 @@ cargo run --quiet --manifest-path "$scratch_root/rust-examples/Cargo.toml" --bin
 cargo run --quiet --manifest-path "$scratch_root/rust-examples/Cargo.toml" --bin selected_refinement_operator </dev/null
 cargo run --quiet --manifest-path "$scratch_root/rust-examples/Cargo.toml" --bin selected_aggregate_consume_operator </dev/null
 
+# Cargo's package include policy must be independent of locally rendered docs.
+# Compare the actual Cargo-owned package listing before and after adding an
+# excluded documentation artifact to the generated crate.
+rust_manifest="$generated_root/rust/Cargo.toml"
+package_paths_before="$(
+  cargo package \
+    --manifest-path "$rust_manifest" \
+    --allow-dirty \
+    --no-verify \
+    --list
+)"
+package_probe="$generated_root/rust/docs/tsl-v1-package-probe.txt"
+cleanup_package_probe() {
+  rm -f "$package_probe"
+  rmdir "$(dirname "$package_probe")" 2>/dev/null || true
+}
+trap cleanup_package_probe EXIT
+mkdir -p "$(dirname "$package_probe")"
+touch "$package_probe"
+package_paths_after="$(
+  cargo package \
+    --manifest-path "$rust_manifest" \
+    --allow-dirty \
+    --no-verify \
+    --list
+)"
+cleanup_package_probe
+trap - EXIT
+if [[ "$package_paths_before" != "$package_paths_after" ]]; then
+  echo "generated Rust package contents changed after local docs were added" >&2
+  exit 1
+fi
+
 build_cpp_consumer() {
   local profile="$1"
   local compiler="$2"

@@ -208,13 +208,13 @@ Sizes, lane counts, and mask-storage capacity are compiler-owned specialization 
 The operand is an immediate rather than caller-controlled runtime data.
 
 - `tslc/src/tslc/backend/assets/tsl_algorithm.rs:680` — owner `selected_row_scale` — `assert` — `assert!(scale > 0, "tsl::algo selected-row scale must be nonzero");`
-- `tslc/src/tslc/backend/rust_signatures.py:165` — owner `_arithmetic_precondition` — `assert` — `f"const {{ assert!(({precondition.parameter_name} as "`
+- `tslc/src/tslc/backend/rust_signatures.py:174` — owner `_arithmetic_precondition` — `assert` — `f"const {{ assert!(({precondition.parameter_name} as "`
 
 ### `static_immediate_range` (1)
 
 The source-authored valid range is resolved from the selected source and target base widths.
 
-- `tslc/src/tslc/backend/rust_signatures.py:150` — owner `immediate_precondition` — `assert` — `" const { assert!("`
+- `tslc/src/tslc/backend/rust_signatures.py:159` — owner `immediate_precondition` — `assert` — `" const { assert!("`
 
 ### `lane_index` (4)
 

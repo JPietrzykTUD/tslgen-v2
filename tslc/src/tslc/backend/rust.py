@@ -9,6 +9,7 @@ from tslc.backend.primitive_rendering import body_for as _body_for
 from tslc.backend.checked_api import (
     CheckedApiPlan,
     CheckedConditionPlan,
+    applicable_checked_condition,
     applicable_checked_api_plan,
     checked_api_plan,
     checked_memory_condition,
@@ -133,21 +134,12 @@ def _rust_precondition_error(error: PreconditionErrorKind) -> str:
 
 
 def _rust_trait_precondition_condition(
-    spec: LoweredSpecialization,
+    specializations: tuple[LoweredSpecialization, ...],
 ) -> CheckedConditionPlan | None:
-    plan = checked_api_plan((spec,))
-    if plan is None:
-        return None
-    conditions = tuple(
-        condition
-        for condition in plan.conditions
-        if condition.kind is PreconditionKind.ACTIVE_DIVISOR_NONZERO
+    return applicable_checked_condition(
+        specializations,
+        PreconditionKind.ACTIVE_DIVISOR_NONZERO,
     )
-    if not conditions:
-        return None
-    if len(conditions) != 1:
-        raise ValueError("Rust implementation trait supports one delegated check")
-    return conditions[0]
 
 
 def _rust_precondition_method_parameters(
@@ -170,16 +162,20 @@ def _rust_precondition_method_parameters(
     return ", ".join(parts)
 
 
-def _rust_trait_precondition_declaration(spec: LoweredSpecialization) -> str:
-    condition = _rust_trait_precondition_condition(spec)
+def _rust_trait_precondition_declaration(
+    spec: LoweredSpecialization,
+    condition: CheckedConditionPlan | None,
+) -> str:
     if condition is None:
         return ""
     params = _rust_precondition_method_parameters(spec, condition, owner="Self")
     return f"    fn {_PRECONDITION_METHOD}({params}) -> Option<PreconditionError>;\n"
 
 
-def _rust_impl_precondition_method(spec: LoweredSpecialization) -> str:
-    condition = _rust_trait_precondition_condition(spec)
+def _rust_impl_precondition_method(
+    spec: LoweredSpecialization,
+    condition: CheckedConditionPlan | None,
+) -> str:
     if condition is None:
         return ""
     params = _rust_precondition_method_parameters(spec, condition, owner="Self")
@@ -239,8 +235,8 @@ def _rust_impl_precondition_method(spec: LoweredSpecialization) -> str:
 def _rust_forwarded_precondition_method(
     spec: LoweredSpecialization,
     selected_trait_name: str,
+    condition: CheckedConditionPlan | None,
 ) -> str:
-    condition = _rust_trait_precondition_condition(spec)
     if condition is None:
         return ""
     params = _rust_precondition_method_parameters(spec, condition, owner="Self")
@@ -735,6 +731,7 @@ class RustBackend:
         if expected is None or (
             expected.specialization != selection.specialization
             or expected.candidate_ids != selection.candidate_ids
+            or expected.checked_precondition != selection.checked_precondition
         ):
             raise ValueError(
                 "Rust policy mapping selection is foreign or stale for this profile"
@@ -744,6 +741,7 @@ class RustBackend:
             caller_unsafe=public_call_requires_unsafe(
                 (selection.specialization,)
             ),
+            precondition_condition=selection.checked_precondition,
         )
 
     def render_primitive_internal(
@@ -756,6 +754,7 @@ class RustBackend:
             shape.param_kinds,
         ):
             return _free_variant_functions(specializations, backend=self)
+        precondition_condition = _rust_trait_precondition_condition(specializations)
         # Rust has no fn overloading: a primitive with several signatures (e.g. store's
         # `(ptr,v)`/`(ptr,s)`) dispatches on the varying argument's type via a trait
         # implemented for that type. Single-signature primitives keep the simple trait.
@@ -774,9 +773,18 @@ class RustBackend:
             )
             return "\n\n".join(parts)
         caller_unsafe = public_call_requires_unsafe(specializations)
-        trait = self._trait(primitive_name, shape, caller_unsafe=caller_unsafe)
+        trait = self._trait(
+            primitive_name,
+            shape,
+            caller_unsafe=caller_unsafe,
+            precondition_condition=precondition_condition,
+        )
         impls = [
-            self._impl(spec, caller_unsafe=caller_unsafe)
+            self._impl(
+                spec,
+                caller_unsafe=caller_unsafe,
+                precondition_condition=precondition_condition,
+            )
             for spec in specializations
             if self._selection_for(spec) is None
         ]
@@ -793,12 +801,14 @@ class RustBackend:
                     default_primitive,
                     shape,
                     caller_unsafe=caller_unsafe,
+                    precondition_condition=precondition_condition,
                 )
             )
             parts.extend(
                 self._impl(
                     selection.specialization,
                     caller_unsafe=caller_unsafe,
+                    precondition_condition=precondition_condition,
                     implementation_trait_variant="default",
                 )
                 for selection in selections
@@ -811,6 +821,7 @@ class RustBackend:
                 if (rendered := self._impl(
                     spec,
                     caller_unsafe=caller_unsafe,
+                    precondition_condition=precondition_condition,
                     variant_name=name,
                 ))
             ]
@@ -820,12 +831,17 @@ class RustBackend:
                         variant_primitive,
                         shape,
                         caller_unsafe=caller_unsafe,
+                        precondition_condition=precondition_condition,
                     )
                 )
                 parts.extend(variant_impls)
         if self._deferred_policy_mapping_file is None:
             parts.extend(
-                self._selection_impl(selection, caller_unsafe=caller_unsafe)
+                self._selection_impl(
+                    selection,
+                    caller_unsafe=caller_unsafe,
+                    precondition_condition=precondition_condition,
+                )
                 for selection in selections
             )
         return "\n\n".join(parts)
@@ -1416,6 +1432,7 @@ class RustBackend:
         shape: LoweredSpecialization,
         *,
         caller_unsafe: bool,
+        precondition_condition: CheckedConditionPlan | None,
     ) -> str:
         # Boolean-wildcard axes and an `sImm` immediate become const-generics on the trait,
         # so the `[aligned=*]` variants are distinct impls (`StoreImpl<false>`/`StoreImpl<true>`)
@@ -1450,7 +1467,7 @@ class RustBackend:
             (f"{doc}\n" if doc else "")
             + f"{trait_header} {{\n"
             "    const IMPLEMENTATION_STATE: ImplementationState;\n"
-            f"{_rust_trait_precondition_declaration(shape)}"
+            f"{_rust_trait_precondition_declaration(shape, precondition_condition)}"
             f"    {_unsafe_prefix(caller_unsafe)}fn apply({params}) -> {ret};\n"
             f"}}"
         )
@@ -1460,6 +1477,7 @@ class RustBackend:
         spec: LoweredSpecialization,
         *,
         caller_unsafe: bool,
+        precondition_condition: CheckedConditionPlan | None,
         variant_name: str | None = None,
         implementation_trait_variant: str | None = None,
     ) -> str:
@@ -1470,6 +1488,10 @@ class RustBackend:
         # is a further free const generic. A monomorphized slot (numeric `lane_parameter`) is over
         # a concrete `Generic<N>` instead, so it declares no lane generic.
         impl_parts, impl_generic_names = _impl_generic_parts(spec)
+        helper_generic_parts, _ = _impl_generic_parts(
+            spec,
+            inline_type_bounds=False,
+        )
         key = self.concrete_vector_type(spec)
         impl_generics = f"<{', '.join(impl_parts)}>" if impl_parts else ""
         targs = _trait_args_by_value(spec)
@@ -1522,12 +1544,13 @@ class RustBackend:
                 spec.result_kind,
                 target_owner or spec.result_vector_param or concrete_owner,
             ),
-            generic_decls=impl_parts,
+            generic_decls=helper_generic_parts,
             generic_names=impl_generic_names,
             where_clause=_index_where(
                 spec,
                 impl_register=impl_register,
                 base_dispatch="concrete",
+                include_type_param_bounds=True,
             ),
             receiver_type=key,
         )
@@ -1554,7 +1577,7 @@ class RustBackend:
             f"{_index_where(spec, impl_register=impl_register, base_dispatch='concrete')} {{\n"
             f"    const IMPLEMENTATION_STATE: ImplementationState = "
             f"{_rust_implementation_state(_spec_implementation_state(spec, variant_name))};\n"
-            f"{_rust_impl_precondition_method(spec)}"
+            f"{_rust_impl_precondition_method(spec, precondition_condition)}"
             f"{_indent(_implementation_lint_allowance(spec), 4)}\n"
             f"    {_unsafe_prefix(caller_unsafe)}fn apply({params}) -> {ret} {{\n"
             f"{preconditions}"
@@ -1583,6 +1606,7 @@ class RustBackend:
         selection: RustPolicySelection,
         *,
         caller_unsafe: bool,
+        precondition_condition: CheckedConditionPlan | None,
     ) -> str:
         spec = selection.specialization
         reason = rust_policy_selection_shape_reason(selection.key, spec)
@@ -1606,11 +1630,16 @@ class RustBackend:
             f"<Self as {selected_trait_name}>::apply({_runtime_names(spec)})"
         )
         call = _unsafe_call(call, caller_unsafe)
+        checked_precondition = _rust_forwarded_precondition_method(
+            spec,
+            selected_trait_name,
+            precondition_condition,
+        )
         return (
             f"impl {trait_name} for {key} {{\n"
             f"    const IMPLEMENTATION_STATE: ImplementationState = "
             f"<Self as {selected_trait_name}>::IMPLEMENTATION_STATE;\n"
-            f"{_rust_forwarded_precondition_method(spec, selected_trait_name)}"
+            f"{checked_precondition}"
             "    #[inline(always)]\n"
             f"    {_unsafe_prefix(caller_unsafe)}fn apply({params}) -> {result} {{\n"
             f"        {call}\n"

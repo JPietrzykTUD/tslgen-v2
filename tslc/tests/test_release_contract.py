@@ -83,6 +83,9 @@ def test_release_profiles_are_projections_of_typed_machine_capabilities() -> Non
     assert not {"sve", "sve128", "sve256", "sve512", "rvv"} & {
         profile.name for profile in rust.profiles
     }
+    scopes = {scope.scope_id: scope for scope in contract.policy.target_scopes}
+    assert "stable Rust SVE" in scopes["arm-sve"].excludes
+    assert "stable Rust RVV" in scopes["riscv-vector"].excludes
 
 
 def test_all_supported_profile_selection_is_additive() -> None:

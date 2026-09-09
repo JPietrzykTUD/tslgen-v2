@@ -66,6 +66,8 @@ def free_kind_type(kind: str, spec: LoweredSpecialization) -> str:
 
 def impl_generic_parts(
     shape: LoweredSpecialization,
+    *,
+    inline_type_bounds: bool = True,
 ) -> tuple[list[str], list[str]]:
     """Return Rust impl generic declarations and matching turbofish names."""
 
@@ -86,7 +88,14 @@ def impl_generic_parts(
         const_decls.append(f"const {name}: {typ}")
         const_names.append(name)
     return (
-        [*type_param_decls(shape), *const_decls],
+        [
+            *(
+                type_param_decls(shape)
+                if inline_type_bounds
+                else type_param_names(shape)
+            ),
+            *const_decls,
+        ],
         [*type_param_names(shape), *const_names],
     )
 

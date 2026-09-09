@@ -3880,7 +3880,8 @@
         "sve512": "sve512"
       },
       "excludes": [
-        "SVE2"
+        "SVE2",
+        "stable Rust SVE"
       ]
     },
     {

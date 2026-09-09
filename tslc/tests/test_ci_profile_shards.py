@@ -173,6 +173,28 @@ def test_generated_profile_shards_preserve_exhaustive_and_coexistence_lanes(
     ] == [128, 256, 512]
 
 
+def test_rust_release_quality_runs_msrv_and_current_stable() -> None:
+    workflow = Path(".github/workflows/generated-values.yml").read_text(
+        encoding="utf-8"
+    )
+    section = workflow.split("  generated-rust-release-quality:\n", 1)[1].split(
+        "\n  generated-", 1
+    )[0]
+    dockerfile = Path(".devcontainer/Dockerfile").read_text(encoding="utf-8")
+
+    assert "rust_release_profiles:" in workflow
+    assert ".backend_profiles.rust" in workflow
+    assert '.profiles | join(",")' in workflow
+    assert "name: stable" in section
+    assert "name: 1.89.0" in section
+    assert 'RUSTUP_TOOLCHAIN="${{ matrix.toolchain.name }}"' in section
+    assert '--profiles "${TSLC_RUST_RELEASE_PROFILES}"' in section
+    assert "--quality" in section
+    assert "./dev.sh test" in section
+    assert "ARG RUST_MSRV=1.89.0" in dockerfile
+    assert 'rustup toolchain install "${RUST_MSRV}"' in dockerfile
+
+
 def test_clang_and_msvc_quality_matrices_cover_non_oneapi_x86_profiles(
     machine_profiles_path: Path,
 ) -> None:
@@ -270,6 +292,9 @@ def test_package_and_docs_generate_a_supported_distributable_profile_set() -> No
     assert "  wasm32-simd128 \\\n" in consumer_verifier
     assert "load_checked<Vec, false>" in consumer_verifier
     assert "store_checked<Vec, false>" in consumer_verifier
+    assert "package_paths_before" in consumer_verifier
+    assert "package_paths_after" in consumer_verifier
+    assert "tsl-v1-package-probe.txt" in consumer_verifier
 
 
 def test_rust_examples_use_static_profile_selection_api() -> None:

@@ -86,6 +86,17 @@ def test_checked_error_assets_match_the_typed_error_registry() -> None:
     assert rust_enum.count("    ///") == len(PreconditionErrorKind)
 
 
+def test_rust_cpu_identity_uses_msrv_compatible_cpuid_calls() -> None:
+    cpu_identity = load_default_render_assets().text(
+        "tsl_rust_cpu_identity.rs"
+    )
+
+    assert "#[allow(unused_unsafe)]" in cpu_identity
+    assert "let (vendor_leaf, identity) = unsafe {" in cpu_identity
+    assert "std::arch::x86_64::__cpuid(0)" in cpu_identity
+    assert "std::arch::x86_64::__cpuid(1)" in cpu_identity
+
+
 def test_render_assets_freeze_and_fill_templates() -> None:
     files = {"plain.txt": "plain", "demo.tmpl": "hello @{name}"}
     assets = RenderAssets(files)

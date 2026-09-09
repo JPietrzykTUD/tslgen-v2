@@ -255,8 +255,15 @@ def test_convert_lanes_checked_uses_typed_lane_count_and_scalable_placeholder(
         "rust",
     )
     rust = RustBackend().render_primitive_public("convert_lanes", (rust_spec,))
+    rust_internal = RustBackend().render_primitive_internal(
+        "convert_lanes",
+        (rust_spec,),
+    )
     assert "if S::lane_count() != ToVec::lane_count()" in rust
     assert "return Err(PreconditionError::LaneCountMismatch);" in rust
+    assert "unsafe fn __tsl_target_feature_body<ToVec>(" in rust_internal
+    assert "unsafe fn __tsl_target_feature_body<ToVec:" not in rust_internal
+    assert "where ToVec: StaticSimdVector" in rust_internal
 
 
 def test_total_integral_mask_test_gets_no_checked_twin_or_unsafe_surface(
@@ -1007,6 +1014,34 @@ def test_rust_indexed_checked_guard_carries_lane_extraction_bound(
         "detail::primitives::Extract_value_atImpl"
     ) in source
     assert "extract_value_at::<IndicesType>(index, __tsl_lane)" in source
+
+
+def test_rust_precondition_hook_is_owned_by_the_complete_callable_group(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["mod"],
+        profiles=["knl"],
+        type_tags=("si8",),
+        backends=["rust"],
+    )
+
+    assert not has_errors(result.diagnostics), result.diagnostics
+    profile = result.emitted_profiles[0]
+    specializations = profile.specializations("rust")["mod"]
+    assert applicable_checked_api_plan(specializations) is None
+    source = next(
+        artifact.content
+        for artifact in result.artifacts.artifacts
+        if artifact.logical_path.endswith("/src/tsl_knl.rs")
+    )
+    trait_start = source.index("pub trait ModImpl:")
+    trait_end = source.index("\n        }", trait_start)
+    assert "__tsl_precondition_error" not in source[trait_start:trait_end]
+    assert "pub fn mod_checked<" not in source
 
 
 @pytest.fixture(scope="module")

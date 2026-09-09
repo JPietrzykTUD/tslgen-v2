@@ -447,9 +447,11 @@ def test_rust_verifier_accepts_explicit_compiler(tmp_path: Path) -> None:
         "rustdoc",
         "clippy",
         "test",
+        "doctest",
+        "package-list",
     ]
     assert seen[0].argv[0] == sys.executable
-    warning_gate, rustdoc_gate, clippy_gate, test = seen[1:]
+    warning_gate, rustdoc_gate, clippy_gate, test, doctest, package_list = seen[1:]
     assert warning_gate.argv[:2] == ("cargo", "check")
     assert "--all-targets" in warning_gate.argv
     warning_flags = _env(warning_gate)["RUSTFLAGS"]
@@ -461,6 +463,7 @@ def test_rust_verifier_accepts_explicit_compiler(tmp_path: Path) -> None:
     assert "--no-deps" in rustdoc_gate.argv
     rustdoc_flags = _env(rustdoc_gate)["RUSTDOCFLAGS"]
     assert "-Dwarnings" in rustdoc_flags
+    assert "-Dmissing-docs" in rustdoc_flags
     assert "-Drustdoc::broken-intra-doc-links" in rustdoc_flags
     assert "-Drustdoc::bare-urls" in rustdoc_flags
     assert clippy_gate.argv[:2] == (sys.executable, "clippy")
@@ -473,6 +476,12 @@ def test_rust_verifier_accepts_explicit_compiler(tmp_path: Path) -> None:
     assert _env(test)["RUSTC"] == sys.executable
     assert "--target-dir" in test.argv
     assert str(tmp_path / "rust" / "target" / "scalar") in test.argv
+    assert doctest.argv[:2] == ("cargo", "test")
+    assert "--doc" in doctest.argv
+    assert "-Dmissing-docs" in _env(doctest)["RUSTDOCFLAGS"]
+    assert package_list.argv[:2] == ("cargo", "package")
+    assert "--list" in package_list.argv
+    assert "--no-verify" in package_list.argv
 
 
 def test_rust_verifier_reports_missing_optional_clippy_and_runs_other_gates(
@@ -513,6 +522,8 @@ def test_rust_verifier_reports_missing_optional_clippy_and_runs_other_gates(
         "check-warnings",
         "rustdoc",
         "test",
+        "doctest",
+        "package-list",
     ]
 
 
@@ -557,6 +568,8 @@ def test_rust_warning_gates_report_independent_failures(tmp_path: Path) -> None:
         "rustdoc",
         "clippy",
         "test",
+        "doctest",
+        "package-list",
     ]
     assert [diagnostic.code for diagnostic in report.diagnostics] == [
         "TSL-BUILD-VERIFY-COMMAND-FAILED",
@@ -668,6 +681,7 @@ def test_rust_build_verifier_cross_target_does_not_run_test_binary(
         "rustdoc",
         "clippy",
         "build-tests",
+        "package-list",
     ]
     assert "--target" in seen[1].argv
     assert "aarch64-unknown-linux-musl" in seen[1].argv
@@ -677,6 +691,7 @@ def test_rust_build_verifier_cross_target_does_not_run_test_binary(
     assert "aarch64-unknown-linux-musl" in build_tests.argv
     assert "--no-run" in build_tests.argv
     assert "--message-format=json" not in build_tests.argv
+    assert not any(command.step == "doctest" for command in seen)
     env = _env(build_tests)
     assert env["CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER"] == "rust-lld"
     assert (
@@ -692,6 +707,79 @@ def test_rust_build_verifier_cross_target_does_not_run_test_binary(
     ]
     assert warning_flags.startswith("-C target-feature=+neon ")
     assert "-Dwarnings" in warning_flags
+
+
+def test_rust_quality_uses_baseline_sde_profile_for_doctests(
+    tmp_path: Path,
+) -> None:
+    executable = str(tmp_path / "rust" / "target" / "debug" / "values")
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="rust",
+                root_path="rust",
+                profiles=(
+                    VerifyProfile(
+                        profile_name="avx2",
+                        file_stem="avx2",
+                        family="x86",
+                        target_features=("+avx", "+avx2", "+sse", "+sse2"),
+                        runner=VerifyRunner(kind="sde", profile="hsw"),
+                    ),
+                    VerifyProfile(
+                        profile_name="sse",
+                        file_stem="sse",
+                        family="x86",
+                        target_features=("+sse",),
+                        runner=VerifyRunner(kind="sde", profile="mrm"),
+                    ),
+                ),
+            ),
+        )
+    )
+    seen: list[BuildCommand] = []
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        if command.step == "host-target":
+            return BuildCommandResult(
+                command=command,
+                returncode=0,
+                stdout="host: x86_64-unknown-linux-gnu\n",
+            )
+        if command.step == "build-tests":
+            return BuildCommandResult(
+                command=command,
+                returncode=0,
+                stdout=json.dumps(
+                    {
+                        "reason": "compiler-artifact",
+                        "executable": executable,
+                    }
+                ),
+            )
+        return BuildCommandResult(command=command, returncode=0)
+
+    report = verify_generated_project(
+        tmp_path,
+        project,
+        runner,
+        config=_config(
+            rust_compiler=sys.executable,
+            rust_clippy_path=sys.executable,
+            sde_path=sys.executable,
+            run_quality_checks=True,
+        ),
+    )
+
+    assert report.diagnostics == ()
+    doctests = [command for command in seen if command.step == "doctest"]
+    assert len(doctests) == 1
+    assert doctests[0].profile_name == "sse"
+    assert "x86_64-unknown-linux-gnu" in doctests[0].argv
+    assert "-C target-feature=+sse" in _env(doctests[0])[
+        "RUSTDOCFLAGS"
+    ]
 
 
 def test_rust_target_preflight_failure_skips_only_that_profile(tmp_path: Path) -> None:

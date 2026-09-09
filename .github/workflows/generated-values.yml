@@ -65,6 +65,7 @@ jobs:
     outputs:
       profile_shards: ${{ steps.shards.outputs.profile_shards }}
       x86_quality_shards: ${{ steps.shards.outputs.x86_quality_shards }}
+      rust_release_profiles: ${{ steps.shards.outputs.rust_release_profiles }}
 
     steps:
       - name: Check out repository
@@ -92,8 +93,21 @@ jobs:
               ]
             ' <<<"${profile_shards}"
           )"
+          rust_release_profiles="$(
+            jq -er '
+              .backend_profiles.rust
+              | if .selection != "explicit" then
+                  error("Rust release profiles must use explicit selection")
+                elif (.profiles | length) == 0 then
+                  error("Rust release profile selection cannot be empty")
+                else
+                  .profiles | join(",")
+                end
+            ' supplementary/release/tsl-v1-policy.json
+          )"
           echo "profile_shards=${profile_shards}" >> "$GITHUB_OUTPUT"
           echo "x86_quality_shards=${x86_quality_shards}" >> "$GITHUB_OUTPUT"
+          echo "rust_release_profiles=${rust_release_profiles}" >> "$GITHUB_OUTPUT"
 
   generated-value-tests:
     name: Generated build and values (${{ matrix.profile_shard.name }})
@@ -367,6 +381,74 @@ jobs:
                 --output-root "./tslctmp/clang-${{ matrix.profile_group.name }}"
             '
 
+  generated-rust-release-quality:
+    name: Generated Rust quality (${{ matrix.toolchain.label }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    needs:
+      - scope
+      - ci-image
+      - profile-shards
+    if: needs.scope.outputs.generated_profiles == 'true'
+
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain:
+          - label: current-stable
+            name: stable
+          - label: msrv-1.89
+            name: 1.89.0
+
+    env:
+      TSLC_CI_IMAGE: ${{ needs.scope.outputs.ci_image }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull CI image
+        run: docker pull "${TSLC_CI_IMAGE}"
+
+      - name: Build, test, lint, document, and package the stable Rust surface
+        run: |
+          bash .github/scripts/run_with_log.sh \
+            "tslctmp/ci-logs/rust-quality-${{ matrix.toolchain.label }}/quality.log" \
+            bash supplementary/ci/run_tslc_ci_container.sh \
+              --cap-add=SYS_PTRACE \
+              --security-opt seccomp=unconfined \
+              -e RUSTUP_TOOLCHAIN="${{ matrix.toolchain.name }}" \
+              -e TSLC_RUST_RELEASE_PROFILES="${{ needs['profile-shards'].outputs.rust_release_profiles }}" \
+              -e TSLC_SDE="/opt/intel-sde/sde64" \
+              -- \
+              bash -lc '
+                set -e
+                rustc --version
+                cargo --version
+                ./dev.sh test \
+                  --backends rust \
+                  --profiles "${TSLC_RUST_RELEASE_PROFILES}" \
+                  --quality \
+                  --no-format \
+                  --output-root "./tslctmp/rust-quality-${{ matrix.toolchain.label }}"
+              '
+
+      - name: Upload Rust quality logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-logs-rust-quality-${{ matrix.toolchain.label }}
+          path: tslctmp/ci-logs/rust-quality-${{ matrix.toolchain.label }}
+          if-no-files-found: ignore
+          retention-days: 14
+
   generated-benchmarks:
     name: Generated benchmarks (x86 policy and ARM smoke)
     runs-on: ubuntu-latest
@@ -442,6 +524,7 @@ jobs:
       - generated-clang-overlay
       - generated-clang-quality
       - generated-msvc-quality
+      - generated-rust-release-quality
       - generated-benchmarks
       - generated-value-tests
     if: always()
@@ -457,5 +540,6 @@ jobs:
             generated-value-tests "${{ needs.scope.outputs.generated_profiles }}" "${{ needs['generated-value-tests'].result }}" \
             generated-clang-quality "${{ needs.scope.outputs.generated_profiles }}" "${{ needs['generated-clang-quality'].result }}" \
             generated-msvc-quality "${{ needs.scope.outputs.generated_profiles }}" "${{ needs['generated-msvc-quality'].result }}" \
+            generated-rust-release-quality "${{ needs.scope.outputs.generated_profiles }}" "${{ needs['generated-rust-release-quality'].result }}" \
             generated-clang-overlay "${{ needs.scope.outputs.clang_overlay }}" "${{ needs['generated-clang-overlay'].result }}" \
             generated-benchmarks "${{ needs.scope.outputs.benchmarks }}" "${{ needs['generated-benchmarks'].result }}"

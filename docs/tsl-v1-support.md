@@ -31,7 +31,7 @@ extensions or LMULs, or stable Rust SVE/RVV.
 
 | Scope | Backend | Profile → target extension | Runtime-scalable profiles | Excludes |
 | --- | --- | --- | --- | --- |
-| `arm-sve` | `cpp` | `sve` → `sve`, `sve128` → `sve128`, `sve256` → `sve256`, `sve512` → `sve512` | `sve` | SVE2 |
+| `arm-sve` | `cpp` | `sve` → `sve`, `sve128` → `sve128`, `sve256` → `sve256`, `sve512` → `sve512` | `sve` | SVE2; stable Rust SVE |
 | `riscv-vector` | `cpp` | `rvv` → `rvv` | `rvv` | optional RVV extensions; LMUL values other than the declared LMUL=1 profile; stable Rust RVV |
 
 ## Stable callable universe
