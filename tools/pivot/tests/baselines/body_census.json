@@ -3,12 +3,11 @@
     "cpp": {
       "categories": {
         "call_and_local": 77,
-        "call_only": 2884,
-        "local_only": 10,
-        "native_leaf": 4146,
-        "synthetic_fixed": 3090
+        "call_only": 2890,
+        "native_leaf": 4168,
+        "synthetic_fixed": 3126
       },
-      "entries": 10207,
+      "entries": 10261,
       "failures": 0,
       "feature_combinations": [
         {
@@ -78,7 +77,7 @@
           ]
         },
         {
-          "count": 736,
+          "count": 742,
           "features": [
             "multi_statement",
             "residual_expression",
@@ -87,22 +86,14 @@
           ]
         },
         {
-          "count": 10,
-          "features": [
-            "multi_statement",
-            "residual_expression",
-            "typed_local"
-          ]
-        },
-        {
-          "count": 4146,
+          "count": 4168,
           "features": [
             "residual_expression",
             "result_only"
           ]
         },
         {
-          "count": 2940,
+          "count": 2976,
           "features": [
             "residual_expression",
             "result_only",
@@ -121,27 +112,26 @@
       ],
       "features": {
         "call_and_local": 77,
-        "multi_statement": 2971,
+        "multi_statement": 2967,
         "multiple_locals": 3,
         "nested_typed_call": 2221,
-        "residual_expression": 10057,
-        "result_only": 10168,
-        "synthetic_fixed": 3090,
-        "typed_call": 6051,
-        "typed_local": 87
+        "residual_expression": 10111,
+        "result_only": 10232,
+        "synthetic_fixed": 3126,
+        "typed_call": 6093,
+        "typed_local": 77
       },
-      "multi_statement": 2971,
+      "multi_statement": 2967,
       "origins": {
-        "fixed_wrapper": 3090,
-        "lowered_source": 7117
+        "fixed_wrapper": 3126,
+        "lowered_source": 7135
       }
     },
     "rust": {
       "categories": {
         "call_and_local": 5,
         "call_only": 1588,
-        "local_only": 10,
-        "native_leaf": 2196,
+        "native_leaf": 2206,
         "synthetic_fixed": 3074
       },
       "entries": 6873,
@@ -224,15 +214,7 @@
           ]
         },
         {
-          "count": 10,
-          "features": [
-            "multi_statement",
-            "residual_expression",
-            "typed_local"
-          ]
-        },
-        {
-          "count": 566,
+          "count": 576,
           "features": [
             "residual_expression",
             "result_only"
@@ -266,31 +248,31 @@
       ],
       "features": {
         "call_and_local": 5,
-        "multi_statement": 1603,
+        "multi_statement": 1593,
         "multiple_locals": 3,
         "nested_typed_call": 1423,
         "residual_expression": 6723,
-        "result_only": 6858,
+        "result_only": 6868,
         "rust_unsafe_frame": 3113,
         "synthetic_fixed": 3074,
         "typed_call": 4667,
-        "typed_local": 15
+        "typed_local": 5
       },
-      "multi_statement": 1603,
+      "multi_statement": 1593,
       "origins": {
         "fixed_wrapper": 3074,
         "lowered_source": 3799
       }
     }
   },
-  "location_digest": "a74f6807243ac2929b7d8284321517716d9f6acb563568b9c3fcdf1cad13395e",
+  "location_digest": "aac1bc2d4f03c9dbf2b3466f0cc62368a193d33b30d407d15312562417bcef59",
   "schema": "tslc-pivot-body-census-v2",
-  "semantic_digest": "99057ae137cb58b482afd0cdb0ac5f50bdf81989bafea0597ca431f38ff86f7e",
+  "semantic_digest": "4a9d5be5d69aa190c68fc45cee4c4c141d2632408a773698674b555f105679e2",
   "summary": {
-    "entries": 17080,
+    "entries": 17134,
     "failures": 0,
-    "fixed_wrappers": 6164,
-    "multi_statement": 4574,
+    "fixed_wrappers": 6200,
+    "multi_statement": 4560,
     "nominal_collision_entries": 640,
     "nominal_collision_groups": 320
   }
