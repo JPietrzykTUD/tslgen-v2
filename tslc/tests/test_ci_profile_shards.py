@@ -154,6 +154,12 @@ def test_generated_profile_shards_preserve_exhaustive_and_coexistence_lanes(
             "profiles": "rvv",
         }
     ]
+    sve_profiles = {"sve", "sve128", "sve256", "sve512"}
+    assert not any(
+        sve_profiles & set(shard["profiles"].split(","))
+        for shard in exhaustive_shards
+        if shard["backend"] == "rust"
+    )
 
     values_workflow = Path(".github/workflows/generated-values.yml").read_text(
         encoding="utf-8"

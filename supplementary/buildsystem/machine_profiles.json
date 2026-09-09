@@ -139,6 +139,7 @@
       "name": "sve",
       "target_features": "sve",
       "backend_flags": {"cpp": ["-mcpu=a64fx"]},
+      "supported_backends": ["cpp"],
       "runner": {
         "kind": "qemu-aarch64",
         "name": "vl128",
@@ -163,6 +164,7 @@
       "target_features": "neon sve",
       "compile_modes": "sve_vector_bits_128",
       "backend_flags": {"cpp": ["-mcpu=a64fx", "-msve-vector-bits=128"]},
+      "supported_backends": ["cpp"],
       "runner": {
         "kind": "qemu-aarch64",
         "name": "vl128",
@@ -175,6 +177,7 @@
       "target_features": "neon sve",
       "compile_modes": "sve_vector_bits_256",
       "backend_flags": {"cpp": ["-mcpu=a64fx", "-msve-vector-bits=256"]},
+      "supported_backends": ["cpp"],
       "runner": {
         "kind": "qemu-aarch64",
         "name": "vl256",
@@ -187,6 +190,7 @@
       "target_features": "neon sve",
       "compile_modes": "sve_vector_bits_512",
       "backend_flags": {"cpp": ["-mcpu=a64fx", "-msve-vector-bits=512"]},
+      "supported_backends": ["cpp"],
       "runner": {
         "kind": "qemu-aarch64",
         "name": "vl512",

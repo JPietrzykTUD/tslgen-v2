@@ -441,6 +441,11 @@ def test_machine_profiles_loaded(machine_profiles) -> None:
     assert machine_profiles["neon"].flags_for_backend("cpp") == ()
     assert machine_profiles["sve"].features == frozenset({"sve"})
     assert machine_profiles["sve"].flags_for_backend("cpp") == ("-mcpu=a64fx",)
+    for profile_name in ("sve", "sve128", "sve256", "sve512"):
+        profile = machine_profiles[profile_name]
+        assert profile.supported_backends == frozenset({"cpp"})
+        assert profile.supports_backend("cpp")
+        assert not profile.supports_backend("rust")
     assert machine_profiles["sve"].runner is not None
     assert tuple(
         (variant.name, variant.vector_bits)
