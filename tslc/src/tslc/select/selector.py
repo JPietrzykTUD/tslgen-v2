@@ -616,9 +616,10 @@ class Selector:
     def _emit_extensions(self, catalog: Catalog, profile: MachineProfile) -> list[str]:
         """Extensions to emit for a profile.
 
-        Base extensions usually have no activation guard; their individual bodies
-        self-gate via `requires` (e.g. avx2's 256-bit *float* add needs only `avx`,
-        so it appears on an avx-only profile while its 256-bit *integer* add does not).
+        Extension activation establishes that the profile can use the register
+        substrate at all. Individual bodies then self-gate finer capabilities
+        via `requires` (e.g. the avx2-tagged 256-bit *float* add needs only `avx`,
+        while its 256-bit *integer* add needs `avx2`).
         Extension variants (e.g. `avx2_vl`) use `active_when` to become candidates
         and explicit `supersedes` entries to hide bases on profiles where the variant
         should replace them. Candidates with no usable body for any type drop out later

@@ -1,17 +1,16 @@
 #include <cstddef>
-#include <cstdint>
 #include <cstdlib>
 
 #include <tsl.hpp>
 
 int main() {
   using Vec =
-      tsl::dataparallel::simd_for_t<tsl::dataparallel::native, std::int32_t>;
+      tsl::dataparallel::simd_for_t<tsl::dataparallel::native, float>;
   const std::size_t lanes = Vec::lane_count();
-  const std::size_t bytes = lanes * sizeof(std::int32_t);
-  auto* left = static_cast<std::int32_t*>(std::malloc(bytes));
-  auto* right = static_cast<std::int32_t*>(std::malloc(bytes));
-  auto* output = static_cast<std::int32_t*>(std::malloc(bytes));
+  const std::size_t bytes = lanes * sizeof(float);
+  auto* left = static_cast<float*>(std::malloc(bytes));
+  auto* right = static_cast<float*>(std::malloc(bytes));
+  auto* output = static_cast<float*>(std::malloc(bytes));
   if (left == nullptr || right == nullptr || output == nullptr) {
     std::free(left);
     std::free(right);
@@ -30,23 +29,12 @@ int main() {
     const auto ordinary = tsl::add<Vec>(ordinary_left, ordinary_right);
     tsl::store<Vec, false>(output, ordinary);
 
-    tsl::precondition_error error = tsl::precondition_error::none;
-    const auto checked_left = tsl::load_checked<Vec, false>(
-        tsl::span<std::int32_t const>(left, lanes), error);
-    if (error != tsl::precondition_error::none) {
-      return 1;
-    }
-    const auto checked_right = tsl::load_checked<Vec, false>(
-        tsl::span<std::int32_t const>(right, lanes), error);
-    if (error != tsl::precondition_error::none) {
-      return 2;
-    }
     return tsl::store_checked<Vec, false>(
-               tsl::span<std::int32_t>(output, lanes),
-               tsl::add<Vec>(checked_left, checked_right)) ==
+               tsl::span<float>(output, lanes),
+               tsl::add<Vec>(ordinary_left, ordinary_right)) ==
                    tsl::precondition_error::none
                ? 0
-               : 3;
+               : 1;
   }();
   std::free(left);
   std::free(right);

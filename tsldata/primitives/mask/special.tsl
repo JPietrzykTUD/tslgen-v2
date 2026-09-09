@@ -208,10 +208,12 @@ prim<m:=(m,usize,usize)> set_mask_lane(mask, index, value):
             );
             var<infer>(bits, call<primitive=to_integral[Vec]>(mask));
             if (value != 0) {
-              complete(call<primitive=to_mask[Vec]>(bits | lane_bit));
+              complete(call<primitive=to_mask[Vec]>(
+                cast<static>(vector::imask, bits | lane_bit)
+              ));
             }
             complete(call<primitive=to_mask[Vec]>(
-              bits & op<bit_negate>(lane_bit)
+              cast<static>(vector::imask, bits & op<bit_negate>(lane_bit))
             ));
           """
 

@@ -3828,10 +3828,10 @@
     "public_api_baseline": {
       "path": "coverage/tsl-v1-public-api.json",
       "schema_version": 4,
-      "sha256": "ccaea29682671529b7d0a51207afb1a73f28b9a7153f36fe59aa2cb42c172214",
+      "sha256": "d980572e9061775302913d2962c7dbb3a2e917972dfd03a062de749c32c5e7f4",
       "exact_declaration_counts": {
-        "cpp": 8015,
-        "rust": 7201
+        "cpp": 8001,
+        "rust": 7194
       }
     }
   },

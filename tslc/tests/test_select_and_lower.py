@@ -232,6 +232,13 @@ def test_profile_reachability(catalog: Catalog, machine_profiles) -> None:
         "clang_v512_bool",
     }
 
+    sse_extensions = set(
+        Selector().emitted_extensions(catalog, machine_profiles["sse"])
+    )
+    assert "sse" in sse_extensions
+    assert "avx2" not in sse_extensions
+    assert "avx512" not in sse_extensions
+
     # avx profile: avx2 integer add needs the avx2 flag (absent) -> falls to sse;
     # but avx2 float add only needs `avx`, so it IS present.
     avx = _by_key(catalog, machine_profiles["avx"], "add")

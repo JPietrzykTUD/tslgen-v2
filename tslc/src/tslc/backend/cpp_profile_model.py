@@ -11,7 +11,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from enum import StrEnum
 
+from tslc.backend.checked_api import applicable_checked_api_plan
 from tslc.backend.cpp_build_policy import (
     CppCompilerOption,
     cpp_profile_compile_options,
@@ -75,6 +77,13 @@ class CppProfileCompileGuard:
             f'#  error "{self.diagnostic}"\n'
             "#endif\n"
         )
+
+
+class CppConsumerKind(StrEnum):
+    """Downstream consumer shape supported by every emitted C++ profile."""
+
+    HEADER_ONLY = "header_only"
+    CHECKED_ARITHMETIC = "checked_arithmetic"
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,6 +187,7 @@ class CppProjectRenderModel:
     value_test_compile_options: tuple[CppCompilerOption, ...]
     supports_algorithm: bool
     profile_detection: CppProfileDetectionPlan
+    consumer_kind: CppConsumerKind
 
 
 def cpp_project_render_model(
@@ -223,7 +233,36 @@ def cpp_project_render_model(
             tuple(profile.profile for profile in profiles),
             candidates=cpp_profile_detection_candidates(profiles),
         ),
+        consumer_kind=_cpp_consumer_kind(profiles),
     )
+
+
+def _cpp_consumer_kind(
+    profiles: tuple[EmittedProfile, ...],
+) -> CppConsumerKind:
+    """Choose the strongest consumer supported by every generated profile.
+
+    The project consumer is compiled once for whichever generated profile CMake
+    selects. It may therefore exercise a primitive family only when every
+    profile carries the needed floating-point specializations and the checked
+    store facade can be generated from the finalized lowered facts.
+    """
+
+    for profile in profiles:
+        by_primitive = profile.specializations("cpp")
+        required = tuple(
+            by_primitive.get(name, ()) for name in ("add", "load", "store")
+        )
+        if any(not specializations for specializations in required):
+            return CppConsumerKind.HEADER_ONLY
+        if any(
+            not any(spec.type_tag == "f32" for spec in specializations)
+            for specializations in required
+        ):
+            return CppConsumerKind.HEADER_ONLY
+        if applicable_checked_api_plan(required[-1]) is None:
+            return CppConsumerKind.HEADER_ONLY
+    return CppConsumerKind.CHECKED_ARITHMETIC
 
 
 def _cpp_profile_model(emitted_profile: EmittedProfile) -> CppProfileRenderModel:

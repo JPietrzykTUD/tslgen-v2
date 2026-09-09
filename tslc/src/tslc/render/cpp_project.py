@@ -10,6 +10,7 @@ from tslc.backend.cpp_algorithm_public_declarations import (
     cpp_algorithm_declaration_holes,
 )
 from tslc.backend.cpp_profile_model import (
+    CppConsumerKind,
     CppProfileHeader,
     CppProjectRenderModel,
     CppSmokeInstantiation,
@@ -80,7 +81,11 @@ def cpp_artifacts(
         ),
         text(
             "cpp/tests/consumer.cpp",
-            assets.text("cpp_consumer.cpp.tmpl"),
+            assets.text(
+                "cpp_consumer.cpp.tmpl"
+                if model.consumer_kind is CppConsumerKind.CHECKED_ARITHMETIC
+                else "cpp_consumer_header_only.cpp.tmpl"
+            ),
             media_type=media_type,
         ),
     ]

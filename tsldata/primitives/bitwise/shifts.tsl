@@ -65,9 +65,10 @@ prim<v:=(v,sImm)> shift_left(data, shift):
               if (cast<static>(ui64, shift) >= value(type::size_bits(base::in))) {
                 complete(call<primitive=set_zero[Vec]>());
               }
-              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<base::unsigned_of(base::in)>]>(data));
-              var<const_infer>(ures, ua << cast<static>(base::unsigned_of(base::in), shift));
-              complete(call<primitive=reinterpret[Vec<base::unsigned_of(base::in)>, Vec]>(ures));
+              let<type>(UBase, base::unsigned_of(base::in));
+              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<UBase>]>(data));
+              var<const_infer>(ures, cast<static>(UBase, ua << cast<static>(UBase, shift)));
+              complete(call<primitive=reinterpret[Vec<UBase>, Vec]>(ures));
             """
     [generic, oneapi_fpga]:
       arith:
@@ -676,9 +677,10 @@ prim<v:=(v,s)> shift_left(data, shift):
               if (cast<static>(ui64, shift) >= value(type::size_bits(base::in))) {
                 complete(call<primitive=set_zero[Vec]>());
               }
-              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<base::unsigned_of(base::in)>]>(data));
-              var<const_infer>(ures, ua << cast<static>(base::unsigned_of(base::in), shift));
-              complete(call<primitive=reinterpret[Vec<base::unsigned_of(base::in)>, Vec]>(ures));
+              let<type>(UBase, base::unsigned_of(base::in));
+              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<UBase>]>(data));
+              var<const_infer>(ures, cast<static>(UBase, ua << cast<static>(UBase, shift)));
+              complete(call<primitive=reinterpret[Vec<UBase>, Vec]>(ures));
             """
     [generic, oneapi_fpga]:
       arith:
@@ -1156,9 +1158,10 @@ prim<v:=(v,v)> shift_left(data, shift):
               if (cast<static>(ui64, shift) >= value(type::size_bits(base::in))) {
                 complete(call<primitive=set_zero[Vec]>());
               }
-              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<base::unsigned_of(base::in)>]>(data));
-              var<const_infer>(ures, ua << cast<static>(base::unsigned_of(base::in), shift));
-              complete(call<primitive=reinterpret[Vec<base::unsigned_of(base::in)>, Vec]>(ures));
+              let<type>(UBase, base::unsigned_of(base::in));
+              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<UBase>]>(data));
+              var<const_infer>(ures, cast<static>(UBase, ua << cast<static>(UBase, shift)));
+              complete(call<primitive=reinterpret[Vec<UBase>, Vec]>(ures));
             """
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
@@ -1827,13 +1830,15 @@ prim<v:=(v,sImm)> shift_right(data, shift):
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
-                var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<base::unsigned_of(base::in)>]>(data));
-                var<const_infer>(ures, ua >> cast<static>(base::unsigned_of(base::in), shift));
-                complete(call<primitive=reinterpret[Vec<base::unsigned_of(base::in)>, Vec]>(ures));
+                let<type>(UBase, base::unsigned_of(base::in));
+                var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<UBase>]>(data));
+                var<const_infer>(ures, cast<static>(UBase, ua >> cast<static>(UBase, shift)));
+                complete(call<primitive=reinterpret[Vec<UBase>, Vec]>(ures));
               } else<compile> {
-                var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<base::signed_of(base::in)>]>(data));
-                var<const_infer>(ures, ua >> cast<static>(base::signed_of(base::in), shift));
-                complete(call<primitive=reinterpret[Vec<base::signed_of(base::in)>, Vec]>(ures));
+                let<type>(SBase, base::signed_of(base::in));
+                var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<SBase>]>(data));
+                var<const_infer>(ures, cast<static>(SBase, ua >> cast<static>(SBase, shift)));
+                complete(call<primitive=reinterpret[Vec<SBase>, Vec]>(ures));
               }
             """
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:

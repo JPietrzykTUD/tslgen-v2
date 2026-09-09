@@ -298,21 +298,21 @@ prim<v:=v> popcnt(data):
             bits = call<primitive=sub[WordVec]>(
               bits,
               call<primitive=binary_and[WordVec]>(
-                call<primitive=shift_right[WordVec, false]>(bits, 1),
+                call<primitive=shift_right[WordVec, false]>(bits, cast<static>(ui16, 1)),
                 m1
               )
             );
             bits = call<primitive=add[WordVec]>(
               call<primitive=binary_and[WordVec]>(bits, m2),
               call<primitive=binary_and[WordVec]>(
-                call<primitive=shift_right[WordVec, false]>(bits, 2),
+                call<primitive=shift_right[WordVec, false]>(bits, cast<static>(ui16, 2)),
                 m2
               )
             );
             bits = call<primitive=binary_and[WordVec]>(
               call<primitive=add[WordVec]>(
                 bits,
-                call<primitive=shift_right[WordVec, false]>(bits, 4)
+                call<primitive=shift_right[WordVec, false]>(bits, cast<static>(ui16, 4))
               ),
               m4
             );

@@ -7,8 +7,17 @@ Date: 2026-09-09
 The generated C++ product now has an ordinary-include quality target. It compiles
 the full generated wrapper smoke translation unit and a downstream-shaped
 `#include <tsl.hpp>` consumer without treating TSL as a system header. The
-consumer exercises direct unchecked load/add/store and checked span-based
-load/store calls.
+consumer exercises direct unchecked load/add/store and a checked span-based
+store call. Register-returning checked paths retain their dedicated assembly
+regression tests; the lowest SSE profile does not expose a checked load family
+because one overload lacks its checked dependency closure.
+
+The compiler plans that richer consumer only when every emitted profile contains
+the required floating-point `load`, `add`, and `store` families plus the checked
+store facade. Primitive-filtered projects that do not meet that contract receive
+a header-only downstream consumer; their strict wrapper smoke target continues to
+instantiate every selected specialization. A filtered request therefore never
+silently imports unrelated primitive families merely to build the quality target.
 
 The local representative gate passed 49 verifier commands for `scalar`, `avx2`,
 runtime-scalable `sve`, `rvv`, and `wasm32-simd128`. AVX2 additionally passed
@@ -48,6 +57,13 @@ The full-header warning audit found and fixed these source or renderer defects:
 - target-only representation types incorrectly participating in public
   `dataparallel::native`/`fixed<N>` inference, which made an AVX2 profile select
   AVX-512;
+- base x86 extension tags without activation predicates, which allowed SSE
+  projects to emit the repository's AVX/AVX2 register substrate and AVX-512
+  bookkeeping types;
+- integer promotions and out-of-range constant shifts in generic fallback
+  bodies, including conflict masks for vectors wider than one result lane;
+- compiler-specific population/zero-count helpers and a constant-width mask
+  expression that were not portable under the MSVC warning contract;
 - a Wasm exception guard that recognized `__wasm__` but not the standard
   `__wasm32__`/`__wasm64__` target macros.
 

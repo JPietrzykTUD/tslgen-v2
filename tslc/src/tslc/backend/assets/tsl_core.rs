@@ -631,9 +631,9 @@ pub fn idx_offset<I: IndexBase, S: IndexBase>(index: I, scale: S) -> usize {
     index.as_offset() * scale.as_offset()
 }
 
-/// A `mem<copy>` byte-count argument. The corpus types `count_bytes` as the vector's base
-/// type, so this normalizes any base (integer or float) to a `usize` byte count — the
-/// counterpart to the implicit `size_t` conversion C++ gets for free at the `std::memcpy` call.
+/// A `mem<copy>` byte-count argument. This accepts the corpus' legacy base-typed counts and
+/// the explicit `scalar::size`/`usize` form, normalizing either to the byte count consumed by
+/// `copy_nonoverlapping`.
 pub trait TslByteCount: Copy {
     fn tsl_byte_count(self) -> usize;
 }
@@ -645,7 +645,7 @@ macro_rules! impl_tsl_byte_count {
         }
     })* };
 }
-impl_tsl_byte_count!(i8, i16, i32, i64, u8, u16, u32, u64, f32, f64);
+impl_tsl_byte_count!(i8, i16, i32, i64, u8, u16, u32, u64, f32, f64, usize);
 
 /// `std::memcpy` counterpart: copy `count` bytes from `src` to `dst`. Byte-addressed
 /// (`*const u8`/`*mut u8`), so a `void`-cast source/dest plus a base-typed byte count lower

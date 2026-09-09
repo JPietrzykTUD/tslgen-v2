@@ -116,6 +116,7 @@ def test_allocation_helpers_define_shared_total_contract() -> None:
     assert "!alignment.is_power_of_two()" in rust_core
     assert ".checked_add(effective_alignment - 1)" in rust_core
     assert "aligned_alloc(effective_alignment, allocation_size)" in rust_core
+    assert "u64, f32, f64, usize" in rust_core
 
 
 def test_render_assets_freeze_and_fill_templates() -> None:

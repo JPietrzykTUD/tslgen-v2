@@ -990,7 +990,7 @@ prim<m:=(v,v)> less_than(left, right):
             var<const_infer>(right_high, intrin<_mm_shuffle_epi32>(right, 0xF5));
             var<const_infer>(left_low, intrin<_mm_shuffle_epi32>(left, 0xA0));
             var<const_infer>(right_low, intrin<_mm_shuffle_epi32>(right, 0xA0));
-            var<const_infer>(sign_bit, call<primitive=set1[WordVec]>(cast<static>(si32, -2147483648)));
+            var<const_infer>(sign_bit, call<primitive=set1[WordVec]>(cast<static>(si32, (-2147483647 - 1))));
             var<const_infer>(low_less, call<primitive=@self[WordVec]>(
               call<primitive=binary_xor[WordVec]>(left_low, sign_bit),
               call<primitive=binary_xor[WordVec]>(right_low, sign_bit)

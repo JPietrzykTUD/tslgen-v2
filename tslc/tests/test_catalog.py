@@ -203,6 +203,15 @@ def test_nested_requires_promoted_per_type_group(catalog: Catalog) -> None:
 
 
 def test_extension_inheritance_activation_and_supersession(catalog: Catalog) -> None:
+    assert catalog.extensions["avx512"].active_when.target_features == frozenset(
+        {"avx512f"}
+    )
+    assert catalog.extensions["avx2"].active_when.target_features == frozenset(
+        {"avx"}
+    )
+    assert catalog.extensions["sse"].active_when.target_features == frozenset(
+        {"sse"}
+    )
     avx2_vl = catalog.extensions["avx2_vl"]
     assert avx2_vl.inherits == "avx2"
     assert avx2_vl.isa_name == "avx2"  # emitted as avx2; _vl is internal only

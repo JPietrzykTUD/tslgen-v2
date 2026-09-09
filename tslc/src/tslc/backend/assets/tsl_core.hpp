@@ -464,7 +464,10 @@ inline void ostream_write(std::string &out, const array_type<T, N, Align> &arr, 
         (modifier == 16) ? 16u : (modifier == 8) ? 8u : (modifier == 0) ? 2u : 10u;
     for (std::size_t lane = 0; lane < N; ++lane) {
         std::uint64_t value = static_cast<std::uint64_t>(arr[N - 1 - lane]);
-        std::uint64_t masked = (bits >= 64) ? value : (value & ((std::uint64_t{1} << bits) - 1));
+        std::uint64_t masked = value;
+        if constexpr (bits < 64) {
+            masked &= (std::uint64_t{1} << bits) - 1;
+        }
         if (base == 2u) {
             for (std::size_t b = bits; b-- > 0;) {
                 out += ((masked >> b) & 1u) ? '1' : '0';
@@ -657,16 +660,21 @@ inline T arith_rem(T a, T b) {
     }
 }
 // Population count of an integer mask: the number of set bits, an unsigned count (not the
-// input type). Used by `mask_population_count` after `to_integral`. `__builtin_popcountll`
-// keeps this C++17 (no `<bit>`/`std::popcount`).
+// input type). Used by `mask_population_count` after `to_integral`. The compact loop keeps the
+// runtime support portable to every C++17 compiler without compiler-specific builtins.
 template <class T>
 inline std::uint32_t popcount(T v) {
     // Reinterpret through the same-width *unsigned* type before widening: a signed lane (e.g.
     // int8_t -1) must count its own 8 bits, not the 64 bits of a sign-extended widening — which
     // would also disagree with Rust's `count_ones`. (Rust counts the two's-complement bits.)
     using U = std::make_unsigned_t<T>;
-    return static_cast<std::uint32_t>(
-        __builtin_popcountll(static_cast<unsigned long long>(static_cast<U>(v))));
+    U bits = static_cast<U>(v);
+    std::uint32_t count = 0;
+    while (bits != 0) {
+        bits = static_cast<U>(bits & static_cast<U>(bits - U{1}));
+        ++count;
+    }
+    return count;
 }
 #if defined(AC_VERSION)
 template <int W, bool S>
@@ -679,17 +687,21 @@ inline std::uint32_t popcount(ac_int<W, S> v) {
 }
 #endif
 // Trailing-zero count of an integer mask (used by `tzc`): the index of the lowest set bit,
-// or the full bit-width when the mask is zero. `__builtin_ctzll(0)` is undefined, hence the
-// guard. Matches the frozen runtime-support `ctz` / Rust's `trailing_zeros`.
+// or the full bit-width when the mask is zero. Matches the frozen runtime-support `ctz` /
+// Rust's `trailing_zeros`.
 template <class T>
 inline std::uint32_t ctz(T v) {
     using U = std::make_unsigned_t<T>;
-    if (v == 0) {
+    U bits = static_cast<U>(v);
+    if (bits == 0) {
         return static_cast<std::uint32_t>(sizeof(T) * 8);
     }
-    return static_cast<std::uint32_t>(
-        __builtin_ctzll(static_cast<unsigned long long>(static_cast<U>(v)))
-    );
+    std::uint32_t count = 0;
+    while ((bits & U{1}) == 0) {
+        bits = static_cast<U>(bits >> 1);
+        ++count;
+    }
+    return count;
 }
 #if defined(AC_VERSION)
 template <int W, bool S>
@@ -704,18 +716,18 @@ inline std::uint32_t ctz(ac_int<W, S> v) {
 #endif
 // Leading-zero count of an integer (used by `lzc`/`lzc_imask`): the number of high-order
 // zero bits, width-aware via `sizeof(T)` (so a `u8` counts within 8 bits), and the full
-// bit-width when the value is zero (`__builtin_clzll(0)` is undefined). Matches the frozen
-// runtime-support `clz` / Rust's `leading_zeros`.
+// bit-width when the value is zero. Matches the frozen runtime-support `clz` / Rust's
+// `leading_zeros`.
 template <class T>
 inline std::uint32_t clz(T v) {
     using U = std::make_unsigned_t<T>;
-    if (v == 0) {
-        return static_cast<std::uint32_t>(sizeof(T) * 8);
+    U bits = static_cast<U>(v);
+    std::uint32_t count = static_cast<std::uint32_t>(sizeof(T) * 8);
+    while (bits != 0) {
+        bits = static_cast<U>(bits >> 1);
+        --count;
     }
-    constexpr int width = static_cast<int>(sizeof(T) * 8);
-    constexpr int ull_width = static_cast<int>(sizeof(unsigned long long) * 8);
-    const int leading = __builtin_clzll(static_cast<unsigned long long>(static_cast<U>(v)));
-    return static_cast<std::uint32_t>(leading - (ull_width - width));
+    return count;
 }
 #if defined(AC_VERSION)
 template <int W, bool S>

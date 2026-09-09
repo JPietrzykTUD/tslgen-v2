@@ -2,7 +2,18 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from tslc.backend.cpp_profile import (
+    _cpp_inference_vector_type_specs,
+    _cpp_native_registration,
+    _cpp_registration,
+    _cpp_used_vector_type_specs,
+)
 from tslc.backend.emitted_profile import used_vector_type_specs
+from tslc.backend.registry import create_backend_dialect
+from tslc.backend.rust_vectors import (
+    rust_extension_tag_registrations,
+    rust_registrations,
+)
 from tslc.backend.target_capability import (
     cpp_width_indexed_register_helper,
     is_width_indexed_register_extension,
@@ -10,27 +21,19 @@ from tslc.backend.target_capability import (
     rust_extension_tag,
     width_indexed_register_bits,
 )
-from tslc.backend.registry import create_backend_dialect
-from tslc.catalog.model import Catalog
 from tslc.catalog.conversion import (
     ConversionKind,
     LaneCountRelation,
     PrimitiveConversionContract,
     conversion_register_shape,
 )
+from tslc.catalog.model import Catalog
 from tslc.catalog.register_shapes import RegisterMultiplicity
 from tslc.lane_count import LaneCount
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.lower.model import LoweredTypeParam
-from tslc.backend.cpp_profile import (
-    _cpp_native_registration,
-    _cpp_registration,
-)
+from tslc.lower.target_vectors import TargetVector
 from tslc.target_text import LoweredBody
-from tslc.backend.rust_vectors import (
-    rust_extension_tag_registrations,
-    rust_registrations,
-)
 
 
 def test_backend_specific_feature_spellings_are_source_capabilities(
@@ -169,6 +172,40 @@ def test_native_registration_includes_concrete_simd_type_parameter_bindings(
     )
     assert "struct simd<int32_t, sve>" in rendered
     assert "struct simd<int64_t, sve>" in rendered
+
+
+def test_cpp_dataparallel_inference_excludes_target_only_vectors() -> None:
+    target = TargetVector(
+        vector_spelling="tsl::simd<int32_t, tsl::avx512>",
+        register_spelling="__m512i",
+        extension_isa="avx512",
+        base_tag="si32",
+        base_spelling="int32_t",
+    )
+    spec = LoweredSpecialization(
+        backend_id="cpp",
+        primitive_name="insert_imask",
+        source_primitive_name="insert_imask",
+        extension_name="avx2",
+        type_tag="si32",
+        base_type_spelling="int32_t",
+        register_spelling="__m256i",
+        result_kind="im",
+        param_names=("orig", "data", "position"),
+        param_kinds=("imt", "im", "usize"),
+        body=LoweredBody.from_text("return orig;"),
+        vector_spelling="tsl::simd<int32_t, tsl::avx2>",
+        target=target,
+    )
+    by_primitive = {"insert_imask": (spec,)}
+
+    assert _cpp_used_vector_type_specs(by_primitive) == (
+        ("avx2", "si32", "int32_t"),
+        ("avx512", "si32", "int32_t"),
+    )
+    assert _cpp_inference_vector_type_specs(by_primitive) == (
+        ("avx2", "si32", "int32_t"),
+    )
 
 
 def test_rust_target_presentation_capabilities_derive_from_metadata(

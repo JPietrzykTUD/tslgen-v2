@@ -89,7 +89,32 @@ def test_backend_selection_is_honored(data_root: Path, machine_profiles_path: Pa
     assert [b.backend_id for b in cpp_only.rendered.verify.backends] == ["cpp"]
 
 
-def test_cpp_dataparallel_inference_excludes_target_only_vectors(
+def test_cpp_consumer_respects_filtered_primitive_set(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=["conflict"],
+        profiles=["sse"],
+        backends=["cpp"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    consumer = next(
+        artifact.content
+        for artifact in result.artifacts.artifacts
+        if artifact.logical_path == "cpp/tests/consumer.cpp"
+    )
+
+    assert "#include <tsl.hpp>" in consumer
+    assert "int main() { return 0; }" in consumer
+    assert "tsl::add" not in consumer
+    assert "tsl::load" not in consumer
+    assert "tsl::store" not in consumer
+
+
+def test_cpp_profile_excludes_inactive_target_vector_registrations(
     data_root: Path,
     machine_profiles_path: Path,
 ) -> None:
@@ -108,7 +133,7 @@ def test_cpp_dataparallel_inference_excludes_target_only_vectors(
         for artifact in result.artifacts.artifacts
         if artifact.logical_path == "cpp/include/tsl_avx2.hpp"
     )
-    assert "struct simd<T, avx512>" in cpp
+    assert "struct simd<T, avx512>" not in cpp
     assert (
         "struct simd_for<native, int32_t> {\n"
         "    using type = ::tsl::simd<int32_t, ::tsl::avx2>;"
@@ -332,7 +357,7 @@ def test_clang_vector_overlay_is_split_guarded_and_uses_hardware_facade(
     result = _gen(
         data_root,
         machine_profiles_path,
-        primitives=["add", "hadd"],
+        primitives=["add", "hadd", "load", "store"],
         profiles=["avx2"],
         backends=["cpp"],
     )
@@ -365,8 +390,9 @@ def test_clang_vector_overlay_is_split_guarded_and_uses_hardware_facade(
     assert "clang_fixed" not in base
     assert "clang_v128" in overlay_smoke
     assert "#include <tsl.hpp>" in consumer
-    assert "load_checked<Vec, false>" in consumer
     assert "store_checked<Vec, false>" in consumer
+    assert "simd_for_t<tsl::dataparallel::native, float>" in consumer
+    assert "std::int32_t" not in consumer
     assert "option(TSL_STRICT_WARNINGS" in cmake
     assert "-Wall -Wextra -Werror" in cmake
     assert "GNU|Clang|AppleClang|IntelLLVM" in cmake

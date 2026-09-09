@@ -266,9 +266,10 @@ prim<v:=v> conflict(data):
             loop<generation, scoped>(idx, 1, value(vector::length), 1) {
               var<infer>(conflict, cast<static>(ConflictT, 0));
               loop<generation, scoped>(cur, 0, value(idx), 1) {
-                if ((value(cur) < (value(type::size_bytes(base::in)) * 8)) &&
-                    (data[value(idx)] == data[value(cur)])) {
-                  conflict |= (cast<static>(ConflictT, 1)) << value(cur);
+                if (data[value(idx)] == data[value(cur)]) {
+                  conflict |=
+                    cast<static>(ConflictT, value(cur) < (value(type::size_bytes(base::in)) * 8)) *
+                    ((cast<static>(ConflictT, 1)) << (value(cur) % (value(type::size_bytes(base::in)) * 8)));
                 }
               }
               result[value(idx)] = cast<static>(base::in, conflict);
@@ -291,9 +292,10 @@ prim<v:=v> conflict(data):
               var<infer>(conflict, cast<static>(ConflictT, 0));
               loop<generation, scoped>(cur, 0, value(idx), 1) {
                 var<const_infer>(previous, call<primitive=extract_value[Vec, cur]>(data));
-                if ((value(cur) < (value(type::size_bytes(base::in)) * 8)) &&
-                    (current == previous)) {
-                  conflict |= (cast<static>(ConflictT, 1)) << value(cur);
+                if (current == previous) {
+                  conflict |=
+                    cast<static>(ConflictT, value(cur) < (value(type::size_bytes(base::in)) * 8)) *
+                    ((cast<static>(ConflictT, 1)) << (value(cur) % (value(type::size_bytes(base::in)) * 8)));
                 }
               }
               result = call<primitive=insert_value[Vec, idx]>(
@@ -319,9 +321,10 @@ prim<v:=v> conflict(data):
               var<infer>(conflict, cast<static>(ConflictT, 0));
               loop<generation, scoped>(cur, 0, value(idx), 1) {
                 var<const_infer>(previous, call<primitive=extract_value[Vec, cur]>(data));
-                if ((value(cur) < (value(type::size_bytes(base::in)) * 8)) &&
-                    (current == previous)) {
-                  conflict |= (cast<static>(ConflictT, 1)) << value(cur);
+                if (current == previous) {
+                  conflict |=
+                    cast<static>(ConflictT, value(cur) < (value(type::size_bytes(base::in)) * 8)) *
+                    ((cast<static>(ConflictT, 1)) << (value(cur) % (value(type::size_bytes(base::in)) * 8)));
                 }
               }
               result = call<primitive=insert_value[Vec, idx]>(
@@ -351,8 +354,10 @@ prim<v:=v> conflict(data):
               loop<generation, scoped>(idx, 1, value(vector::length), 1) {
                 var<infer>(conflict, cast<static>(ConflictT, 0));
                 loop<generation, scoped>(cur, 0, value(idx), 1) {
-                  if ((value(cur) < (value(type::size_bytes(base::in)) * 8)) && (values[value(idx)] == values[value(cur)])) {
-                    conflict |= (cast<static>(ConflictT, 1)) << value(cur);
+                  if (values[value(idx)] == values[value(cur)]) {
+                    conflict |=
+                      cast<static>(ConflictT, value(cur) < (value(type::size_bytes(base::in)) * 8)) *
+                      ((cast<static>(ConflictT, 1)) << (value(cur) % (value(type::size_bytes(base::in)) * 8)));
                   }
                 }
                 result[value(idx)] = cast<static>(base::in, conflict);

@@ -4,6 +4,8 @@ extension avx512:
   vector_bits 512
   native_sort_order 500
   default_test_target true
+  active_when:
+    target_features ["avx512f"]
   cpp:
     supported true
     headers ["immintrin.h"]
@@ -59,6 +61,10 @@ extension avx2:
   vector_bits 256
   native_sort_order 300
   default_test_target true
+  # The tag is also the repository's 256-bit AVX floating-point substrate, so
+  # AVX—not AVX2—is the minimum capability that makes the register family real.
+  active_when:
+    target_features ["avx"]
   cpp:
     supported true
     headers ["immintrin.h"]
@@ -200,6 +206,8 @@ extension sse:
   vector_bits 128
   native_sort_order 100
   default_test_target true
+  active_when:
+    target_features ["sse"]
   cpp:
     supported true
     headers ["immintrin.h"]

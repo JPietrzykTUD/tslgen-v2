@@ -2900,7 +2900,7 @@ def test_memory_cp_builds(data_root: Path, machine_profiles_path: Path, tmp_path
     # count_bytes)`. `mem` is a scanned keyword lowered by `MemLowerer` to the `mem_copy`
     # translate template — C++ `std::memcpy` over `void *` reinterprets, Rust
     # `crate::tsl_core::mem_copy` over `u8` byte pointers (the `void`-cast maps to `*const/*mut
-    # u8`) with a `TslByteCount` normalization of the base-typed count. Same body for every
+    # u8`) with an explicit `usize` byte count accepted by `TslByteCount`. Same body for every
     # extension (no SIMD intrinsics), so it builds across scalar + SIMD in C++ and Rust.
     result = generate_project(
         [data_root],
