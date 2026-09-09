@@ -73,6 +73,10 @@ def _resolve_extension_inheritance(
                 ext.vector_register_types,
             ),
             backend_headers=_merge_header_maps(parent.backend_headers, ext.backend_headers),
+            backend_system_headers=_merge_header_maps(
+                parent.backend_system_headers,
+                ext.backend_system_headers,
+            ),
             backend_supported={**parent.backend_supported, **ext.backend_supported},
             metadata=replace(
                 ext.metadata,
@@ -177,6 +181,7 @@ def _build_extension(
             fields.get("register_multiplicity_types")
         ),
         backend_headers=_backend_headers(fields, backend_ids),
+        backend_system_headers=_backend_system_headers(fields, backend_ids),
         backend_supported=_backend_supported(fields, backend_ids),
         inherits=_field_text(fields.get("inherits")),
         active_when=_extension_activation(fields.get("active_when")),
@@ -293,6 +298,20 @@ def _backend_headers(
     result: dict[str, tuple[str, ...]] = {}
     for backend_id in sorted(backend_ids):
         headers = _list_text(_child(fields.get(backend_id), "headers"))
+        if headers:
+            result[backend_id] = headers
+    return result
+
+
+def _backend_system_headers(
+    fields: dict[str, ParsedTslField],
+    backend_ids: frozenset[str],
+) -> dict[str, tuple[str, ...]]:
+    """Promote third-party includes that require a scoped system boundary."""
+
+    result: dict[str, tuple[str, ...]] = {}
+    for backend_id in sorted(backend_ids):
+        headers = _list_text(_child(fields.get(backend_id), "system_headers"))
         if headers:
             result[backend_id] = headers
     return result

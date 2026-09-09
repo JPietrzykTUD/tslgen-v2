@@ -59,6 +59,18 @@ def cpp_artifacts(
         for header in _CPP_STATIC_HEADERS
     ] + [
         text(
+            f"cpp/include/{group.header_name}",
+            assets.fill(
+                "cpp_system_headers.hpp.tmpl",
+                includes="\n".join(
+                    f"#include <{header}>" for header in group.headers
+                ),
+            ),
+            media_type=media_type,
+        )
+        for group in model.system_header_groups
+    ] + [
+        text(
             "cpp/include/tsl_primitives.hpp",
             assets.fill(
                 "cpp_primitive_tags.hpp.tmpl",
@@ -120,7 +132,10 @@ def cpp_artifacts(
                         backend,
                         header,
                         assets,
-                        includes=f'#include "tsl_{profile_slug}.hpp"\n',
+                        includes=(
+                            f'#include "tsl_{profile_slug}.hpp"\n'
+                            f"{header.includes or ''}"
+                        ),
                         profile_metadata="",
                     ),
                     media_type=media_type,

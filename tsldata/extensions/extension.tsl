@@ -300,7 +300,7 @@ extension oneapi_fpga:
     kind "same_as_mask_type"
   cpp:
     supported true
-    headers ["sycl/ext/intel/ac_types/ac_int.hpp"]
+    system_headers ["sycl/ext/intel/ac_types/ac_int.hpp"]
   rust:
     supported true
     type_name "OneapiFpga"

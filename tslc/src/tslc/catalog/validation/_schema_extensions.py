@@ -65,6 +65,7 @@ KNOWN_EXTENSION_BACKEND_FIELDS = frozenset(
         "compiler_capabilities",
         "dataparallel_inference",
         "headers",
+        "system_headers",
         "supported",
         "type_name",
     }

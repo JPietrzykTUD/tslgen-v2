@@ -519,6 +519,12 @@ benchmark plans as one frozen snapshot. This lets a backend compute any shared
 semantic-to-layout projection once before its focused project, test, and
 benchmark formatters run.
 
+C++ extension metadata separates ordinary `headers` from third-party
+`system_headers`. The latter are parsed inside a narrowly scoped compiler
+diagnostic boundary, before `tsl_core.hpp` when vendor types affect core helper
+overloads. Both classes remain part of the typed compiler/doctor preflight; the
+classification changes warning ownership, not dependency detection.
+
 Sized-vector lane arithmetic crosses that boundary as a typed `LaneCount`.
 C++ renders scaled symbolic counts as constant expressions; stable Rust rejects
 them before target text is produced unless selection has monomorphized the

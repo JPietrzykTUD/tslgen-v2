@@ -292,7 +292,7 @@ def _profile_preflight_headers(
                 if catalog.target_families.extension_targets_profile(
                     extension.family, profile.family
                 )
-                for header in extension.headers_for_backend(backend_id)
+                for header in extension.required_headers_for_backend(backend_id)
             }
         )
     )

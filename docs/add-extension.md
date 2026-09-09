@@ -220,6 +220,15 @@ Also define:
 
 Use explicit register mappings when native registration needs concrete tags.
 
+Declare normal compiler or intrinsic dependencies with `headers`. They remain
+inside the generated project's strict warning boundary. Use `system_headers`
+only for an external vendor header whose own diagnostics cannot satisfy that
+boundary. The C++ backend scopes system-warning treatment to the include and
+then restores strict diagnostics before generated declarations; verification and
+`tslc doctor` still preflight both header classes. System headers are emitted
+before `tsl_core.hpp` so vendor-defined types and feature macros required by core
+overloads are available without relying on formatter include reordering.
+
 Base `wasm128` needs no `active_when` rule.
 
 The profile admits the family.

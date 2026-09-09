@@ -765,6 +765,7 @@ class Extension:
         RegisterMultiplicity, Mapping[str, Mapping[str, str]]
     ] = field(default_factory=dict)
     backend_headers: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    backend_system_headers: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     # backend_id -> whether this extension is emittable for that backend. Missing entries are
     # unsupported; inherited extensions receive parent entries during catalog promotion.
     backend_supported: Mapping[str, bool] = field(default_factory=dict)
@@ -828,6 +829,16 @@ class Extension:
                 {
                     backend: tuple(headers)
                     for backend, headers in self.backend_headers.items()
+                }
+            ),
+        )
+        object.__setattr__(
+            self,
+            "backend_system_headers",
+            MappingProxyType(
+                {
+                    backend: tuple(headers)
+                    for backend, headers in self.backend_system_headers.items()
                 }
             ),
         )
@@ -904,6 +915,23 @@ class Extension:
 
     def headers_for_backend(self, backend_id: str) -> tuple[str, ...]:
         return self.backend_headers.get(backend_id, ())
+
+    def system_headers_for_backend(self, backend_id: str) -> tuple[str, ...]:
+        """Third-party headers whose diagnostics must not weaken product checks."""
+
+        return self.backend_system_headers.get(backend_id, ())
+
+    def required_headers_for_backend(self, backend_id: str) -> tuple[str, ...]:
+        """All compiler preflight dependencies, independent of warning policy."""
+
+        return tuple(
+            dict.fromkeys(
+                (
+                    *self.headers_for_backend(backend_id),
+                    *self.system_headers_for_backend(backend_id),
+                )
+            )
+        )
 
 @dataclass(frozen=True, slots=True)
 class Catalog:

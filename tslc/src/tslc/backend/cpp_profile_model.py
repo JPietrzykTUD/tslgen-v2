@@ -34,6 +34,7 @@ from tslc.backend.cpp_compiler_capabilities import (
     used_cpp_compiler_capability_ids,
 )
 from tslc.backend.cpp_profile import (
+    _cpp_system_header_includes,
     _cpp_overlay_fixed_registrations,
     _cpp_includes,
     _cpp_inferred_simd_registrations,
@@ -46,6 +47,7 @@ from tslc.backend.cpp_profile import (
     cpp_compiler_capability_diagnostic,
     cpp_extension_availability_condition,
     cpp_profiles_support_algorithm,
+    cpp_system_header_name,
 )
 from tslc.backend.emitted_profile import EmittedProfile, used_extensions
 from tslc.backend.target_capability import is_width_indexed_register_extension
@@ -84,6 +86,14 @@ class CppConsumerKind(StrEnum):
 
     HEADER_ONLY = "header_only"
     CHECKED_ARITHMETIC = "checked_arithmetic"
+
+
+@dataclass(frozen=True, slots=True)
+class CppSystemHeaderGroup:
+    """One extension-owned proxy around third-party C++ headers."""
+
+    header_name: str
+    headers: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,6 +198,7 @@ class CppProjectRenderModel:
     supports_algorithm: bool
     profile_detection: CppProfileDetectionPlan
     consumer_kind: CppConsumerKind
+    system_header_groups: tuple[CppSystemHeaderGroup, ...]
 
 
 def cpp_project_render_model(
@@ -234,6 +245,7 @@ def cpp_project_render_model(
             candidates=cpp_profile_detection_candidates(profiles),
         ),
         consumer_kind=_cpp_consumer_kind(profiles),
+        system_header_groups=_cpp_system_header_groups(profiles),
     )
 
 
@@ -263,6 +275,26 @@ def _cpp_consumer_kind(
         if applicable_checked_api_plan(required[-1]) is None:
             return CppConsumerKind.HEADER_ONLY
     return CppConsumerKind.CHECKED_ARITHMETIC
+
+
+def _cpp_system_header_groups(
+    profiles: tuple[EmittedProfile, ...],
+) -> tuple[CppSystemHeaderGroup, ...]:
+    """Collect deterministic extension-specific external-header proxies."""
+
+    groups: dict[str, CppSystemHeaderGroup] = {}
+    for profile in profiles:
+        for extension_name in profile.used_extensions("cpp"):
+            extension = profile.extensions.get(extension_name)
+            if extension is None:
+                continue
+            headers = extension.system_headers_for_backend("cpp")
+            if headers:
+                groups[extension_name] = CppSystemHeaderGroup(
+                    header_name=cpp_system_header_name(extension_name),
+                    headers=tuple(sorted(set(headers))),
+                )
+    return tuple(groups[name] for name in sorted(groups))
 
 
 def _cpp_profile_model(emitted_profile: EmittedProfile) -> CppProfileRenderModel:
@@ -370,6 +402,10 @@ def _cpp_overlay_header(
         header_group,
     )
     registrations += overlay_registrations
+    system_header_includes = _cpp_system_header_includes(
+        used_extensions(grouped),
+        emitted_profile.extensions,
+    )
     return CppProfileHeader(
         header_group=header_group,
         compiler_ids=tuple(
@@ -384,7 +420,11 @@ def _cpp_overlay_header(
             )
         ),
         enable_macro=f"TSL_ENABLE_{header_group.upper()}",
-        includes=None,
+        includes=(
+            "\n".join(system_header_includes) + "\n"
+            if system_header_includes
+            else None
+        ),
         registrations=registrations,
         declarations=tuple(
             CppDeclaredPrimitive(name, grouped[name])

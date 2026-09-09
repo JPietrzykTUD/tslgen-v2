@@ -19,7 +19,7 @@ def _cpp_preflight_headers(profile: EmittedProfile) -> tuple[str, ...]:
                 header
                 for extension_name in used
                 if (extension := profile.extensions.get(extension_name)) is not None
-                for header in extension.headers_for_backend("cpp")
+                for header in extension.required_headers_for_backend("cpp")
             }
         )
     )

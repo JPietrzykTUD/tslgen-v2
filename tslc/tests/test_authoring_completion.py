@@ -122,7 +122,12 @@ def test_empty_file_and_primitive_header_complete_declarations_and_shapes(
         (
             "extension sample:\n  cpp:\n    supported true\n",
             "extension sample:\n  cpp:\n    supported true\n    ",
-            {"headers", "compiler_capabilities", "dataparallel_inference"},
+            {
+                "headers",
+                "system_headers",
+                "compiler_capabilities",
+                "dataparallel_inference",
+            },
             {"supported", "active_when"},
         ),
         (

@@ -64,10 +64,17 @@ The full-header warning audit found and fixed these source or renderer defects:
   bodies, including conflict masks for vectors wider than one result lane;
 - compiler-specific population/zero-count helpers and a constant-width mask
   expression that were not portable under the MSVC warning contract;
+- Intel's `ac_int.hpp` diagnostics crossing into `-Werror`; the dependency is
+  now source-classified as an external system header and isolated without
+  relaxing generated-code diagnostics;
 - a Wasm exception guard that recognized `__wasm__` but not the standard
   `__wasm32__`/`__wasm64__` target macros.
 
-No warning category is suppressed in the stable quality target.
+No warning category is suppressed for generated or consumer code in the stable
+quality target. Extension-declared third-party `system_headers` are isolated in
+generated proxy headers, so vendor diagnostics do not weaken the strict warning
+boundary around TSL itself. Both ordinary and system headers remain compiler
+preflight requirements.
 
 ## Static chunk-index contract
 

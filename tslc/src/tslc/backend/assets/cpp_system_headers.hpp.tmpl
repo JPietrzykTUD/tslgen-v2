@@ -1,0 +1,15 @@
+#pragma once
+
+#if defined(__clang__)
+#  pragma clang system_header
+#elif defined(__GNUC__)
+#  pragma GCC system_header
+#elif defined(_MSC_VER)
+#  pragma warning(push, 0)
+#endif
+
+@{includes}
+
+#if defined(_MSC_VER) && !defined(__clang__)
+#  pragma warning(pop)
+#endif

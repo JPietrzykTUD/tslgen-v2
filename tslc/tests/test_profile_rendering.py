@@ -548,8 +548,19 @@ def test_oneapi_sized_vector_is_distinct_from_generic(
     by = {a.logical_path: a.content for a in result.artifacts.artifacts}
 
     cpp = by["cpp/include/tsl_cascadelake_oneapi.hpp"]
+    system_headers = by["cpp/include/tsl_system_headers_oneapi_fpga.hpp"]
     assert "template <std::size_t LANES>\nstruct oneapi_fpga" in cpp
-    assert "#include <sycl/ext/intel/ac_types/ac_int.hpp>" in cpp
+    system_include = cpp.index(
+        "#include <tsl_system_headers_oneapi_fpga.hpp>"
+    )
+    core = cpp.index('#include "tsl_core.hpp"')
+    generated = cpp.index("template <std::size_t LANES>\nstruct oneapi_fpga")
+    assert system_include < core < generated
+    assert "#  pragma clang system_header" in system_headers
+    assert "#  pragma GCC system_header" in system_headers
+    assert "#  pragma warning(push, 0)" in system_headers
+    assert "#  pragma warning(pop)" in system_headers
+    assert "#include <sycl/ext/intel/ac_types/ac_int.hpp>" in system_headers
     assert "using mask_type = ac_int<LANES, false>;" in cpp
     assert "using imask_type = ac_int<LANES, false>;" in cpp
     assert "struct add_impl<tsl::simd<int32_t, tsl::generic<LANES>>>" in cpp
@@ -561,6 +572,15 @@ def test_oneapi_sized_vector_is_distinct_from_generic(
     assert cpp_by_identity[
         "tsl::reg_param#oneapi_fpga-registration"
     ]["classification_scope"] == "descendants"
+    cpp_verify = next(
+        backend
+        for backend in result.rendered.verify.backends
+        if backend.backend_id == "cpp"
+    ).profiles[0]
+    assert cpp_verify.preflight_headers == (
+        "immintrin.h",
+        "sycl/ext/intel/ac_types/ac_int.hpp",
+    )
 
     rust = by["rust/src/tsl_cascadelake_oneapi.rs"]
     assert "pub struct OneapiFpga<const LANES: usize>;" in rust

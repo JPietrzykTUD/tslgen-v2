@@ -18,6 +18,7 @@ from tslc.backend.target_capability import (
 from tslc.catalog.model import Extension
 from tslc.catalog.scalar_types import scalar_bit_width_or_default
 from tslc.lower.lowerer import LoweredSpecialization
+from tslc.names import identifier_slug
 from tslc.target_text import TemplateApplication
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
@@ -107,11 +108,14 @@ def _cpp_includes(
     emitted_exts: Sequence[str],
     extensions: Mapping[str, Extension],
 ) -> str:
-    lines = [
-        '#include "tsl_core.hpp"',
-        '#include "tsl_primitives.hpp"',
-        '#include "tsl_dataparallel.hpp"',
-    ]
+    lines = list(_cpp_system_header_includes(emitted_exts, extensions))
+    lines.extend(
+        (
+            '#include "tsl_core.hpp"',
+            '#include "tsl_primitives.hpp"',
+            '#include "tsl_dataparallel.hpp"',
+        )
+    )
     if any(
         is_width_indexed_register_extension(extensions.get(ext))
         for ext in emitted_exts
@@ -127,6 +131,24 @@ def _cpp_includes(
     )
     lines.extend(f"#include <{header}>" for header in headers)
     return "\n".join(lines) + "\n"
+
+
+def cpp_system_header_name(extension_name: str) -> str:
+    """Generated proxy that confines one extension's external headers."""
+
+    return f"tsl_system_headers_{identifier_slug(extension_name)}.hpp"
+
+
+def _cpp_system_header_includes(
+    emitted_exts: Sequence[str],
+    extensions: Mapping[str, Extension],
+) -> tuple[str, ...]:
+    return tuple(
+        f"#include <{cpp_system_header_name(ext)}>"
+        for ext in sorted(emitted_exts)
+        if ext in extensions
+        and extensions[ext].system_headers_for_backend("cpp")
+    )
 
 
 def cpp_profiles_support_algorithm(profiles: tuple[EmittedProfile, ...]) -> bool:

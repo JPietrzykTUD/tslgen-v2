@@ -245,7 +245,11 @@ def test_extension_inheritance_activation_and_supersession(catalog: Catalog) -> 
     assert oneapi.mask_policy.kind == "exact_lane_bitmask"
     assert oneapi.mask_policy.spelling("cpp") == "ac_int<LANES, false>"
     assert oneapi.imask_policy.kind == "same_as_mask_type"
-    assert oneapi.headers_for_backend("cpp") == (
+    assert oneapi.headers_for_backend("cpp") == ()
+    assert oneapi.system_headers_for_backend("cpp") == (
+        "sycl/ext/intel/ac_types/ac_int.hpp",
+    )
+    assert oneapi.required_headers_for_backend("cpp") == (
         "sycl/ext/intel/ac_types/ac_int.hpp",
     )
     assert (
