@@ -16,9 +16,10 @@ _RELEASE_POLICY = json.loads(_RELEASE_POLICY_PATH.read_text(encoding="utf-8"))
 _RUST_COEXISTENCE_PROFILES = tuple(
     _RELEASE_POLICY["backend_profiles"]["rust"]["profiles"]
 )
-_DISTRIBUTABLE_GENERATOR = (
-    "bash .github/scripts/generate_distributable_project.sh"
+_REFERENCE_GENERATOR = (
+    "bash .github/scripts/generate_release_reference_project.sh"
 )
+_BUNDLE_GENERATOR = "python .github/scripts/build_release_bundles.py"
 
 
 def test_generated_profile_shards_preserve_exhaustive_and_coexistence_lanes(
@@ -271,8 +272,8 @@ def test_clang_and_msvc_quality_matrices_cover_non_oneapi_x86_profiles(
         assert "--quality" in section
 
 
-def test_package_and_docs_generate_a_supported_distributable_profile_set() -> None:
-    helper = Path(".github/scripts/generate_distributable_project.sh").read_text(
+def test_package_and_docs_generate_contract_owned_reference_and_bundles() -> None:
+    helper = Path(".github/scripts/generate_release_reference_project.sh").read_text(
         encoding="utf-8"
     )
     assert "python -m tslc release contract --format json" in helper
@@ -292,13 +293,15 @@ def test_package_and_docs_generate_a_supported_distributable_profile_set() -> No
     package_workflow = Path(".github/workflows/generated-package.yml").read_text(
         encoding="utf-8"
     )
-    assert _DISTRIBUTABLE_GENERATOR in package_workflow
-    assert package_workflow.count(_DISTRIBUTABLE_GENERATOR) == 1
+    assert _REFERENCE_GENERATOR in package_workflow
+    assert package_workflow.count(_REFERENCE_GENERATOR) == 1
+    assert _BUNDLE_GENERATOR in package_workflow
+    assert package_workflow.count(_BUNDLE_GENERATOR) == 1
     assert not Path(".github/workflows/docs.yml").exists()
     assert "./dev.sh generate --backends cpp,rust" not in package_workflow
     assert "./dev.sh document" not in package_workflow
     assert "python -m tslc.maintenance.documentation" in package_workflow
-    assert "Download generated package" in package_workflow
+    assert "tsl-generated-reference-${{ github.sha }}" in package_workflow
 
     consumer_verifier = Path(
         "supplementary/ci/verify_generated_consumers.sh"
@@ -319,11 +322,18 @@ def test_package_and_docs_generate_a_supported_distributable_profile_set() -> No
         "supplementary/ci/verify_release_archive_consumers.sh"
     ).read_text(encoding="utf-8")
     assert "tar -xzf" in archive_verifier
+    assert '"$archive_root/bundles/cpp-scalar"' in archive_verifier
+    assert '"$archive_root/bundles/rust-release"' in archive_verifier
+    assert ".tsl-release-bundles.json" in archive_verifier
     assert "archive_cpp_consumer" in archive_verifier
     assert "cargo new" in archive_verifier
     assert 'cargo run --quiet --locked' in archive_verifier
     assert "Consume the packaged archive from clean projects" in package_workflow
     assert "verify_release_archive_consumers.sh" in package_workflow
+    assert "Run the scalable showcase from packaged target bundles" in package_workflow
+    assert "TSL_RELEASE_ARCHIVE" in Path(
+        "tslc/tests/test_scalable_release_showcase.py"
+    ).read_text(encoding="utf-8")
     assert '-e TSLC_RELEASE_ARCHIVE="tslctmp/artifacts/tsl-generated-${GITHUB_SHA}.tar.gz"' in (
         package_workflow
     )

@@ -10,12 +10,16 @@ companions, scalable-shape exclusions, and implementation-state meanings. This
 guide explains how to consume that contract; it does not maintain a second
 profile list.
 
-## Choose a generated slice
+## Choose a generated bundle
 
-Generate only the backends, profiles, element types, and primitive families an
-application deploys. A monolithic all-profile tree is useful as release and
-stress evidence, but its extracted size and formatting cost make it a poor
-default application dependency.
+The release tarball contains standalone deployment bundles rather than one
+monolithic all-profile project. Each C++ profile has its own bundle because a
+C++ application selects one deployment profile. The Rust release profiles stay
+together in one crate because Rust selects among them from compile-target
+features. The root `.tsl-release-bundles.json` lists the exact bundle paths,
+profiles, extracted sizes, and generated artifact-manifest digests; those rows
+are derived from the machine-generated release contract rather than maintained
+as another profile list.
 
 The v1 contract provides C++ across every listed supported profile, including
 runtime-scalable SVE, fixed SVE128/SVE256/SVE512, and baseline RV64 Vector 1.0.
@@ -30,20 +34,29 @@ result-target constraints, and the reviewed exact exclusions still apply.
 ## Consume the release archive
 
 The v1 generated-library tarball is a source package, not a system-prefix
-installer. Verify it with the published `SHA256SUMS`, extract its single
-`tsl-generated-1.0.0/` root, and consume only the backend subdirectory needed by
-the application.
+installer. Verify it with the published `SHA256SUMS`, inspect the manifest, and
+extract only the selected bundle. For example:
+
+```bash
+tar -xOf tsl-generated-v1.0.0.tar.gz \
+  tsl-generated-1.0.0/.tsl-release-bundles.json | jq .
+tar -xzf tsl-generated-v1.0.0.tar.gz \
+  tsl-generated-1.0.0/bundles/cpp-avx2
+```
+
+Extracting every bundle is supported for auditing, but recreates the measured
+all-profile stress footprint and is not the normal installation path.
 
 For C++, point CMake `FetchContent` at the extracted `cpp/` directory and link
 the stable `tsl::tsl` target:
 
 ```cmake
 include(FetchContent)
-set(TSL_PROFILE scalar CACHE STRING "Generated TSL profile" FORCE)
+set(TSL_PROFILE avx2 CACHE STRING "Generated TSL profile" FORCE)
 set(TSL_BUILD_TESTS OFF CACHE BOOL "Generated TSL tests" FORCE)
 FetchContent_Declare(
   tsl
-  SOURCE_DIR "/path/to/tsl-generated-1.0.0/cpp"
+  SOURCE_DIR "/path/to/tsl-generated-1.0.0/bundles/cpp-avx2/cpp"
 )
 FetchContent_MakeAvailable(tsl)
 target_link_libraries(my_target PRIVATE tsl::tsl)
@@ -55,7 +68,7 @@ Cargo feature.
 
 ```toml
 [dependencies]
-tsl = { path = "/path/to/tsl-generated-1.0.0/rust" }
+tsl = { path = "/path/to/tsl-generated-1.0.0/bundles/rust-release/rust" }
 ```
 
 The release package workflow performs these steps from a fresh extraction and

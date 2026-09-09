@@ -18,8 +18,8 @@ For a tag, the release workflow:
 1. resolves the tag to the checked-out commit and validates product, Cargo,
    compiler, editor, MSRV, status, and changelog metadata;
 2. waits for all five required reusable workflows;
-3. downloads the generated library, generated documentation, and five native
-   VSIX artifacts from that same workflow run;
+3. downloads the deployment-bundled generated library, generated documentation,
+   and five native VSIX artifacts from that same workflow run;
 4. assembles the exact asset set, checks every digest and embedded component
    identity, and writes `release-manifest.json` plus `SHA256SUMS`;
 5. uploads that verified directory as an Actions artifact;
@@ -44,10 +44,14 @@ and documentation tarballs with:
 - directory/executable mode `0755` and regular-file mode `0644`; and
 - no symbolic links or special files.
 
-The package workflow builds each archive twice and requires `cmp` to report
-byte identity. Release assembly verifies the normalized metadata again, then
-checks the generated `rust/Cargo.toml` version and `rust-version` against the
-release contract.
+The package workflow builds each release archive twice and requires `cmp` to
+report byte identity. Release assembly verifies the normalized metadata again,
+validates the root bundle manifest against the checked-in release-contract
+snapshot, and checks every declared bundle path, inner artifact inventory and
+file digest, artifact-manifest digest, and extracted size. It then checks the
+combined Rust bundle's `Cargo.toml` version and `rust-version` against the
+release contract. The full all-profile tree used to build documentation is an
+internal CI artifact, not the release payload.
 
 Each VSIX is already built and smoke-tested on its native OS/architecture. The
 release assembler additionally verifies its sidecar digest and embedded
@@ -65,12 +69,19 @@ The local metadata and archive primitives can be checked with:
 
 ```bash
 python .github/scripts/release_production.py metadata --tag v1.0.0-rc.1
+python .github/scripts/build_release_bundles.py \
+  ./tslctmp/ci-release-bundles
 python .github/scripts/release_production.py archive \
   --kind generated \
-  --source ./tslctmp/ci-generated \
+  --source ./tslctmp/ci-release-bundles \
   --output ./tslctmp/tsl-generated-test.tar.gz \
   --epoch "$(git show -s --format=%ct HEAD)"
 ```
+
+The generated archive contains one standalone C++ project per release profile
+and one combined Rust release crate. This keeps the public asset set small while
+allowing a consumer to extract only its deployment bundle; extracting the whole
+archive remains possible for auditing.
 
 The first real candidate is created by pushing an immutable
 `v1.0.0-rc.1` tag. Candidate tags require the product status
@@ -82,8 +93,8 @@ candidate policy from being presented as a final release.
 Candidate staging can run before native evidence is available. A final release
 cannot. Its exact native evidence filenames and IDs are owned by
 `supplementary/release/tsl-v1-production.json`; release assembly requires both
-the SVE and RVV/CHORYS records and verifies that they name the generated
-manifest shipped in the release.
+the SVE and RVV/CHORYS records and verifies that they name the generated bundle
+index shipped in the release and the exact target bundle's artifact manifest.
 
 The evidence files are deliberately separate from compiler semantics. They are
 execution attestations, not inputs that affect selection or lowering. The
@@ -95,8 +106,9 @@ Start from the non-accepted examples in
 configured by `supplementary/release/tsl-v1-production.json` only after replacing
 every placeholder with observed evidence. The release validator requires:
 
-- the exact generated-manifest digest and one shared compiler-input digest
-  across the SVE and RVV records;
+- the exact generated bundle-index digest and one shared compiler-input digest
+  across the SVE and RVV records, plus the exact `cpp-sve` or `cpp-rvv` inner
+  artifact-manifest digest used by each run;
 - native machine identity, feature report, OS, compiler version, exact flags,
   and observed vector length(s);
 - non-empty generated-value and differential suites with every planned case
@@ -113,9 +125,10 @@ native upstream CHORYS record.
 The evidence does not contain the final Git commit: doing so would be circular,
 because committing that evidence changes the commit. Instead, the compiler-
 input digest proves that both native runs used the same generation inputs, the
-generated-manifest digest proves that they used the package artifact inventory,
-and the release manifest hashes both evidence files alongside the final source
-commit. Adding the completed attestations must not change either tested digest.
+bundle-index and inner-manifest digests prove that they used the packaged target
+project, and the release manifest hashes both evidence files alongside the final
+source commit. Adding the completed attestations must not change either tested
+digest.
 
 The showcase is a generated-library consumer rather than compiler semantics:
 

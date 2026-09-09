@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from hashlib import sha256
 import json
+import os
 from pathlib import Path
+from pathlib import PurePosixPath
 import shutil
 import subprocess
+import tarfile
 
 import pytest
 
@@ -63,24 +67,31 @@ def test_scalable_filter_gather_transform_matches_oracle_at_three_vector_lengths
     runner_path = shutil.which(runner_name)
     if compiler is None or runner_path is None or not sysroot.is_dir():
         pytest.skip(
-            f"{profile_name} showcase needs {compiler_name}, {runner_name}, and {sysroot}"
+            f"{profile_name} showcase needs {compiler_name}, {runner_name}, "
+            f"and {sysroot}"
         )
     profile = machine_profiles[profile_name]
     assert profile.runner is not None
     assert len(profile.runner.executions) == 3
 
-    result = generate_project(
-        [data_root],
-        machine_profiles_path=machine_profiles_path,
-        primitives=_PRIMITIVES,
-        profiles=(profile_name,),
-        type_tags=("si32",),
-        backends=("cpp",),
-    )
-    assert not has_errors(result.diagnostics), result.diagnostics
-    generated = tmp_path / "generated"
-    report = write_artifacts(result.artifacts, generated)
-    assert not has_errors(report.diagnostics), report.diagnostics
+    release_archive = os.environ.get("TSL_RELEASE_ARCHIVE")
+    if release_archive:
+        generated = _extract_release_bundle(
+            Path(release_archive), profile_name=profile_name, destination=tmp_path
+        )
+    else:
+        result = generate_project(
+            [data_root],
+            machine_profiles_path=machine_profiles_path,
+            primitives=_PRIMITIVES,
+            profiles=(profile_name,),
+            type_tags=("si32",),
+            backends=("cpp",),
+        )
+        assert not has_errors(result.diagnostics), result.diagnostics
+        generated = tmp_path / "generated"
+        report = write_artifacts(result.artifacts, generated)
+        assert not has_errors(report.diagnostics), report.diagnostics
 
     binary = tmp_path / f"scalable-showcase-{profile_name}"
     compiled = subprocess.run(
@@ -138,3 +149,57 @@ def test_scalable_filter_gather_transform_matches_oracle_at_three_vector_lengths
         observations.append(payload)
 
     assert len({item["runtime_lanes"] for item in observations}) == 3
+
+
+def _extract_release_bundle(
+    archive_path: Path, *, profile_name: str, destination: Path
+) -> Path:
+    assert archive_path.is_file(), f"release archive does not exist: {archive_path}"
+    bundle_id = f"cpp-{profile_name}"
+    with tarfile.open(archive_path, "r:gz") as archive:
+        members = archive.getmembers()
+        roots = {PurePosixPath(member.name).parts[0] for member in members}
+        assert len(roots) == 1, "release archive must contain exactly one root"
+        archive_root = next(iter(roots))
+        manifest_name = f"{archive_root}/.tsl-release-bundles.json"
+        manifest_members = [
+            member for member in members if member.name == manifest_name
+        ]
+        assert len(manifest_members) == 1
+        manifest_handle = archive.extractfile(manifest_members[0])
+        assert manifest_handle is not None
+        manifest = json.load(manifest_handle)
+        records = [item for item in manifest["bundles"] if item["id"] == bundle_id]
+        assert len(records) == 1
+        record = records[0]
+        assert record["backend"] == "cpp"
+        assert record["profiles"] == [profile_name]
+        assert record["generated_scope"] == [profile_name]
+        relative = PurePosixPath(record["path"])
+        assert relative == PurePosixPath("bundles") / bundle_id
+        bundle_prefix = PurePosixPath(archive_root) / relative
+        selected = [
+            member
+            for member in members
+            if PurePosixPath(member.name) == bundle_prefix
+            or bundle_prefix in PurePosixPath(member.name).parents
+        ]
+        assert selected, f"release archive has no {bundle_id} members"
+        assert all(member.isdir() or member.isfile() for member in selected)
+        inner_name = f"{bundle_prefix.as_posix()}/.tslc-manifest.json"
+        inner_members = [member for member in selected if member.name == inner_name]
+        assert len(inner_members) == 1
+        inner_handle = archive.extractfile(inner_members[0])
+        assert inner_handle is not None
+        assert sha256(inner_handle.read()).hexdigest() == record[
+            "artifact_manifest_sha256"
+        ]
+        archive.extractall(destination, members=selected, filter="data")
+    generated = destination / bundle_prefix
+    assert (generated / "cpp" / "CMakeLists.txt").is_file()
+    public_api = json.loads(
+        (generated / "cpp" / "public-api.json").read_text(encoding="utf-8")
+    )
+    assert public_api["backend"] == "cpp"
+    assert public_api["scope"] == [profile_name]
+    return generated

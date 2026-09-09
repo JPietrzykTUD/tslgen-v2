@@ -20,6 +20,15 @@ import tomllib
 from typing import Any, Mapping, Sequence
 from zipfile import BadZipFile, ZipFile
 
+from release_bundle_package import (
+    GeneratedBundleConfig,
+    GeneratedBundleRecord,
+    GeneratedPackageIndex,
+    ReleaseBundleError,
+    load_generated_bundle_config,
+    verify_generated_package,
+)
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG = REPO_ROOT / "supplementary/release/tsl-v1-production.json"
@@ -46,6 +55,7 @@ class ReleaseProductionConfig:
     compiler_project: Path
     editor_package: Path
     changelog: Path
+    generated_bundles: GeneratedBundleConfig
     editor_targets: tuple[str, ...]
     native_evidence: tuple[NativeEvidenceSpec, ...]
 
@@ -116,12 +126,17 @@ def load_config(
         raise ReleaseProductionError(
             "native evidence must require exactly SVE and RVV/CHORYS targets"
         )
+    try:
+        generated_bundles = load_generated_bundle_config(payload, root=root)
+    except ReleaseBundleError as error:
+        raise ReleaseProductionError(str(error)) from error
     return ReleaseProductionConfig(
         release_policy=_rooted(root, payload, "release_policy"),
         generated_config=_rooted(root, payload, "generated_config"),
         compiler_project=_rooted(root, payload, "compiler_project"),
         editor_package=_rooted(root, payload, "editor_package"),
         changelog=_rooted(root, payload, "changelog"),
+        generated_bundles=generated_bundles,
         editor_targets=targets,
         native_evidence=tuple(evidence),
     )
@@ -366,7 +381,9 @@ def assemble_release(
         epoch=epoch,
         expected_root=f"tsl-docs-{metadata.product_version}",
     )
-    _verify_generated_package_metadata(output_dir / generated_name, metadata)
+    generated_package = _verify_generated_package_metadata(
+        output_dir / generated_name, metadata, config
+    )
 
     payloads: list[tuple[str, str, str]] = [
         ("generated-library", generated_name, "application/gzip"),
@@ -381,7 +398,7 @@ def assemble_release(
         _copy_new(source, output_dir / filename)
         payloads.append((f"vscode-{target}", filename, "application/vsix"))
 
-    generated_manifest_sha256 = _generated_manifest_digest(output_dir / generated_name)
+    generated_bundle_index_sha256 = generated_package.manifest_sha256
     evidence_records: list[dict[str, object]] = []
     require_evidence = metadata.release_kind == "final"
     for spec in config.native_evidence:
@@ -396,7 +413,8 @@ def assemble_release(
             source,
             spec=spec,
             metadata=metadata,
-            generated_manifest_sha256=generated_manifest_sha256,
+            generated_bundle_index_sha256=generated_bundle_index_sha256,
+            generated_bundle=_native_target_bundle(generated_package, spec),
         )
         _copy_new(source, output_dir / spec.filename)
         payloads.append((spec.evidence_id, spec.filename, "application/json"))
@@ -432,7 +450,7 @@ def assemble_release(
             "vscode-tsl": metadata.editor_version,
             "rust_msrv": metadata.rust_msrv,
         },
-        "generated_manifest_sha256": generated_manifest_sha256,
+        "generated_bundle_index_sha256": generated_bundle_index_sha256,
         "native_evidence": evidence_records,
         "artifacts": artifact_records,
     }
@@ -491,7 +509,8 @@ def verify_release_assets(
     filenames: list[str] = []
     artifact_ids: list[str] = []
     checksum_lines: list[str] = []
-    generated_manifest_sha256: str | None = None
+    generated_bundle_index_sha256: str | None = None
+    generated_package: GeneratedPackageIndex | None = None
     evidence_paths: dict[str, Path] = {}
     expected_artifacts = {
         "generated-library": (
@@ -548,8 +567,10 @@ def verify_release_assets(
                 expected_root=f"tsl-{kind}-{metadata.product_version}",
             )
             if kind == "generated":
-                _verify_generated_package_metadata(path, metadata)
-                generated_manifest_sha256 = _generated_manifest_digest(path)
+                generated_package = _verify_generated_package_metadata(
+                    path, metadata, config
+                )
+                generated_bundle_index_sha256 = generated_package.manifest_sha256
         elif artifact_id.startswith("vscode-"):
             _verify_vsix_identity(
                 path,
@@ -578,10 +599,12 @@ def verify_release_assets(
             "release manifest artifact identity set is invalid"
         )
     if (
-        generated_manifest_sha256 is None
-        or manifest.get("generated_manifest_sha256") != generated_manifest_sha256
+        generated_bundle_index_sha256 is None
+        or generated_package is None
+        or manifest.get("generated_bundle_index_sha256")
+        != generated_bundle_index_sha256
     ):
-        raise ReleaseProductionError("release generated-manifest identity is stale")
+        raise ReleaseProductionError("release generated bundle-index identity is stale")
     expected_evidence: list[dict[str, object]] = []
     for spec in config.native_evidence:
         path = evidence_paths.get(spec.evidence_id)
@@ -592,7 +615,8 @@ def verify_release_assets(
                 path,
                 spec=spec,
                 metadata=metadata,
-                generated_manifest_sha256=generated_manifest_sha256,
+                generated_bundle_index_sha256=generated_bundle_index_sha256,
+                generated_bundle=_native_target_bundle(generated_package, spec),
             )
         )
     _verify_shared_native_input_identity(expected_evidence)
@@ -621,7 +645,8 @@ def _validate_native_evidence(
     *,
     spec: NativeEvidenceSpec,
     metadata: ReleaseMetadata,
-    generated_manifest_sha256: str,
+    generated_bundle_index_sha256: str,
+    generated_bundle: GeneratedBundleRecord,
 ) -> dict[str, object]:
     payload = _read_json(path)
     required = {
@@ -629,7 +654,11 @@ def _validate_native_evidence(
         "id": spec.evidence_id,
         "target": spec.target,
         "product_version": metadata.product_version,
-        "generated_manifest_sha256": generated_manifest_sha256,
+        "generated_bundle_index_sha256": generated_bundle_index_sha256,
+        "generated_bundle_id": generated_bundle.bundle_id,
+        "generated_bundle_manifest_sha256": (
+            generated_bundle.artifact_manifest_sha256
+        ),
         "result": "passed",
     }
     for key, expected in required.items():
@@ -732,7 +761,11 @@ def _validate_native_evidence(
         "sha256": _file_sha256(path),
         "target": spec.target,
         "compiler_input_sha256": input_digest,
-        "generated_manifest_sha256": generated_manifest_sha256,
+        "generated_bundle_index_sha256": generated_bundle_index_sha256,
+        "generated_bundle_id": generated_bundle.bundle_id,
+        "generated_bundle_manifest_sha256": (
+            generated_bundle.artifact_manifest_sha256
+        ),
         "runtime_vector_bits": vector_bits,
         "showcase_binary_sha256": showcase_binary,
         **(
@@ -864,23 +897,30 @@ def _verify_shared_native_input_identity(
 def _verify_generated_package_metadata(
     archive_path: Path,
     metadata: ReleaseMetadata,
-) -> None:
-    cargo_bytes = _archive_member_bytes(archive_path, "rust/Cargo.toml")
+    config: ReleaseProductionConfig,
+) -> GeneratedPackageIndex:
     try:
-        cargo = tomllib.loads(cargo_bytes.decode("utf-8"))
-    except (UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
-        raise ReleaseProductionError("generated Cargo.toml is invalid") from exc
-    package = cargo.get("package")
-    if not isinstance(package, dict):
-        raise ReleaseProductionError("generated Cargo.toml has no [package] table")
-    if package.get("version") != metadata.product_version:
-        raise ReleaseProductionError(
-            "generated Cargo version does not match release product"
+        return verify_generated_package(
+            archive_path,
+            product_id=metadata.product_id,
+            product_version=metadata.product_version,
+            rust_msrv=metadata.rust_msrv,
+            config=config.generated_bundles,
         )
-    if package.get("rust-version") != metadata.rust_msrv:
+    except ReleaseBundleError as error:
+        raise ReleaseProductionError(str(error)) from error
+
+
+def _native_target_bundle(
+    package: GeneratedPackageIndex,
+    spec: NativeEvidenceSpec,
+) -> GeneratedBundleRecord:
+    try:
+        return package.exact_bundle("cpp", (spec.target,))
+    except ReleaseBundleError as error:
         raise ReleaseProductionError(
-            "generated Cargo MSRV does not match release metadata"
-        )
+            f"native evidence target {spec.target!r} has no exact C++ bundle"
+        ) from error
 
 
 def _verify_vsix_identity(
@@ -916,32 +956,6 @@ def _verify_vsix_identity(
             )
     if package.get("version") != metadata.editor_version:
         raise ReleaseProductionError(f"VSIX {path.name} has a stale extension version")
-
-
-def _generated_manifest_digest(archive_path: Path) -> str:
-    contents = _archive_member_bytes(archive_path, ".tslc-manifest.json")
-    return sha256(contents).hexdigest()
-
-
-def _archive_member_bytes(archive_path: Path, suffix: str) -> bytes:
-    suffix_path = PurePosixPath(suffix)
-    with tarfile.open(archive_path, "r:gz") as archive:
-        matches = [
-            member
-            for member in archive.getmembers()
-            if not member.isdir()
-            and PurePosixPath(*PurePosixPath(member.name).parts[1:]) == suffix_path
-        ]
-        if len(matches) != 1:
-            raise ReleaseProductionError(
-                f"generated archive must contain exactly one {suffix}"
-            )
-        handle = archive.extractfile(matches[0])
-        if handle is None:
-            raise ReleaseProductionError(
-                f"generated archive member is not a file: {suffix}"
-            )
-        return handle.read()
 
 
 def _verify_sidecar(path: Path, checksum_path: Path) -> None:

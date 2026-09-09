@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 import importlib.util
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import sys
 import tarfile
 from types import ModuleType
@@ -19,6 +19,9 @@ _SCRIPT = _ROOT / ".github/scripts/release_production.py"
 
 
 def _load_release_production() -> ModuleType:
+    script_root = str(_SCRIPT.parent)
+    if script_root not in sys.path:
+        sys.path.insert(0, script_root)
     spec = importlib.util.spec_from_file_location("release_production", _SCRIPT)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -28,6 +31,7 @@ def _load_release_production() -> ModuleType:
 
 
 release_production = _load_release_production()
+release_bundle_package = sys.modules["release_bundle_package"]
 
 
 def _write_vsix(path: Path, *, target: str, commit: str) -> None:
@@ -57,7 +61,8 @@ def _native_evidence_payload(
     target: str,
     product_version: str = "1.0.0",
     compiler_input_sha256: str = "b" * 64,
-    generated_manifest_sha256: str = "c" * 64,
+    generated_bundle_index_sha256: str = "c" * 64,
+    generated_bundle_manifest_sha256: str = "e" * 64,
     requires_chorys: bool = False,
 ) -> dict[str, object]:
     payload: dict[str, object] = {
@@ -66,7 +71,9 @@ def _native_evidence_payload(
         "target": target,
         "product_version": product_version,
         "compiler_input_sha256": compiler_input_sha256,
-        "generated_manifest_sha256": generated_manifest_sha256,
+        "generated_bundle_index_sha256": generated_bundle_index_sha256,
+        "generated_bundle_id": f"cpp-{target}",
+        "generated_bundle_manifest_sha256": generated_bundle_manifest_sha256,
         "result": "passed",
         "skips": [],
         "reviewer": "TSL release reviewer",
@@ -138,6 +145,120 @@ def _native_evidence_payload(
     return payload
 
 
+def _native_bundle(
+    target: str, *, manifest_sha256: str = "e" * 64
+) -> object:
+    return release_bundle_package.GeneratedBundleRecord(
+        bundle_id=f"cpp-{target}",
+        backend_id="cpp",
+        profiles=(target,),
+        generated_scope=(target,),
+        relative_path=PurePosixPath("bundles") / f"cpp-{target}",
+        artifact_manifest_sha256=manifest_sha256,
+    )
+
+
+def _write_generated_package(
+    root: Path, *, config: object, version: str = "1.0.0", rust_msrv: str = "1.89"
+) -> None:
+    root.mkdir()
+    contract = release_production._read_json(
+        config.generated_bundles.release_contract
+    )
+    records: list[dict[str, object]] = []
+    for expected in release_bundle_package.expected_generated_bundles(
+        contract, config.generated_bundles
+    ):
+        bundle_root = root / Path(expected.relative_path)
+        backend_root = bundle_root / expected.backend_id
+        backend_root.mkdir(parents=True)
+        if expected.backend_id == "cpp":
+            product_file = backend_root / "CMakeLists.txt"
+            product_file.write_text(
+                "cmake_minimum_required(VERSION 3.16)\n", encoding="utf-8"
+            )
+        else:
+            product_file = backend_root / "Cargo.toml"
+            product_file.write_text(
+                "[package]\n"
+                f'version = "{version}"\n'
+                f'rust-version = "{rust_msrv}"\n',
+                encoding="utf-8",
+            )
+        public_api = backend_root / "public-api.json"
+        public_api.write_text(
+            json.dumps(
+                {
+                    "backend": expected.backend_id,
+                    "scope": list(expected.generated_scope),
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        artifact_manifest = bundle_root / ".tslc-manifest.json"
+        artifact_manifest.write_text(
+            json.dumps(
+                {
+                    "artifacts": [
+                        {
+                            "logical_path": (
+                                f"{expected.backend_id}/{product_file.name}"
+                            ),
+                            "digest": release_production._file_sha256(
+                                product_file
+                            ),
+                        },
+                        {
+                            "logical_path": f"{expected.backend_id}/public-api.json",
+                            "digest": release_production._file_sha256(public_api),
+                        }
+                    ],
+                    "version": 1,
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        records.append(
+            {
+                "id": expected.bundle_id,
+                "backend": expected.backend_id,
+                "profiles": list(expected.profiles),
+                "generated_scope": list(expected.generated_scope),
+                "path": expected.relative_path.as_posix(),
+                "artifact_manifest_sha256": release_production._file_sha256(
+                    artifact_manifest
+                ),
+                "extracted_size_bytes": sum(
+                    path.stat().st_size
+                    for path in bundle_root.rglob("*")
+                    if path.is_file()
+                ),
+            }
+        )
+    (root / ".tsl-release-bundles.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "product": {
+                    "id": "tsl-generated-library",
+                    "version": version,
+                },
+                "release_contract_sha256": release_bundle_package.json_sha256(
+                    contract
+                ),
+                "layout": config.generated_bundles.layout_id,
+                "bundles": records,
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (root / "README.md").write_text("generated bundles\n", encoding="utf-8")
+
+
 def test_release_metadata_keeps_product_and_component_versions_distinct() -> None:
     config = release_production.load_config()
 
@@ -185,22 +306,105 @@ def test_normalized_archives_are_byte_reproducible(tmp_path: Path) -> None:
     assert modes["tsl-generated-1.0.0/bin/tool"] == 0o755
 
 
+def test_generated_package_index_is_exact_and_detects_stale_bundle_data(
+    tmp_path: Path,
+) -> None:
+    config = release_production.load_config()
+    metadata = release_production.release_metadata("v1.0.0-rc.1", config=config)
+    source = tmp_path / "generated"
+    _write_generated_package(source, config=config)
+    archive = tmp_path / "generated.tar.gz"
+    release_production.write_deterministic_archive(
+        source, archive, prefix="tsl-generated-1.0.0", epoch=1
+    )
+
+    index = release_production._verify_generated_package_metadata(
+        archive, metadata, config
+    )
+
+    contract = release_production._read_json(
+        config.generated_bundles.release_contract
+    )
+    assert len(index.bundles) == sum(
+        len(backend["profiles"]) if backend["id"] == "cpp" else 1
+        for backend in contract["backends"]
+    )
+    assert index.exact_bundle("cpp", ("sve",)).bundle_id == "cpp-sve"
+    assert index.exact_bundle("cpp", ("rvv",)).bundle_id == "cpp-rvv"
+
+    scalar_cmake = source / "bundles/cpp-scalar/cpp/CMakeLists.txt"
+    scalar_cmake.write_text(
+        "cmake_minimum_required(VERSION 3.15)\n", encoding="utf-8"
+    )
+    tampered_archive = tmp_path / "tampered.tar.gz"
+    release_production.write_deterministic_archive(
+        source, tampered_archive, prefix="tsl-generated-1.0.0", epoch=1
+    )
+    with pytest.raises(
+        release_production.ReleaseProductionError,
+        match="stale artifact digest",
+    ):
+        release_production._verify_generated_package_metadata(
+            tampered_archive, metadata, config
+        )
+    scalar_cmake.write_text(
+        "cmake_minimum_required(VERSION 3.16)\n", encoding="utf-8"
+    )
+
+    manifest_path = source / ".tsl-release-bundles.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["bundles"][0]["extracted_size_bytes"] += 1
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    stale_archive = tmp_path / "stale.tar.gz"
+    release_production.write_deterministic_archive(
+        source, stale_archive, prefix="tsl-generated-1.0.0", epoch=1
+    )
+    with pytest.raises(
+        release_production.ReleaseProductionError,
+        match="extracted size is stale",
+    ):
+        release_production._verify_generated_package_metadata(
+            stale_archive, metadata, config
+        )
+
+
+def test_generated_package_verifier_follows_configured_rust_grouping(
+    tmp_path: Path,
+) -> None:
+    config = release_production.load_config()
+    config = replace(
+        config,
+        generated_bundles=replace(
+            config.generated_bundles,
+            backend_grouping=(
+                ("cpp", "per_profile"),
+                ("rust", "per_profile"),
+            ),
+        ),
+    )
+    metadata = release_production.release_metadata("v1.0.0-rc.1", config=config)
+    source = tmp_path / "generated"
+    _write_generated_package(source, config=config)
+    archive = tmp_path / "generated.tar.gz"
+    release_production.write_deterministic_archive(
+        source, archive, prefix="tsl-generated-1.0.0", epoch=1
+    )
+
+    index = release_production._verify_generated_package_metadata(
+        archive, metadata, config
+    )
+
+    rust_bundles = [item for item in index.bundles if item.backend_id == "rust"]
+    assert len(rust_bundles) > 1
+    assert all(len(item.profiles) == 1 for item in rust_bundles)
+
+
 def test_release_assembly_is_exact_verified_and_never_replaced(tmp_path: Path) -> None:
     config = release_production.load_config()
     metadata = release_production.release_metadata("v1.0.0-rc.1", config=config)
     epoch = 1_700_000_000
     generated_source = tmp_path / "generated"
-    generated_source.mkdir()
-    (generated_source / ".tslc-manifest.json").write_text(
-        '{"schema_version":1}\n', encoding="utf-8"
-    )
-    cargo = generated_source / "rust" / "Cargo.toml"
-    cargo.parent.mkdir()
-    cargo.write_text(
-        '[package]\nversion = "1.0.0"\nrust-version = "1.89"\n',
-        encoding="utf-8",
-    )
-    (generated_source / "README.md").write_text("generated\n", encoding="utf-8")
+    _write_generated_package(generated_source, config=config)
     docs_source = tmp_path / "docs"
     docs_source.mkdir()
     (docs_source / "index.html").write_text("<h1>TSL</h1>\n", encoding="utf-8")
@@ -289,14 +493,7 @@ def test_final_release_fails_closed_without_native_evidence(tmp_path: Path) -> N
         config=config,
     )
     generated_source = tmp_path / "generated"
-    generated_source.mkdir()
-    (generated_source / ".tslc-manifest.json").write_text("{}\n", encoding="utf-8")
-    cargo = generated_source / "rust" / "Cargo.toml"
-    cargo.parent.mkdir()
-    cargo.write_text(
-        '[package]\nversion = "1.0.0"\nrust-version = "1.89"\n',
-        encoding="utf-8",
-    )
+    _write_generated_package(generated_source, config=config)
     docs_source = tmp_path / "docs"
     docs_source.mkdir()
     (docs_source / "index.html").write_text("docs\n", encoding="utf-8")
@@ -337,14 +534,19 @@ def test_final_release_fails_closed_without_native_evidence(tmp_path: Path) -> N
 
     evidence_dir = tmp_path / "evidence"
     evidence_dir.mkdir()
-    generated_manifest_sha256 = release_production._generated_manifest_digest(
-        generated_archive
+    generated_package = release_production._verify_generated_package_metadata(
+        generated_archive, final, config
     )
+    generated_bundle_index_sha256 = generated_package.manifest_sha256
     for spec in config.native_evidence:
+        bundle = generated_package.exact_bundle("cpp", (spec.target,))
         payload = _native_evidence_payload(
             evidence_id=spec.evidence_id,
             target=spec.target,
-            generated_manifest_sha256=generated_manifest_sha256,
+            generated_bundle_index_sha256=generated_bundle_index_sha256,
+            generated_bundle_manifest_sha256=(
+                bundle.artifact_manifest_sha256
+            ),
             requires_chorys=spec.requires_chorys,
         )
         (evidence_dir / spec.filename).write_text(
@@ -398,7 +600,8 @@ def test_native_evidence_requires_reproducible_suites_and_actual_chorys(
                 path,
                 spec=spec,
                 metadata=metadata,
-                generated_manifest_sha256="c" * 64,
+                generated_bundle_index_sha256="c" * 64,
+                generated_bundle=_native_bundle(spec.target),
             )
         )
 
@@ -422,7 +625,8 @@ def test_native_evidence_requires_reproducible_suites_and_actual_chorys(
             invalid_path,
             spec=rvv_spec,
             metadata=metadata,
-            generated_manifest_sha256="c" * 64,
+            generated_bundle_index_sha256="c" * 64,
+            generated_bundle=_native_bundle(rvv_spec.target),
         )
 
 
@@ -447,6 +651,7 @@ def test_native_evidence_must_share_compiler_input_identity() -> None:
         ("skipped_case", "generated_values suite"),
         ("showcase_binary", "scalable_showcase result"),
         ("showcase_shape", "scalable_showcase run"),
+        ("bundle", "generated_bundle_id"),
         ("placeholder", "invalid reviewer"),
     ),
 )
@@ -485,6 +690,8 @@ def test_native_evidence_rejects_incomplete_or_placeholder_claims(
         showcase["binary_sha256"] = "not-a-digest"
     elif failure == "showcase_shape":
         runs[0]["tail"] = 2
+    elif failure == "bundle":
+        payload["generated_bundle_id"] = "cpp-rvv"
     else:
         payload["reviewer"] = "REPLACE_WITH_REVIEWER"
     path = tmp_path / f"invalid-{failure}.json"
@@ -495,7 +702,8 @@ def test_native_evidence_rejects_incomplete_or_placeholder_claims(
             path,
             spec=spec,
             metadata=metadata,
-            generated_manifest_sha256="c" * 64,
+            generated_bundle_index_sha256="c" * 64,
+            generated_bundle=_native_bundle(spec.target),
         )
 
 

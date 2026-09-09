@@ -114,8 +114,9 @@ throughput, fallback-cost, or other performance claims.
 ## Native release-candidate checklist
 
 Before tagging `v1.0.0`, produce native SVE and RVV attestations that reference
-the same compiler-input and artifact-manifest identity as the accepted generated
-product and record:
+the same compiler-input and release bundle-index identity. Each record must also
+name the exact target bundle (`cpp-sve` or `cpp-rvv`) and its inner generated
+artifact-manifest digest, and record:
 
 - machine/vendor/model and architectural feature report;
 - operating system, compiler executable/version, and exact flags;

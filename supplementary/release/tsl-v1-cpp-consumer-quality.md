@@ -130,11 +130,24 @@ configured build trees, were:
 
 The per-consumer compile cost and 50.7 MB compressed delivery are not v1 use or
 download blockers. The 1.73 GB extracted all-profile tree and formatter cost are
-material packaging risks, however. They should be addressed in Slice 12 with
-profile/family-sharded release archives or an equally explicit packaging
-boundary. A compiler-header deduplication refactor is not justified in Slice 9:
-it would change the generated architecture despite the measured consumer
-translation units completing in roughly two to three seconds.
+material packaging risks, however. Slice 15 addresses them without changing
+compiler architecture: the single release archive contains a standalone project
+per C++ profile and one combined Rust crate, and consumers selectively extract
+only their deployment bundle. The full reference tree remains an internal
+documentation/stress artifact. A compiler-header deduplication refactor is not
+justified for v1: it would change the generated architecture despite the
+measured consumer translation units completing in roughly two to three seconds.
+
+The complete Slice 15 package build generated and formatted all 30 deployment
+bundles in approximately 29.5 minutes. The deterministic archive was 56,997,715
+bytes; its aggregate audit extraction was 2,177,610,277 bytes because common
+generated support is intentionally repeated across standalone projects. Normal
+C++ extraction is bounded to one 53,080,305–78,546,574-byte profile bundle; the
+combined six-profile Rust crate is 192,807,970 bytes. Two independently written
+archives were byte-identical. Clean selectively extracted CMake/Cargo consumers
+passed, and the packaged `cpp-sve`/`cpp-rvv` showcase passed all six QEMU vector-
+length executions. This closes the distribution concern without presenting the
+aggregate audit extraction as the installation path.
 
 ## Reproduction
 

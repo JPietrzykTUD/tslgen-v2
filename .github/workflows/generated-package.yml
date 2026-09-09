@@ -67,7 +67,8 @@ jobs:
 
     env:
       TSLC_CI_IMAGE: ${{ needs.scope.outputs.ci_image }}
-      TSLC_CI_OUTPUT: ./tslctmp/ci-generated
+      TSLC_CI_OUTPUT: ./tslctmp/ci-release-bundles
+      TSLC_CI_REFERENCE: ./tslctmp/ci-generated-reference
 
     steps:
       - name: Check out repository
@@ -86,24 +87,37 @@ jobs:
             "tslctmp/ci-logs/generated-package/docker-pull.log" \
             docker pull "${TSLC_CI_IMAGE}"
 
-      - name: Generate package output
+      - name: Generate full documentation and validation reference
         run: |
           bash .github/scripts/run_with_log.sh \
-            "tslctmp/ci-logs/generated-package/generate.log" \
+            "tslctmp/ci-logs/generated-package/generate-reference.log" \
             bash supplementary/ci/run_tslc_ci_container.sh \
-              -e TSLC_CI_OUTPUT="${TSLC_CI_OUTPUT}" \
+              -e TSLC_CI_REFERENCE="${TSLC_CI_REFERENCE}" \
               -- \
               bash -lc \
-                'bash .github/scripts/generate_distributable_project.sh "${TSLC_CI_OUTPUT}"'
+                'bash .github/scripts/generate_release_reference_project.sh \
+                  "${TSLC_CI_REFERENCE}"'
 
       - name: Verify generated consumers and examples
         run: |
           bash .github/scripts/run_with_log.sh \
             "tslctmp/ci-logs/generated-package/verify-consumers.log" \
             bash supplementary/ci/run_tslc_ci_container.sh \
+              -e TSLC_CI_REFERENCE="${TSLC_CI_REFERENCE}" \
+              -- \
+              bash -lc 'bash supplementary/ci/verify_generated_consumers.sh \
+                "${TSLC_CI_REFERENCE}"'
+
+      - name: Generate deployment-oriented release bundles
+        run: |
+          bash .github/scripts/run_with_log.sh \
+            "tslctmp/ci-logs/generated-package/generate-bundles.log" \
+            bash supplementary/ci/run_tslc_ci_container.sh \
               -e TSLC_CI_OUTPUT="${TSLC_CI_OUTPUT}" \
               -- \
-              bash -lc 'bash supplementary/ci/verify_generated_consumers.sh "${TSLC_CI_OUTPUT}"'
+              bash -lc \
+                'python .github/scripts/build_release_bundles.py \
+                  "${TSLC_CI_OUTPUT}"'
 
       - name: Package generated output
         run: |
@@ -126,6 +140,11 @@ jobs:
               cmp \
                 "tslctmp/artifacts/tsl-generated-${GITHUB_SHA}.tar.gz" \
                 "tslctmp/artifacts/tsl-generated-${GITHUB_SHA}-repro.tar.gz"
+              python .github/scripts/release_production.py archive \
+                --kind generated \
+                --source "${TSLC_CI_REFERENCE}" \
+                --output "tslctmp/artifacts/tsl-generated-reference-${GITHUB_SHA}.tar.gz" \
+                --epoch "${source_epoch}"
             '
 
       - name: Consume the packaged archive from clean projects
@@ -139,11 +158,29 @@ jobs:
                 'bash supplementary/ci/verify_release_archive_consumers.sh \
                   "${TSLC_RELEASE_ARCHIVE}"'
 
+      - name: Run the scalable showcase from packaged target bundles
+        run: |
+          bash .github/scripts/run_with_log.sh \
+            "tslctmp/ci-logs/generated-package/archive-scalable-showcase.log" \
+            bash supplementary/ci/run_tslc_ci_container.sh \
+              -e TSLC_RELEASE_ARCHIVE="tslctmp/artifacts/tsl-generated-${GITHUB_SHA}.tar.gz" \
+              -- \
+              bash -lc \
+                'PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds \
+                  tslc/tests/test_scalable_release_showcase.py'
+
       - name: Upload generated artifact package
         uses: actions/upload-artifact@v7
         with:
           name: tsl-generated-${{ github.sha }}
           path: tslctmp/artifacts/tsl-generated-${{ github.sha }}.tar.gz
+          if-no-files-found: error
+
+      - name: Upload internal documentation reference
+        uses: actions/upload-artifact@v7
+        with:
+          name: tsl-generated-reference-${{ github.sha }}
+          path: tslctmp/artifacts/tsl-generated-reference-${{ github.sha }}.tar.gz
           if-no-files-found: error
 
       - name: Upload package logs
@@ -180,13 +217,13 @@ jobs:
       - name: Download generated package
         uses: actions/download-artifact@v8
         with:
-          name: tsl-generated-${{ github.sha }}
+          name: tsl-generated-reference-${{ github.sha }}
           path: tslctmp/docs-input
 
       - name: Extract generated package
         run: |
           mkdir -p "${TSLC_CI_OUTPUT}"
-          tar -xzf "tslctmp/docs-input/tsl-generated-${GITHUB_SHA}.tar.gz" \
+          tar -xzf "tslctmp/docs-input/tsl-generated-reference-${GITHUB_SHA}.tar.gz" \
             -C "${TSLC_CI_OUTPUT}"
 
       - name: Log in to GHCR

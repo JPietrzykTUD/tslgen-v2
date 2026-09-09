@@ -28,21 +28,35 @@ cleanup() {
 trap cleanup EXIT
 
 mkdir "$run_root/extracted"
-tar -xzf "$archive" -C "$run_root/extracted"
-shopt -s nullglob
-archive_roots=("$run_root"/extracted/*)
-shopt -u nullglob
-if [[ "${#archive_roots[@]}" -ne 1 || ! -d "${archive_roots[0]}" ]]; then
+mapfile -t archive_roots < <(
+  tar -tzf "$archive" | awk -F/ 'NF > 0 {print $1}' | sort -u
+)
+if [[ "${#archive_roots[@]}" -ne 1 || -z "${archive_roots[0]}" ]]; then
   echo "generated release archive must contain exactly one root directory" >&2
   exit 1
 fi
-generated_root="${archive_roots[0]}"
-if [[ ! -f "$generated_root/.tslc-manifest.json" || \
-      ! -f "$generated_root/cpp/CMakeLists.txt" || \
-      ! -f "$generated_root/rust/Cargo.toml" ]]; then
-  echo "generated release archive is missing its C++, Rust, or manifest product" >&2
+archive_root="${archive_roots[0]}"
+tar -xzf "$archive" -C "$run_root/extracted" \
+  "$archive_root/.tsl-release-bundles.json" \
+  "$archive_root/bundles/cpp-scalar" \
+  "$archive_root/bundles/rust-release"
+generated_root="$run_root/extracted/$archive_root"
+cpp_bundle="$generated_root/bundles/cpp-scalar"
+rust_bundle="$generated_root/bundles/rust-release"
+if [[ ! -f "$generated_root/.tsl-release-bundles.json" || \
+      ! -f "$cpp_bundle/.tslc-manifest.json" || \
+      ! -f "$cpp_bundle/cpp/CMakeLists.txt" || \
+      ! -f "$rust_bundle/.tslc-manifest.json" || \
+      ! -f "$rust_bundle/rust/Cargo.toml" ]]; then
+  echo "generated release archive is missing its scalar C++ or Rust bundle" >&2
   exit 1
 fi
+jq -e '
+  .schema_version == 1
+  and .layout == "backend-deployment-bundles-v1"
+  and any(.bundles[]; .id == "cpp-scalar" and .profiles == ["scalar"])
+  and any(.bundles[]; .id == "rust-release" and (.profiles | length) > 0)
+' "$generated_root/.tsl-release-bundles.json" >/dev/null
 
 cp -R \
   "$repo_root/tslc/tests/fixtures/release/archive_cpp_consumer" \
@@ -50,7 +64,7 @@ cp -R \
 cmake \
   -S "$run_root/cpp-consumer" \
   -B "$run_root/cpp-build" \
-  -DTSL_GENERATED_ROOT="$generated_root"
+  -DTSL_GENERATED_ROOT="$cpp_bundle"
 cmake --build "$run_root/cpp-build"
 ctest --test-dir "$run_root/cpp-build" --output-on-failure
 
@@ -61,7 +75,7 @@ cp \
 cargo add \
   --quiet \
   --manifest-path "$run_root/rust-consumer/Cargo.toml" \
-  --path "$generated_root/rust" \
+  --path "$rust_bundle/rust" \
   tsl
 CARGO_TARGET_DIR="$run_root/rust-target" \
   cargo run --quiet --locked --manifest-path "$run_root/rust-consumer/Cargo.toml"

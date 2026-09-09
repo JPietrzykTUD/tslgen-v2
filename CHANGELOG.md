@@ -37,8 +37,9 @@ VS Code extension have independent version lines.
   Cargo features, with an exact generated generic fallback.
 - Runtime-scalable vectors use runtime lane counts. Fixed-width compatibility
   profiles remain distinct products.
-- Release use favors generated profile/type/primitive slices; the monolithic
-  all-profile tree is a reference and stress-test ceiling.
+- The release archive provides one standalone project per C++ profile and one
+  combined Rust crate, with a contract-bound bundle index. The monolithic
+  all-profile tree remains only an internal documentation and stress reference.
 
 ### Explicitly unsupported in v1
 
