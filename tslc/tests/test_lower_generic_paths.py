@@ -474,6 +474,28 @@ def test_generic_cast_mutates_native_output_register_directly(
         assert "from_array" not in lowered.body_text
 
 
+def test_cpp_intrinsic_register_reinterpretation_uses_portable_bit_cast(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles["avx"], "cast", ("si8",))
+        .selected
+        if selected.extension.name == "sse"
+        and selected.to_target == "si16"
+    )
+
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert lowered is not None
+    assert "::tsl::bit_cast<" in lowered.body_text
+    assert "reinterpret_cast<" not in lowered.body_text
+
+
 @pytest.mark.parametrize("extension", ["generic", "oneapi_fpga"])
 @pytest.mark.parametrize("primitive", ["convert_up", "convert_down"])
 def test_generic_like_width_conversions_mutate_native_registers_directly(

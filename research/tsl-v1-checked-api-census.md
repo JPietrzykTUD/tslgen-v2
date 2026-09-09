@@ -15,7 +15,7 @@ This generated maintenance report tracks reviewed evidence for the implemented d
 
 ## Inventory summary
 
-- Exact generated runtime-failure sites: 155
+- Exact generated runtime-failure sites: 156
 - Exact typed public callable identities with at least one `caller_unsafe` implementation: 33
 - Checked source-contract coverage gaps among those identities: 11
 - Applicable source safety-metadata gaps: 138 (26 require caller unsafety)
@@ -25,7 +25,7 @@ Runtime sites by classification:
 - dynamic precondition: 6
 - implementation hazard: 8
 - static well-formedness constraint: 23
-- tooling-only validation: 118
+- tooling-only validation: 119
 
 ## Reviewed semantic families
 
@@ -55,7 +55,7 @@ Runtime sites by classification:
 
 ## Exact generated runtime sites
 
-### `tooling_only` (118)
+### `tooling_only` (119)
 
 It is not part of a generated runtime API contract.
 
@@ -164,19 +164,20 @@ It is not part of a generated runtime API contract.
 - `tslc/src/tslc/value_tests/_render_rust_core.py:349` — owner `_scalar_result` — `assert` — `f" assert!(result.lane_eq(expected), "`
 - `tslc/src/tslc/value_tests/_render_rust_core.py:495` — owner `_status_pointer` — `assert_eq` — `f' assert_eq!(value, before, "{case.case_name}: failure modified output");',`
 - `tslc/src/tslc/value_tests/_render_rust_core.py:493` — owner `_status_pointer` — `assert` — `f' assert!(status <= 1, "{case.case_name}: invalid status {{status}}");',`
-- `tslc/src/tslc/value_tests/_render_rust_memory.py:344` — owner `_indexed_load` — `assert` — `f" for i in 0..{lanes} {{ assert!(result[i].lane_eq(expected[i]), "`
-- `tslc/src/tslc/value_tests/_render_rust_memory.py:395` — owner `_indexed_store` — `assert` — `f" for i in 0..{buflen} {{ assert!(data[i].lane_eq(expected[i]), "`
+- `tslc/src/tslc/value_tests/_render_rust_memory.py:350` — owner `_indexed_load` — `assert` — `f" for i in 0..{lanes} {{ assert!(result[i].lane_eq(expected[i]), "`
+- `tslc/src/tslc/value_tests/_render_rust_memory.py:401` — owner `_indexed_store` — `assert` — `f" for i in 0..{buflen} {{ assert!(data[i].lane_eq(expected[i]), "`
 - `tslc/src/tslc/value_tests/_render_rust_memory.py:41` — owner `_load` — `assert` — `f" for i in 0..{case.lanes} {{ assert!(result[i].lane_eq(expected[i]), "`
 - `tslc/src/tslc/value_tests/_render_rust_memory.py:130` — owner `_mask_pointer_load` — `assert_eq` — `f" assert_eq!(mask_bit(result as u64, {lane}), {bit}, "`
 - `tslc/src/tslc/value_tests/_render_rust_memory.py:174` — owner `_masked_pointer_load` — `assert` — `f" for i in 0..{case.lanes} {{ assert!(result[i].lane_eq(expected[i]), "`
 - `tslc/src/tslc/value_tests/_render_rust_memory.py:206` — owner `_masked_pointer_store` — `assert` — `f" for i in 0..{buflen} {{ assert!(buf[i].lane_eq(expected[i]), "`
 - `tslc/src/tslc/value_tests/_render_rust_memory.py:240` — owner `_memory_copy` — `assert` — `f" for i in 0..{dst_len} {{ assert!(dst[i].lane_eq(expected[i]), "`
-- `tslc/src/tslc/value_tests/_render_rust_memory.py:279` — owner `_pointer_free` — `assert` — `f' assert!(!ptr.is_null(), "{case.case_name}: setup allocation failed");',`
-- `tslc/src/tslc/value_tests/_render_rust_memory.py:259` — owner `_pointer_lifetime` — `assert_eq` — `f" assert_eq!((ptr as usize) % {alignment}usize, 0, "`
-- `tslc/src/tslc/value_tests/_render_rust_memory.py:255` — owner `_pointer_lifetime` — `assert` — `f' assert!(!ptr.is_null(), "{case.case_name}: null pointer");',`
+- `tslc/src/tslc/value_tests/_render_rust_memory.py:285` — owner `_pointer_free` — `assert` — `f' assert!(!ptr.is_null(), "{case.case_name}: setup allocation failed");',`
+- `tslc/src/tslc/value_tests/_render_rust_memory.py:265` — owner `_pointer_lifetime` — `assert_eq` — `f" assert_eq!((ptr as usize) % {alignment}usize, 0, "`
+- `tslc/src/tslc/value_tests/_render_rust_memory.py:261` — owner `_pointer_lifetime` — `assert` — `f' assert!(ptr.is_null(), "{case.case_name}: expected null pointer");'`
+- `tslc/src/tslc/value_tests/_render_rust_memory.py:258` — owner `_pointer_lifetime` — `assert` — `lines.append(f' assert!(!ptr.is_null(), "{case.case_name}: null pointer");')`
 - `tslc/src/tslc/value_tests/_render_rust_memory.py:96` — owner `_scalar_pointer_load` — `assert` — `f" assert!(result.lane_eq(expected), "`
 - `tslc/src/tslc/value_tests/_render_rust_memory.py:70` — owner `_store` — `assert` — `f" for i in 0..{buflen} {{ assert!(buf[i].lane_eq(expected[i]), "`
-- `tslc/src/tslc/value_tests/_render_rust_memory.py:421` — owner `_stream` — `assert_eq` — `f" assert_eq!(result.as_str(), {expected}, \"{case.case_name}\");",`
+- `tslc/src/tslc/value_tests/_render_rust_memory.py:427` — owner `_stream` — `assert_eq` — `f" assert_eq!(result.as_str(), {expected}, \"{case.case_name}\");",`
 
 ### `static_representation_or_lane_shape` (20)
 
@@ -197,11 +198,11 @@ Sizes, lane counts, and mask-storage capacity are compiler-owned specialization 
 - `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6134` — owner `transform_unary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_unary requires a vector with at least one lane", );`
 - `tslc/src/tslc/backend/assets/tsl_algorithm.rs:662` — owner `validate_integral_mask_vector` — `assert` — `assert!( lanes <= <V::ImaskType as IntegralMaskWord>::BITS, "{} requires an integral mask storage type with at least one bit per lane", helper_name, );`
 - `tslc/src/tslc/backend/assets/tsl_algorithm.rs:657` — owner `validate_integral_mask_vector` — `assert` — `assert!( lanes > 0, "{} requires a vector with at least one lane", helper_name, );`
-- `tslc/src/tslc/backend/assets/tsl_core.hpp:508` — owner `require_same_lanes` — `throw` — `throw std::invalid_argument( "lane-preserving conversion requires equal source and target lane counts" );`
-- `tslc/src/tslc/backend/assets/tsl_core.hpp:506` — owner `require_same_lanes` — `trap` — `__builtin_trap();`
+- `tslc/src/tslc/backend/assets/tsl_core.hpp:562` — owner `require_same_lanes` — `throw` — `throw std::invalid_argument( "lane-preserving conversion requires equal source and target lane counts" );`
+- `tslc/src/tslc/backend/assets/tsl_core.hpp:560` — owner `require_same_lanes` — `trap` — `__builtin_trap();`
 - `tslc/src/tslc/backend/assets/tsl_core.rs:313` — owner `bit_cast` — `assert_eq` — `assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());`
 - `tslc/src/tslc/backend/assets/tsl_core.rs:327` — owner `reinterpret_unchecked` — `assert_eq` — `assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:776` — owner `require_same_lanes` — `assert_eq` — `assert_eq!( source_lanes, target_lanes, "lane-preserving conversion requires equal source and target lane counts" );`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:791` — owner `require_same_lanes` — `assert_eq` — `assert_eq!( source_lanes, target_lanes, "lane-preserving conversion requires equal source and target lane counts" );`
 
 ### `static_immediate_nonzero` (2)
 
@@ -236,11 +237,11 @@ The checked signature must establish an addressable extent.
 
 This is a compiler/backend defect if reachable, not invalid caller data.
 
-- `tslc/src/tslc/backend/assets/tsl_core.rs:1160` — owner `saturating_cast_value` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:1117` — owner `saturating_from_f64` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:1032` — owner `saturating_from_i128` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:1075` — owner `saturating_from_u128` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:989` — owner `scalar_as_cast_value` — `panic` — `panic!("unsupported scalar-as cast")`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:1175` — owner `saturating_cast_value` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:1132` — owner `saturating_from_f64` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:1047` — owner `saturating_from_i128` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:1090` — owner `saturating_from_u128` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:1004` — owner `scalar_as_cast_value` — `panic` — `panic!("unsupported scalar-as cast")`
 
 ### `implementation_invariant` (3)
 
@@ -248,7 +249,7 @@ The condition is not part of the public call domain.
 
 - `tslc/src/tslc/backend/assets/tsl_algorithm.rs:146` — owner `lane_is_set` — `debug_assert` — `debug_assert!(lane < <Self as IntegralMaskWord>::BITS);`
 - `tslc/src/tslc/backend/assets/tsl_algorithm.rs:133` — owner `one_at` — `debug_assert` — `debug_assert!(lane < <Self as IntegralMaskWord>::BITS);`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:757` — owner `ostream_write` — `unwrap` — `.unwrap()`
+- `tslc/src/tslc/backend/assets/tsl_core.rs:772` — owner `ostream_write` — `unwrap` — `.unwrap()`
 
 ## Typed `caller_unsafe` public paths
 

@@ -97,6 +97,27 @@ def test_rust_cpu_identity_uses_msrv_compatible_cpuid_calls() -> None:
     assert "std::arch::x86_64::__cpuid(1)" in cpu_identity
 
 
+def test_allocation_helpers_define_shared_total_contract() -> None:
+    cpp_core = load_default_render_assets().text("tsl_core.hpp")
+    rust_core = load_default_render_assets().text("tsl_core.rs")
+
+    assert "#if defined(_MSC_VER)\n#include <malloc.h>" in cpp_core
+    assert "if (count_bytes == 0)" in cpp_core
+    assert "(alignment & (alignment - 1)) != 0" in cpp_core
+    assert "std::numeric_limits<std::size_t>::max()" in cpp_core
+    assert "return _aligned_malloc(count_bytes, alignof(std::max_align_t));" in cpp_core
+    assert "return _aligned_malloc(allocation_size, effective_alignment);" in cpp_core
+    assert "_aligned_free(ptr);" in cpp_core
+    assert "return std::malloc(count_bytes);" in cpp_core
+    assert "return std::aligned_alloc(effective_alignment, allocation_size);" in cpp_core
+    assert "std::free(ptr);" in cpp_core
+
+    assert "if count_bytes == 0" in rust_core
+    assert "!alignment.is_power_of_two()" in rust_core
+    assert ".checked_add(effective_alignment - 1)" in rust_core
+    assert "aligned_alloc(effective_alignment, allocation_size)" in rust_core
+
+
 def test_render_assets_freeze_and_fill_templates() -> None:
     files = {"plain.txt": "plain", "demo.tmpl": "hello @{name}"}
     assets = RenderAssets(files)

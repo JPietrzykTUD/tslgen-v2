@@ -64,6 +64,11 @@ def rust_literal_list(values: tuple[str, ...], type_tag: str) -> str:
 
 
 def token_truthy(token: str) -> bool:
+    normalized = token.strip().lower()
+    if normalized == "true":
+        return True
+    if normalized == "false":
+        return False
     try:
         return int(token) != 0
     except ValueError:

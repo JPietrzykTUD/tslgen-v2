@@ -18327,7 +18327,7 @@
         "path": "supplementary/buildsystem/machine_profiles.json",
         "sha256": "b7747cbc4bd6836065a94c443cdcca93563d5f85b1cb332dadad5f2a0ffe49ab"
       },
-      "portable_sha256": "891f60b514239b295b0e0b00710702ebe6cf80ddeb76b61c0b5a4a41a241f7a6",
+      "portable_sha256": "9d372ec9a6b137345091fa1c07143108b88bf0e1e43a759dd232e1176fc51f90",
       "request": {
         "languages": [
           "cpp",
@@ -18349,7 +18349,7 @@
           "f64"
         ]
       },
-      "source_corpus_sha256": "73a290c8421ffa7998364ab95c18e6991ad0e04753ee2fa4e773876884c5ce74",
+      "source_corpus_sha256": "df4c8984eac701faa0a1b02da769af212750682f9ad5396fe969d0fa11d28bee",
       "source_files": [
         {
           "path": "tsldata/detail/flags.tsl",
@@ -18361,7 +18361,7 @@
         },
         {
           "path": "tsldata/detail/lang/translate_cpp.tsl",
-          "sha256": "d64b1a02898fdbc4e315d711358f0a8c255ce472515140e881587bafc7a7047b"
+          "sha256": "94a8e86908aaf4286ae432f9da2968c98b95ec1fb4e111424d1043ac86fb21af"
         },
         {
           "path": "tsldata/detail/lang/translate_rust.tsl",
@@ -18497,7 +18497,7 @@
         },
         {
           "path": "tsldata/primitives/memory/allocation.tsl",
-          "sha256": "0bac51f8a5753808543c498790dbfc79a732a3f4814823c38512c96fb57013c9"
+          "sha256": "c97361f232aab7ec69e2d9a28809754f9e770807052a15215013c2a6b9a0ed9b"
         },
         {
           "path": "tsldata/primitives/memory/copy.tsl",
@@ -18542,7 +18542,7 @@
     "source",
     "count"
   ],
-  "skip_location_inventory_sha256": "5aea641535ea225820fcc5220b535613f58b05a9e542d3e54511b926869dcf19",
+  "skip_location_inventory_sha256": "63277455d47e3710ad944e27bcdf1e396240ccfed4d3e628d099f5f78e644aac",
   "skip_semantic_fields": [
     "language",
     "profile",
@@ -19231,7 +19231,7 @@
     ["cpp","icelake_rockerlake+icelake_rockerlake-oneapi","align_right_lanes","sse","ui64","PIVOT does not support signature kind(s): sImm",["tsldata/primitives/misc/swizzle.tsl",3,6,3,19],1],
     ["cpp","icelake_rockerlake+icelake_rockerlake-oneapi","align_right_lanes","sse","ui8","PIVOT does not support signature kind(s): sImm",["tsldata/primitives/misc/swizzle.tsl",3,6,3,19],1],
     ["cpp","icelake_rockerlake+icelake_rockerlake-oneapi","allocate","avx2","ptr","PIVOT does not support signature kind(s): ptr",["tsldata/primitives/memory/allocation.tsl",1,6,1,18],1],
-    ["cpp","icelake_rockerlake+icelake_rockerlake-oneapi","allocate_aligned","avx2","ptr","PIVOT does not support signature kind(s): ptr",["tsldata/primitives/memory/allocation.tsl",42,6,42,24],1],
+    ["cpp","icelake_rockerlake+icelake_rockerlake-oneapi","allocate_aligned","avx2","ptr","PIVOT does not support signature kind(s): ptr",["tsldata/primitives/memory/allocation.tsl",44,6,44,24],1],
     ["cpp","icelake_rockerlake+icelake_rockerlake-oneapi","between_exclusive","clang_v128_bool","f32","PIVOT does not support compiler boolean-vector masks",["tsldata/primitives/comparison/range.tsl",817,19,824,11],1],
     ["cpp","icelake_rockerlake+icelake_rockerlake-oneapi","between_exclusive","clang_v128_bool","f64","PIVOT does not support compiler boolean-vector masks",["tsldata/primitives/comparison/range.tsl",817,19,824,11],1],
     ["cpp","icelake_rockerlake+icelake_rockerlake-oneapi","between_exclusive","clang_v128_bool","si16","PIVOT does not support compiler boolean-vector masks",["tsldata/primitives/comparison/range.tsl",817,19,824,11],1],
@@ -21660,7 +21660,7 @@
     ["cpp","icelake_rockerlake+icelake_rockerlake-oneapi","custom_sequence","sse","ui32","PIVOT body contains a cast",["tsldata/primitives/load_store/construct.tsl",79,15,83,16],1],
     ["cpp","icelake_rockerlake+icelake_rockerlake-oneapi","custom_sequence","sse","ui64","PIVOT body contains residual top-level target statements",["tsldata/primitives/load_store/construct.tsl",72,19,85,11],1],
     ["cpp","icelake_rockerlake+icelake_rockerlake-oneapi","custom_sequence","sse","ui8","PIVOT body contains a cast",["tsldata/primitives/load_store/construct.tsl",79,15,83,16],1],
-    ["cpp","icelake_rockerlake+icelake_rockerlake-oneapi","deallocate","avx2","ptr","PIVOT schema requires a value result",["tsldata/primitives/memory/allocation.tsl",85,6,85,17],1],
+    ["cpp","icelake_rockerlake+icelake_rockerlake-oneapi","deallocate","avx2","ptr","PIVOT schema requires a value result",["tsldata/primitives/memory/allocation.tsl",90,6,90,17],1],
     ["cpp","icelake_rockerlake+icelake_rockerlake-oneapi","div","avx2","si16","PIVOT call inlining does not support forwarded immediate or generic arguments: 'call<primitive=extract_value[Vec, i]>(dividend)'",["tsldata/primitives/arithmetic/complex.tsl",1061,47,1061,94],1],
     ["cpp","icelake_rockerlake+icelake_rockerlake-oneapi","div","avx2","si32","PIVOT call inlining does not support forwarded immediate or generic arguments: 'call<primitive=extract_value[Vec, i]>(dividend)'",["tsldata/primitives/arithmetic/complex.tsl",1061,47,1061,94],1],
     ["cpp","icelake_rockerlake+icelake_rockerlake-oneapi","div","avx2","si64","PIVOT call inlining does not support forwarded immediate or generic arguments: 'call<primitive=extract_value[Vec, i]>(dividend)'",["tsldata/primitives/arithmetic/complex.tsl",1061,47,1061,94],1],
@@ -38391,7 +38391,7 @@
     ["cpp","sve128+sve256+sve512","align_right_lanes","sve512","ui64","PIVOT does not support signature kind(s): sImm",["tsldata/primitives/misc/swizzle.tsl",3,6,3,19],1],
     ["cpp","sve128+sve256+sve512","align_right_lanes","sve512","ui8","PIVOT does not support signature kind(s): sImm",["tsldata/primitives/misc/swizzle.tsl",3,6,3,19],1],
     ["cpp","sve128+sve256+sve512","allocate","generic","ptr","PIVOT does not support signature kind(s): ptr",["tsldata/primitives/memory/allocation.tsl",1,6,1,18],1],
-    ["cpp","sve128+sve256+sve512","allocate_aligned","generic","ptr","PIVOT does not support signature kind(s): ptr",["tsldata/primitives/memory/allocation.tsl",42,6,42,24],1],
+    ["cpp","sve128+sve256+sve512","allocate_aligned","generic","ptr","PIVOT does not support signature kind(s): ptr",["tsldata/primitives/memory/allocation.tsl",44,6,44,24],1],
     ["cpp","sve128+sve256+sve512","between_exclusive","neon","f32","PIVOT call inlining does not support forwarded immediate or generic arguments: 'call<primitive=reinterpret[MaskVec, base::in]>(\\n                intrin<vcltq, build>(left, right)\\n              )'",["tsldata/primitives/comparison/fundamental.tsl",1023,15,1025,16],1],
     ["cpp","sve128+sve256+sve512","between_exclusive","neon","f64","PIVOT call inlining does not support forwarded immediate or generic arguments: 'call<primitive=reinterpret[MaskVec, base::in]>(\\n                intrin<vcltq, build>(left, right)\\n              )'",["tsldata/primitives/comparison/fundamental.tsl",1023,15,1025,16],1],
     ["cpp","sve128+sve256+sve512","between_exclusive","neon","si16","PIVOT call inlining does not support forwarded immediate or generic arguments: 'call<primitive=reinterpret[MaskVec, base::in]>(\\n                intrin<vcltq, build>(left, right)\\n              )'",["tsldata/primitives/comparison/fundamental.tsl",1023,15,1025,16],1],
@@ -39476,7 +39476,7 @@
     ["cpp","sve128+sve256+sve512","custom_sequence","sve256","f64","PIVOT call inlining does not support forwarded immediate or generic arguments: 'call<primitive=cast[IndexVec, base::in]>(indexes)'",["tsldata/primitives/load_store/sequence.tsl",587,37,587,86],1],
     ["cpp","sve128+sve256+sve512","custom_sequence","sve512","f32","PIVOT call inlining does not support forwarded immediate or generic arguments: 'call<primitive=cast[IndexVec, base::in]>(indexes)'",["tsldata/primitives/load_store/sequence.tsl",587,37,587,86],1],
     ["cpp","sve128+sve256+sve512","custom_sequence","sve512","f64","PIVOT call inlining does not support forwarded immediate or generic arguments: 'call<primitive=cast[IndexVec, base::in]>(indexes)'",["tsldata/primitives/load_store/sequence.tsl",587,37,587,86],1],
-    ["cpp","sve128+sve256+sve512","deallocate","generic","ptr","PIVOT schema requires a value result",["tsldata/primitives/memory/allocation.tsl",85,6,85,17],1],
+    ["cpp","sve128+sve256+sve512","deallocate","generic","ptr","PIVOT schema requires a value result",["tsldata/primitives/memory/allocation.tsl",90,6,90,17],1],
     ["cpp","sve128+sve256+sve512","div","clang_v128","si32","PIVOT body body has no typed final complete(...) result",["tsldata/primitives/arithmetic/complex.tsl",1014,19,1020,11],1],
     ["cpp","sve128+sve256+sve512","div","clang_v128","si64","PIVOT body body has no typed final complete(...) result",["tsldata/primitives/arithmetic/complex.tsl",1014,19,1020,11],1],
     ["cpp","sve128+sve256+sve512","div","clang_v128","ui32","PIVOT body body has no typed final complete(...) result",["tsldata/primitives/arithmetic/complex.tsl",1014,19,1020,11],1],
@@ -46769,7 +46769,7 @@
     ["rust","icelake_rockerlake+icelake_rockerlake-oneapi","align_right_lanes","sse","ui64","PIVOT does not support signature kind(s): sImm",["tsldata/primitives/misc/swizzle.tsl",3,6,3,19],1],
     ["rust","icelake_rockerlake+icelake_rockerlake-oneapi","align_right_lanes","sse","ui8","PIVOT does not support signature kind(s): sImm",["tsldata/primitives/misc/swizzle.tsl",3,6,3,19],1],
     ["rust","icelake_rockerlake+icelake_rockerlake-oneapi","allocate","avx2","ptr","PIVOT does not support signature kind(s): ptr",["tsldata/primitives/memory/allocation.tsl",1,6,1,18],1],
-    ["rust","icelake_rockerlake+icelake_rockerlake-oneapi","allocate_aligned","avx2","ptr","PIVOT does not support signature kind(s): ptr",["tsldata/primitives/memory/allocation.tsl",42,6,42,24],1],
+    ["rust","icelake_rockerlake+icelake_rockerlake-oneapi","allocate_aligned","avx2","ptr","PIVOT does not support signature kind(s): ptr",["tsldata/primitives/memory/allocation.tsl",44,6,44,24],1],
     ["rust","icelake_rockerlake+icelake_rockerlake-oneapi","between_exclusive","generic","f32","PIVOT requires a concrete fixed-width or scalar specialization",["tsldata/primitives/comparison/range.tsl",817,19,824,11],1],
     ["rust","icelake_rockerlake+icelake_rockerlake-oneapi","between_exclusive","generic","f64","PIVOT requires a concrete fixed-width or scalar specialization",["tsldata/primitives/comparison/range.tsl",817,19,824,11],1],
     ["rust","icelake_rockerlake+icelake_rockerlake-oneapi","between_exclusive","generic","si16","PIVOT requires a concrete fixed-width or scalar specialization",["tsldata/primitives/comparison/range.tsl",817,19,824,11],1],
@@ -47790,7 +47790,7 @@
     ["rust","icelake_rockerlake+icelake_rockerlake-oneapi","custom_sequence","sse","ui32","PIVOT body contains a cast",["tsldata/primitives/load_store/construct.tsl",79,15,83,16],1],
     ["rust","icelake_rockerlake+icelake_rockerlake-oneapi","custom_sequence","sse","ui64","PIVOT body contains residual top-level target statements",["tsldata/primitives/load_store/construct.tsl",72,19,85,11],1],
     ["rust","icelake_rockerlake+icelake_rockerlake-oneapi","custom_sequence","sse","ui8","PIVOT body contains a cast",["tsldata/primitives/load_store/construct.tsl",79,15,83,16],1],
-    ["rust","icelake_rockerlake+icelake_rockerlake-oneapi","deallocate","avx2","ptr","PIVOT schema requires a value result",["tsldata/primitives/memory/allocation.tsl",85,6,85,17],1],
+    ["rust","icelake_rockerlake+icelake_rockerlake-oneapi","deallocate","avx2","ptr","PIVOT schema requires a value result",["tsldata/primitives/memory/allocation.tsl",90,6,90,17],1],
     ["rust","icelake_rockerlake+icelake_rockerlake-oneapi","div","avx2","si16","PIVOT call inlining does not support forwarded immediate or generic arguments: 'call<primitive=extract_value[Vec, i]>(dividend)'",["tsldata/primitives/arithmetic/complex.tsl",1061,47,1061,94],1],
     ["rust","icelake_rockerlake+icelake_rockerlake-oneapi","div","avx2","si32","PIVOT call inlining does not support forwarded immediate or generic arguments: 'call<primitive=extract_value[Vec, i]>(dividend)'",["tsldata/primitives/arithmetic/complex.tsl",1061,47,1061,94],1],
     ["rust","icelake_rockerlake+icelake_rockerlake-oneapi","div","avx2","si64","PIVOT call inlining does not support forwarded immediate or generic arguments: 'call<primitive=extract_value[Vec, i]>(dividend)'",["tsldata/primitives/arithmetic/complex.tsl",1061,47,1061,94],1],
@@ -55994,7 +55994,7 @@
     ["rust","wasm32-simd128","align_right_lanes","wasm128","ui64","PIVOT does not support signature kind(s): sImm",["tsldata/primitives/misc/swizzle.tsl",3,6,3,19],1],
     ["rust","wasm32-simd128","align_right_lanes","wasm128","ui8","PIVOT does not support signature kind(s): sImm",["tsldata/primitives/misc/swizzle.tsl",3,6,3,19],1],
     ["rust","wasm32-simd128","allocate","generic","ptr","PIVOT does not support signature kind(s): ptr",["tsldata/primitives/memory/allocation.tsl",1,6,1,18],1],
-    ["rust","wasm32-simd128","allocate_aligned","generic","ptr","PIVOT does not support signature kind(s): ptr",["tsldata/primitives/memory/allocation.tsl",42,6,42,24],1],
+    ["rust","wasm32-simd128","allocate_aligned","generic","ptr","PIVOT does not support signature kind(s): ptr",["tsldata/primitives/memory/allocation.tsl",44,6,44,24],1],
     ["rust","wasm32-simd128","between_exclusive","wasm128","ui64","PIVOT body contains a cast",["tsldata/primitives/comparison/fundamental.tsl",812,40,812,109],1],
     ["rust","wasm32-simd128","between_exclusive_maskz","wasm128","ui64","PIVOT body contains a cast",["tsldata/primitives/comparison/fundamental.tsl",812,40,812,109],1],
     ["rust","wasm32-simd128","between_inclusive","wasm128","ui64","PIVOT body contains a cast",["tsldata/primitives/comparison/fundamental.tsl",1650,40,1650,109],1],
@@ -56133,7 +56133,7 @@
     ["rust","wasm32-simd128","custom_sequence","wasm128","ui32","PIVOT body contains a cast",["tsldata/primitives/load_store/construct.tsl",168,13,172,14],1],
     ["rust","wasm32-simd128","custom_sequence","wasm128","ui64","PIVOT body contains a cast",["tsldata/primitives/load_store/construct.tsl",168,13,172,14],1],
     ["rust","wasm32-simd128","custom_sequence","wasm128","ui8","PIVOT body contains a cast",["tsldata/primitives/load_store/construct.tsl",168,13,172,14],1],
-    ["rust","wasm32-simd128","deallocate","generic","ptr","PIVOT schema requires a value result",["tsldata/primitives/memory/allocation.tsl",85,6,85,17],1],
+    ["rust","wasm32-simd128","deallocate","generic","ptr","PIVOT schema requires a value result",["tsldata/primitives/memory/allocation.tsl",90,6,90,17],1],
     ["rust","wasm32-simd128","div","wasm128","si16","PIVOT call inlining does not support forwarded immediate or generic arguments: 'call<primitive=extract_value[Vec, i]>(dividend)'",["tsldata/primitives/arithmetic/complex.tsl",1185,47,1185,94],1],
     ["rust","wasm32-simd128","div","wasm128","si32","PIVOT call inlining does not support forwarded immediate or generic arguments: 'call<primitive=extract_value[Vec, i]>(dividend)'",["tsldata/primitives/arithmetic/complex.tsl",1185,47,1185,94],1],
     ["rust","wasm32-simd128","div","wasm128","si64","PIVOT call inlining does not support forwarded immediate or generic arguments: 'call<primitive=extract_value[Vec, i]>(dividend)'",["tsldata/primitives/arithmetic/complex.tsl",1185,47,1185,94],1],

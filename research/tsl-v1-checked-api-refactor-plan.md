@@ -1138,10 +1138,12 @@ memory operations without overclaiming.
 Outcomes:
 
 - ordinary allocation failure does not create a checked twin because the base
-  return already represents it;
-- `allocate_aligned` likewise has no checked twin: its current implementations
-  are caller-safe and return the ordinary null failure representation rather
-  than declaring a catastrophic caller precondition;
+  return already represents it. The total source contract returns null for a
+  zero-byte request or allocation failure;
+- `allocate_aligned` likewise has no checked twin: its total source contract
+  returns null for zero-byte requests, invalid non-power-of-two alignment,
+  unrepresentable rounded size, or allocation failure rather than declaring a
+  catastrophic caller precondition;
 - `memory_cp` has no honest checked twin for its current signature. Although
   the count is semantically bytes, count and copy kind are vector-base scalars
   (including signed and floating domains), and bare pointers establish neither

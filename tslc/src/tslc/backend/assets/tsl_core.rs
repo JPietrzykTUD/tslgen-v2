@@ -671,7 +671,7 @@ extern "C" {
 }
 
 /// `std::malloc` counterpart for the `allocate` free function: a `count_bytes` block as an
-/// untyped pointer (null on failure, per the C contract).
+/// untyped pointer. Zero-size requests and allocation failures return null.
 ///
 /// # Safety
 ///
@@ -679,20 +679,35 @@ extern "C" {
 /// must not be dereferenced beyond the allocated byte count.
 #[inline]
 pub unsafe fn mem_alloc(count_bytes: usize) -> *mut core::ffi::c_void {
+    if count_bytes == 0 {
+        return core::ptr::null_mut();
+    }
     malloc(count_bytes)
 }
 
 /// `std::aligned_alloc` counterpart for `allocate_aligned`. Argument order mirrors the
-/// translate template (`alignment` then `count_bytes`); `aligned_alloc` requires the size be a
-/// multiple of the alignment.
+/// translate template (`alignment` then `count_bytes`). The requested size is rounded up for
+/// C runtimes whose `aligned_alloc` requires a multiple of the effective alignment. Zero-size
+/// requests, non-power-of-two alignments, overflow, and allocation failures return null.
 ///
 /// # Safety
 ///
-/// `alignment` must satisfy the C `aligned_alloc` contract. The returned
-/// pointer must be released exactly once with [`mem_free`].
+/// A non-null returned pointer must be released exactly once with [`mem_free`].
 #[inline]
 pub unsafe fn mem_alloc_aligned(alignment: usize, count_bytes: usize) -> *mut core::ffi::c_void {
-    aligned_alloc(alignment, count_bytes)
+    if count_bytes == 0 || !alignment.is_power_of_two() {
+        return core::ptr::null_mut();
+    }
+    let minimum_alignment = core::mem::align_of::<*mut core::ffi::c_void>();
+    let effective_alignment = core::cmp::max(alignment, minimum_alignment);
+    let allocation_size = match count_bytes
+        .checked_add(effective_alignment - 1)
+        .map(|size| (size / effective_alignment) * effective_alignment)
+    {
+        Some(size) => size,
+        None => return core::ptr::null_mut(),
+    };
+    aligned_alloc(effective_alignment, allocation_size)
 }
 
 /// `std::free` counterpart for `deallocate`: frees a malloc/aligned_alloc block by pointer

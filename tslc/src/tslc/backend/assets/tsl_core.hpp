@@ -14,6 +14,10 @@
 #include <type_traits>
 #include <vector>
 
+#if defined(_MSC_VER)
+#include <malloc.h>
+#endif
+
 #if defined(__x86_64__) || defined(_M_X64)
 #include <immintrin.h>
 #endif
@@ -135,6 +139,56 @@ template <> struct base_type_dispatch_key<double> { using type = base_f64_tag; }
 
 template <class T>
 using base_type_dispatch_key_t = typename base_type_dispatch_key<T>::type;
+
+// Keep the allocation family paired on each C++ runtime. MSVC does not expose
+// C11 aligned_alloc, and memory returned by _aligned_malloc must be released
+// with _aligned_free. The public deallocate contract accepts only pointers
+// returned by the TSL allocation family, so both Windows allocation paths use
+// the matching aligned runtime. Reject invalid requests before either runtime
+// can apply a platform-specific invalid-parameter policy, and round valid
+// aligned sizes without changing the requested usable byte count.
+inline void* mem_alloc(std::size_t count_bytes) {
+    if (count_bytes == 0) {
+        return nullptr;
+    }
+#if defined(_MSC_VER)
+    return _aligned_malloc(count_bytes, alignof(std::max_align_t));
+#else
+    return std::malloc(count_bytes);
+#endif
+}
+
+inline void* mem_alloc_aligned(
+    std::size_t alignment,
+    std::size_t count_bytes
+) {
+    if (count_bytes == 0 || alignment == 0 || (alignment & (alignment - 1)) != 0) {
+        return nullptr;
+    }
+    const std::size_t minimum_alignment = alignof(void*);
+    const std::size_t effective_alignment =
+        alignment < minimum_alignment ? minimum_alignment : alignment;
+    if (count_bytes >
+        std::numeric_limits<std::size_t>::max() - (effective_alignment - 1)) {
+        return nullptr;
+    }
+    const std::size_t allocation_size =
+        ((count_bytes + effective_alignment - 1) / effective_alignment) *
+        effective_alignment;
+#if defined(_MSC_VER)
+    return _aligned_malloc(allocation_size, effective_alignment);
+#else
+    return std::aligned_alloc(effective_alignment, allocation_size);
+#endif
+}
+
+inline void mem_free(void* ptr) {
+#if defined(_MSC_VER)
+    _aligned_free(ptr);
+#else
+    std::free(ptr);
+#endif
+}
 
 }  // namespace detail
 

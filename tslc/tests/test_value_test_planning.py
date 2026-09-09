@@ -2667,6 +2667,44 @@ def test_extension_result_renderers_use_distinct_fixed_extensions(
     assert "for i in 0..4" in rust_source
 
 
+def test_pointer_lifetime_renderers_honor_null_expectations_and_allocator_pairing() -> None:
+    null_case = ValueTestCasePlan(
+        "pointer_lifetime",
+        "test_zero_allocation",
+        "zero",
+        "allocate_aligned",
+        "ptr",
+        "void*",
+        1,
+        scalar_inputs=("0", "32"),
+        expected=("false",),
+    )
+    free_case = ValueTestCasePlan(
+        "pointer_free",
+        "test_aligned_free",
+        "aligned_free",
+        "deallocate",
+        "ptr",
+        "void*",
+        1,
+        scalar_inputs=("64",),
+        expected=("true",),
+        alignment=32,
+    )
+
+    cpp_null = CPP_VALUE_TEST_RENDERER.render_case(null_case)
+    cpp_free = CPP_VALUE_TEST_RENDERER.render_case(free_case)
+    assert "expected null pointer" in cpp_null
+    assert "::tsl::detail::mem_free(ptr)" in cpp_null
+    assert "std::free(ptr)" not in cpp_null
+    assert "::tsl::detail::mem_alloc_aligned" in cpp_free
+    assert "std::aligned_alloc" not in cpp_free
+
+    rust_null = RUST_VALUE_TEST_RENDERER.render_case(null_case)
+    assert "expected null pointer" in rust_null
+    assert "if !ptr.is_null() { unsafe { mem_free(ptr); } }" in rust_null
+
+
 def test_value_test_case_plan_validates_kind_requirements() -> None:
     assert all(
         isinstance(fact, ValueTestFact)
@@ -4041,6 +4079,7 @@ def test_rust_renderer_consumes_memory_and_conversion_plans_without_catalog(
             "*mut core::ffi::c_void",
             4,
             scalar_inputs=("64",),
+            expected=("true",),
         ),
         ValueTestCasePlan(
             "pointer_free",

@@ -177,7 +177,9 @@ _CASE_REQUIREMENTS = {
         required_facts=frozenset({ValueTestFact.MEMORY_LENGTH}),
     ),
     "pointer_free": ValueTestCaseRequirements(scalar_inputs="one"),
-    "pointer_lifetime": ValueTestCaseRequirements(scalar_inputs="non_empty"),
+    "pointer_lifetime": ValueTestCaseRequirements(
+        expected="one", scalar_inputs="non_empty"
+    ),
     "reduction": ValueTestCaseRequirements(
         expected="one", vector_inputs="one", vector_inputs_match_lanes=True
     ),

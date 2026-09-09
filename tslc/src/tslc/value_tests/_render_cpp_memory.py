@@ -5,7 +5,7 @@ from __future__ import annotations
 from tslc.catalog.preconditions import PreconditionErrorKind
 from tslc.value_tests.case_components import ValueTestInvalidPreconditionValue
 from tslc.value_tests.lane_math import runtime_tile_index as _runtime_tile_index
-from tslc.value_tests.literals import cpp_literal, cpp_literal_list
+from tslc.value_tests.literals import cpp_literal, cpp_literal_list, token_truthy
 from tslc.value_tests.model import ValueTestCasePlan, ValueTestMemory
 from tslc.value_tests.render_cpp_helpers import (
     append_runtime_vector_input as _append_runtime_vector_input,
@@ -193,18 +193,26 @@ def _memory_copy(case: ValueTestCasePlan) -> str:
 def _pointer_lifetime(case: ValueTestCasePlan) -> str:
     args = ", ".join(f"static_cast<std::size_t>({value})" for value in case.inputs.scalars)
     alignment = case.inputs.scalars[1] if len(case.inputs.scalars) > 1 else None
+    expect_nonnull = token_truthy(case.expectation.values[0])
     lines = [
         f"int {case.function_name}() {{",
         f"  void* ptr = tsl::{case.call_name}({args});",
         "  int failures = 0;",
-        f'  if (ptr == nullptr) {{ std::fprintf(stderr, "FAIL {case.case_name}: null pointer\\n"); ++failures; }}',
     ]
-    if alignment is not None:
+    if expect_nonnull:
+        lines.append(
+            f'  if (ptr == nullptr) {{ std::fprintf(stderr, "FAIL {case.case_name}: null pointer\\n"); ++failures; }}'
+        )
+    else:
+        lines.append(
+            f'  if (ptr != nullptr) {{ std::fprintf(stderr, "FAIL {case.case_name}: expected null pointer\\n"); ++failures; }}'
+        )
+    if alignment is not None and expect_nonnull:
         lines.append(
             f"  if (ptr != nullptr && (reinterpret_cast<std::uintptr_t>(ptr) % "
             f"static_cast<std::size_t>({alignment})) != 0) {{ ++failures; }}"
         )
-    lines.append("  std::free(ptr);")
+    lines.append("  if (ptr != nullptr) ::tsl::detail::mem_free(ptr);")
     lines.append("  return failures;")
     lines.append("}")
     return "\n".join(lines)
@@ -214,9 +222,10 @@ def _pointer_free(case: ValueTestCasePlan) -> str:
     count = case.inputs.scalars[0]
     alignment = memory.alignment
     alloc = (
-        f"std::aligned_alloc(static_cast<std::size_t>({alignment}), static_cast<std::size_t>({count}))"
+        f"::tsl::detail::mem_alloc_aligned(static_cast<std::size_t>({alignment}), "
+        f"static_cast<std::size_t>({count}))"
         if alignment is not None
-        else f"std::malloc(static_cast<std::size_t>({count}))"
+        else f"::tsl::detail::mem_alloc(static_cast<std::size_t>({count}))"
     )
     lines = [
         f"int {case.function_name}() {{",

@@ -1388,11 +1388,19 @@
       "family": "tooling_only"
     },
     {
-      "id": "tslc/src/tslc/value_tests/_render_rust_memory.py|_pointer_lifetime|assert|8504760dcc31ab07|0",
+      "id": "tslc/src/tslc/value_tests/_render_rust_memory.py|_pointer_lifetime|assert|3b902ec018f4131b|0",
       "path": "tslc/src/tslc/value_tests/_render_rust_memory.py",
       "owner": "_pointer_lifetime",
       "kind": "assert",
-      "excerpt": "f' assert!(!ptr.is_null(), \"{case.case_name}: null pointer\");',",
+      "excerpt": "f' assert!(ptr.is_null(), \"{case.case_name}: expected null pointer\");'",
+      "family": "tooling_only"
+    },
+    {
+      "id": "tslc/src/tslc/value_tests/_render_rust_memory.py|_pointer_lifetime|assert|5d7ce6b823f1acf8|0",
+      "path": "tslc/src/tslc/value_tests/_render_rust_memory.py",
+      "owner": "_pointer_lifetime",
+      "kind": "assert",
+      "excerpt": "lines.append(f' assert!(!ptr.is_null(), \"{case.case_name}: null pointer\");')",
       "family": "tooling_only"
     },
     {
