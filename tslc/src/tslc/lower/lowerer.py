@@ -303,14 +303,12 @@ class Lowerer:
             ),
             concrete_lanes=selected.concrete_lanes,
         )
-        context = body_context(env, scope, shape, self._support)
+        context = body_context(env, scope)
 
         param_context = (
             body_context(
                 replace(env, simd_type_param_base_bindings={}),
                 scope,
-                shape,
-                self._support,
             )
             if selected.simd_type_base_bindings
             else context
@@ -384,8 +382,6 @@ class Lowerer:
                     dependency_origin=f"implementation variant {variant.name!r}",
                 ),
                 scope,
-                shape,
-                self._support,
             )
             rendered_variant = render_body(
                 selected=selected,

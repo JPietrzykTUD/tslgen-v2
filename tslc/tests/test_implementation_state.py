@@ -245,8 +245,6 @@ def _render_state(selected: SelectedImplementation) -> ImplementationState:
             type_tag=selected.type_tag,
         ),
         LoweringScope(),
-        shape,
-        SimpleNamespace(requires_unsafe_frame=lambda shape: False),
     )
     result = render_body(
         selected=selected,

@@ -569,7 +569,10 @@ fail closed through the live ordinary call graph.
 This two-path surface is implemented and release-ratcheted; it is not pending
 refactor work. In particular, `internal_unsafe` describes the implementation
 boundary needed by generated Rust, while `caller_unsafe` describes the public
-call contract. A `raw_memory` mechanism without a `raw_pointer` or another
+call contract. Pointer-shaped signature syntax is not enough to infer either
+fact: source metadata owns uncheckable caller obligations, while typed TSIL
+regions contribute only their internal implementation effects. A `raw_memory`
+mechanism without a `raw_pointer` or another
 outstanding catastrophic caller obligation does not make the public function
 unsafe. The unsuffixed operation remains direct in both languages, and the
 optional checked companion never changes its behavior.

@@ -31,7 +31,6 @@ def test_safety_suggestion_applies_missing_direct_facts(tmp_path: Path) -> None:
     suggestion = result.suggestions[0]
     assert suggestion.kind == "safety"
     assert suggestion.applicable
-    assert "raw_pointer" in suggestion.after
     assert "intrinsic" in suggestion.after
 
     assert apply_suggestions(result.suggestions, kinds=("safety",)) == 1
@@ -39,8 +38,8 @@ def test_safety_suggestion_applies_missing_direct_facts(tmp_path: Path) -> None:
     assert (
         "        safety:\n"
         "          internal_unsafe true\n"
-        "          caller_unsafe true\n"
-        "          reasons [intrinsic, raw_pointer]\n"
+        "          caller_unsafe false\n"
+        "          reasons [intrinsic]\n"
         "        implementation:\n"
     ) in text
 
@@ -58,7 +57,27 @@ def test_interactive_apply_accepts_applicable_suggestion(tmp_path: Path) -> None
     written = interactive_apply(result.suggestions, input_func=lambda _prompt: "a")
 
     assert written == 1
-    assert "reasons [intrinsic, raw_pointer]" in source.read_text(encoding="utf-8")
+    assert "reasons [intrinsic]" in source.read_text(encoding="utf-8")
+
+
+def test_safety_audit_does_not_infer_unsafety_from_pointer_syntax(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "pointer_observer.tsl"
+    source.write_text(
+        _safety_source().replace(
+            'tsil "intrin<store>(ptr, data);"',
+            'tsil "auto observed = ptr; (void)observed;"',
+        ),
+        encoding="utf-8",
+    )
+
+    result = audit_metadata(
+        (source,), checks=("safety",), machine_profiles_path=None, backends=("cpp",)
+    )
+
+    assert result.diagnostics == ()
+    assert result.suggestions == ()
 
 
 def test_safety_audit_keeps_raw_comments_and_literals_opaque(tmp_path: Path) -> None:

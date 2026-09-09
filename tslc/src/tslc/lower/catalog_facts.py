@@ -52,7 +52,7 @@ class LowererCatalogFacts:
                 _primitive_arg_generics(catalog, support)
             ),
             primitive_caller_unsafe=MappingProxyType(
-                _primitive_caller_unsafe(catalog, support)
+                _primitive_caller_unsafe(catalog)
             ),
             primitive_borrowed_arg_positions=MappingProxyType(
                 _primitive_borrowed_arg_positions(catalog, support)
@@ -228,12 +228,9 @@ def _primitive_arg_generics(
 
 def _primitive_caller_unsafe(
     catalog: Catalog,
-    support: SupportPolicy = DEFAULT_SUPPORT_POLICY,
 ) -> dict[str, bool]:
     values: dict[str, bool] = {}
     for primitive in catalog.primitives:
-        shape = parse_signature(primitive.signature)
-        inferred = shape is not None and support.requires_unsafe_frame(shape)
         authored = any(
             implementation.safety.caller_unsafe
             for implementation in primitive.implementations
@@ -245,7 +242,6 @@ def _primitive_caller_unsafe(
         )
         values[primitive.name] = (
             values.get(primitive.name, False)
-            or inferred
             or authored
             or preconditioned
         )

@@ -38,7 +38,6 @@ from tslc.target_text import (
     trimmed_text,
 )
 from tslc.select.selector import SelectedImplementation
-from tslc.support_policy import SupportPolicy
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,20 +51,12 @@ class RenderedBodyResult:
 def body_context(
     env: LoweringEnv,
     scope: LoweringScope,
-    shape: SignatureShape,
-    support: SupportPolicy,
 ) -> LoweringSession:
-    context = LoweringSession(
+    return LoweringSession(
         env=env,
         scope=_clone_scope(scope),
         effects=LoweringEffects(),
     )
-    # Dereferencing a raw pointer is `unsafe` in Rust, so a pointer-taking body needs
-    # the unsafe frame even when it uses no intrinsics (e.g. scalar `*ptr = data;`).
-    # Raw-pointer APIs also require callers to uphold pointer validity.
-    if support.requires_unsafe_frame(shape):
-        context.effects.mark_caller_unsafe("raw_pointer")
-    return context
 
 
 def render_body(

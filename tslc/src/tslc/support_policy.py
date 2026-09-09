@@ -205,9 +205,6 @@ class SupportPolicy:
             return self.type_bit_width_or_default(type_tag) // 8
         return max(1, extension.vector_bits // 8)
 
-    def requires_unsafe_frame(self, shape: SignatureShape) -> bool:
-        return any(kind in self.pointer_kinds for kind in shape.param_kinds)
-
     def is_const_pointer_kind(self, kind: str) -> bool:
         return self.signature_kinds.is_const_pointer(kind)
 

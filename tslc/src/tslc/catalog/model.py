@@ -199,6 +199,8 @@ class ImplementationSafety:
     boundary. ``caller_unsafe`` means calling the generated API requires the
     caller to uphold an unsafe contract. ``reasons`` are stable source-authored
     and compiler-propagated labels for diagnostics, review, and future docs.
+    Neither pointer-shaped signature syntax nor an internal unsafe mechanism is
+    by itself a public caller obligation.
     """
 
     internal_unsafe: bool = False
