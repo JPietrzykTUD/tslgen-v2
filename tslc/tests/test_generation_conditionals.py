@@ -878,7 +878,9 @@ def test_scalar_vector_overload_dispatch_explicitly_normalizes_scalar_calls(
         type_tags=["ui16"],
     )
     write_artifacts(result.artifacts, tmp_path)
-    core = (tmp_path / "cpp" / "include" / "tsl_core.hpp").read_text()
+    core = (
+        tmp_path / "cpp" / "include" / "tsl_core_detail_scalar.hpp"
+    ).read_text()
     hpp = (tmp_path / "cpp" / "include" / "tsl_sse2.hpp").read_text()
 
     assert "scalar_argument_conversion_probe(typename Vec::base_type)" in core

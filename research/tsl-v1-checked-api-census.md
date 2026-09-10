@@ -198,11 +198,11 @@ Sizes, lane counts, and mask-storage capacity are compiler-owned specialization 
 - `tslc/src/tslc/backend/assets/tsl_algorithm_transform.rs:232` — owner `transform_selected_binary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_selected_binary requires a vector with at least one lane", );`
 - `tslc/src/tslc/backend/assets/tsl_algorithm_transform.rs:98` — owner `transform_selected_unary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_selected_unary requires a vector with at least one lane", );`
 - `tslc/src/tslc/backend/assets/tsl_algorithm_transform.rs:1332` — owner `transform_unary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_unary requires a vector with at least one lane", );`
-- `tslc/src/tslc/backend/assets/tsl_core.hpp:589` — owner `require_same_lanes` — `throw` — `throw std::invalid_argument( "lane-preserving conversion requires equal source and target lane counts" );`
-- `tslc/src/tslc/backend/assets/tsl_core.hpp:587` — owner `require_same_lanes` — `trap` — `__builtin_trap();`
 - `tslc/src/tslc/backend/assets/tsl_core.rs:313` — owner `bit_cast` — `assert_eq` — `assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());`
 - `tslc/src/tslc/backend/assets/tsl_core.rs:327` — owner `reinterpret_unchecked` — `assert_eq` — `assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());`
 - `tslc/src/tslc/backend/assets/tsl_core.rs:791` — owner `require_same_lanes` — `assert_eq` — `assert_eq!( source_lanes, target_lanes, "lane-preserving conversion requires equal source and target lane counts" );`
+- `tslc/src/tslc/backend/assets/tsl_core_detail_scalar.hpp:178` — owner `require_same_lanes` — `throw` — `throw std::invalid_argument( "lane-preserving conversion requires equal source and target lane counts" );`
+- `tslc/src/tslc/backend/assets/tsl_core_detail_scalar.hpp:176` — owner `require_same_lanes` — `trap` — `__builtin_trap();`
 
 ### `static_immediate_nonzero` (2)
 

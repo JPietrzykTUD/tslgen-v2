@@ -34,6 +34,11 @@ from tslc.render.cpp_build import _cpp_cmakelists
 from tslc.value_tests.model import ValueTestProjectPlan
 
 _CPP_BASE_STATIC_HEADERS = (
+    "tsl_core_detail_types.hpp",
+    "tsl_core_detail_memory.hpp",
+    "tsl_core_detail_scalar.hpp",
+    "tsl_core_detail_mask.hpp",
+    "tsl_core_detail_io.hpp",
     "tsl_core.hpp",
     "tsl_dataparallel.hpp",
     "tsl_algorithm_tags.hpp",

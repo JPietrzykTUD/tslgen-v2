@@ -485,7 +485,8 @@ def test_checked_error_assets_are_evolution_safe_and_debug_inline_is_portable(
     render_assets,
 ) -> None:
     cpp = render_assets.fill(
-        "tsl_core.hpp", **cpp_static_declaration_holes("tsl_core.hpp")
+        "tsl_core_detail_types.hpp",
+        **cpp_static_declaration_holes("tsl_core_detail_types.hpp"),
     )
     rust = render_assets.fill("tsl_core.rs", **rust_static_declaration_holes())
 
@@ -637,7 +638,8 @@ def test_rust_contiguous_memory_checked_twins_use_slices_and_overload_facts(
 
 def test_checked_memory_assets_expose_range_and_error_contracts(render_assets) -> None:
     cpp = render_assets.fill(
-        "tsl_core.hpp", **cpp_static_declaration_holes("tsl_core.hpp")
+        "tsl_core_detail_types.hpp",
+        **cpp_static_declaration_holes("tsl_core_detail_types.hpp"),
     )
     rust = render_assets.fill("tsl_core.rs", **rust_static_declaration_holes())
 

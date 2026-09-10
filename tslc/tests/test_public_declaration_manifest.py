@@ -360,7 +360,7 @@ def test_static_assets_have_one_hole_for_each_owned_declaration_fragment() -> No
     by_asset = {
         name: cpp_static_declaration_holes(name)
         for name in (
-            "tsl_core.hpp",
+            "tsl_core_detail_types.hpp",
             "tsl_dataparallel.hpp",
             "tsl_algorithm_tags.hpp",
         )

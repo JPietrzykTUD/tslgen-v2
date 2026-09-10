@@ -737,9 +737,11 @@ model. Distributable packaging consumes that projection, while CI profile
 sharding reads the same narrow policy file; neither owns a second release
 profile list.
 
-A static substrate ships as assets
-([backend/assets/tsl_core.hpp](src/tslc/backend/assets/tsl_core.hpp),
-[tsl_core.rs](src/tslc/backend/assets/tsl_core.rs)) defining `simd<T,Ext>` /
+A static substrate ships as assets. C++ keeps
+[backend/assets/tsl_core.hpp](src/tslc/backend/assets/tsl_core.hpp) as its stable
+facade over a directly includable type foundation and focused memory, scalar,
+integral-mask, and I/O runtime headers. Rust keeps
+[tsl_core.rs](src/tslc/backend/assets/tsl_core.rs) as its current facade defining
 `SimdVector` and helpers. Whole-file scaffolding and stable profile metadata
 also live there as named templates; Python renderers supply only finalized,
 typed holes and dynamic declarations. Backend target-text values use

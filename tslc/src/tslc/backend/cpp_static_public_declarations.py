@@ -30,6 +30,8 @@ CPP_CORE_PUBLIC_IDENTITIES = (
     "tsl::span",
 )
 
+_CPP_CORE_TYPES_ASSET = "tsl_core_detail_types.hpp"
+
 
 @dataclass(frozen=True, slots=True)
 class _StaticDeclaration:
@@ -158,7 +160,7 @@ def _static_member(
 
 _DECLARATIONS = (
     _StaticDeclaration(
-        "tsl_core.hpp",
+        _CPP_CORE_TYPES_ASSET,
         "core_declaration_implementation_state",
         _type(
             "tsl::implementation_state",
@@ -172,7 +174,7 @@ _DECLARATIONS = (
         complete_definition=True,
     ),
     _StaticDeclaration(
-        "tsl_core.hpp",
+        _CPP_CORE_TYPES_ASSET,
         "core_declaration_precondition_error",
         _type(
             "tsl::precondition_error",
@@ -198,7 +200,7 @@ _DECLARATIONS = (
         complete_definition=True,
     ),
     _StaticDeclaration(
-        "tsl_core.hpp",
+        _CPP_CORE_TYPES_ASSET,
         "core_declaration_span",
         _type(
             "tsl::span",
@@ -210,7 +212,7 @@ _DECLARATIONS = (
         ),
     ),
     _static_member(
-        "tsl_core.hpp",
+        _CPP_CORE_TYPES_ASSET,
         "core_span_alias_element_type",
         _member(
             "tsl::span<T>::element_type",
@@ -223,7 +225,7 @@ _DECLARATIONS = (
         ),
     ),
     _static_member(
-        "tsl_core.hpp",
+        _CPP_CORE_TYPES_ASSET,
         "core_span_constructor_pointer",
         _member(
             "tsl::span<T>::span#pointer-size",
@@ -241,7 +243,7 @@ _DECLARATIONS = (
         ),
     ),
     _static_member(
-        "tsl_core.hpp",
+        _CPP_CORE_TYPES_ASSET,
         "core_span_constructor_array",
         _member(
             "tsl::span<T>::span#array",
@@ -264,7 +266,7 @@ _DECLARATIONS = (
         ),
     ),
     _static_member(
-        "tsl_core.hpp",
+        _CPP_CORE_TYPES_ASSET,
         "core_span_constructor_conversion",
         _member(
             "tsl::span<T>::span#conversion",
@@ -293,7 +295,7 @@ _DECLARATIONS = (
         ),
     ),
     _static_member(
-        "tsl_core.hpp",
+        _CPP_CORE_TYPES_ASSET,
         "core_span_method_data",
         _member(
             "tsl::span<T>::data",
@@ -311,7 +313,7 @@ _DECLARATIONS = (
         ),
     ),
     _static_member(
-        "tsl_core.hpp",
+        _CPP_CORE_TYPES_ASSET,
         "core_span_method_size",
         _member(
             "tsl::span<T>::size",
@@ -329,7 +331,7 @@ _DECLARATIONS = (
         ),
     ),
     _StaticDeclaration(
-        "tsl_core.hpp",
+        _CPP_CORE_TYPES_ASSET,
         "core_declaration_simd",
         _type(
             "tsl::simd",
@@ -341,7 +343,7 @@ _DECLARATIONS = (
         ),
     ),
     _StaticDeclaration(
-        "tsl_core.hpp",
+        _CPP_CORE_TYPES_ASSET,
         "core_declaration_reg_param",
         _type(
             "tsl::reg_param",
@@ -353,7 +355,7 @@ _DECLARATIONS = (
         ),
     ),
     _static_member(
-        "tsl_core.hpp",
+        _CPP_CORE_TYPES_ASSET,
         "core_reg_param_alias_type",
         _member(
             "tsl::reg_param<Vec>::type",
@@ -366,7 +368,7 @@ _DECLARATIONS = (
         ),
     ),
     _StaticDeclaration(
-        "tsl_core.hpp",
+        _CPP_CORE_TYPES_ASSET,
         "core_declaration_array_type",
         _type(
             "tsl::array_type",
@@ -385,7 +387,7 @@ _DECLARATIONS = (
         ),
     ),
     _static_member(
-        "tsl_core.hpp",
+        _CPP_CORE_TYPES_ASSET,
         "core_array_field_storage",
         _member(
             "tsl::array_type<T,N,Align>::_storage",
@@ -399,7 +401,7 @@ _DECLARATIONS = (
         ),
     ),
     _static_member(
-        "tsl_core.hpp",
+        _CPP_CORE_TYPES_ASSET,
         "core_array_method_data_mut",
         _member(
             "tsl::array_type<T,N,Align>::data#mutable",
@@ -412,7 +414,7 @@ _DECLARATIONS = (
         ),
     ),
     _static_member(
-        "tsl_core.hpp",
+        _CPP_CORE_TYPES_ASSET,
         "core_array_method_data_const",
         _member(
             "tsl::array_type<T,N,Align>::data#const",
@@ -426,7 +428,7 @@ _DECLARATIONS = (
         ),
     ),
     _static_member(
-        "tsl_core.hpp",
+        _CPP_CORE_TYPES_ASSET,
         "core_array_method_as_ptr",
         _member(
             "tsl::array_type<T,N,Align>::as_ptr",
@@ -440,7 +442,7 @@ _DECLARATIONS = (
         ),
     ),
     _static_member(
-        "tsl_core.hpp",
+        _CPP_CORE_TYPES_ASSET,
         "core_array_method_as_mut_ptr",
         _member(
             "tsl::array_type<T,N,Align>::as_mut_ptr",
@@ -453,7 +455,7 @@ _DECLARATIONS = (
         ),
     ),
     _static_member(
-        "tsl_core.hpp",
+        _CPP_CORE_TYPES_ASSET,
         "core_array_method_index_mut",
         _member(
             "tsl::array_type<T,N,Align>::operator[]#mutable",
@@ -467,7 +469,7 @@ _DECLARATIONS = (
         ),
     ),
     _static_member(
-        "tsl_core.hpp",
+        _CPP_CORE_TYPES_ASSET,
         "core_array_method_index_const",
         _member(
             "tsl::array_type<T,N,Align>::operator[]#const",
@@ -482,7 +484,7 @@ _DECLARATIONS = (
         ),
     ),
     _static_member(
-        "tsl_core.hpp",
+        _CPP_CORE_TYPES_ASSET,
         "core_array_method_fill",
         _member(
             "tsl::array_type<T,N,Align>::fill",

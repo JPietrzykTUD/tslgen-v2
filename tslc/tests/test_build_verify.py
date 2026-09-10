@@ -216,6 +216,65 @@ def test_cpp_incomplete_compaction_keeps_admitted_algorithms_compilable(
     assert executed.returncode == 0, executed.stderr
 
 
+def test_cpp_core_headers_are_self_contained(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    compilers = tuple(
+        dict.fromkeys(
+            compiler
+            for compiler in (shutil.which("c++"), _native_clangxx())
+            if compiler is not None
+        )
+    )
+    if not compilers:
+        pytest.skip("a native C++ compiler is required")
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["add"],
+        profiles=["scalar"],
+        backends=["cpp"],
+        type_tags=["si32"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    generated = tmp_path / "generated"
+    write_report = write_artifacts(result.artifacts, generated)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    headers = (
+        "tsl_core_detail_types.hpp",
+        "tsl_core_detail_memory.hpp",
+        "tsl_core_detail_scalar.hpp",
+        "tsl_core_detail_mask.hpp",
+        "tsl_core_detail_io.hpp",
+        "tsl_core.hpp",
+    )
+    for compiler in compilers:
+        compiler_name = Path(compiler).name.replace("+", "x")
+        for header in headers:
+            source = tmp_path / f"{compiler_name}_{header}.cpp"
+            source.write_text(f"#include <{header}>\n", encoding="utf-8")
+            compiled = subprocess.run(
+                (
+                    compiler,
+                    "-std=c++17",
+                    "-Wall",
+                    "-Wextra",
+                    "-Werror",
+                    "-pedantic",
+                    "-fsyntax-only",
+                    f"-I{generated / 'cpp' / 'include'}",
+                    str(source),
+                ),
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            assert compiled.returncode == 0, (
+                f"{compiler} could not compile {header}:\n{compiled.stderr}"
+            )
+
+
 def test_clang_vector_overlay_builds_and_runs_through_opt_in_target(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:

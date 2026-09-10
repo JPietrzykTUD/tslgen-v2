@@ -788,22 +788,6 @@
       "family": "tooling_only"
     },
     {
-      "id": "tslc/src/tslc/backend/assets/tsl_core.hpp|require_same_lanes|throw|8a50669413a63275|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_core.hpp",
-      "owner": "require_same_lanes",
-      "kind": "throw",
-      "excerpt": "throw std::invalid_argument( \"lane-preserving conversion requires equal source and target lane counts\" );",
-      "family": "static_representation_or_lane_shape"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_core.hpp|require_same_lanes|trap|b375913dce9106f7|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_core.hpp",
-      "owner": "require_same_lanes",
-      "kind": "trap",
-      "excerpt": "__builtin_trap();",
-      "family": "static_representation_or_lane_shape"
-    },
-    {
       "id": "tslc/src/tslc/backend/assets/tsl_core.rs|bit_cast|assert_eq|51144d90f8521bbf|0",
       "path": "tslc/src/tslc/backend/assets/tsl_core.rs",
       "owner": "bit_cast",
@@ -874,6 +858,22 @@
       "kind": "panic",
       "excerpt": "panic!(\"unsupported scalar-as cast\")",
       "family": "implementation_exhaustiveness"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_core_detail_scalar.hpp|require_same_lanes|throw|8a50669413a63275|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_core_detail_scalar.hpp",
+      "owner": "require_same_lanes",
+      "kind": "throw",
+      "excerpt": "throw std::invalid_argument( \"lane-preserving conversion requires equal source and target lane counts\" );",
+      "family": "static_representation_or_lane_shape"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_core_detail_scalar.hpp|require_same_lanes|trap|b375913dce9106f7|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_core_detail_scalar.hpp",
+      "owner": "require_same_lanes",
+      "kind": "trap",
+      "excerpt": "__builtin_trap();",
+      "family": "static_representation_or_lane_shape"
     },
     {
       "id": "tslc/src/tslc/backend/assets/tsl_rust_policy_json.rs|Err|expect|f647d570b2ec41dd|0",

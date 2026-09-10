@@ -50,11 +50,63 @@ from tslc.syntax.parser import TslParser
 
 RUST_POLICY_MANIFEST = load_rust_policy_manifest()
 
+CPP_CORE_INTERNAL_HEADERS = (
+    "tsl_core_detail_types.hpp",
+    "tsl_core_detail_memory.hpp",
+    "tsl_core_detail_scalar.hpp",
+    "tsl_core_detail_mask.hpp",
+    "tsl_core_detail_io.hpp",
+)
+
+CPP_CORE_RUNTIME_SYMBOLS = {
+    "tsl_core_detail_memory.hpp": (
+        "mem_alloc(",
+        "mem_alloc_aligned(",
+        "mem_free(",
+        "indexed_memory_address_error(",
+        "assume_aligned(",
+        "ptr_add_mut(",
+        "ptr_add(",
+        "idx_offset(",
+    ),
+    "tsl_core_detail_scalar.hpp": (
+        "base_type_dispatch_key",
+        "scalar_or_register_arg(",
+        "bit_cast(",
+        "saturating_cast(",
+        "scalar_as_cast(",
+        "lane_get_unchecked(",
+        "lane_set_unchecked(",
+        "require_same_lanes(",
+        "random_step_u64(",
+        "arith_add(",
+        "arith_sub(",
+        "arith_div(",
+        "arith_mul(",
+        "arith_rem(",
+    ),
+    "tsl_core_detail_mask.hpp": (
+        "mask_lane_all_true(",
+        "mask_lane_all_false(",
+        "uint_for_bits",
+        "lane_bitmask_int",
+        "popcount(",
+        "ctz(",
+        "clz(",
+        "imask_low_bits(",
+        "imask_insert(",
+        "imask_extract(",
+        "mask_test(",
+    ),
+    "tsl_core_detail_io.hpp": ("ostream_write(",),
+}
+
 
 def test_checked_error_assets_match_the_typed_error_registry() -> None:
     assets = load_default_render_assets()
     cpp = assets.fill(
-        "tsl_core.hpp", **cpp_static_declaration_holes("tsl_core.hpp")
+        "tsl_core_detail_types.hpp",
+        **cpp_static_declaration_holes("tsl_core_detail_types.hpp"),
     )
     rust = assets.fill("tsl_core.rs", **rust_static_declaration_holes())
 
@@ -98,7 +150,7 @@ def test_rust_cpu_identity_uses_msrv_compatible_cpuid_calls() -> None:
 
 
 def test_allocation_helpers_define_shared_total_contract() -> None:
-    cpp_core = load_default_render_assets().text("tsl_core.hpp")
+    cpp_core = load_default_render_assets().text("tsl_core_detail_memory.hpp")
     rust_core = load_default_render_assets().text("tsl_core.rs")
 
     assert "#if defined(_MSC_VER)\n#include <malloc.h>" in cpp_core
@@ -117,6 +169,41 @@ def test_allocation_helpers_define_shared_total_contract() -> None:
     assert ".checked_add(effective_alignment - 1)" in rust_core
     assert "aligned_alloc(effective_alignment, allocation_size)" in rust_core
     assert "u64, f32, f64, usize" in rust_core
+
+
+def test_cpp_core_facade_orders_focused_internal_headers() -> None:
+    assets = load_default_render_assets()
+    facade = assets.text("tsl_core.hpp")
+    includes = tuple(f'#include "{header}"' for header in CPP_CORE_INTERNAL_HEADERS)
+
+    assert tuple(facade.index(include) for include in includes) == tuple(
+        sorted(facade.index(include) for include in includes)
+    )
+    for header in CPP_CORE_INTERNAL_HEADERS[1:]:
+        content = assets.text(header)
+        assert '#include "tsl_core_detail_types.hpp"' in content
+        assert all(
+            f'#include "{sibling}"' not in content
+            for sibling in CPP_CORE_INTERNAL_HEADERS[1:]
+            if sibling != header
+        )
+
+
+def test_cpp_core_runtime_symbols_have_one_focused_asset_owner() -> None:
+    assets = load_default_render_assets()
+    contents = {
+        header: assets.text(header)
+        for header in ("tsl_core.hpp", *CPP_CORE_INTERNAL_HEADERS)
+    }
+
+    for owner, symbols in CPP_CORE_RUNTIME_SYMBOLS.items():
+        for symbol in symbols:
+            assert symbol in contents[owner]
+            assert all(
+                symbol not in content
+                for header, content in contents.items()
+                if header != owner
+            )
 
 
 def test_render_assets_freeze_and_fill_templates() -> None:

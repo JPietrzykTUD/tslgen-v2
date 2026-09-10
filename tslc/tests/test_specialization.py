@@ -427,6 +427,11 @@ def test_artifact_layout(specialization_result) -> None:
     # static cores, per-profile headers, top-level dispatch, per-profile smokes.
     assert {
         "cpp/include/tsl_core.hpp",
+        "cpp/include/tsl_core_detail_types.hpp",
+        "cpp/include/tsl_core_detail_memory.hpp",
+        "cpp/include/tsl_core_detail_scalar.hpp",
+        "cpp/include/tsl_core_detail_mask.hpp",
+        "cpp/include/tsl_core_detail_io.hpp",
         "cpp/include/tsl_primitives.hpp",
         "cpp/include/tsl_dataparallel.hpp",
         "cpp/include/tsl_algorithm_tags.hpp",
@@ -480,7 +485,7 @@ def test_artifact_layout(specialization_result) -> None:
 def test_cpp_core_vectors_expose_metadata_constants(
     specialization_artifacts: dict[str, str]
 ) -> None:
-    core = specialization_artifacts["cpp/include/tsl_core.hpp"]
+    core = specialization_artifacts["cpp/include/tsl_core_detail_types.hpp"]
 
     assert "enum class implementation_state" in core
     assert "not an instruction-count or" in core
@@ -521,7 +526,7 @@ def test_cpp_algorithm_mask_layout_uses_typed_vector_metadata(
 def test_cpp_static_lane_mismatch_traps_on_non_unwinding_targets(
     specialization_artifacts: dict[str, str]
 ) -> None:
-    core = specialization_artifacts["cpp/include/tsl_core.hpp"]
+    core = specialization_artifacts["cpp/include/tsl_core_detail_scalar.hpp"]
 
     assert "defined(__SYCL_DEVICE_ONLY__) || defined(__wasm__)" in core
     assert "!defined(__cpp_exceptions) && !defined(_CPPUNWIND)" in core
@@ -541,7 +546,7 @@ def test_cpp_static_lane_mismatch_traps_on_non_unwinding_targets(
 def test_cpp_core_base_dispatch_admits_explicit_scalar_types(
     specialization_artifacts: dict[str, str]
 ) -> None:
-    core = specialization_artifacts["cpp/include/tsl_core.hpp"]
+    core = specialization_artifacts["cpp/include/tsl_core_detail_scalar.hpp"]
 
     assert "template <class T, class Enable = void>\nstruct base_type_dispatch_key;" in core
     assert (

@@ -442,7 +442,7 @@ def test_clang_vector_overlay_is_split_guarded_and_uses_hardware_facade(
     ) not in cmake
     assert "add_executable(tsl_consumer tests/consumer.cpp)" in cmake
     assert "add_custom_target(tsl_quality DEPENDS tsl_smoke tsl_consumer)" in cmake
-    core = by["cpp/include/tsl_core.hpp"]
+    core = by["cpp/include/tsl_core_detail_scalar.hpp"]
     assert "defined(__wasm32__)" in core
     assert "defined(__wasm64__)" in core
     assert "struct clang_v128 {};" in overlay
@@ -1416,6 +1416,7 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
     assert "::tsl::less_than<Vec>(data, zero)" in header
     assert "::tsl::neg<Vec>(data),\n" in header
     assert "::tsl::set_zero<Vec>()" in header
+    assert "#include <vector>" in header
     assert "std::vector<float> dividends_storage" in header
     assert "std::vector<double> divisors_storage" in header
     assert "::tsl::mod<tsl::simd<float, tsl::scalar>>" in header
