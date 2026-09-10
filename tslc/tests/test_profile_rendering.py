@@ -370,7 +370,7 @@ def test_representative_project_shape_is_byte_stable(
         "rust/Cargo.toml": "994e9d912db23d0ba8d6f4763b54bdea83c838f6b8427af8e038be42b2f5f860",
         "rust/src/lib.rs": "0a57fa83b8458be54a2313e7ffc3b77c798accc546089acfda6c41f1421e25ad",
         "rust/src/tsl_documentation.rs": "9b67bf0a87556f23e8b0e4d4b5c1d6215c46367d4c1b6e1bbfa76ba8a27cf089",
-        "rust/src/tsl_scalar.rs": "47b89acd99eac174a1c446eef07327d5fb47a573d4e9385faacaa6b982467707",
+        "rust/src/tsl_scalar.rs": "dc897534295f08bc366eb4b0428e4f88316f1736a9ac67e91e001238cfd1285e",
         "rust/tests/smoke.rs": "a4d108f502689e7f29ba5259e22779e8ef0afa36ab83c239022e2772d68d6b44",
     }
     actual = {
