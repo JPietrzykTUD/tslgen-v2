@@ -2516,9 +2516,12 @@ prim<v:=(v,sImm)> shift_right(data, shift):
                       value(type::size_bits(base::in)) - 1,
                       value(vector::runtime_length)
                     ));
+                  } else<compile> {
+                    complete(call<primitive=set_zero[Vec]>());
                   }
+                } else<generation> {
+                  complete(call<primitive=set_zero[Vec]>());
                 }
-                complete(call<primitive=set_zero[Vec]>());
               }
               _ => {
                 if<generation>(value(type::is_signed(base::in))) {
@@ -3179,9 +3182,12 @@ prim<v:=(v,s)> shift_right(data, shift):
                 if<generation>(value(type::is_signed(base::in))) {
                   if<compile>(PreserveSign) {
                     complete(sign_mask);
+                  } else<compile> {
+                    complete(call<primitive=set_zero[Vec]>());
                   }
+                } else<generation> {
+                  complete(call<primitive=set_zero[Vec]>());
                 }
-                complete(call<primitive=set_zero[Vec]>());
               }
               var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
               var<const_infer>(count, call<primitive=set1[CountVec]>(cast<static>(si64, shift)));
@@ -3200,9 +3206,12 @@ prim<v:=(v,s)> shift_right(data, shift):
                   complete(call<primitive=reinterpret[UVec, Vec]>(
                     call<primitive=binary_or[UVec]>(logical, fill)
                   ));
+                } else<compile> {
+                  complete(call<primitive=reinterpret[UVec, Vec]>(logical));
                 }
+              } else<generation> {
+                complete(call<primitive=reinterpret[UVec, Vec]>(logical));
               }
-              complete(call<primitive=reinterpret[UVec, Vec]>(logical));
             """
       f?:
         requires [avx512f]
@@ -3404,9 +3413,12 @@ prim<v:=(v,s)> shift_right(data, shift):
                 if<generation>(value(type::is_signed(base::in))) {
                   if<compile>(PreserveSign) {
                     complete(sign_mask);
+                  } else<compile> {
+                    complete(call<primitive=set_zero[Vec]>());
                   }
+                } else<generation> {
+                  complete(call<primitive=set_zero[Vec]>());
                 }
-                complete(call<primitive=set_zero[Vec]>());
               }
               var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
               var<const_infer>(count, call<primitive=set1[CountVec]>(cast<static>(si64, shift)));
@@ -3425,9 +3437,12 @@ prim<v:=(v,s)> shift_right(data, shift):
                   complete(call<primitive=reinterpret[UVec, Vec]>(
                     call<primitive=binary_or[UVec]>(logical, fill)
                   ));
+                } else<compile> {
+                  complete(call<primitive=reinterpret[UVec, Vec]>(logical));
                 }
+              } else<generation> {
+                complete(call<primitive=reinterpret[UVec, Vec]>(logical));
               }
-              complete(call<primitive=reinterpret[UVec, Vec]>(logical));
             """
       f?:
         requires [avx]
@@ -3602,9 +3617,12 @@ prim<v:=(v,s)> shift_right(data, shift):
                 if<generation>(value(type::is_signed(base::in))) {
                   if<compile>(PreserveSign) {
                     complete(sign_mask);
+                  } else<compile> {
+                    complete(call<primitive=set_zero[Vec]>());
                   }
+                } else<generation> {
+                  complete(call<primitive=set_zero[Vec]>());
                 }
-                complete(call<primitive=set_zero[Vec]>());
               }
               var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
               var<const_infer>(count, call<primitive=set1[CountVec]>(cast<static>(si64, shift)));
@@ -3623,9 +3641,12 @@ prim<v:=(v,s)> shift_right(data, shift):
                   complete(call<primitive=reinterpret[UVec, Vec]>(
                     call<primitive=binary_or[UVec]>(logical, fill)
                   ));
+                } else<compile> {
+                  complete(call<primitive=reinterpret[UVec, Vec]>(logical));
                 }
+              } else<generation> {
+                complete(call<primitive=reinterpret[UVec, Vec]>(logical));
               }
-              complete(call<primitive=reinterpret[UVec, Vec]>(logical));
             """
       f?:
         requires [sse, sse2]
@@ -3943,9 +3964,12 @@ prim<v:=(v,s)> shift_right(data, shift):
                       value(type::size_bits(base::in)) - 1,
                       value(vector::runtime_length)
                     ));
+                  } else<compile> {
+                    complete(call<primitive=set_zero[Vec]>());
                   }
+                } else<generation> {
+                  complete(call<primitive=set_zero[Vec]>());
                 }
-                complete(call<primitive=set_zero[Vec]>());
               }
               if<generation>(value(type::is_signed(base::in))) {
                 if<compile>(PreserveSign) {
@@ -4241,9 +4265,12 @@ prim<v:=(v,v)> shift_right(data, shift):
                   complete(call<primitive=reinterpret[UVec, Vec]>(
                     call<primitive=binary_or[UVec]>(logical, fill)
                   ));
+                } else<compile> {
+                  complete(call<primitive=reinterpret[UVec, Vec]>(logical));
                 }
+              } else<generation> {
+                complete(call<primitive=reinterpret[UVec, Vec]>(logical));
               }
-              complete(call<primitive=reinterpret[UVec, Vec]>(logical));
             """
     [avx2_vl, sse_vl]:
       ?i16:
@@ -4342,9 +4369,12 @@ prim<v:=(v,v)> shift_right(data, shift):
                   complete(call<primitive=reinterpret[UVec, Vec]>(
                     call<primitive=binary_or[UVec]>(logical, fill)
                   ));
+                } else<compile> {
+                  complete(call<primitive=reinterpret[UVec, Vec]>(logical));
                 }
+              } else<generation> {
+                complete(call<primitive=reinterpret[UVec, Vec]>(logical));
               }
-              complete(call<primitive=reinterpret[UVec, Vec]>(logical));
             """
       ?i16:
         requires:
@@ -4382,20 +4412,25 @@ prim<v:=(v,v)> shift_right(data, shift):
                       intrin<slli, build[suffix=epi32]>(odd_low, 16)
                     )
                   ));
+                } else<compile> {
+                  complete(call<primitive=reinterpret[UVec, Vec]>(
+                    call<primitive=@self[UVec, false]>(udata, counts)
+                  ));
                 }
+              } else<generation> {
+                var<const_infer>(even_data, call<primitive=binary_and[UVec]>(udata, word_mask));
+                var<const_infer>(even_shifted, intrin<srlv, build[suffix=epi32]>(even_data, even_counts));
+                var<const_infer>(even_result, call<primitive=binary_and[UVec]>(even_shifted, word_mask));
+                var<const_infer>(odd_data, intrin<srli, build[suffix=epi32]>(udata, 16));
+                var<const_infer>(odd_shifted, intrin<srlv, build[suffix=epi32]>(odd_data, odd_counts));
+                var<const_infer>(odd_low, call<primitive=binary_and[UVec]>(odd_shifted, word_mask));
+                complete(call<primitive=reinterpret[UVec, Vec]>(
+                  call<primitive=binary_or[UVec]>(
+                    even_result,
+                    intrin<slli, build[suffix=epi32]>(odd_low, 16)
+                  )
+                ));
               }
-              var<const_infer>(even_data, call<primitive=binary_and[UVec]>(udata, word_mask));
-              var<const_infer>(even_shifted, intrin<srlv, build[suffix=epi32]>(even_data, even_counts));
-              var<const_infer>(even_result, call<primitive=binary_and[UVec]>(even_shifted, word_mask));
-              var<const_infer>(odd_data, intrin<srli, build[suffix=epi32]>(udata, 16));
-              var<const_infer>(odd_shifted, intrin<srlv, build[suffix=epi32]>(odd_data, odd_counts));
-              var<const_infer>(odd_low, call<primitive=binary_and[UVec]>(odd_shifted, word_mask));
-              complete(call<primitive=reinterpret[UVec, Vec]>(
-                call<primitive=binary_or[UVec]>(
-                  even_result,
-                  intrin<slli, build[suffix=epi32]>(odd_low, 16)
-                )
-              ));
             """
     avx512:
       [ui16, ui32, ui64]:
