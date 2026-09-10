@@ -494,6 +494,7 @@ def test_algorithm_assets_have_one_typed_declaration_hole_per_record() -> None:
             "tsl_algorithm_iteration.hpp",
             "tsl_algorithm_predicate.hpp",
             "tsl_algorithm_count.hpp",
+            "tsl_algorithm_select.hpp",
             "tsl_algorithm_families.hpp",
         )
     )

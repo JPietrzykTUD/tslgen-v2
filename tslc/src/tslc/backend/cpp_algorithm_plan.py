@@ -284,6 +284,7 @@ _CPP_SPLIT_ALGORITHM_SEMANTIC_FAMILIES = (
     AlgorithmSemanticFamily.ITERATION,
     AlgorithmSemanticFamily.PREDICATE,
     AlgorithmSemanticFamily.COUNT,
+    AlgorithmSemanticFamily.SELECT,
 )
 
 

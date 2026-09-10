@@ -585,10 +585,10 @@ count. Neutral lowering never constructs a C++ or Rust lane-count expression.
 C++ keeps `tsl_algorithm.hpp` as the stable public umbrella. The project-wide
 algorithm admission plan owns its ordered generated family-header records and
 the renderer only formats those decided includes. Utility aliases and helpers,
-iteration, predicate, and count now have focused public headers; the three
-behavioral families also own matching private detail-loop headers. Selection,
-transform, consume, and aggregate remain in temporary public/detail catchalls
-until their ordered layout slices move them.
+iteration, predicate, count, and selection/index now have focused public
+headers; the four behavioral families also own matching private detail-loop
+headers. Transform, consume, and aggregate remain in temporary public/detail
+catchalls until their ordered layout slices move them.
 
 The public safety surface is a typed projection, not a renderer convention.
 [backend/checked_api.py](src/tslc/backend/checked_api.py) admits a `_checked`
