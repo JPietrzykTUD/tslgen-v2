@@ -120,6 +120,7 @@ def test_generated_checked_surface_exactly_projects_the_registry() -> None:
             "tsl_algorithm_predicate.rs",
             "tsl_algorithm_count.rs",
             "tsl_algorithm_select.rs",
+            "tsl_algorithm_transform.rs",
             "tsl_algorithm_families.rs",
         )
     )
@@ -334,7 +335,7 @@ def test_generated_transform_checked_surfaces_use_contract_guards(
         "range_size(output)"
     )
 
-    rust = artifacts["rust/src/tsl_algorithm/families.rs"]
+    rust = artifacts["rust/src/tsl_algorithm/transform.rs"]
     profile = artifacts["rust/src/tsl_scalar/algo/transform.rs"]
     assert "pub fn transform_unary_checked<" in rust
     assert "return Err(crate::PreconditionError::InsufficientOutput);" in rust

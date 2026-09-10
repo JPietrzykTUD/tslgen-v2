@@ -524,38 +524,6 @@
       "family": "static_representation_or_lane_shape"
     },
     {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm_families.rs|transform_binary_raw|assert|efcd9e30c6585633|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm_families.rs",
-      "owner": "transform_binary_raw",
-      "kind": "assert",
-      "excerpt": "assert!( lanes > 0, \"tsl::algo::transform_binary requires a vector with at least one lane\", );",
-      "family": "static_representation_or_lane_shape"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm_families.rs|transform_selected_binary_scaled_raw|assert|595dae8e3efbb61e|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm_families.rs",
-      "owner": "transform_selected_binary_scaled_raw",
-      "kind": "assert",
-      "excerpt": "assert!( lanes > 0, \"tsl::algo::transform_selected_binary requires a vector with at least one lane\", );",
-      "family": "static_representation_or_lane_shape"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm_families.rs|transform_selected_unary_scaled_raw|assert|ff68601aea5a705f|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm_families.rs",
-      "owner": "transform_selected_unary_scaled_raw",
-      "kind": "assert",
-      "excerpt": "assert!( lanes > 0, \"tsl::algo::transform_selected_unary requires a vector with at least one lane\", );",
-      "family": "static_representation_or_lane_shape"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm_families.rs|transform_unary_raw|assert|fe9af0de1aa58a7b|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm_families.rs",
-      "owner": "transform_unary_raw",
-      "kind": "assert",
-      "excerpt": "assert!( lanes > 0, \"tsl::algo::transform_unary requires a vector with at least one lane\", );",
-      "family": "static_representation_or_lane_shape"
-    },
-    {
       "id": "tslc/src/tslc/backend/assets/tsl_algorithm_iteration.rs|for_each_chunk_raw|assert|d23a82219d4650bc|0",
       "path": "tslc/src/tslc/backend/assets/tsl_algorithm_iteration.rs",
       "owner": "for_each_chunk_raw",
@@ -593,6 +561,38 @@
       "owner": "validate_integral_mask_vector",
       "kind": "assert",
       "excerpt": "assert!( lanes > 0, \"{} requires a vector with at least one lane\", helper_name, );",
+      "family": "static_representation_or_lane_shape"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm_transform.rs|transform_binary_raw|assert|efcd9e30c6585633|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm_transform.rs",
+      "owner": "transform_binary_raw",
+      "kind": "assert",
+      "excerpt": "assert!( lanes > 0, \"tsl::algo::transform_binary requires a vector with at least one lane\", );",
+      "family": "static_representation_or_lane_shape"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm_transform.rs|transform_selected_binary_scaled_raw|assert|595dae8e3efbb61e|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm_transform.rs",
+      "owner": "transform_selected_binary_scaled_raw",
+      "kind": "assert",
+      "excerpt": "assert!( lanes > 0, \"tsl::algo::transform_selected_binary requires a vector with at least one lane\", );",
+      "family": "static_representation_or_lane_shape"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm_transform.rs|transform_selected_unary_scaled_raw|assert|ff68601aea5a705f|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm_transform.rs",
+      "owner": "transform_selected_unary_scaled_raw",
+      "kind": "assert",
+      "excerpt": "assert!( lanes > 0, \"tsl::algo::transform_selected_unary requires a vector with at least one lane\", );",
+      "family": "static_representation_or_lane_shape"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm_transform.rs|transform_unary_raw|assert|fe9af0de1aa58a7b|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm_transform.rs",
+      "owner": "transform_unary_raw",
+      "kind": "assert",
+      "excerpt": "assert!( lanes > 0, \"tsl::algo::transform_unary requires a vector with at least one lane\", );",
       "family": "static_representation_or_lane_shape"
     },
     {

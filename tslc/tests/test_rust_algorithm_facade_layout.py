@@ -21,6 +21,7 @@ def test_root_algorithm_exports_are_projected_from_exact_declarations() -> None:
         AlgorithmSemanticFamily.PREDICATE,
         AlgorithmSemanticFamily.COUNT,
         AlgorithmSemanticFamily.SELECT,
+        AlgorithmSemanticFamily.TRANSFORM,
     )
     remaining_families = tuple(
         family for family in AlgorithmSemanticFamily if family not in split_families
@@ -71,6 +72,7 @@ def test_root_algorithm_uses_private_one_way_substrate_modules(
         "predicate",
         "count",
         "select",
+        "transform",
         "families",
     )
 
@@ -95,6 +97,7 @@ def test_root_algorithm_uses_private_one_way_substrate_modules(
     predicate = artifacts["rust/src/tsl_algorithm/predicate.rs"]
     count = artifacts["rust/src/tsl_algorithm/count.rs"]
     selection = artifacts["rust/src/tsl_algorithm/select.rs"]
+    transform = artifacts["rust/src/tsl_algorithm/transform.rs"]
     assert "for_each_chunk_raw" in iteration
     assert "predicate_unary_raw" not in iteration
     assert "predicate_unary_raw" in predicate
@@ -104,6 +107,10 @@ def test_root_algorithm_uses_private_one_way_substrate_modules(
     assert "select_unary_raw" in selection
     assert "select_selected_indices_binary_scaled_raw" in selection
     assert "transform_selected_unary_raw" not in selection
+    assert "transform_selected_unary_raw" in transform
+    assert "transform_where_binary_raw" in transform
+    assert "transform_masked_binary_mask_layout_raw" in transform
+    assert "consume_selected_unary_raw" not in transform
 
     public_inventory = artifacts["rust/public-api.json"]
     assert "tsl_algorithm::representation" not in public_inventory
@@ -114,4 +121,5 @@ def test_root_algorithm_uses_private_one_way_substrate_modules(
     assert "tsl_algorithm::predicate" not in public_inventory
     assert "tsl_algorithm::count" not in public_inventory
     assert "tsl_algorithm::select" not in public_inventory
+    assert "tsl_algorithm::transform" not in public_inventory
     assert "tsl_algorithm::families" not in public_inventory

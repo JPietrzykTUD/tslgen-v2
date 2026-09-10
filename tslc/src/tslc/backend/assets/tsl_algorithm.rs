@@ -55,6 +55,12 @@ pub use self::select::{
 };
 
 #[doc(hidden)]
+mod transform;
+pub use self::transform::{
+@{algorithm_transform_reexports}
+};
+
+#[doc(hidden)]
 mod families;
 pub use self::families::{
 @{algorithm_family_reexports}

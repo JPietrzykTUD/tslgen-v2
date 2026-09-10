@@ -450,6 +450,7 @@ def test_artifact_layout(specialization_result) -> None:
         "rust/src/tsl_algorithm/predicate.rs",
         "rust/src/tsl_algorithm/count.rs",
         "rust/src/tsl_algorithm/select.rs",
+        "rust/src/tsl_algorithm/transform.rs",
         "rust/src/tsl_algorithm/families.rs",
         "rust/src/tsl_avx2.rs",
         "rust/src/lib.rs",

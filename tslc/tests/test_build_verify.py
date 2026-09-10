@@ -994,6 +994,7 @@ def test_rust_path_dependency_consumer_builds(
         "src/tsl_algorithm/predicate.rs",
         "src/tsl_algorithm/count.rs",
         "src/tsl_algorithm/select.rs",
+        "src/tsl_algorithm/transform.rs",
         "src/tsl_algorithm/families.rs",
         "src/tsl_scalar/algo.rs",
         "src/tsl_scalar/algo/support.rs",

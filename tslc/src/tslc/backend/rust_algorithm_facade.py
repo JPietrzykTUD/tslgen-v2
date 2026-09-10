@@ -143,6 +143,11 @@ _RUST_ALGORITHM_SPLIT_FAMILY_ASSETS = (
     ),
     (AlgorithmSemanticFamily.COUNT, "count", "tsl_algorithm_count.rs"),
     (AlgorithmSemanticFamily.SELECT, "select", "tsl_algorithm_select.rs"),
+    (
+        AlgorithmSemanticFamily.TRANSFORM,
+        "transform",
+        "tsl_algorithm_transform.rs",
+    ),
 )
 _RUST_ALGORITHM_REMAINING_FAMILIES = tuple(
     family
