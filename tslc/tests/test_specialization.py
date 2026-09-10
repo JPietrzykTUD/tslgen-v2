@@ -436,12 +436,14 @@ def test_artifact_layout(specialization_result) -> None:
         "cpp/include/tsl_algorithm_detail_predicate.hpp",
         "cpp/include/tsl_algorithm_detail_count.hpp",
         "cpp/include/tsl_algorithm_detail_select.hpp",
+        "cpp/include/tsl_algorithm_detail_transform.hpp",
         "cpp/include/tsl_algorithm_detail_loops.hpp",
         "cpp/include/tsl_algorithm_utility.hpp",
         "cpp/include/tsl_algorithm_iteration.hpp",
         "cpp/include/tsl_algorithm_predicate.hpp",
         "cpp/include/tsl_algorithm_count.hpp",
         "cpp/include/tsl_algorithm_select.hpp",
+        "cpp/include/tsl_algorithm_transform.hpp",
         "cpp/include/tsl_algorithm_families.hpp",
         "cpp/include/tsl_algorithm.hpp",
         "cpp/include/tsl_x86_traits.hpp",
@@ -648,12 +650,14 @@ def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
             "tsl_algorithm_detail_predicate.hpp",
             "tsl_algorithm_detail_count.hpp",
             "tsl_algorithm_detail_select.hpp",
+            "tsl_algorithm_detail_transform.hpp",
             "tsl_algorithm_detail_loops.hpp",
             "tsl_algorithm_utility.hpp",
             "tsl_algorithm_iteration.hpp",
             "tsl_algorithm_predicate.hpp",
             "tsl_algorithm_count.hpp",
             "tsl_algorithm_select.hpp",
+            "tsl_algorithm_transform.hpp",
             "tsl_algorithm_families.hpp",
             "tsl_algorithm.hpp",
         )
@@ -665,6 +669,12 @@ def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
     ]
     select_detail = specialization_artifacts[
         "cpp/include/tsl_algorithm_detail_select.hpp"
+    ]
+    transform_public = specialization_artifacts[
+        "cpp/include/tsl_algorithm_transform.hpp"
+    ]
+    transform_detail = specialization_artifacts[
+        "cpp/include/tsl_algorithm_detail_transform.hpp"
     ]
     remaining_public = specialization_artifacts[
         "cpp/include/tsl_algorithm_families.hpp"
@@ -679,6 +689,7 @@ def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
         "tsl_algorithm_predicate.hpp",
         "tsl_algorithm_count.hpp",
         "tsl_algorithm_select.hpp",
+        "tsl_algorithm_transform.hpp",
         "tsl_algorithm_families.hpp",
     )
     for header in family_headers:
@@ -693,6 +704,12 @@ def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
     assert "transform_selected_binary_loop(" not in select_detail
     assert "select_selected_indices_binary(" not in remaining_public
     assert "select_selected_indices_binary_loop(" not in remaining_detail
+    assert "transform_selected_binary(" in transform_public
+    assert "aggregate_selected_binary(" not in transform_public
+    assert "transform_masked_binary_dispatch_detect(" in transform_detail
+    assert "aggregate_binary_dispatch_detect(" not in transform_detail
+    assert "transform_selected_binary(" not in remaining_public
+    assert "transform_masked_binary_dispatch_detect(" not in remaining_detail
     assert "namespace tsl::algo" in helper
     assert "#include <iterator>" in helper
     assert "template <class Vec>\nstruct vector_tag" in helper

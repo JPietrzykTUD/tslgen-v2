@@ -141,9 +141,9 @@ def test_cpp_algorithm_admission_is_granular_around_compaction() -> None:
         AlgorithmSemanticFamily.PREDICATE,
         AlgorithmSemanticFamily.COUNT,
         AlgorithmSemanticFamily.SELECT,
+        AlgorithmSemanticFamily.TRANSFORM,
     )
     assert plan.remaining_semantic_families == (
-        AlgorithmSemanticFamily.TRANSFORM,
         AlgorithmSemanticFamily.CONSUME,
         AlgorithmSemanticFamily.AGGREGATE,
     )
