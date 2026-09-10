@@ -22,6 +22,7 @@ from tslc.backend.cpp_algorithm_contracts import (
 )
 from tslc.backend.cpp_algorithm_public_declarations import (
     cpp_algorithm_checked_twin_identity,
+    cpp_consume_aggregate_declarations,
     cpp_algorithm_declaration_holes,
     cpp_algorithm_form_support,
     cpp_algorithm_public_declarations,
@@ -36,6 +37,7 @@ from tslc.backend.rust_algorithm_contracts import (
 from tslc.backend.rust_algorithm_manifest import RUST_ALGORITHM_RESERVED_NAMES
 from tslc.backend.rust_algorithm_public_declarations import (
     rust_algorithm_form_support,
+    rust_consume_aggregate_function_declarations,
     rust_iteration_predicate_count_function_declarations,
     rust_profile_algorithm_declaration_holes,
     rust_profile_algorithm_public_declarations,
@@ -403,6 +405,96 @@ def test_transform_projectors_accept_layout_and_scaled_forms() -> None:
         "synthetic_transform_selected_unary_checked",
         "synthetic_transform_selected_unary_raw",
         "synthetic_transform_selected_unary_scaled_raw",
+    ]
+
+
+def test_consume_aggregate_forms_project_to_existing_records_and_holes() -> None:
+    cpp = cpp_algorithm_public_declarations()
+    cpp_holes = cpp_algorithm_declaration_holes()
+    reachability = ("crate", "profile", "selection:test", "algo")
+    rust = rust_profile_algorithm_public_declarations(reachability)
+    rust_holes = rust_profile_algorithm_declaration_holes()
+
+    for form in ALGORITHM_CALLABLE_FORMS:
+        if form.family.semantic_family not in {
+            AlgorithmSemanticFamily.CONSUME,
+            AlgorithmSemanticFamily.AGGREGATE,
+        }:
+            continue
+        cpp_projected = cpp_consume_aggregate_declarations(form)
+        assert cpp_projected == tuple(
+            declaration
+            for declaration in cpp
+            if declaration.kind is PublicDeclarationKind.FUNCTION
+            and declaration.name == form.family.name
+        )
+        assert all(
+            f"algorithm_declaration_{declaration.name}_"
+            f"{declaration.identity.rsplit('-', 1)[-1]}" in cpp_holes
+            for declaration in cpp_projected
+        )
+
+        rust_projected = rust_consume_aggregate_function_declarations(
+            form,
+            reachability,
+        )
+        projected_identities = {
+            declaration.identity for declaration in rust_projected
+        }
+        assert rust_projected == tuple(
+            declaration
+            for declaration in rust
+            if declaration.identity in projected_identities
+        )
+        assert all(
+            f"profile_algorithm_declaration_{declaration.name}" in rust_holes
+            for declaration in rust_projected
+        )
+
+
+def test_consume_aggregate_projectors_accept_masked_and_scaled_forms() -> None:
+    masked_aggregate = AlgorithmSurfaceFamily(
+        "synthetic_aggregate_masked_binary",
+        AlgorithmSemanticFamily.AGGREGATE,
+        AlgorithmArity.BINARY,
+        AlgorithmShape.MASKED,
+        AlgorithmResultKind.VALUE,
+        has_contract=True,
+    ).callable_forms[0]
+    selected_consume = AlgorithmSurfaceFamily(
+        "synthetic_consume_selected_unary",
+        AlgorithmSemanticFamily.CONSUME,
+        AlgorithmArity.UNARY,
+        AlgorithmShape.SELECTED,
+        AlgorithmResultKind.VOID,
+        has_contract=True,
+        has_scaled_form=True,
+    ).callable_forms[0]
+    reachability = ("crate", "profile", "selection:synthetic", "algo")
+
+    cpp_masked = cpp_consume_aggregate_declarations(masked_aggregate)
+    assert len(cpp_masked) == 4
+    assert all(declaration.result_type == "auto" for declaration in cpp_masked)
+    rust_masked = rust_consume_aggregate_function_declarations(
+        masked_aggregate,
+        reachability,
+    )
+    assert rust_masked[0].result_type is not None
+    assert "MaskedBinaryAggregateKernel" in rust_masked[0].result_type
+
+    cpp_selected = cpp_consume_aggregate_declarations(selected_consume)
+    assert len(cpp_selected) == 2
+    assert cpp_selected[0].template_parameters[1].name == "Scale"
+    assert [
+        declaration.name
+        for declaration in rust_consume_aggregate_function_declarations(
+            selected_consume,
+            reachability,
+        )
+    ] == [
+        "synthetic_consume_selected_unary_checked",
+        "synthetic_consume_selected_unary_raw",
+        "synthetic_consume_selected_unary_scaled_raw",
     ]
 
 

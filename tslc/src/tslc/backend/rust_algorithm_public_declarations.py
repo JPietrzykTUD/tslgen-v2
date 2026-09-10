@@ -17,6 +17,7 @@ from tslc.backend.algorithm_surface import (
     AlgorithmArity,
     AlgorithmCallableForm,
     AlgorithmMaskForm,
+    AlgorithmResultKind,
     AlgorithmSemanticFamily,
     AlgorithmShape,
 )
@@ -905,6 +906,230 @@ def rust_transform_function_declarations(
     )
 
 
+def _rust_consume_aggregate_parameters(
+    form: AlgorithmCallableForm,
+    *,
+    safe: bool,
+) -> tuple[RustPublicParameter, ...]:
+    parameters = [
+        _rust_algorithm_parameter("policy", "Policy"),
+        _rust_algorithm_parameter("op", "&mut Op"),
+    ]
+    if form.family.arity is AlgorithmArity.UNARY:
+        parameters.append(
+            _rust_algorithm_parameter("input", "&[T]" if safe else "*const T")
+        )
+    else:
+        parameters.extend(
+            (
+                _rust_algorithm_parameter(
+                    "left", "&[T]" if safe else "*const T"
+                ),
+                _rust_algorithm_parameter(
+                    "right", "&[T]" if safe else "*const T"
+                ),
+            )
+        )
+    if form.family.shape is AlgorithmShape.MASKED:
+        storage = (
+            "<<Policy as VectorFor<Profile, T>>::Vec as "
+            "SimdVector>::ImaskType"
+        )
+        parameters.append(
+            _rust_algorithm_parameter(
+                "masks", f"&[{storage}]" if safe else f"*const {storage}"
+            )
+        )
+    elif form.family.shape is AlgorithmShape.SELECTED:
+        parameters.append(
+            _rust_algorithm_parameter(
+                "indices", "&[usize]" if safe else "*const usize"
+            )
+        )
+    if not safe:
+        count_name = (
+            "selected_count"
+            if form.family.shape is AlgorithmShape.SELECTED
+            else "count"
+        )
+        parameters.append(_rust_algorithm_parameter(count_name, "usize"))
+    return tuple(parameters)
+
+
+def _rust_consume_aggregate_kernel(form: AlgorithmCallableForm) -> str:
+    mask_prefix = "Masked" if form.family.shape is AlgorithmShape.MASKED else ""
+    arity = "Unary" if form.family.arity is AlgorithmArity.UNARY else "Binary"
+    operation = (
+        "Consume"
+        if form.family.semantic_family is AlgorithmSemanticFamily.CONSUME
+        else "Aggregate"
+    )
+    return f"{mask_prefix}{arity}{operation}Kernel"
+
+
+def _rust_consume_aggregate_where_predicates(
+    form: AlgorithmCallableForm,
+    *,
+    scaled: bool,
+) -> tuple[str, ...]:
+    predicates = [
+        "Policy: VectorFor<Profile, T>",
+        "<Policy as VectorFor<Profile, T>>::Vec: "
+        "StaticSimdVector<BaseType = T>",
+        "Simd<T, Scalar>: StaticSimdVector<BaseType = T>",
+    ]
+    if form.family.shape is AlgorithmShape.SELECTED:
+        scale = "SCALE" if scaled else "0"
+        predicates.append(
+            "Profile: SelectedLoad<<Policy as VectorFor<Profile, T>>::Vec, "
+            f"{scale}> + SelectedLoad<Simd<T, Scalar>, {scale}>"
+        )
+    else:
+        profile = (
+            "Profile: LoadStore<<Policy as VectorFor<Profile, T>>::Vec> "
+            "+ LoadStore<Simd<T, Scalar>>"
+        )
+        if form.family.shape is AlgorithmShape.MASKED:
+            profile += (
+                " + MaskFromIntegral<<Policy as VectorFor<Profile, T>>::Vec>"
+                " + MaskFromIntegral<Simd<T, Scalar>>"
+            )
+        predicates.append(profile)
+    kernel = _rust_consume_aggregate_kernel(form)
+    predicates.append(
+        f"Op: {kernel}<<Policy as VectorFor<Profile, T>>::Vec> "
+        f"+ {kernel}<Simd<T, Scalar>>"
+    )
+    if form.family.shape is AlgorithmShape.MASKED:
+        predicates.extend(
+            (
+                "<<Policy as VectorFor<Profile, T>>::Vec as "
+                "SimdVector>::ImaskType: IntegralMaskWord",
+                "<Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord",
+            )
+        )
+    return tuple(predicates)
+
+
+def _rust_consume_aggregate_result(
+    form: AlgorithmCallableForm,
+    *,
+    checked: bool,
+) -> str | None:
+    if form.family.result_kind is AlgorithmResultKind.VOID:
+        return "Result<(), crate::PreconditionError>" if checked else None
+    if form.family.result_kind is not AlgorithmResultKind.VALUE:
+        raise ValueError("consume/aggregate form has an unsupported result kind")
+    kernel = _rust_consume_aggregate_kernel(form)
+    output = (
+        f"<Op as {kernel}<<Policy as VectorFor<Profile, T>>::Vec>>::Output"
+    )
+    return (
+        f"Result<{output}, crate::PreconditionError>" if checked else output
+    )
+
+
+def _rust_consume_aggregate_form_specs(
+    form: AlgorithmCallableForm,
+) -> tuple[RustAlgorithmDeclarationSpec, ...]:
+    if form.raw_name is None:
+        raise ValueError("Rust consume/aggregate forms require a raw callable")
+    primary_name = form.checked_name or form.name
+    checked = form.checked_name is not None
+    specs = [
+        RustAlgorithmDeclarationSpec(
+            hole=None,
+            name=primary_name,
+            unsafe=False,
+            generic_parameters=_rust_algorithm_generics(form, scaled=False),
+            parameters=_rust_consume_aggregate_parameters(form, safe=True),
+            where_predicates=_rust_consume_aggregate_where_predicates(
+                form,
+                scaled=False,
+            ),
+            result_type=_rust_consume_aggregate_result(
+                form,
+                checked=checked,
+            ),
+        ),
+        RustAlgorithmDeclarationSpec(
+            hole=None,
+            name=form.raw_name,
+            unsafe=True,
+            generic_parameters=_rust_algorithm_generics(form, scaled=False),
+            parameters=_rust_consume_aggregate_parameters(form, safe=False),
+            where_predicates=_rust_consume_aggregate_where_predicates(
+                form,
+                scaled=False,
+            ),
+            result_type=_rust_consume_aggregate_result(form, checked=False),
+        ),
+    ]
+    if form.scaled_raw_name is not None:
+        specs.append(
+            RustAlgorithmDeclarationSpec(
+                hole=None,
+                name=form.scaled_raw_name,
+                unsafe=True,
+                generic_parameters=_rust_algorithm_generics(form, scaled=True),
+                parameters=_rust_consume_aggregate_parameters(form, safe=False),
+                where_predicates=_rust_consume_aggregate_where_predicates(
+                    form,
+                    scaled=True,
+                ),
+                result_type=_rust_consume_aggregate_result(
+                    form,
+                    checked=False,
+                ),
+            )
+        )
+    return tuple(specs)
+
+
+def _rust_consume_aggregate_specs(
+    semantic_family: AlgorithmSemanticFamily,
+    *,
+    selected: bool,
+) -> tuple[RustAlgorithmDeclarationSpec, ...]:
+    return tuple(
+        spec
+        for form in ALGORITHM_CALLABLE_FORMS
+        if form.family.semantic_family is semantic_family
+        and (form.family.shape is AlgorithmShape.SELECTED) is selected
+        for spec in _rust_consume_aggregate_form_specs(form)
+    )
+
+
+def rust_consume_aggregate_function_declarations(
+    form: AlgorithmCallableForm,
+    reachability: tuple[str, ...],
+) -> tuple[RustPublicDeclaration, ...]:
+    """Project one consume/aggregate form into exact Rust declarations."""
+
+    if form.family.semantic_family not in {
+        AlgorithmSemanticFamily.CONSUME,
+        AlgorithmSemanticFamily.AGGREGATE,
+    }:
+        raise ValueError("form is not a Rust consume/aggregate form")
+    if (
+        form.family.shape
+        not in {
+            AlgorithmShape.PLAIN,
+            AlgorithmShape.MASKED,
+            AlgorithmShape.SELECTED,
+        }
+        or form.mask_form is not AlgorithmMaskForm.DEFAULT
+    ):
+        raise ValueError("Rust consume/aggregate form has an unsupported shape")
+    return tuple(
+        spec.declaration(
+            owner=_PROFILE_ALGORITHM_OWNER,
+            reachability=reachability,
+        )
+        for spec in _rust_consume_aggregate_form_specs(form)
+    )
+
+
 _SPECS = (
     *_rust_transform_specs(AlgorithmShape.PLAIN),
     RustAlgorithmDeclarationSpec(
@@ -1010,722 +1235,12 @@ _SPECS = (
     *_rust_predicate_count_specs(),
     *_rust_selection_specs(),
     *_rust_transform_specs(AlgorithmShape.SELECTED),
-    RustAlgorithmDeclarationSpec(
-        hole='profile_algorithm_declaration_consume_selected_unary_checked',
-        name='consume_selected_unary_checked',
-        unsafe=False,
-        generic_parameters=(
-            RustGenericParameter(name='Policy', kind='type', declaration='Policy', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='Op', kind='type', declaration='Op', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='T', kind='type', declaration='T', bounds=(), type_spelling=None, default=None),
-        ),
-        parameters=(
-            RustPublicParameter(name='policy', type_spelling='Policy', role='algorithm-parameter:policy'),
-            RustPublicParameter(name='op', type_spelling='&mut Op', role='algorithm-parameter:op'),
-            RustPublicParameter(name='input', type_spelling='&[T]', role='algorithm-parameter:input'),
-            RustPublicParameter(name='indices', type_spelling='&[usize]', role='algorithm-parameter:indices'),
-        ),
-        where_predicates=(
-            'Policy: VectorFor<Profile, T>',
-            '<Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>',
-            'Simd<T, Scalar>: StaticSimdVector<BaseType = T>',
-            'Profile: SelectedLoad<<Policy as VectorFor<Profile, T>>::Vec, 0> + SelectedLoad<Simd<T, Scalar>, 0>',
-            'Op: UnaryConsumeKernel<<Policy as VectorFor<Profile, T>>::Vec> + UnaryConsumeKernel<Simd<T, Scalar>>',
-        ),
-        result_type='Result<(), crate::PreconditionError>',
-    ),
-    RustAlgorithmDeclarationSpec(
-        hole='profile_algorithm_declaration_consume_selected_unary_raw',
-        name='consume_selected_unary_raw',
-        unsafe=True,
-        generic_parameters=(
-            RustGenericParameter(name='Policy', kind='type', declaration='Policy', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='Op', kind='type', declaration='Op', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='T', kind='type', declaration='T', bounds=(), type_spelling=None, default=None),
-        ),
-        parameters=(
-            RustPublicParameter(name='policy', type_spelling='Policy', role='algorithm-parameter:policy'),
-            RustPublicParameter(name='op', type_spelling='&mut Op', role='algorithm-parameter:op'),
-            RustPublicParameter(name='input', type_spelling='*const T', role='algorithm-parameter:input'),
-            RustPublicParameter(name='indices', type_spelling='*const usize', role='algorithm-parameter:indices'),
-            RustPublicParameter(name='selected_count', type_spelling='usize', role='algorithm-parameter:selected_count'),
-        ),
-        where_predicates=(
-            'Policy: VectorFor<Profile, T>',
-            '<Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>',
-            'Simd<T, Scalar>: StaticSimdVector<BaseType = T>',
-            'Profile: SelectedLoad<<Policy as VectorFor<Profile, T>>::Vec, 0> + SelectedLoad<Simd<T, Scalar>, 0>',
-            'Op: UnaryConsumeKernel<<Policy as VectorFor<Profile, T>>::Vec> + UnaryConsumeKernel<Simd<T, Scalar>>',
-        ),
-        result_type=None,
-    ),
-    RustAlgorithmDeclarationSpec(
-        hole='profile_algorithm_declaration_consume_selected_unary_scaled_raw',
-        name='consume_selected_unary_scaled_raw',
-        unsafe=True,
-        generic_parameters=(
-            RustGenericParameter(name='SCALE', kind='const', declaration='const SCALE: u32', bounds=(), type_spelling='u32', default=None),
-            RustGenericParameter(name='Policy', kind='type', declaration='Policy', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='Op', kind='type', declaration='Op', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='T', kind='type', declaration='T', bounds=(), type_spelling=None, default=None),
-        ),
-        parameters=(
-            RustPublicParameter(name='policy', type_spelling='Policy', role='algorithm-parameter:policy'),
-            RustPublicParameter(name='op', type_spelling='&mut Op', role='algorithm-parameter:op'),
-            RustPublicParameter(name='input', type_spelling='*const T', role='algorithm-parameter:input'),
-            RustPublicParameter(name='indices', type_spelling='*const usize', role='algorithm-parameter:indices'),
-            RustPublicParameter(name='selected_count', type_spelling='usize', role='algorithm-parameter:selected_count'),
-        ),
-        where_predicates=(
-            'Policy: VectorFor<Profile, T>',
-            '<Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>',
-            'Simd<T, Scalar>: StaticSimdVector<BaseType = T>',
-            'Profile: SelectedLoad<<Policy as VectorFor<Profile, T>>::Vec, SCALE> + SelectedLoad<Simd<T, Scalar>, SCALE>',
-            'Op: UnaryConsumeKernel<<Policy as VectorFor<Profile, T>>::Vec> + UnaryConsumeKernel<Simd<T, Scalar>>',
-        ),
-        result_type=None,
-    ),
-    RustAlgorithmDeclarationSpec(
-        hole='profile_algorithm_declaration_consume_selected_binary_checked',
-        name='consume_selected_binary_checked',
-        unsafe=False,
-        generic_parameters=(
-            RustGenericParameter(name='Policy', kind='type', declaration='Policy', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='Op', kind='type', declaration='Op', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='T', kind='type', declaration='T', bounds=(), type_spelling=None, default=None),
-        ),
-        parameters=(
-            RustPublicParameter(name='policy', type_spelling='Policy', role='algorithm-parameter:policy'),
-            RustPublicParameter(name='op', type_spelling='&mut Op', role='algorithm-parameter:op'),
-            RustPublicParameter(name='left', type_spelling='&[T]', role='algorithm-parameter:left'),
-            RustPublicParameter(name='right', type_spelling='&[T]', role='algorithm-parameter:right'),
-            RustPublicParameter(name='indices', type_spelling='&[usize]', role='algorithm-parameter:indices'),
-        ),
-        where_predicates=(
-            'Policy: VectorFor<Profile, T>',
-            '<Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>',
-            'Simd<T, Scalar>: StaticSimdVector<BaseType = T>',
-            'Profile: SelectedLoad<<Policy as VectorFor<Profile, T>>::Vec, 0> + SelectedLoad<Simd<T, Scalar>, 0>',
-            'Op: BinaryConsumeKernel<<Policy as VectorFor<Profile, T>>::Vec> + BinaryConsumeKernel<Simd<T, Scalar>>',
-        ),
-        result_type='Result<(), crate::PreconditionError>',
-    ),
-    RustAlgorithmDeclarationSpec(
-        hole='profile_algorithm_declaration_consume_selected_binary_raw',
-        name='consume_selected_binary_raw',
-        unsafe=True,
-        generic_parameters=(
-            RustGenericParameter(name='Policy', kind='type', declaration='Policy', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='Op', kind='type', declaration='Op', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='T', kind='type', declaration='T', bounds=(), type_spelling=None, default=None),
-        ),
-        parameters=(
-            RustPublicParameter(name='policy', type_spelling='Policy', role='algorithm-parameter:policy'),
-            RustPublicParameter(name='op', type_spelling='&mut Op', role='algorithm-parameter:op'),
-            RustPublicParameter(name='left', type_spelling='*const T', role='algorithm-parameter:left'),
-            RustPublicParameter(name='right', type_spelling='*const T', role='algorithm-parameter:right'),
-            RustPublicParameter(name='indices', type_spelling='*const usize', role='algorithm-parameter:indices'),
-            RustPublicParameter(name='selected_count', type_spelling='usize', role='algorithm-parameter:selected_count'),
-        ),
-        where_predicates=(
-            'Policy: VectorFor<Profile, T>',
-            '<Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>',
-            'Simd<T, Scalar>: StaticSimdVector<BaseType = T>',
-            'Profile: SelectedLoad<<Policy as VectorFor<Profile, T>>::Vec, 0> + SelectedLoad<Simd<T, Scalar>, 0>',
-            'Op: BinaryConsumeKernel<<Policy as VectorFor<Profile, T>>::Vec> + BinaryConsumeKernel<Simd<T, Scalar>>',
-        ),
-        result_type=None,
-    ),
-    RustAlgorithmDeclarationSpec(
-        hole='profile_algorithm_declaration_consume_selected_binary_scaled_raw',
-        name='consume_selected_binary_scaled_raw',
-        unsafe=True,
-        generic_parameters=(
-            RustGenericParameter(name='SCALE', kind='const', declaration='const SCALE: u32', bounds=(), type_spelling='u32', default=None),
-            RustGenericParameter(name='Policy', kind='type', declaration='Policy', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='Op', kind='type', declaration='Op', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='T', kind='type', declaration='T', bounds=(), type_spelling=None, default=None),
-        ),
-        parameters=(
-            RustPublicParameter(name='policy', type_spelling='Policy', role='algorithm-parameter:policy'),
-            RustPublicParameter(name='op', type_spelling='&mut Op', role='algorithm-parameter:op'),
-            RustPublicParameter(name='left', type_spelling='*const T', role='algorithm-parameter:left'),
-            RustPublicParameter(name='right', type_spelling='*const T', role='algorithm-parameter:right'),
-            RustPublicParameter(name='indices', type_spelling='*const usize', role='algorithm-parameter:indices'),
-            RustPublicParameter(name='selected_count', type_spelling='usize', role='algorithm-parameter:selected_count'),
-        ),
-        where_predicates=(
-            'Policy: VectorFor<Profile, T>',
-            '<Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>',
-            'Simd<T, Scalar>: StaticSimdVector<BaseType = T>',
-            'Profile: SelectedLoad<<Policy as VectorFor<Profile, T>>::Vec, SCALE> + SelectedLoad<Simd<T, Scalar>, SCALE>',
-            'Op: BinaryConsumeKernel<<Policy as VectorFor<Profile, T>>::Vec> + BinaryConsumeKernel<Simd<T, Scalar>>',
-        ),
-        result_type=None,
-    ),
-    RustAlgorithmDeclarationSpec(
-        hole='profile_algorithm_declaration_aggregate_selected_unary_checked',
-        name='aggregate_selected_unary_checked',
-        unsafe=False,
-        generic_parameters=(
-            RustGenericParameter(name='Policy', kind='type', declaration='Policy', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='Op', kind='type', declaration='Op', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='T', kind='type', declaration='T', bounds=(), type_spelling=None, default=None),
-        ),
-        parameters=(
-            RustPublicParameter(name='policy', type_spelling='Policy', role='algorithm-parameter:policy'),
-            RustPublicParameter(name='op', type_spelling='&mut Op', role='algorithm-parameter:op'),
-            RustPublicParameter(name='input', type_spelling='&[T]', role='algorithm-parameter:input'),
-            RustPublicParameter(name='indices', type_spelling='&[usize]', role='algorithm-parameter:indices'),
-        ),
-        where_predicates=(
-            'Policy: VectorFor<Profile, T>',
-            '<Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>',
-            'Simd<T, Scalar>: StaticSimdVector<BaseType = T>',
-            'Profile: SelectedLoad<<Policy as VectorFor<Profile, T>>::Vec, 0> + SelectedLoad<Simd<T, Scalar>, 0>',
-            'Op: UnaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec> + UnaryAggregateKernel<Simd<T, Scalar>>',
-        ),
-        result_type='Result<<Op as UnaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output, crate::PreconditionError>',
-    ),
-    RustAlgorithmDeclarationSpec(
-        hole='profile_algorithm_declaration_aggregate_selected_unary_raw',
-        name='aggregate_selected_unary_raw',
-        unsafe=True,
-        generic_parameters=(
-            RustGenericParameter(name='Policy', kind='type', declaration='Policy', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='Op', kind='type', declaration='Op', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='T', kind='type', declaration='T', bounds=(), type_spelling=None, default=None),
-        ),
-        parameters=(
-            RustPublicParameter(name='policy', type_spelling='Policy', role='algorithm-parameter:policy'),
-            RustPublicParameter(name='op', type_spelling='&mut Op', role='algorithm-parameter:op'),
-            RustPublicParameter(name='input', type_spelling='*const T', role='algorithm-parameter:input'),
-            RustPublicParameter(name='indices', type_spelling='*const usize', role='algorithm-parameter:indices'),
-            RustPublicParameter(name='selected_count', type_spelling='usize', role='algorithm-parameter:selected_count'),
-        ),
-        where_predicates=(
-            'Policy: VectorFor<Profile, T>',
-            '<Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>',
-            'Simd<T, Scalar>: StaticSimdVector<BaseType = T>',
-            'Profile: SelectedLoad<<Policy as VectorFor<Profile, T>>::Vec, 0> + SelectedLoad<Simd<T, Scalar>, 0>',
-            'Op: UnaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec> + UnaryAggregateKernel<Simd<T, Scalar>>',
-        ),
-        result_type='<Op as UnaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output',
-    ),
-    RustAlgorithmDeclarationSpec(
-        hole='profile_algorithm_declaration_aggregate_selected_unary_scaled_raw',
-        name='aggregate_selected_unary_scaled_raw',
-        unsafe=True,
-        generic_parameters=(
-            RustGenericParameter(name='SCALE', kind='const', declaration='const SCALE: u32', bounds=(), type_spelling='u32', default=None),
-            RustGenericParameter(name='Policy', kind='type', declaration='Policy', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='Op', kind='type', declaration='Op', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='T', kind='type', declaration='T', bounds=(), type_spelling=None, default=None),
-        ),
-        parameters=(
-            RustPublicParameter(name='policy', type_spelling='Policy', role='algorithm-parameter:policy'),
-            RustPublicParameter(name='op', type_spelling='&mut Op', role='algorithm-parameter:op'),
-            RustPublicParameter(name='input', type_spelling='*const T', role='algorithm-parameter:input'),
-            RustPublicParameter(name='indices', type_spelling='*const usize', role='algorithm-parameter:indices'),
-            RustPublicParameter(name='selected_count', type_spelling='usize', role='algorithm-parameter:selected_count'),
-        ),
-        where_predicates=(
-            'Policy: VectorFor<Profile, T>',
-            '<Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>',
-            'Simd<T, Scalar>: StaticSimdVector<BaseType = T>',
-            'Profile: SelectedLoad<<Policy as VectorFor<Profile, T>>::Vec, SCALE> + SelectedLoad<Simd<T, Scalar>, SCALE>',
-            'Op: UnaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec> + UnaryAggregateKernel<Simd<T, Scalar>>',
-        ),
-        result_type='<Op as UnaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output',
-    ),
-    RustAlgorithmDeclarationSpec(
-        hole='profile_algorithm_declaration_aggregate_selected_binary_checked',
-        name='aggregate_selected_binary_checked',
-        unsafe=False,
-        generic_parameters=(
-            RustGenericParameter(name='Policy', kind='type', declaration='Policy', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='Op', kind='type', declaration='Op', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='T', kind='type', declaration='T', bounds=(), type_spelling=None, default=None),
-        ),
-        parameters=(
-            RustPublicParameter(name='policy', type_spelling='Policy', role='algorithm-parameter:policy'),
-            RustPublicParameter(name='op', type_spelling='&mut Op', role='algorithm-parameter:op'),
-            RustPublicParameter(name='left', type_spelling='&[T]', role='algorithm-parameter:left'),
-            RustPublicParameter(name='right', type_spelling='&[T]', role='algorithm-parameter:right'),
-            RustPublicParameter(name='indices', type_spelling='&[usize]', role='algorithm-parameter:indices'),
-        ),
-        where_predicates=(
-            'Policy: VectorFor<Profile, T>',
-            '<Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>',
-            'Simd<T, Scalar>: StaticSimdVector<BaseType = T>',
-            'Profile: SelectedLoad<<Policy as VectorFor<Profile, T>>::Vec, 0> + SelectedLoad<Simd<T, Scalar>, 0>',
-            'Op: BinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec> + BinaryAggregateKernel<Simd<T, Scalar>>',
-        ),
-        result_type='Result<<Op as BinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output, crate::PreconditionError>',
-    ),
-    RustAlgorithmDeclarationSpec(
-        hole='profile_algorithm_declaration_aggregate_selected_binary_raw',
-        name='aggregate_selected_binary_raw',
-        unsafe=True,
-        generic_parameters=(
-            RustGenericParameter(name='Policy', kind='type', declaration='Policy', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='Op', kind='type', declaration='Op', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='T', kind='type', declaration='T', bounds=(), type_spelling=None, default=None),
-        ),
-        parameters=(
-            RustPublicParameter(name='policy', type_spelling='Policy', role='algorithm-parameter:policy'),
-            RustPublicParameter(name='op', type_spelling='&mut Op', role='algorithm-parameter:op'),
-            RustPublicParameter(name='left', type_spelling='*const T', role='algorithm-parameter:left'),
-            RustPublicParameter(name='right', type_spelling='*const T', role='algorithm-parameter:right'),
-            RustPublicParameter(name='indices', type_spelling='*const usize', role='algorithm-parameter:indices'),
-            RustPublicParameter(name='selected_count', type_spelling='usize', role='algorithm-parameter:selected_count'),
-        ),
-        where_predicates=(
-            'Policy: VectorFor<Profile, T>',
-            '<Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>',
-            'Simd<T, Scalar>: StaticSimdVector<BaseType = T>',
-            'Profile: SelectedLoad<<Policy as VectorFor<Profile, T>>::Vec, 0> + SelectedLoad<Simd<T, Scalar>, 0>',
-            'Op: BinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec> + BinaryAggregateKernel<Simd<T, Scalar>>',
-        ),
-        result_type='<Op as BinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output',
-    ),
-    RustAlgorithmDeclarationSpec(
-        hole='profile_algorithm_declaration_aggregate_selected_binary_scaled_raw',
-        name='aggregate_selected_binary_scaled_raw',
-        unsafe=True,
-        generic_parameters=(
-            RustGenericParameter(name='SCALE', kind='const', declaration='const SCALE: u32', bounds=(), type_spelling='u32', default=None),
-            RustGenericParameter(name='Policy', kind='type', declaration='Policy', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='Op', kind='type', declaration='Op', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='T', kind='type', declaration='T', bounds=(), type_spelling=None, default=None),
-        ),
-        parameters=(
-            RustPublicParameter(name='policy', type_spelling='Policy', role='algorithm-parameter:policy'),
-            RustPublicParameter(name='op', type_spelling='&mut Op', role='algorithm-parameter:op'),
-            RustPublicParameter(name='left', type_spelling='*const T', role='algorithm-parameter:left'),
-            RustPublicParameter(name='right', type_spelling='*const T', role='algorithm-parameter:right'),
-            RustPublicParameter(name='indices', type_spelling='*const usize', role='algorithm-parameter:indices'),
-            RustPublicParameter(name='selected_count', type_spelling='usize', role='algorithm-parameter:selected_count'),
-        ),
-        where_predicates=(
-            'Policy: VectorFor<Profile, T>',
-            '<Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>',
-            'Simd<T, Scalar>: StaticSimdVector<BaseType = T>',
-            'Profile: SelectedLoad<<Policy as VectorFor<Profile, T>>::Vec, SCALE> + SelectedLoad<Simd<T, Scalar>, SCALE>',
-            'Op: BinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec> + BinaryAggregateKernel<Simd<T, Scalar>>',
-        ),
-        result_type='<Op as BinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output',
-    ),
+    *_rust_consume_aggregate_specs(AlgorithmSemanticFamily.CONSUME, selected=True),
+    *_rust_consume_aggregate_specs(AlgorithmSemanticFamily.AGGREGATE, selected=True),
     *_rust_transform_specs(AlgorithmShape.WHERE),
     *_rust_transform_specs(AlgorithmShape.MASKED),
-    RustAlgorithmDeclarationSpec(
-        hole='profile_algorithm_declaration_consume_unary',
-        name='consume_unary',
-        unsafe=False,
-        generic_parameters=(
-            RustGenericParameter(name='Policy', kind='type', declaration='Policy', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='Op', kind='type', declaration='Op', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='T', kind='type', declaration='T', bounds=(), type_spelling=None, default=None),
-        ),
-        parameters=(
-            RustPublicParameter(name='policy', type_spelling='Policy', role='algorithm-parameter:policy'),
-            RustPublicParameter(name='op', type_spelling='&mut Op', role='algorithm-parameter:op'),
-            RustPublicParameter(name='input', type_spelling='&[T]', role='algorithm-parameter:input'),
-        ),
-        where_predicates=(
-            'Policy: VectorFor<Profile, T>',
-            '<Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>',
-            'Simd<T, Scalar>: StaticSimdVector<BaseType = T>',
-            'Profile: LoadStore<<Policy as VectorFor<Profile, T>>::Vec> + LoadStore<Simd<T, Scalar>>',
-            'Op: UnaryConsumeKernel<<Policy as VectorFor<Profile, T>>::Vec> + UnaryConsumeKernel<Simd<T, Scalar>>',
-        ),
-        result_type=None,
-    ),
-    RustAlgorithmDeclarationSpec(
-        hole='profile_algorithm_declaration_consume_unary_raw',
-        name='consume_unary_raw',
-        unsafe=True,
-        generic_parameters=(
-            RustGenericParameter(name='Policy', kind='type', declaration='Policy', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='Op', kind='type', declaration='Op', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='T', kind='type', declaration='T', bounds=(), type_spelling=None, default=None),
-        ),
-        parameters=(
-            RustPublicParameter(name='policy', type_spelling='Policy', role='algorithm-parameter:policy'),
-            RustPublicParameter(name='op', type_spelling='&mut Op', role='algorithm-parameter:op'),
-            RustPublicParameter(name='input', type_spelling='*const T', role='algorithm-parameter:input'),
-            RustPublicParameter(name='count', type_spelling='usize', role='algorithm-parameter:count'),
-        ),
-        where_predicates=(
-            'Policy: VectorFor<Profile, T>',
-            '<Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>',
-            'Simd<T, Scalar>: StaticSimdVector<BaseType = T>',
-            'Profile: LoadStore<<Policy as VectorFor<Profile, T>>::Vec> + LoadStore<Simd<T, Scalar>>',
-            'Op: UnaryConsumeKernel<<Policy as VectorFor<Profile, T>>::Vec> + UnaryConsumeKernel<Simd<T, Scalar>>',
-        ),
-        result_type=None,
-    ),
-    RustAlgorithmDeclarationSpec(
-        hole='profile_algorithm_declaration_consume_binary_checked',
-        name='consume_binary_checked',
-        unsafe=False,
-        generic_parameters=(
-            RustGenericParameter(name='Policy', kind='type', declaration='Policy', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='Op', kind='type', declaration='Op', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='T', kind='type', declaration='T', bounds=(), type_spelling=None, default=None),
-        ),
-        parameters=(
-            RustPublicParameter(name='policy', type_spelling='Policy', role='algorithm-parameter:policy'),
-            RustPublicParameter(name='op', type_spelling='&mut Op', role='algorithm-parameter:op'),
-            RustPublicParameter(name='left', type_spelling='&[T]', role='algorithm-parameter:left'),
-            RustPublicParameter(name='right', type_spelling='&[T]', role='algorithm-parameter:right'),
-        ),
-        where_predicates=(
-            'Policy: VectorFor<Profile, T>',
-            '<Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>',
-            'Simd<T, Scalar>: StaticSimdVector<BaseType = T>',
-            'Profile: LoadStore<<Policy as VectorFor<Profile, T>>::Vec> + LoadStore<Simd<T, Scalar>>',
-            'Op: BinaryConsumeKernel<<Policy as VectorFor<Profile, T>>::Vec> + BinaryConsumeKernel<Simd<T, Scalar>>',
-        ),
-        result_type='Result<(), crate::PreconditionError>',
-    ),
-    RustAlgorithmDeclarationSpec(
-        hole='profile_algorithm_declaration_consume_binary_raw',
-        name='consume_binary_raw',
-        unsafe=True,
-        generic_parameters=(
-            RustGenericParameter(name='Policy', kind='type', declaration='Policy', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='Op', kind='type', declaration='Op', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='T', kind='type', declaration='T', bounds=(), type_spelling=None, default=None),
-        ),
-        parameters=(
-            RustPublicParameter(name='policy', type_spelling='Policy', role='algorithm-parameter:policy'),
-            RustPublicParameter(name='op', type_spelling='&mut Op', role='algorithm-parameter:op'),
-            RustPublicParameter(name='left', type_spelling='*const T', role='algorithm-parameter:left'),
-            RustPublicParameter(name='right', type_spelling='*const T', role='algorithm-parameter:right'),
-            RustPublicParameter(name='count', type_spelling='usize', role='algorithm-parameter:count'),
-        ),
-        where_predicates=(
-            'Policy: VectorFor<Profile, T>',
-            '<Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>',
-            'Simd<T, Scalar>: StaticSimdVector<BaseType = T>',
-            'Profile: LoadStore<<Policy as VectorFor<Profile, T>>::Vec> + LoadStore<Simd<T, Scalar>>',
-            'Op: BinaryConsumeKernel<<Policy as VectorFor<Profile, T>>::Vec> + BinaryConsumeKernel<Simd<T, Scalar>>',
-        ),
-        result_type=None,
-    ),
-    RustAlgorithmDeclarationSpec(
-        hole='profile_algorithm_declaration_consume_masked_unary_checked',
-        name='consume_masked_unary_checked',
-        unsafe=False,
-        generic_parameters=(
-            RustGenericParameter(name='Policy', kind='type', declaration='Policy', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='Op', kind='type', declaration='Op', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='T', kind='type', declaration='T', bounds=(), type_spelling=None, default=None),
-        ),
-        parameters=(
-            RustPublicParameter(name='policy', type_spelling='Policy', role='algorithm-parameter:policy'),
-            RustPublicParameter(name='op', type_spelling='&mut Op', role='algorithm-parameter:op'),
-            RustPublicParameter(name='input', type_spelling='&[T]', role='algorithm-parameter:input'),
-            RustPublicParameter(name='masks', type_spelling='&[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType]', role='algorithm-parameter:masks'),
-        ),
-        where_predicates=(
-            'Policy: VectorFor<Profile, T>',
-            '<Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>',
-            'Simd<T, Scalar>: StaticSimdVector<BaseType = T>',
-            'Profile: LoadStore<<Policy as VectorFor<Profile, T>>::Vec> + LoadStore<Simd<T, Scalar>> + MaskFromIntegral<<Policy as VectorFor<Profile, T>>::Vec> + MaskFromIntegral<Simd<T, Scalar>>',
-            'Op: MaskedUnaryConsumeKernel<<Policy as VectorFor<Profile, T>>::Vec> + MaskedUnaryConsumeKernel<Simd<T, Scalar>>',
-            '<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord',
-            '<Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord',
-        ),
-        result_type='Result<(), crate::PreconditionError>',
-    ),
-    RustAlgorithmDeclarationSpec(
-        hole='profile_algorithm_declaration_consume_masked_unary_raw',
-        name='consume_masked_unary_raw',
-        unsafe=True,
-        generic_parameters=(
-            RustGenericParameter(name='Policy', kind='type', declaration='Policy', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='Op', kind='type', declaration='Op', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='T', kind='type', declaration='T', bounds=(), type_spelling=None, default=None),
-        ),
-        parameters=(
-            RustPublicParameter(name='policy', type_spelling='Policy', role='algorithm-parameter:policy'),
-            RustPublicParameter(name='op', type_spelling='&mut Op', role='algorithm-parameter:op'),
-            RustPublicParameter(name='input', type_spelling='*const T', role='algorithm-parameter:input'),
-            RustPublicParameter(name='masks', type_spelling='*const <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType', role='algorithm-parameter:masks'),
-            RustPublicParameter(name='count', type_spelling='usize', role='algorithm-parameter:count'),
-        ),
-        where_predicates=(
-            'Policy: VectorFor<Profile, T>',
-            '<Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>',
-            'Simd<T, Scalar>: StaticSimdVector<BaseType = T>',
-            'Profile: LoadStore<<Policy as VectorFor<Profile, T>>::Vec> + LoadStore<Simd<T, Scalar>> + MaskFromIntegral<<Policy as VectorFor<Profile, T>>::Vec> + MaskFromIntegral<Simd<T, Scalar>>',
-            'Op: MaskedUnaryConsumeKernel<<Policy as VectorFor<Profile, T>>::Vec> + MaskedUnaryConsumeKernel<Simd<T, Scalar>>',
-            '<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord',
-            '<Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord',
-        ),
-        result_type=None,
-    ),
-    RustAlgorithmDeclarationSpec(
-        hole='profile_algorithm_declaration_consume_masked_binary_checked',
-        name='consume_masked_binary_checked',
-        unsafe=False,
-        generic_parameters=(
-            RustGenericParameter(name='Policy', kind='type', declaration='Policy', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='Op', kind='type', declaration='Op', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='T', kind='type', declaration='T', bounds=(), type_spelling=None, default=None),
-        ),
-        parameters=(
-            RustPublicParameter(name='policy', type_spelling='Policy', role='algorithm-parameter:policy'),
-            RustPublicParameter(name='op', type_spelling='&mut Op', role='algorithm-parameter:op'),
-            RustPublicParameter(name='left', type_spelling='&[T]', role='algorithm-parameter:left'),
-            RustPublicParameter(name='right', type_spelling='&[T]', role='algorithm-parameter:right'),
-            RustPublicParameter(name='masks', type_spelling='&[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType]', role='algorithm-parameter:masks'),
-        ),
-        where_predicates=(
-            'Policy: VectorFor<Profile, T>',
-            '<Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>',
-            'Simd<T, Scalar>: StaticSimdVector<BaseType = T>',
-            'Profile: LoadStore<<Policy as VectorFor<Profile, T>>::Vec> + LoadStore<Simd<T, Scalar>> + MaskFromIntegral<<Policy as VectorFor<Profile, T>>::Vec> + MaskFromIntegral<Simd<T, Scalar>>',
-            'Op: MaskedBinaryConsumeKernel<<Policy as VectorFor<Profile, T>>::Vec> + MaskedBinaryConsumeKernel<Simd<T, Scalar>>',
-            '<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord',
-            '<Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord',
-        ),
-        result_type='Result<(), crate::PreconditionError>',
-    ),
-    RustAlgorithmDeclarationSpec(
-        hole='profile_algorithm_declaration_consume_masked_binary_raw',
-        name='consume_masked_binary_raw',
-        unsafe=True,
-        generic_parameters=(
-            RustGenericParameter(name='Policy', kind='type', declaration='Policy', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='Op', kind='type', declaration='Op', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='T', kind='type', declaration='T', bounds=(), type_spelling=None, default=None),
-        ),
-        parameters=(
-            RustPublicParameter(name='policy', type_spelling='Policy', role='algorithm-parameter:policy'),
-            RustPublicParameter(name='op', type_spelling='&mut Op', role='algorithm-parameter:op'),
-            RustPublicParameter(name='left', type_spelling='*const T', role='algorithm-parameter:left'),
-            RustPublicParameter(name='right', type_spelling='*const T', role='algorithm-parameter:right'),
-            RustPublicParameter(name='masks', type_spelling='*const <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType', role='algorithm-parameter:masks'),
-            RustPublicParameter(name='count', type_spelling='usize', role='algorithm-parameter:count'),
-        ),
-        where_predicates=(
-            'Policy: VectorFor<Profile, T>',
-            '<Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>',
-            'Simd<T, Scalar>: StaticSimdVector<BaseType = T>',
-            'Profile: LoadStore<<Policy as VectorFor<Profile, T>>::Vec> + LoadStore<Simd<T, Scalar>> + MaskFromIntegral<<Policy as VectorFor<Profile, T>>::Vec> + MaskFromIntegral<Simd<T, Scalar>>',
-            'Op: MaskedBinaryConsumeKernel<<Policy as VectorFor<Profile, T>>::Vec> + MaskedBinaryConsumeKernel<Simd<T, Scalar>>',
-            '<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord',
-            '<Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord',
-        ),
-        result_type=None,
-    ),
-    RustAlgorithmDeclarationSpec(
-        hole='profile_algorithm_declaration_aggregate_unary',
-        name='aggregate_unary',
-        unsafe=False,
-        generic_parameters=(
-            RustGenericParameter(name='Policy', kind='type', declaration='Policy', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='Op', kind='type', declaration='Op', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='T', kind='type', declaration='T', bounds=(), type_spelling=None, default=None),
-        ),
-        parameters=(
-            RustPublicParameter(name='policy', type_spelling='Policy', role='algorithm-parameter:policy'),
-            RustPublicParameter(name='op', type_spelling='&mut Op', role='algorithm-parameter:op'),
-            RustPublicParameter(name='input', type_spelling='&[T]', role='algorithm-parameter:input'),
-        ),
-        where_predicates=(
-            'Policy: VectorFor<Profile, T>',
-            '<Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>',
-            'Simd<T, Scalar>: StaticSimdVector<BaseType = T>',
-            'Profile: LoadStore<<Policy as VectorFor<Profile, T>>::Vec> + LoadStore<Simd<T, Scalar>>',
-            'Op: UnaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec> + UnaryAggregateKernel<Simd<T, Scalar>>',
-        ),
-        result_type='<Op as UnaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output',
-    ),
-    RustAlgorithmDeclarationSpec(
-        hole='profile_algorithm_declaration_aggregate_unary_raw',
-        name='aggregate_unary_raw',
-        unsafe=True,
-        generic_parameters=(
-            RustGenericParameter(name='Policy', kind='type', declaration='Policy', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='Op', kind='type', declaration='Op', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='T', kind='type', declaration='T', bounds=(), type_spelling=None, default=None),
-        ),
-        parameters=(
-            RustPublicParameter(name='policy', type_spelling='Policy', role='algorithm-parameter:policy'),
-            RustPublicParameter(name='op', type_spelling='&mut Op', role='algorithm-parameter:op'),
-            RustPublicParameter(name='input', type_spelling='*const T', role='algorithm-parameter:input'),
-            RustPublicParameter(name='count', type_spelling='usize', role='algorithm-parameter:count'),
-        ),
-        where_predicates=(
-            'Policy: VectorFor<Profile, T>',
-            '<Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>',
-            'Simd<T, Scalar>: StaticSimdVector<BaseType = T>',
-            'Profile: LoadStore<<Policy as VectorFor<Profile, T>>::Vec> + LoadStore<Simd<T, Scalar>>',
-            'Op: UnaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec> + UnaryAggregateKernel<Simd<T, Scalar>>',
-        ),
-        result_type='<Op as UnaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output',
-    ),
-    RustAlgorithmDeclarationSpec(
-        hole='profile_algorithm_declaration_aggregate_binary_checked',
-        name='aggregate_binary_checked',
-        unsafe=False,
-        generic_parameters=(
-            RustGenericParameter(name='Policy', kind='type', declaration='Policy', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='Op', kind='type', declaration='Op', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='T', kind='type', declaration='T', bounds=(), type_spelling=None, default=None),
-        ),
-        parameters=(
-            RustPublicParameter(name='policy', type_spelling='Policy', role='algorithm-parameter:policy'),
-            RustPublicParameter(name='op', type_spelling='&mut Op', role='algorithm-parameter:op'),
-            RustPublicParameter(name='left', type_spelling='&[T]', role='algorithm-parameter:left'),
-            RustPublicParameter(name='right', type_spelling='&[T]', role='algorithm-parameter:right'),
-        ),
-        where_predicates=(
-            'Policy: VectorFor<Profile, T>',
-            '<Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>',
-            'Simd<T, Scalar>: StaticSimdVector<BaseType = T>',
-            'Profile: LoadStore<<Policy as VectorFor<Profile, T>>::Vec> + LoadStore<Simd<T, Scalar>>',
-            'Op: BinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec> + BinaryAggregateKernel<Simd<T, Scalar>>',
-        ),
-        result_type='Result<<Op as BinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output, crate::PreconditionError>',
-    ),
-    RustAlgorithmDeclarationSpec(
-        hole='profile_algorithm_declaration_aggregate_binary_raw',
-        name='aggregate_binary_raw',
-        unsafe=True,
-        generic_parameters=(
-            RustGenericParameter(name='Policy', kind='type', declaration='Policy', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='Op', kind='type', declaration='Op', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='T', kind='type', declaration='T', bounds=(), type_spelling=None, default=None),
-        ),
-        parameters=(
-            RustPublicParameter(name='policy', type_spelling='Policy', role='algorithm-parameter:policy'),
-            RustPublicParameter(name='op', type_spelling='&mut Op', role='algorithm-parameter:op'),
-            RustPublicParameter(name='left', type_spelling='*const T', role='algorithm-parameter:left'),
-            RustPublicParameter(name='right', type_spelling='*const T', role='algorithm-parameter:right'),
-            RustPublicParameter(name='count', type_spelling='usize', role='algorithm-parameter:count'),
-        ),
-        where_predicates=(
-            'Policy: VectorFor<Profile, T>',
-            '<Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>',
-            'Simd<T, Scalar>: StaticSimdVector<BaseType = T>',
-            'Profile: LoadStore<<Policy as VectorFor<Profile, T>>::Vec> + LoadStore<Simd<T, Scalar>>',
-            'Op: BinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec> + BinaryAggregateKernel<Simd<T, Scalar>>',
-        ),
-        result_type='<Op as BinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output',
-    ),
-    RustAlgorithmDeclarationSpec(
-        hole='profile_algorithm_declaration_aggregate_masked_unary_checked',
-        name='aggregate_masked_unary_checked',
-        unsafe=False,
-        generic_parameters=(
-            RustGenericParameter(name='Policy', kind='type', declaration='Policy', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='Op', kind='type', declaration='Op', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='T', kind='type', declaration='T', bounds=(), type_spelling=None, default=None),
-        ),
-        parameters=(
-            RustPublicParameter(name='policy', type_spelling='Policy', role='algorithm-parameter:policy'),
-            RustPublicParameter(name='op', type_spelling='&mut Op', role='algorithm-parameter:op'),
-            RustPublicParameter(name='input', type_spelling='&[T]', role='algorithm-parameter:input'),
-            RustPublicParameter(name='masks', type_spelling='&[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType]', role='algorithm-parameter:masks'),
-        ),
-        where_predicates=(
-            'Policy: VectorFor<Profile, T>',
-            '<Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>',
-            'Simd<T, Scalar>: StaticSimdVector<BaseType = T>',
-            'Profile: LoadStore<<Policy as VectorFor<Profile, T>>::Vec> + LoadStore<Simd<T, Scalar>> + MaskFromIntegral<<Policy as VectorFor<Profile, T>>::Vec> + MaskFromIntegral<Simd<T, Scalar>>',
-            'Op: MaskedUnaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec> + MaskedUnaryAggregateKernel<Simd<T, Scalar>>',
-            '<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord',
-            '<Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord',
-        ),
-        result_type='Result<<Op as MaskedUnaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output, crate::PreconditionError>',
-    ),
-    RustAlgorithmDeclarationSpec(
-        hole='profile_algorithm_declaration_aggregate_masked_unary_raw',
-        name='aggregate_masked_unary_raw',
-        unsafe=True,
-        generic_parameters=(
-            RustGenericParameter(name='Policy', kind='type', declaration='Policy', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='Op', kind='type', declaration='Op', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='T', kind='type', declaration='T', bounds=(), type_spelling=None, default=None),
-        ),
-        parameters=(
-            RustPublicParameter(name='policy', type_spelling='Policy', role='algorithm-parameter:policy'),
-            RustPublicParameter(name='op', type_spelling='&mut Op', role='algorithm-parameter:op'),
-            RustPublicParameter(name='input', type_spelling='*const T', role='algorithm-parameter:input'),
-            RustPublicParameter(name='masks', type_spelling='*const <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType', role='algorithm-parameter:masks'),
-            RustPublicParameter(name='count', type_spelling='usize', role='algorithm-parameter:count'),
-        ),
-        where_predicates=(
-            'Policy: VectorFor<Profile, T>',
-            '<Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>',
-            'Simd<T, Scalar>: StaticSimdVector<BaseType = T>',
-            'Profile: LoadStore<<Policy as VectorFor<Profile, T>>::Vec> + LoadStore<Simd<T, Scalar>> + MaskFromIntegral<<Policy as VectorFor<Profile, T>>::Vec> + MaskFromIntegral<Simd<T, Scalar>>',
-            'Op: MaskedUnaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec> + MaskedUnaryAggregateKernel<Simd<T, Scalar>>',
-            '<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord',
-            '<Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord',
-        ),
-        result_type='<Op as MaskedUnaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output',
-    ),
-    RustAlgorithmDeclarationSpec(
-        hole='profile_algorithm_declaration_aggregate_masked_binary_checked',
-        name='aggregate_masked_binary_checked',
-        unsafe=False,
-        generic_parameters=(
-            RustGenericParameter(name='Policy', kind='type', declaration='Policy', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='Op', kind='type', declaration='Op', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='T', kind='type', declaration='T', bounds=(), type_spelling=None, default=None),
-        ),
-        parameters=(
-            RustPublicParameter(name='policy', type_spelling='Policy', role='algorithm-parameter:policy'),
-            RustPublicParameter(name='op', type_spelling='&mut Op', role='algorithm-parameter:op'),
-            RustPublicParameter(name='left', type_spelling='&[T]', role='algorithm-parameter:left'),
-            RustPublicParameter(name='right', type_spelling='&[T]', role='algorithm-parameter:right'),
-            RustPublicParameter(name='masks', type_spelling='&[<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType]', role='algorithm-parameter:masks'),
-        ),
-        where_predicates=(
-            'Policy: VectorFor<Profile, T>',
-            '<Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>',
-            'Simd<T, Scalar>: StaticSimdVector<BaseType = T>',
-            'Profile: LoadStore<<Policy as VectorFor<Profile, T>>::Vec> + LoadStore<Simd<T, Scalar>> + MaskFromIntegral<<Policy as VectorFor<Profile, T>>::Vec> + MaskFromIntegral<Simd<T, Scalar>>',
-            'Op: MaskedBinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec> + MaskedBinaryAggregateKernel<Simd<T, Scalar>>',
-            '<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord',
-            '<Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord',
-        ),
-        result_type='Result<<Op as MaskedBinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output, crate::PreconditionError>',
-    ),
-    RustAlgorithmDeclarationSpec(
-        hole='profile_algorithm_declaration_aggregate_masked_binary_raw',
-        name='aggregate_masked_binary_raw',
-        unsafe=True,
-        generic_parameters=(
-            RustGenericParameter(name='Policy', kind='type', declaration='Policy', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='Op', kind='type', declaration='Op', bounds=(), type_spelling=None, default=None),
-            RustGenericParameter(name='T', kind='type', declaration='T', bounds=(), type_spelling=None, default=None),
-        ),
-        parameters=(
-            RustPublicParameter(name='policy', type_spelling='Policy', role='algorithm-parameter:policy'),
-            RustPublicParameter(name='op', type_spelling='&mut Op', role='algorithm-parameter:op'),
-            RustPublicParameter(name='left', type_spelling='*const T', role='algorithm-parameter:left'),
-            RustPublicParameter(name='right', type_spelling='*const T', role='algorithm-parameter:right'),
-            RustPublicParameter(name='masks', type_spelling='*const <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType', role='algorithm-parameter:masks'),
-            RustPublicParameter(name='count', type_spelling='usize', role='algorithm-parameter:count'),
-        ),
-        where_predicates=(
-            'Policy: VectorFor<Profile, T>',
-            '<Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>',
-            'Simd<T, Scalar>: StaticSimdVector<BaseType = T>',
-            'Profile: LoadStore<<Policy as VectorFor<Profile, T>>::Vec> + LoadStore<Simd<T, Scalar>> + MaskFromIntegral<<Policy as VectorFor<Profile, T>>::Vec> + MaskFromIntegral<Simd<T, Scalar>>',
-            'Op: MaskedBinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec> + MaskedBinaryAggregateKernel<Simd<T, Scalar>>',
-            '<<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::ImaskType: IntegralMaskWord',
-            '<Simd<T, Scalar> as SimdVector>::ImaskType: IntegralMaskWord',
-        ),
-        result_type='<Op as MaskedBinaryAggregateKernel<<Policy as VectorFor<Profile, T>>::Vec>>::Output',
-    ),
+    *_rust_consume_aggregate_specs(AlgorithmSemanticFamily.CONSUME, selected=False),
+    *_rust_consume_aggregate_specs(AlgorithmSemanticFamily.AGGREGATE, selected=False),
     *_rust_iteration_specs(),
 )
 
@@ -1891,6 +1406,7 @@ def _indent(text: str, spaces: int) -> str:
 
 __all__ = (
     'rust_algorithm_form_support',
+    'rust_consume_aggregate_function_declarations',
     'rust_iteration_predicate_count_function_declarations',
     'rust_profile_algorithm_aliases',
     'rust_profile_algorithm_declaration_holes',
