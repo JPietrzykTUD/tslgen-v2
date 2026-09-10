@@ -178,6 +178,9 @@ def test_rust_project_renderer_consumes_injected_assets() -> None:
             "tsl_algorithm_masks.rs": "// injected masks\n",
             "tsl_algorithm_kernel_traits.rs": "// injected kernels\n",
             "tsl_algorithm_validation.rs": "// injected validation\n",
+            "tsl_algorithm_iteration.rs": "// injected iteration\n",
+            "tsl_algorithm_predicate.rs": "// injected predicate\n",
+            "tsl_algorithm_count.rs": "// injected count\n",
             "tsl_algorithm_families.rs": "// injected families\n",
             "tsl_rust_cpu_identity.rs": "// injected CPU identity\n",
             "tsl_rust_policy_json.rs": "// injected policy JSON\n",
@@ -240,6 +243,13 @@ def test_rust_project_renderer_consumes_injected_assets() -> None:
     assert rendered["rust/src/tsl_algorithm/validation.rs"] == (
         "// injected validation\n"
     )
+    assert rendered["rust/src/tsl_algorithm/iteration.rs"] == (
+        "// injected iteration\n"
+    )
+    assert rendered["rust/src/tsl_algorithm/predicate.rs"] == (
+        "// injected predicate\n"
+    )
+    assert rendered["rust/src/tsl_algorithm/count.rs"] == "// injected count\n"
     assert rendered["rust/src/tsl_algorithm/families.rs"] == (
         "// injected families\n"
     )

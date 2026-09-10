@@ -113,7 +113,15 @@ def test_algorithm_contract_registry_covers_every_checked_family() -> None:
 def test_generated_checked_surface_exactly_projects_the_registry() -> None:
     assets = load_default_render_assets()
     holes = rust_algorithm_contract_holes()
-    rust = assets.fill("tsl_algorithm_families.rs", **holes)
+    rust = "\n".join(
+        assets.fill(name, **holes)
+        for name in (
+            "tsl_algorithm_iteration.rs",
+            "tsl_algorithm_predicate.rs",
+            "tsl_algorithm_count.rs",
+            "tsl_algorithm_families.rs",
+        )
+    )
     profile = "\n".join(
         assets.fill(name, **holes)
         for name in (

@@ -524,14 +524,6 @@
       "family": "static_representation_or_lane_shape"
     },
     {
-      "id": "tslc/src/tslc/backend/assets/tsl_algorithm_families.rs|for_each_chunk_raw|assert|d23a82219d4650bc|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_algorithm_families.rs",
-      "owner": "for_each_chunk_raw",
-      "kind": "assert",
-      "excerpt": "assert!( lanes > 0, \"tsl::algo::for_each_chunk requires a vector with at least one lane\", );",
-      "family": "static_representation_or_lane_shape"
-    },
-    {
       "id": "tslc/src/tslc/backend/assets/tsl_algorithm_families.rs|transform_binary_raw|assert|efcd9e30c6585633|0",
       "path": "tslc/src/tslc/backend/assets/tsl_algorithm_families.rs",
       "owner": "transform_binary_raw",
@@ -561,6 +553,14 @@
       "owner": "transform_unary_raw",
       "kind": "assert",
       "excerpt": "assert!( lanes > 0, \"tsl::algo::transform_unary requires a vector with at least one lane\", );",
+      "family": "static_representation_or_lane_shape"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_algorithm_iteration.rs|for_each_chunk_raw|assert|d23a82219d4650bc|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_algorithm_iteration.rs",
+      "owner": "for_each_chunk_raw",
+      "kind": "assert",
+      "excerpt": "assert!( lanes > 0, \"tsl::algo::for_each_chunk requires a vector with at least one lane\", );",
       "family": "static_representation_or_lane_shape"
     },
     {

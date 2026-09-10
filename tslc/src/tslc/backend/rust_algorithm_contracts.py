@@ -428,6 +428,7 @@ def rust_algorithm_contract_holes(
     aliases = rust_profile_algorithm_aliases(
         ("tsl_algorithm",),
         owner="crate::tsl_algorithm",
+        admitted_form_names=admitted_form_names,
     )
     profile_aliases = rust_profile_algorithm_aliases(
         ("profile", "algo"),
@@ -453,6 +454,8 @@ def rust_algorithm_contract_holes(
         "scaled_checked_algorithm_definitions": "\n\n".join(
             render_rust_scaled_checked_algorithm(contract)
             for contract in _selected_contracts()
+            if admitted_form_names is None
+            or contract.name in admitted_form_names
         ),
         "profile_scaled_checked_algorithm_definitions": "\n\n".join(
             _render_rust_profile_scaled_checked(contract)

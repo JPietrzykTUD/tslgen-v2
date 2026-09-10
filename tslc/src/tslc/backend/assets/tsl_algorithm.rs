@@ -26,11 +26,27 @@ pub use self::kernel_traits::{
 
 #[doc(hidden)]
 mod validation;
-use self::validation::{
-    chunk_count_for_lanes, selected_address_error,
-};
+use self::validation::{chunk_count_for_lanes, selected_address_error};
 #[allow(unused_imports)]
 pub(crate) use self::validation::{selected_row_pointer, selected_row_scale};
+
+#[doc(hidden)]
+mod iteration;
+pub use self::iteration::{
+@{algorithm_iteration_reexports}
+};
+
+#[doc(hidden)]
+mod predicate;
+pub use self::predicate::{
+@{algorithm_predicate_reexports}
+};
+
+#[doc(hidden)]
+mod count;
+pub use self::count::{
+@{algorithm_count_reexports}
+};
 
 #[doc(hidden)]
 mod families;
