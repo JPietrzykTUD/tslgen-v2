@@ -1,6 +1,6 @@
 # TSL v1.0.0 session recap
 
-Date: 2026-09-09
+Date: 2026-09-10
 
 Branch: `tsl-v1-release`
 
@@ -282,8 +282,36 @@ The generated product was hardened as a normal consumer include rather than
 relying on system-header treatment to suppress warnings. Release gates cover
 supported GCC, Clang, cross-compilation, and WebAssembly paths, exact public
 declaration manifests, executable value cases, documentation, compile time, and
-artifact size. Remote MSVC remains part of the remote candidate gate because it
-is not locally available on this Linux host.
+artifact size. MSVC is not locally available on this Linux host, so its release
+proof comes from the automatic Windows CI quality matrix; all three exhaustive
+`/W4 /WX` shards now pass.
+
+The first automatic branch runs exposed real portability defects rather than a
+profile-selector regression. The fixes keep target selection profile-owned,
+make compiler-dependent horizontal-reduction eligibility an explicit backend
+capability, preserve external OneAPI headers as a typed system-header boundary,
+and represent compile-known primitive branches with typed TSIL control. The
+last warning slice also makes scalar/register overload conversion explicit at
+the generated C++ implementation boundary without type-trait inspection of
+intrinsic register types or forced register copies.
+
+The next automatic MSVC run showed two remaining exhaustive-project issues.
+Immediate-shift normal paths now live inside the `switch<compile>` fallback arm,
+so C++ emits a complete `if constexpr`/`else` for those immediate-bound
+decisions. The generated CMake project also applies `/bigobj` privately to its
+exhaustive MSVC smoke and value targets; ordinary consumers and the public
+generated interface do not inherit that verification-only flag.
+
+The automatic run proved `/bigobj` fixed C1128, but its three MSVC warning
+shards still found C4702. Although diagnostics pointed at transitive callers
+such as `popcnt` and `permute_lanes_mask`, the repeated instantiations led back
+to signed `shift_right` implementations whose return-producing
+`if constexpr (PreserveSign)` branches were followed by unconditional code.
+Those branches now have explicit typed compile-time alternatives across SSE,
+AVX2, AVX-512, and RVV. Unsigned generation remains direct, the large logical
+16-bit implementation is shared through the existing unsigned specialization,
+and scalar cases with genuine runtime fallthrough remain open. The fix is
+source semantics, not warning suppression or a compiler-specific backend rule.
 
 Conversion-index diagnostics and exact all-profile declarations were made
 typed and deterministic. Representative clean generated projects build in
@@ -370,18 +398,44 @@ The updated deterministic baseline contains 17,134 definitions: 10,261 C++ and
 6,873 Rust definitions. All 86 PIVOT tests pass. No PIVOT production behavior
 was changed to accommodate the compiler.
 
+The `3ae5e615` MSVC-warning slice refreshed this downstream evidence once more.
+Definition counts, identities, direct hashes, collision multiplicities, and the
+typed-body semantic digest remained exact. Only `interleave_lo` skip taxonomy
+changed—from an unsupported render value to residual target statements after
+generation-time parity branches became direct lane-pair assignments—and source
+locations moved. The guarded updater's reviewed override was used only after
+that comparison.
+
+The exhaustive-MSVC follow-up moved source locations again while restructuring
+immediate-shift control. PIVOT accepted that refresh without an override: all
+17,134 definition records, direct hashes, collision multiplicities, skip counts,
+and the typed-body semantic digest remained unchanged. Only source hashes and
+locations changed.
+
+Closing the remaining signed-shift compile-time branches moved those locations
+once more. The guarded updater again accepted the refresh without an override;
+the 17,134 definitions, semantic digest, skip counts, body-quality summary, and
+collision inventory remain unchanged.
+
 ## 11. Local validation completed
 
-The latest broad validation after the caller-safety correction produced:
+The latest broad validation after closing the generated shift branches
+produced:
 
 | Gate | Result |
 | --- | --- |
-| Full ordinary `tslc` test suite | 2,857 passed, 128 expected skips |
+| Full ordinary `tslc` test suite | 2,921 passed, 129 expected skips |
 | Python compilation | passed |
 | `tslc` mypy | 367 source files passed |
 | Corpus `check` | passed |
-| Checked-API census | 155 runtime sites, 33 caller-unsafe paths, 138 explicit metadata gaps |
-| Representative C++/Rust generated build | 1,494 specializations, 70 artifacts, 20 commands passed |
+| Checked-API census | 156 runtime sites, 33 caller-unsafe paths, 138 explicit metadata gaps |
+| Focused warning-clean C++/Rust build | 37,962 specializations, 92 artifacts, 36 commands passed |
+| Focused generated C++/Rust values | 65 build/test commands passed |
+| Focused RVV values | 2,244 specializations, 49 artifacts, 9 commands passed at VLEN 128/256/512 |
+| Exact coverage ratchet | 174,602 emitted slot-variants; no changes or regressions |
+| Exact SVE/RVV target ratchet | 9,239 applicable slots; no changes or regressions |
+| C++ benchmark ratchet | 14,138 selected slots; evidence current |
+| Rust benchmark ratchet | 4,938 selected slots; evidence current |
 | PIVOT suite | 86 passed |
 | PIVOT mypy | 17 source files passed |
 | Whitespace/error-marker check | passed |
@@ -430,6 +484,20 @@ The v1 branch contains the following reviewed slices after baseline
 | `e29eba22` | Keep pointer caller-safety contracts source-owned |
 | `03fed88f` | Refresh reviewed PIVOT v1 export evidence |
 | `396177b5` | Reconcile the release plan with completed local gates |
+| `a06b496d` | Add the first complete session recap |
+| `b2c3649d` | Fix generated C++ MSVC portability defects |
+| `c66778ab` | Keep generated x86 activation profile-exact |
+| `178d6ea5` | Test editor profile-activation semantics |
+| `8ce798f7` | Model the OneAPI external system-header boundary |
+| `7ced4216` | Exclude unsupported Rust SVE profiles from scheduling |
+| `b12e65d8` | Refresh exact release and benchmark evidence |
+| `0b25bda1` | Refresh PIVOT evidence after type canonicalization |
+| `76b609f2` | Fix Clang uniform-shift result typing |
+| `a33ee33a` | Make MSVC narrow-reduction selection capability-aware |
+| `fe9c16db` | Stabilize initial LSP workspace indexing |
+| `3ae5e615` | Eliminate the remaining generated MSVC warning sources |
+| `cf1000b1` | Make exhaustive generated MSVC verification portable |
+| `f358e5b4` | Close generated shift compile-time return branches |
 
 Every implementation slice was followed by a focused design review, fixes for
 identified boundary or maintainability problems, proportionate validation, and
@@ -439,17 +507,30 @@ a separate commit before moving to the next slice.
 
 The following are external execution gates, not locally hidden TODOs:
 
-1. Push `tsl-v1-release` and run the remote non-publishing release-candidate
-   workflow, including Windows/MSVC jobs.
-2. Run the exact packaged SVE artifact on supported native SVE hardware and
+1. Run the exact packaged SVE artifact on supported native SVE hardware and
    provide the schema-valid, traceable attestation.
-3. Run the exact packaged RVV artifact on supported native RVV hardware.
-4. Build and execute the declared showcase against the actual CHORYS repository
+2. Run the exact packaged RVV artifact on supported native RVV hardware.
+3. Build and execute the declared showcase against the actual CHORYS repository
    and revision, then provide the combined RVV/CHORYS native attestation.
+4. Run the non-publishing release-candidate workflow when explicitly authorized.
 5. Review all remote and native evidence. Fix branch-owned failures through the
    same review/validation/commit loop.
 6. Only after every required gate is green, authorize and create the final
    `v1.0.0` tag and allow the atomic workflow to publish it.
+
+The automatic run for `fe9c16db` passed editor, Python, coverage, Clang, Rust,
+benchmark, scalable-showcase, and generated build/value jobs. Its only failures
+were three MSVC warning shards. `3ae5e615` removed their C4127/C4244 warnings;
+its automatic run then reported only C4702 unreachable code and C1128 section
+count exhaustion in those shards. `cf1000b1` fixed C1128, but automatic run
+`34428614416` showed C4702 still originating in transitively instantiated
+runtime/vector signed shifts. `f358e5b4` closes those branches. These historical
+results are diagnosis evidence; all three automatic MSVC warning shards for the
+current commit pass under `/W4 /WX`. Generated Build and Values passed all 49
+jobs in run `34433042041`; Python Logic (`34433042052`), Coverage Ratchet
+(`34433042044`), and TSL Editor (`34433042045`) also completed successfully.
+Those workflows started automatically from the normal push; none was manually
+dispatched or rerun.
 
 If native evidence cannot be obtained, the affected scalable profile must be
 marked experimental for the release. The evidence requirement must not be
