@@ -9,7 +9,11 @@ import pytest
 from rust_api_test_support import _aligned_memory_specs, _plan
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.helper_requirements import PrimitiveRequirement, RUST_HELPER_MANIFEST
-from tslc.backend.rust_algorithm import rust_algorithm_module
+from tslc.backend.rust_algorithm import (
+    rust_algorithm_family_module,
+    rust_algorithm_root_module,
+    rust_algorithm_support_module,
+)
 from tslc.backend.rust_algorithm_plan import plan_rust_algorithm
 from tslc.backend.rust_static_selection import (
     RustStaticProfileSelection,
@@ -112,7 +116,7 @@ def test_missing_contiguous_store_is_structured_before_rendering() -> None:
         PrimitiveRequirement("store", PrimitiveMaskMode.PASS_THROUGH),
     )
     with pytest.raises(ValueError, match="unsupported Rust algorithm profile"):
-        rust_algorithm_module(plan.fallback, RenderAssets({}))
+        rust_algorithm_support_module(plan.fallback)
 
 
 def test_algorithm_planning_is_independent_of_primitive_input_order() -> None:
@@ -246,6 +250,16 @@ def test_renamed_and_reordered_profiles_are_planned_by_exact_identity(
     )
     assert renamed is not None
 
-    assert rust_algorithm_module(profile, render_assets) == rust_algorithm_module(
-        renamed, render_assets
+    assert rust_algorithm_root_module(profile) == rust_algorithm_root_module(
+        renamed
+    )
+    assert rust_algorithm_support_module(
+        profile
+    ) == rust_algorithm_support_module(renamed)
+    assert tuple(
+        rust_algorithm_family_module(family, render_assets)
+        for family in profile.family_modules
+    ) == tuple(
+        rust_algorithm_family_module(family, render_assets)
+        for family in renamed.family_modules
     )

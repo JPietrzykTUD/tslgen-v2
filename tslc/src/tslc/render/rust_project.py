@@ -10,21 +10,32 @@ from tslc.backend.emitted_profile import (
     used_extensions,
 )
 from tslc.backend.rust import RustBackend
+from tslc.backend.rust_algorithm import (
+    rust_algorithm_family_module,
+    rust_algorithm_module_declaration,
+    rust_algorithm_root_module,
+    rust_algorithm_support_module,
+)
+from tslc.backend.rust_algorithm_contracts import rust_algorithm_contract_holes
+from tslc.backend.rust_algorithm_plan import (
+    RustAlgorithmPlan,
+    RustAlgorithmProfilePlan,
+)
 from tslc.backend.rust_api_model import RustFacadePlan
-from tslc.backend.rust_algorithm_plan import RustAlgorithmPlan
-from tslc.backend.rust_dispatch import RustDispatchPlan
-from tslc.backend.rust_documentation import rust_checked_api_examples
 from tslc.backend.rust_benchmark_context import (
     RUST_BENCHMARK_CODEGEN_CONTRACT,
     RUST_BENCHMARK_POLICY_SCHEMA_VERSION,
     RUST_POLICY_CONSUMPTION_SCHEMA_VERSION,
 )
-from tslc.backend.rust_policy_selection import (
-    RustPolicySelectionPlan,
-)
+from tslc.backend.rust_dispatch import RustDispatchPlan
+from tslc.backend.rust_documentation import rust_checked_api_examples
+from tslc.backend.rust_names import rust_primitive_tag_name
 from tslc.backend.rust_package import (
     DEFAULT_RUST_PACKAGE_CONFIG,
     RustPackageConfig,
+)
+from tslc.backend.rust_policy_selection import (
+    RustPolicySelectionPlan,
 )
 from tslc.backend.rust_public_api import (
     rust_fallback_profile_reexport_declaration,
@@ -39,11 +50,11 @@ from tslc.backend.rust_static_selection import (
 from tslc.backend.rust_static_public_declarations import (
     rust_static_declaration_holes,
 )
-from tslc.backend.rust_names import rust_primitive_tag_name
+from tslc.backend.rust_vectors import rust_registrations, rust_vector_registrations
 from tslc.backend.target_capability import rust_arch_module
+from tslc.benchmark.planner import BENCHMARK_PROTOCOL_VERSION
 from tslc.catalog.model import Extension
 from tslc.catalog.target_families import ProfileFamilyCapability
-from tslc.benchmark.planner import BENCHMARK_PROTOCOL_VERSION
 from tslc.compiler_assets import RenderAssets
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact
@@ -66,9 +77,6 @@ from tslc.render.rust_static_selection import (
     rust_static_fallback_cfg,
     rust_static_profile_cfg,
 )
-from tslc.backend.rust_algorithm import rust_algorithm_module
-from tslc.backend.rust_algorithm_contracts import rust_algorithm_contract_holes
-from tslc.backend.rust_vectors import rust_registrations, rust_vector_registrations
 
 
 def _rust_artifacts(
@@ -285,7 +293,7 @@ def _rust_artifacts(
             registrations=registrations,
             bodies=bodies,
             algorithm=(
-                rust_algorithm_module(algorithm_profile, assets)
+                rust_algorithm_module_declaration(algorithm_profile)
                 if algorithm_profile.supported
                 else ""
             ),
@@ -297,6 +305,15 @@ def _rust_artifacts(
                 media_type=media_type,
             )
         )
+        if algorithm_profile.supported:
+            artifacts.extend(
+                _rust_profile_algorithm_artifacts(
+                    f"rust/src/tsl_{slug(emitted_profile.profile.name)}",
+                    algorithm_profile,
+                    assets,
+                    media_type=media_type,
+                )
+            )
         artifacts.append(
             text(
                 f"rust/benches/{benchmark_layout.benchmark_target}.rs",
@@ -359,7 +376,7 @@ def _rust_artifacts(
         ),
         bodies=fallback_bodies,
         algorithm=(
-            rust_algorithm_module(algorithm_plan.fallback, assets)
+            rust_algorithm_module_declaration(algorithm_plan.fallback)
             if algorithm_plan.fallback.supported
             else ""
         ),
@@ -371,6 +388,15 @@ def _rust_artifacts(
             media_type=media_type,
         )
     )
+    if algorithm_plan.fallback.supported:
+        artifacts.extend(
+            _rust_profile_algorithm_artifacts(
+                "rust/src/tsl_target_fallback",
+                algorithm_plan.fallback,
+                assets,
+                media_type=media_type,
+            )
+        )
 
     artifacts.append(
         text(
@@ -423,6 +449,37 @@ def _rust_artifacts(
         )
     )
     return artifacts
+
+
+def _rust_profile_algorithm_artifacts(
+    profile_path: str,
+    plan: RustAlgorithmProfilePlan,
+    assets: RenderAssets,
+    *,
+    media_type: str,
+) -> tuple[Artifact, ...]:
+    """Render one profile and fallback through the same private module layout."""
+
+    return (
+        text(
+            f"{profile_path}/algo.rs",
+            rust_algorithm_root_module(plan),
+            media_type=media_type,
+        ),
+        text(
+            f"{profile_path}/algo/support.rs",
+            rust_algorithm_support_module(plan),
+            media_type=media_type,
+        ),
+        *(
+            text(
+                f"{profile_path}/algo/{family.module_name}.rs",
+                rust_algorithm_family_module(family, assets),
+                media_type=media_type,
+            )
+            for family in plan.family_modules
+        ),
+    )
 
 
 def _rust_core(profiles: Sequence[EmittedProfile], assets: RenderAssets) -> str:

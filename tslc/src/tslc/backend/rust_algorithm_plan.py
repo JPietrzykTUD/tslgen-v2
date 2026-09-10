@@ -127,6 +127,31 @@ class RustAlgorithmSelectedLoadTarget:
 
 
 @dataclass(frozen=True, slots=True)
+class RustAlgorithmFamilyModulePlan:
+    """One private profile wrapper module and its admitted callable forms."""
+
+    semantic_family: AlgorithmSemanticFamily
+    forms: tuple[AlgorithmCallableForm, ...]
+
+    def __post_init__(self) -> None:
+        if not self.forms or any(
+            form.family.semantic_family is not self.semantic_family
+            for form in self.forms
+        ):
+            raise ValueError(
+                "Rust algorithm family modules require matching admitted forms"
+            )
+
+    @property
+    def module_name(self) -> str:
+        return self.semantic_family.value
+
+    @property
+    def admitted_form_names(self) -> tuple[str, ...]:
+        return tuple(form.name for form in self.forms)
+
+
+@dataclass(frozen=True, slots=True)
 class RustAlgorithmProfilePlan:
     """All decided facts needed to format one profile-local algorithm module."""
 
@@ -139,6 +164,7 @@ class RustAlgorithmProfilePlan:
     read_facade: RustAlgorithmPrimitiveFacade | None
     write_facade: RustAlgorithmPrimitiveFacade | None
     admission: AlgorithmProfileAdmission
+    family_modules: tuple[RustAlgorithmFamilyModulePlan, ...]
     selected_load_targets: tuple[RustAlgorithmSelectedLoadTarget, ...]
     primitive_facades: tuple[RustAlgorithmPrimitiveFacade, ...]
     requires_rebind: bool
@@ -160,6 +186,26 @@ class RustAlgorithmProfilePlan:
             raise ValueError("Rust algorithm admission must use the Rust backend")
         if self.admission.profile_name != self.profile_name:
             raise ValueError("Rust algorithm admission must match its profile")
+        expected_families = tuple(
+            family
+            for family in AlgorithmSemanticFamily
+            if any(
+                form.family.semantic_family is family
+                for form in self.admission.admitted_forms
+            )
+        )
+        if tuple(
+            module.semantic_family for module in self.family_modules
+        ) != expected_families:
+            raise ValueError(
+                "Rust algorithm family modules must follow semantic family order"
+            )
+        if tuple(
+            form for module in self.family_modules for form in module.forms
+        ) != self.admission.admitted_forms:
+            raise ValueError(
+                "Rust algorithm family modules must partition admitted forms"
+            )
         if (
             self.read_facade is not None
             and self.read_facade.memory_access is not MemoryAccess.READ
@@ -330,6 +376,7 @@ def _plan_profile(
         read_facade=read_facade,
         write_facade=write_facade,
         admission=admission,
+        family_modules=_family_modules(admission),
         selected_load_targets=_selected_load_targets(
             static_mappings,
             by_primitive,
@@ -337,6 +384,26 @@ def _plan_profile(
         ),
         primitive_facades=primitive_facades,
         requires_rebind=any(facade.requires_rebind for facade in primitive_facades),
+    )
+
+
+def _family_modules(
+    admission: AlgorithmProfileAdmission,
+) -> tuple[RustAlgorithmFamilyModulePlan, ...]:
+    return tuple(
+        RustAlgorithmFamilyModulePlan(
+            semantic_family,
+            tuple(
+                form
+                for form in admission.admitted_forms
+                if form.family.semantic_family is semantic_family
+            ),
+        )
+        for semantic_family in AlgorithmSemanticFamily
+        if any(
+            form.family.semantic_family is semantic_family
+            for form in admission.admitted_forms
+        )
     )
 
 
@@ -372,7 +439,7 @@ def _implementation_targets(
         RustAlgorithmImplTarget("T", "Simd<T, Scalar>"),
         RustAlgorithmImplTarget("T, const N: usize", "Simd<T, Generic<N>>"),
         *(
-            RustAlgorithmImplTarget("T", f"Simd<T, super::{tag}>")
+            RustAlgorithmImplTarget("T", f"Simd<T, super::super::{tag}>")
             for tag in concrete_tags
         ),
     )
@@ -431,6 +498,7 @@ def _selected_load_targets(
 
 __all__ = (
     "RUST_ALGORITHM_REQUIREMENTS",
+    "RustAlgorithmFamilyModulePlan",
     "RustAlgorithmImplTarget",
     "RustAlgorithmPlan",
     "RustAlgorithmProfilePlan",

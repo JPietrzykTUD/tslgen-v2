@@ -559,9 +559,16 @@ count. Neutral lowering never constructs a C++ or Rust lane-count expression.
   `RustStaticSelectionPlan`; profiles without a compile-target selection reuse
   that plan's exact generic fallback. The target formatter in
   [backend/rust_algorithm.py](src/tslc/backend/rust_algorithm.py) consumes only
-  those decided facts and static assets. Missing mandatory contiguous memory
-  support and missing optional family helpers remain typed admission gaps
-  rather than an empty formatter result or a template-time decision. Static
+  those decided facts and semantic-family static assets. The project renderer
+  keeps the stable `profile::algo` module path while emitting a private
+  `algo/support.rs` for helper implementations and primitive policy facades,
+  plus ordered private utility, iteration, predicate, count, selection,
+  transform, consume, and aggregate wrapper modules. `algo.rs` explicitly
+  re-exports their stable functions and `Profile`; concrete and fallback
+  profiles use the same layout, and the parent profile cfg owns whether any
+  child is compiled. Missing mandatory contiguous memory support and missing
+  optional family helpers remain typed admission gaps rather than an empty
+  formatter result or a template-time decision. Static
   algorithm-wrapper names are reserved by the compiler manifest in
   [backend/rust_algorithm_manifest.py](src/tslc/backend/rust_algorithm_manifest.py),
   with an asset-consistency test preventing drift.

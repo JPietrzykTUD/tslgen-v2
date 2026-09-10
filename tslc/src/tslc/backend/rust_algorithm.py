@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
+from textwrap import dedent
+
+from tslc.backend.algorithm_surface import AlgorithmSemanticFamily
 from tslc.backend.rust_algorithm_plan import (
+    RustAlgorithmFamilyModulePlan,
     RustAlgorithmImplTarget,
     RustAlgorithmProfilePlan,
     RustAlgorithmSelectedLoadTarget,
 )
-from tslc.backend.rust_algorithm_contracts import rust_algorithm_contract_holes
+from tslc.backend.rust_algorithm_contracts import (
+    rust_algorithm_contract_holes,
+    rust_profile_scaled_checked_algorithm_declarations,
+)
 from tslc.backend.rust_algorithm_public_declarations import (
     rust_profile_algorithm_module_declaration,
+    rust_profile_algorithm_public_declarations,
     rust_profile_algorithm_support_reexports,
 )
 from tslc.backend.rust_facades import (
@@ -22,48 +30,75 @@ from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.compiler_assets import RenderAssets
 
 
-def rust_algorithm_module(
-    plan: RustAlgorithmProfilePlan,
-    assets: RenderAssets,
-) -> str:
-    """Profile-local Rust algorithm facade and SIMD policy mappings."""
+def rust_algorithm_module_declaration(plan: RustAlgorithmProfilePlan) -> str:
+    """Public parent declaration for the generated profile algorithm module."""
 
-    if not plan.supported:
-        raise ValueError("cannot format an unsupported Rust algorithm profile")
-    if plan.read_facade is None or plan.write_facade is None:
-        raise ValueError("supported Rust algorithm profile has no memory bindings")
-    read_facade = plan.read_facade
-    write_facade = plan.write_facade
-    impl_targets = plan.implementation_targets
-    mappings = _rust_algorithm_vector_mappings(plan)
-    rebind_imports = (
-        ", RebindBase, ReboundBase"
-        if plan.requires_rebind
-        else ""
+    _validate_supported_plan(plan)
+    return (
+        "\n\n"
+        + rust_profile_algorithm_module_declaration(("profile",)).render_head()
+        + ";\n"
     )
+
+
+def rust_algorithm_root_module(plan: RustAlgorithmProfilePlan) -> str:
+    """Stable profile algorithm shell with explicit private-module re-exports."""
+
+    _validate_supported_plan(plan)
     support_reexports = "\n".join(
-        "    " + declaration.render_head() + ";"
+        declaration.render_head() + ";"
         for declaration in rust_profile_algorithm_support_reexports(
             ("profile", "algo")
         )
     )
-    module_head = rust_profile_algorithm_module_declaration(
-        ("profile",),
-    ).render_head()
-    parts = [
-        f"{module_head} {{\n"
-        f"{support_reexports}\n\n"
-        "    use crate::tsl_algorithm::{\n"
-        "        CompressStore, IntegralMask, LoadStore, MaskFromIntegral, MaskedStore,\n"
-        f"        MaskPopulationCount, SelectedLoad, VectorFor{rebind_imports},\n"
-        "    };\n"
-        "    use crate::dataparallel;\n"
-        "    use crate::tsl_core::{\n"
-        "        Generic, Scalar, Simd, SimdVector, StaticSimdVector,\n"
-        "    };\n"
-        "\n"
-        "    pub struct Profile;"
+    support_names = tuple(
+        dict.fromkeys(
+            ("Profile", *(facade.function_name for facade in plan.primitive_facades))
+        )
+    )
+    module_exports = [
+        "mod support;",
+        _rust_public_module_reexport("support", support_names),
     ]
+    for family in plan.family_modules:
+        module_exports.extend(
+            (
+                f"mod {family.module_name};",
+                _rust_public_module_reexport(
+                    family.module_name,
+                    _rust_algorithm_family_export_names(family),
+                ),
+            )
+        )
+    rebind_imports = ", RebindBase, ReboundBase" if plan.requires_rebind else ""
+    return (
+        f"{support_reexports}\n\n"
+        "use crate::dataparallel;\n"
+        "use crate::tsl_algorithm::{\n"
+        "    CompressStore, IntegralMask, LoadStore, MaskFromIntegral, MaskedStore,\n"
+        f"    MaskPopulationCount, SelectedLoad, VectorFor{rebind_imports},\n"
+        "};\n"
+        "use crate::tsl_core::{\n"
+        "    Generic, Scalar, Simd, SimdVector, StaticSimdVector,\n"
+        "};\n\n"
+        + "\n".join(module_exports)
+        + "\n"
+    )
+
+
+def rust_algorithm_support_module(
+    plan: RustAlgorithmProfilePlan,
+) -> str:
+    """Private profile helper implementations and primitive policy facades."""
+
+    _validate_supported_plan(plan)
+    assert plan.read_facade is not None
+    assert plan.write_facade is not None
+    read_facade = plan.read_facade
+    write_facade = plan.write_facade
+    impl_targets = plan.implementation_targets
+    mappings = _rust_algorithm_vector_mappings(plan)
+    parts = ["pub struct Profile;"]
     parts.append(
         _rust_algorithm_load_store_impls(
             impl_targets,
@@ -104,17 +139,64 @@ def rust_algorithm_module(
         parts.append(mask_from_integral_impls)
     if mappings:
         parts.append(mappings)
-    algorithm_wrappers = assets.fill(
-        _RUST_ALGORITHM_WRAPPER_ASSET,
-        **rust_algorithm_contract_holes(
-            admitted_form_names=frozenset(plan.admitted_form_names)
-        ),
-    ).rstrip()
-    primitive_facades = rust_algorithm_primitive_facades(plan.primitive_facades)
+    primitive_facades = rust_algorithm_primitive_facades(
+        plan.primitive_facades,
+        profile_module_path="super::super",
+    )
     if primitive_facades:
         parts.append(primitive_facades)
-    parts.append(algorithm_wrappers)
-    return "\n\n" + "\n\n".join(part for part in parts if part) + "\n}\n"
+    return "use super::*;\n\n" + "\n\n".join(
+        dedent(part) for part in parts if part
+    ) + "\n"
+
+
+def rust_algorithm_family_module(
+    family: RustAlgorithmFamilyModulePlan,
+    assets: RenderAssets,
+) -> str:
+    """One private semantic-family wrapper module."""
+
+    return (
+        "use super::*;\n\n"
+        + assets.fill(
+            _RUST_ALGORITHM_FAMILY_ASSETS[family.semantic_family],
+            **rust_algorithm_contract_holes(
+                admitted_form_names=frozenset(family.admitted_form_names)
+            ),
+        ).rstrip()
+        + "\n"
+    )
+
+
+def _validate_supported_plan(plan: RustAlgorithmProfilePlan) -> None:
+    if not plan.supported:
+        raise ValueError("cannot format an unsupported Rust algorithm profile")
+    if plan.read_facade is None or plan.write_facade is None:
+        raise ValueError("supported Rust algorithm profile has no memory bindings")
+
+
+def _rust_algorithm_family_export_names(
+    family: RustAlgorithmFamilyModulePlan,
+) -> tuple[str, ...]:
+    admitted = frozenset(family.admitted_form_names)
+    declarations = (
+        *rust_profile_algorithm_public_declarations(
+            ("profile", "algo"), admitted_form_names=admitted
+        ),
+        *rust_profile_scaled_checked_algorithm_declarations(
+            ("profile", "algo"), admitted_form_names=admitted
+        ),
+    )
+    return tuple(dict.fromkeys(declaration.name for declaration in declarations))
+
+
+def _rust_public_module_reexport(
+    module_name: str,
+    names: tuple[str, ...],
+) -> str:
+    if not names:
+        raise ValueError("Rust algorithm child modules require public exports")
+    return f"pub use self::{module_name}::{{{', '.join(names)}}};"
 
 
 def _rust_algorithm_load_store_impls(
@@ -145,26 +227,26 @@ def _rust_algorithm_load_store_impl(
     if write_facade.overload_parameter_positions:
         write_bound = (
             f"        <{vector} as SimdVector>::RegisterType:\n"
-            f"            super::detail::primitives::{write_trait}Arg<{vector}, false>,\n"
+            f"            super::super::detail::primitives::{write_trait}Arg<{vector}, false>,\n"
         )
         write_generics = f"<{vector}, false, _>"
     else:
         write_bound = (
-            f"        {vector}: super::detail::primitives::{write_trait}<false>,\n"
+            f"        {vector}: super::super::detail::primitives::{write_trait}<false>,\n"
         )
         write_generics = f"<{vector}, false>"
     return (
         f"    impl<{target.type_parameters}> LoadStore<{vector}> for Profile\n"
         "    where\n"
         f"        {vector}: StaticSimdVector<BaseType = T>\n"
-        f"            + super::detail::primitives::{read_trait}<false>,\n"
+        f"            + super::super::detail::primitives::{read_trait}<false>,\n"
         f"{write_bound}"
         "    {\n"
         f"        unsafe fn load_unaligned(ptr: *const T) -> <{vector} as SimdVector>::RegisterType {{\n"
-        f"            unsafe {{ super::{read_name}::<{vector}, false>(ptr) }}\n"
+        f"            unsafe {{ super::super::{read_name}::<{vector}, false>(ptr) }}\n"
         "        }\n\n"
         f"        unsafe fn store_unaligned(ptr: *mut T, value: <{vector} as SimdVector>::RegisterType) {{\n"
-        f"            unsafe {{ super::{write_name}::{write_generics}(ptr, value) }}\n"
+        f"            unsafe {{ super::super::{write_name}::{write_generics}(ptr, value) }}\n"
         "        }\n"
         "    }"
     )
@@ -197,7 +279,7 @@ def _rust_algorithm_scalar_selected_load_impl(
         f"    impl<T, const SCALE: u32> SelectedLoad<{vector}, SCALE> for Profile\n"
         "    where\n"
         f"        {vector}: StaticSimdVector<BaseType = T>\n"
-        f"            + super::detail::primitives::{read_trait}<false>,\n"
+        f"            + super::super::detail::primitives::{read_trait}<false>,\n"
         "    {\n"
         f"        unsafe fn load_selected(input: *const T, indices: *const usize)\n"
         f"            -> <{vector} as SimdVector>::RegisterType {{\n"
@@ -206,7 +288,7 @@ def _rust_algorithm_scalar_selected_load_impl(
         "                    input,\n"
         "                    indices.read(),\n"
         "                );\n"
-        f"                super::{read_name}::<{vector}, false>(ptr)\n"
+        f"                super::super::{read_name}::<{vector}, false>(ptr)\n"
         "            }\n"
         "        }\n"
         "    }"
@@ -219,15 +301,15 @@ def _rust_algorithm_generic_selected_load_impl() -> str:
         f"    impl<T, const N: usize, const SCALE: u32> SelectedLoad<{vector}, SCALE> for Profile\n"
         "    where\n"
         f"        {vector}: StaticSimdVector<BaseType = T>\n"
-        "            + super::detail::primitives::Set_zeroImpl\n"
-        "            + super::detail::primitives::To_arrayImpl\n"
-        "            + super::detail::primitives::From_arrayImpl,\n"
+        "            + super::super::detail::primitives::Set_zeroImpl\n"
+        "            + super::super::detail::primitives::To_arrayImpl\n"
+        "            + super::super::detail::primitives::From_arrayImpl,\n"
         "        T: Copy,\n"
         "    {\n"
         f"        unsafe fn load_selected(input: *const T, indices: *const usize)\n"
         f"            -> <{vector} as SimdVector>::RegisterType {{\n"
         "            unsafe {\n"
-        f"                let mut result = super::to_array::<{vector}>(super::set_zero::<{vector}>());\n"
+        f"                let mut result = super::super::to_array::<{vector}>(super::super::set_zero::<{vector}>());\n"
         f"                let lanes = <{vector} as StaticSimdVector>::ELEMENT_COUNT;\n"
         "                let mut lane = 0usize;\n"
         "                while lane < lanes {\n"
@@ -238,7 +320,7 @@ def _rust_algorithm_generic_selected_load_impl() -> str:
         "                    result[lane] = ptr.read();\n"
         "                    lane += 1;\n"
         "                }\n"
-        f"                super::from_array::<{vector}>(&result)\n"
+        f"                super::super::from_array::<{vector}>(&result)\n"
         "            }\n"
         "        }\n"
         "    }"
@@ -260,21 +342,21 @@ def _rust_algorithm_selected_load_impl(
         f"    impl<const SCALE: u32> SelectedLoad<{vector}, SCALE> for Profile\n"
         "    where\n"
         f"        {vector}: StaticSimdVector<BaseType = {base}>\n"
-        f"            + super::detail::primitives::Gather_narrowImpl<{index_vector}, "
+        f"            + super::super::detail::primitives::Gather_narrowImpl<{index_vector}, "
         f"<usize as crate::tsl_core::BaseTypeDispatch>::Key, {default_scale}, 1>\n"
-        f"            + super::detail::primitives::Gather_narrowImpl<{index_vector}, "
+        f"            + super::super::detail::primitives::Gather_narrowImpl<{index_vector}, "
         f"<usize as crate::tsl_core::BaseTypeDispatch>::Key, SCALE, 1>,\n"
         "    {\n"
         f"        unsafe fn load_selected(input: *const {base}, indices: *const usize)\n"
         f"            -> <{vector} as SimdVector>::RegisterType {{\n"
         "            unsafe {\n"
         "                if SCALE == 0 {\n"
-        f"                    super::gather_narrow::<{vector}, {index_vector}, {default_scale}, 1>(\n"
+        f"                    super::super::gather_narrow::<{vector}, {index_vector}, {default_scale}, 1>(\n"
         "                        input,\n"
         "                        indices,\n"
         "                    )\n"
         "                } else {\n"
-        f"                    super::gather_narrow::<{vector}, {index_vector}, SCALE, 1>(\n"
+        f"                    super::super::gather_narrow::<{vector}, {index_vector}, SCALE, 1>(\n"
         "                        input,\n"
         "                        indices,\n"
         "                    )\n"
@@ -290,14 +372,14 @@ def _rust_algorithm_array_selected_load_impl(vector: str, base: str) -> str:
         f"    impl<const SCALE: u32> SelectedLoad<{vector}, SCALE> for Profile\n"
         "    where\n"
         f"        {vector}: StaticSimdVector<BaseType = {base}>\n"
-        "            + super::detail::primitives::Set_zeroImpl\n"
-        "            + super::detail::primitives::To_arrayImpl\n"
-        "            + super::detail::primitives::From_arrayImpl,\n"
+        "            + super::super::detail::primitives::Set_zeroImpl\n"
+        "            + super::super::detail::primitives::To_arrayImpl\n"
+        "            + super::super::detail::primitives::From_arrayImpl,\n"
         "    {\n"
         f"        unsafe fn load_selected(input: *const {base}, indices: *const usize)\n"
         f"            -> <{vector} as SimdVector>::RegisterType {{\n"
         "            unsafe {\n"
-        f"                let mut result = super::to_array::<{vector}>(super::set_zero::<{vector}>());\n"
+        f"                let mut result = super::super::to_array::<{vector}>(super::super::set_zero::<{vector}>());\n"
         f"                let lanes = <{vector} as StaticSimdVector>::ELEMENT_COUNT;\n"
         "                let mut lane = 0usize;\n"
         "                while lane < lanes {\n"
@@ -308,7 +390,7 @@ def _rust_algorithm_array_selected_load_impl(vector: str, base: str) -> str:
         "                    result[lane] = ptr.read();\n"
         "                    lane += 1;\n"
         "                }\n"
-        f"                super::from_array::<{vector}>(&result)\n"
+        f"                super::super::from_array::<{vector}>(&result)\n"
         "            }\n"
         "        }\n"
         "    }"
@@ -332,14 +414,14 @@ def _rust_algorithm_masked_store_impl(target: RustAlgorithmImplTarget) -> str:
         f"    impl<{target.type_parameters}> MaskedStore<{vector}> for Profile\n"
         "    where\n"
         f"        {vector}: StaticSimdVector<BaseType = T>\n"
-        "            + super::detail::primitives::Store_maskImpl<false>,\n"
+        "            + super::super::detail::primitives::Store_maskImpl<false>,\n"
         "    {\n"
         f"        unsafe fn store_mask_unaligned(\n"
         f"            mask: <{vector} as SimdVector>::MaskType,\n"
         f"            ptr: *mut T,\n"
         f"            value: <{vector} as SimdVector>::RegisterType,\n"
         "        ) {\n"
-        f"            unsafe {{ super::store_mask::<{vector}, false>(mask, ptr, value) }}\n"
+        f"            unsafe {{ super::super::store_mask::<{vector}, false>(mask, ptr, value) }}\n"
         "        }\n"
         "    }"
     )
@@ -362,14 +444,14 @@ def _rust_algorithm_compress_store_impl(target: RustAlgorithmImplTarget) -> str:
         f"    impl<{target.type_parameters}> CompressStore<{vector}> for Profile\n"
         "    where\n"
         f"        {vector}: StaticSimdVector<BaseType = T>\n"
-        "            + super::detail::primitives::Compress_storeImpl<true>,\n"
+        "            + super::super::detail::primitives::Compress_storeImpl<true>,\n"
         "    {\n"
         "        unsafe fn compress_store(\n"
         f"            mask: <{vector} as SimdVector>::MaskType,\n"
         "            ptr: *mut T,\n"
         f"            value: <{vector} as SimdVector>::RegisterType,\n"
         "        ) {\n"
-        f"            unsafe {{ super::compress_store::<{vector}, true>(mask, ptr, value) }}\n"
+        f"            unsafe {{ super::super::compress_store::<{vector}, true>(mask, ptr, value) }}\n"
         "        }\n"
         "    }"
     )
@@ -394,10 +476,10 @@ def _rust_algorithm_mask_population_count_impl(
         f"    impl<{target.type_parameters}> MaskPopulationCount<{vector}> for Profile\n"
         "    where\n"
         f"        {vector}: StaticSimdVector\n"
-        "            + super::detail::primitives::Mask_population_countImpl,\n"
+        "            + super::super::detail::primitives::Mask_population_countImpl,\n"
         "    {\n"
         f"        fn mask_population_count(mask: <{vector} as SimdVector>::MaskType) -> usize {{\n"
-        f"            super::mask_population_count::<{vector}>(mask)\n"
+        f"            super::super::mask_population_count::<{vector}>(mask)\n"
         "        }\n"
         "    }"
     )
@@ -420,11 +502,11 @@ def _rust_algorithm_integral_mask_impl(target: RustAlgorithmImplTarget) -> str:
         f"    impl<{target.type_parameters}> IntegralMask<{vector}> for Profile\n"
         "    where\n"
         f"        {vector}: StaticSimdVector\n"
-        "            + super::detail::primitives::To_integralImpl,\n"
+        "            + super::super::detail::primitives::To_integralImpl,\n"
         "    {\n"
         f"        fn to_integral(mask: <{vector} as SimdVector>::MaskType)\n"
         f"            -> <{vector} as SimdVector>::ImaskType {{\n"
-        f"            super::to_integral::<{vector}>(mask)\n"
+        f"            super::super::to_integral::<{vector}>(mask)\n"
         "        }\n"
         "    }"
     )
@@ -449,11 +531,11 @@ def _rust_algorithm_mask_from_integral_impl(
         f"    impl<{target.type_parameters}> MaskFromIntegral<{vector}> for Profile\n"
         "    where\n"
         f"        {vector}: StaticSimdVector\n"
-        "            + super::detail::primitives::To_maskImpl,\n"
+        "            + super::super::detail::primitives::To_maskImpl,\n"
         "    {\n"
         f"        fn to_mask(mask: <{vector} as SimdVector>::ImaskType)\n"
         f"            -> <{vector} as SimdVector>::MaskType {{\n"
-        f"            super::to_mask::<{vector}>(mask)\n"
+        f"            super::super::to_mask::<{vector}>(mask)\n"
         "        }\n"
         "    }"
     )
@@ -498,7 +580,30 @@ def rust_fixed_vector_spelling(base: str, lane_count: int) -> str:
 def _rust_algorithm_vector_type(mapping: RustStaticVectorMapping) -> str:
     if mapping.extension_tag_spelling is None:
         return mapping.vector_spelling
-    return f"Simd<{mapping.base_spelling}, super::{mapping.extension_tag_spelling}>"
+    return (
+        f"Simd<{mapping.base_spelling}, "
+        f"super::super::{mapping.extension_tag_spelling}>"
+    )
 
 
-_RUST_ALGORITHM_WRAPPER_ASSET = "rust_algo_wrappers.rs"
+_RUST_ALGORITHM_FAMILY_ASSETS = {
+    AlgorithmSemanticFamily.UTILITY: "rust_algo_utility.rs",
+    AlgorithmSemanticFamily.ITERATION: "rust_algo_iteration.rs",
+    AlgorithmSemanticFamily.PREDICATE: "rust_algo_predicate.rs",
+    AlgorithmSemanticFamily.COUNT: "rust_algo_count.rs",
+    AlgorithmSemanticFamily.SELECT: "rust_algo_select.rs",
+    AlgorithmSemanticFamily.TRANSFORM: "rust_algo_transform.rs",
+    AlgorithmSemanticFamily.CONSUME: "rust_algo_consume.rs",
+    AlgorithmSemanticFamily.AGGREGATE: "rust_algo_aggregate.rs",
+}
+if tuple(_RUST_ALGORITHM_FAMILY_ASSETS) != tuple(AlgorithmSemanticFamily):
+    raise ValueError("Rust algorithm assets must follow every semantic family")
+
+
+__all__ = (
+    "rust_algorithm_family_module",
+    "rust_algorithm_module_declaration",
+    "rust_algorithm_root_module",
+    "rust_algorithm_support_module",
+    "rust_fixed_vector_spelling",
+)

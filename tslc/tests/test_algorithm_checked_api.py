@@ -114,7 +114,19 @@ def test_generated_checked_surface_exactly_projects_the_registry() -> None:
     assets = load_default_render_assets()
     holes = rust_algorithm_contract_holes()
     rust = assets.fill("tsl_algorithm.rs", **holes)
-    profile = assets.fill("rust_algo_wrappers.rs", **holes)
+    profile = "\n".join(
+        assets.fill(name, **holes)
+        for name in (
+            "rust_algo_utility.rs",
+            "rust_algo_iteration.rs",
+            "rust_algo_predicate.rs",
+            "rust_algo_count.rs",
+            "rust_algo_select.rs",
+            "rust_algo_transform.rs",
+            "rust_algo_consume.rs",
+            "rust_algo_aggregate.rs",
+        )
+    )
     expected = set(ALGORITHM_CONTRACTS)
     expected_scaled = {
         f"{contract.name}_scaled"
@@ -314,7 +326,7 @@ def test_generated_transform_checked_surfaces_use_contract_guards(
     )
 
     rust = artifacts["rust/src/tsl_algorithm.rs"]
-    profile = artifacts["rust/src/tsl_scalar.rs"]
+    profile = artifacts["rust/src/tsl_scalar/algo/transform.rs"]
     assert "pub fn transform_unary_checked<" in rust
     assert "return Err(crate::PreconditionError::InsufficientOutput);" in rust
     assert "pub use self::transform_unary_raw as transform_unary;" in rust

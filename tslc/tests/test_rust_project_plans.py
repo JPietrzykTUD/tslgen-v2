@@ -179,4 +179,5 @@ def test_trusted_rust_project_renderer_has_one_production_caller() -> None:
     assert "native_sort_order" not in formatter_source
     assert "rust_vector_registrations" not in formatter_source
     assert "classify_dataparallel_primitive_facade" not in formatter_source
-    assert "rust_algorithm_module(algorithm_profile, assets)" in renderer_source
+    assert "rust_algorithm_module_declaration(algorithm_profile)" in renderer_source
+    assert "_rust_profile_algorithm_artifacts(" in renderer_source

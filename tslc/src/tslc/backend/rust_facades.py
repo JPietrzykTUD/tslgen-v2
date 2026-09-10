@@ -126,12 +126,22 @@ def plan_rust_algorithm_primitive_facades(
 
 def rust_algorithm_primitive_facades(
     facades: tuple[RustAlgorithmPrimitiveFacade, ...],
+    *,
+    profile_module_path: str = "super",
 ) -> str:
+    if not profile_module_path:
+        raise ValueError("Rust primitive facades require a profile module path")
     parts: list[str] = []
     for facade in facades:
         function_name = facade.function_name
         if facade.kind is DataparallelPrimitiveFacadeKind.CONTIGUOUS_MEMORY:
-            parts.append(_rust_algorithm_memory_facade(function_name, facade))
+            parts.append(
+                _rust_algorithm_memory_facade(
+                    function_name,
+                    facade,
+                    profile_module_path=profile_module_path,
+                )
+            )
             continue
         source_type = "FromT" if facade.has_target else "T"
         source_vec = f"<Policy as VectorFor<Profile, {source_type}>>::Vec"
@@ -152,9 +162,10 @@ def rust_algorithm_primitive_facades(
         function_generics = "Policy, FromT, ToT" if facade.has_target else "Policy, T"
         target_trait_arg = f"<{target_vec}>" if target_vec is not None else ""
         vec_bound = (
-            f"RebindBase<ToT> + super::detail::primitives::{facade.trait_name}{target_trait_arg}"
+            f"RebindBase<ToT> + {profile_module_path}::detail::primitives::"
+            f"{facade.trait_name}{target_trait_arg}"
             if target_vec is not None
-            else f"super::detail::primitives::{facade.trait_name}"
+            else f"{profile_module_path}::detail::primitives::{facade.trait_name}"
         )
         parts.append(
             "\n".join(
@@ -169,11 +180,11 @@ def rust_algorithm_primitive_facades(
                     "    {",
                     (
                         "        unsafe { "
-                        f"super::{function_name}::<{source_vec}"
+                        f"{profile_module_path}::{function_name}::<{source_vec}"
                         f"{', ' + target_vec if target_vec is not None else ''}>({args})"
                         " }"
                         if facade.caller_unsafe
-                        else f"        super::{function_name}::<{source_vec}"
+                        else f"        {profile_module_path}::{function_name}::<{source_vec}"
                         f"{', ' + target_vec if target_vec is not None else ''}>({args})"
                     ),
                     "    }",
@@ -186,6 +197,8 @@ def rust_algorithm_primitive_facades(
 def _rust_algorithm_memory_facade(
     function_name: str,
     facade: RustAlgorithmPrimitiveFacade,
+    *,
+    profile_module_path: str,
 ) -> str:
     trait_name = facade.trait_name
     if facade.memory_access is MemoryAccess.READ:
@@ -198,9 +211,9 @@ def _rust_algorithm_memory_facade(
                 "    where",
                 "        Policy: VectorFor<Profile, T>,",
                 "        <Policy as VectorFor<Profile, T>>::Vec:",
-                f"            super::detail::primitives::{trait_name}<ALIGNED>,",
+                f"            {profile_module_path}::detail::primitives::{trait_name}<ALIGNED>,",
                 "    {",
-                f"        unsafe {{ super::{function_name}::<<Policy as VectorFor<Profile, T>>::Vec, ALIGNED>(ptr) }}",
+                f"        unsafe {{ {profile_module_path}::{function_name}::<<Policy as VectorFor<Profile, T>>::Vec, ALIGNED>(ptr) }}",
                 "    }",
             )
         )
@@ -208,7 +221,7 @@ def _rust_algorithm_memory_facade(
         if facade.overload_parameter_positions:
             bound = (
                 "        <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::RegisterType:\n"
-                f"            super::detail::primitives::{trait_name}Arg<\n"
+                f"            {profile_module_path}::detail::primitives::{trait_name}Arg<\n"
                 "                <Policy as VectorFor<Profile, T>>::Vec,\n"
                 "                ALIGNED,\n"
                 "            >,"
@@ -219,7 +232,7 @@ def _rust_algorithm_memory_facade(
         else:
             bound = (
                 "        <Policy as VectorFor<Profile, T>>::Vec:\n"
-                f"            super::detail::primitives::{trait_name}<ALIGNED>,"
+                f"            {profile_module_path}::detail::primitives::{trait_name}<ALIGNED>,"
             )
             call_generics = (
                 "<<Policy as VectorFor<Profile, T>>::Vec, ALIGNED>"
@@ -235,7 +248,7 @@ def _rust_algorithm_memory_facade(
                 "        Policy: VectorFor<Profile, T>,",
                 bound,
                 "    {",
-                f"        unsafe {{ super::{function_name}::{call_generics}(ptr, data) }}",
+                f"        unsafe {{ {profile_module_path}::{function_name}::{call_generics}(ptr, data) }}",
                 "    }",
             )
         )

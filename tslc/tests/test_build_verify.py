@@ -984,6 +984,14 @@ def test_rust_path_dependency_consumer_builds(
     assert packaged.returncode == 0, packaged.stderr + packaged.stdout
     packaged_paths = set(packaged.stdout.splitlines())
     assert {"Cargo.toml", "README.md", "src/lib.rs", "src/tsl_facade.rs"} <= packaged_paths
+    assert {
+        "src/tsl_scalar/algo.rs",
+        "src/tsl_scalar/algo/support.rs",
+        "src/tsl_scalar/algo/transform.rs",
+        "src/tsl_target_fallback/algo.rs",
+        "src/tsl_target_fallback/algo/support.rs",
+        "src/tsl_target_fallback/algo/transform.rs",
+    } <= packaged_paths
     assert not any(path.startswith("tslc/") for path in packaged_paths)
     generated_doc_junk = generated / "rust/docs/target/doc/tsl/index.html"
     generated_doc_junk.parent.mkdir(parents=True)

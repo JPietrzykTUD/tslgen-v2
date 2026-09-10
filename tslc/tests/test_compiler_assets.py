@@ -405,7 +405,7 @@ def test_rust_project_renderer_wires_opt_in_profile_benchmarks() -> None:
 def test_rust_algorithm_facade_wrappers_are_static_render_asset() -> None:
     assets = load_default_render_assets()
 
-    wrappers = assets.text("rust_algo_wrappers.rs")
+    wrappers = assets.text("rust_algo_transform.rs")
     holes = rust_profile_algorithm_declaration_holes()
 
     assert "@{profile_algorithm_declaration_transform_unary_checked}" in wrappers
@@ -446,7 +446,19 @@ def test_algorithm_assets_have_one_typed_declaration_hole_per_record() -> None:
     rust_holes = rust_profile_algorithm_declaration_holes()
 
     cpp_asset = assets.text("tsl_algorithm.hpp")
-    rust_asset = assets.text("rust_algo_wrappers.rs")
+    rust_asset = "\n".join(
+        assets.text(name)
+        for name in (
+            "rust_algo_utility.rs",
+            "rust_algo_iteration.rs",
+            "rust_algo_predicate.rs",
+            "rust_algo_count.rs",
+            "rust_algo_select.rs",
+            "rust_algo_transform.rs",
+            "rust_algo_consume.rs",
+            "rust_algo_aggregate.rs",
+        )
+    )
     assert all(cpp_asset.count(f"@{{{name}}}") == 1 for name in cpp_holes)
     assert all(rust_asset.count(f"@{{{name}}}") == 1 for name in rust_holes)
 

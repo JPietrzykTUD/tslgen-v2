@@ -407,12 +407,12 @@ def test_semantically_renamed_memory_primitives_retain_shared_facades() -> None:
         rust_write_facade,
     )
     assert "Read_contiguousImpl<false>" in load_store
-    assert "super::read_contiguous::<Simd<T, Scalar>, false>" in load_store
+    assert "super::super::read_contiguous::<Simd<T, Scalar>, false>" in load_store
     assert "Write_contiguousImplArg<Simd<T, Scalar>, false>" in load_store
-    assert "super::write_contiguous::<Simd<T, Scalar>, false, _>" in load_store
+    assert "super::super::write_contiguous::<Simd<T, Scalar>, false, _>" in load_store
     selected_load = _rust_algorithm_scalar_selected_load_impl(rust_read_facade)
     assert "Read_contiguousImpl<false>" in selected_load
-    assert "super::read_contiguous::<Simd<T, Scalar>, false>" in selected_load
+    assert "super::super::read_contiguous::<Simd<T, Scalar>, false>" in selected_load
 
     cpp = CppBackend().render_primitive("read_contiguous", read_specs)
     assert "read_contiguous(" in cpp
@@ -692,7 +692,20 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     helper = specialization_artifacts["rust/src/tsl_algorithm.rs"]
     lib = specialization_artifacts["rust/src/lib.rs"]
     cargo = specialization_artifacts["rust/Cargo.toml"]
-    avx2 = specialization_artifacts["rust/src/tsl_avx2.rs"]
+    avx2_parent = specialization_artifacts["rust/src/tsl_avx2.rs"]
+    avx2_support = specialization_artifacts[
+        "rust/src/tsl_avx2/algo/support.rs"
+    ]
+    avx2 = "\n".join(
+        (
+            avx2_parent,
+            *(
+                content
+                for path, content in sorted(specialization_artifacts.items())
+                if path.startswith("rust/src/tsl_avx2/algo")
+            ),
+        )
+    ).replace("super::super::", "super::")
     facade = specialization_artifacts["rust/src/tsl_facade.rs"]
     documentation = specialization_artifacts["rust/src/tsl_documentation.rs"]
 
@@ -914,6 +927,7 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     assert "pub unsafe fn aggregate_masked_binary_raw<Profile, Policy, Op, T>" in helper
 
     assert "pub mod algo" in avx2
+    assert "super::super::detail::primitives" in avx2_support
     assert "BinaryAggregateKernel" in avx2
     assert "BinaryConsumeKernel" in avx2
     assert "UnaryAggregateKernel" in avx2
@@ -1112,11 +1126,11 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
         in avx2
     )
     assert "pub unsafe fn store<Policy, T, const ALIGNED: bool>(" in avx2
-    assert (
-        "super::detail::primitives::StoreImplArg<\n"
-        "                <Policy as VectorFor<Profile, T>>::Vec,\n"
-        "                ALIGNED,"
-        in avx2
+    assert re.search(
+        r"super::detail::primitives::StoreImplArg<\n"
+        r"\s*<Policy as VectorFor<Profile, T>>::Vec,\n"
+        r"\s*ALIGNED,",
+        avx2,
     )
     assert (
         "unsafe { super::store::<<Policy as VectorFor<Profile, T>>::Vec, ALIGNED, _>(ptr, data) }"
