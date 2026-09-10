@@ -64,12 +64,13 @@ prim<v:=(v,sImm)> shift_left(data, shift):
           tsil """
               switch<compile>(cast<static>(ui64, shift) >= value(type::size_bits(base::in))) {
                 true => { complete(call<primitive=set_zero[Vec]>()); }
-                _ => {}
+                _ => {
+                  let<type>(UBase, base::unsigned_of(base::in));
+                  var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<UBase>]>(data));
+                  var<const_infer>(ures, cast<static>(UBase, ua << cast<static>(UBase, shift)));
+                  complete(call<primitive=reinterpret[Vec<UBase>, Vec]>(ures));
+                }
               }
-              let<type>(UBase, base::unsigned_of(base::in));
-              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<UBase>]>(data));
-              var<const_infer>(ures, cast<static>(UBase, ua << cast<static>(UBase, shift)));
-              complete(call<primitive=reinterpret[Vec<UBase>, Vec]>(ures));
             """
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
@@ -83,13 +84,14 @@ prim<v:=(v,sImm)> shift_left(data, shift):
           tsil """
               switch<compile>(cast<static>(ui64, shift) >= value(type::size_bits(base::in))) {
                 true => { complete(call<primitive=set_zero[Vec]>()); }
-                _ => {}
+                _ => {
+                  let<type>(UBase, base::unsigned_of(base::in));
+                  let<type>(UVec, vector::as_base(UBase));
+                  var<const_infer>(ua, call<primitive=reinterpret[Vec, UVec]>(data));
+                  var<const_infer>(ures, ua << cast<static>(UBase, shift));
+                  complete(call<primitive=reinterpret[UVec, Vec]>(ures));
+                }
               }
-              let<type>(UBase, base::unsigned_of(base::in));
-              let<type>(UVec, vector::as_base(UBase));
-              var<const_infer>(ua, call<primitive=reinterpret[Vec, UVec]>(data));
-              var<const_infer>(ures, ua << cast<static>(UBase, shift));
-              complete(call<primitive=reinterpret[UVec, Vec]>(ures));
             """
     [generic, oneapi_fpga]:
       arith:
@@ -423,13 +425,14 @@ prim<v:=(v,sImm)> shift_left(data, shift):
           tsil """
             switch<compile>(cast<static>(ui64, shift) >= value(type::size_bits(base::in))) {
               true => { complete(call<primitive=set_zero[Vec]>()); }
-              _ => {}
+              _ => {
+                complete(intrin<vsll, build[infix="vx", infix_sep="_"]>(
+                  data,
+                  cast<static>(ui64, shift),
+                  value(vector::runtime_length)
+                ));
+              }
             }
-            complete(intrin<vsll, build[infix="vx", infix_sep="_"]>(
-              data,
-              cast<static>(ui64, shift),
-              value(vector::runtime_length)
-            ));
           """
       f?:
         requires [v]
@@ -2517,33 +2520,34 @@ prim<v:=(v,sImm)> shift_right(data, shift):
                 }
                 complete(call<primitive=set_zero[Vec]>());
               }
-              _ => {}
-            }
-            if<generation>(value(type::is_signed(base::in))) {
-              var<const_infer>(shifted, intrin<vsra, build[infix="vx", infix_sep="_"]>(
-                data,
-                cast<static>(ui64, shift),
-                value(vector::runtime_length)
-              ));
-              if<compile>(PreserveSign) {
-                complete(shifted);
-              } else<compile> {
-                let<type>(UBase, base::unsigned_of(base::in));
-                var<const_infer>(mask_bits, cast<static>(UBase, -1) >>
-                  cast<static>(UBase, shift));
-                complete(call<primitive=binary_and[Vec]>(
-                  shifted,
-                  call<primitive=set1[Vec]>(
-                    cast<bitcast>(base::in, mask_bits)
-                  )
-                ));
+              _ => {
+                if<generation>(value(type::is_signed(base::in))) {
+                  var<const_infer>(shifted, intrin<vsra, build[infix="vx", infix_sep="_"]>(
+                    data,
+                    cast<static>(ui64, shift),
+                    value(vector::runtime_length)
+                  ));
+                  if<compile>(PreserveSign) {
+                    complete(shifted);
+                  } else<compile> {
+                    let<type>(UBase, base::unsigned_of(base::in));
+                    var<const_infer>(mask_bits, cast<static>(UBase, -1) >>
+                      cast<static>(UBase, shift));
+                    complete(call<primitive=binary_and[Vec]>(
+                      shifted,
+                      call<primitive=set1[Vec]>(
+                        cast<bitcast>(base::in, mask_bits)
+                      )
+                    ));
+                  }
+                } else<generation> {
+                  complete(intrin<vsrl, build[infix="vx", infix_sep="_"]>(
+                    data,
+                    cast<static>(ui64, shift),
+                    value(vector::runtime_length)
+                  ));
+                }
               }
-            } else<generation> {
-              complete(intrin<vsrl, build[infix="vx", infix_sep="_"]>(
-                data,
-                cast<static>(ui64, shift),
-                value(vector::runtime_length)
-              ));
             }
           """
       f?:

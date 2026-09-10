@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from _select_lower_extension_support import (
     Catalog,
     create_backend_dialect,
@@ -494,10 +496,14 @@ def test_scalar_uniform_shift_left_keeps_narrowing_cast(
 
 
 @pytest.mark.parametrize(
-    ("backend_id", "expected"),
+    ("backend_id", "expected", "continuation"),
     (
-        ("cpp", "if constexpr (static_cast<uint64_t>(shift) >= 8)"),
-        ("rust", "if (shift) as u64 >= 8"),
+        (
+            "cpp",
+            "if constexpr (static_cast<uint64_t>(shift) >= 8)",
+            "auto const ua",
+        ),
+        ("rust", "if (shift) as u64 >= 8", "let ua"),
     ),
 )
 def test_scalar_immediate_shift_bound_uses_static_control(
@@ -505,6 +511,7 @@ def test_scalar_immediate_shift_bound_uses_static_control(
     machine_profiles,
     backend_id: str,
     expected: str,
+    continuation: str,
 ) -> None:
     slot = next(
         selected
@@ -522,6 +529,41 @@ def test_scalar_immediate_shift_bound_uses_static_control(
 
     assert lowered is not None
     assert expected in lowered.body_text
+    assert re.search(
+        rf"\}}\s+else\s+\{{\s*{re.escape(continuation)}", lowered.body_text
+    )
+
+
+@pytest.mark.parametrize(
+    ("primitive", "type_tag", "continuation"),
+    (
+        ("shift_left", "ui32", "return __riscv_vsll_vx_u32m1"),
+        ("shift_right", "si32", "auto const shifted = __riscv_vsra_vx_i32m1"),
+    ),
+)
+def test_rvv_immediate_shift_bound_encloses_normal_path(
+    catalog: Catalog,
+    machine_profiles,
+    primitive: str,
+    type_tag: str,
+    continuation: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles["rvv"], primitive, (type_tag,))
+        .selected
+        if selected.extension.name == "rvv"
+        and selected.primitive.signature == "v:=(v,sImm)"
+    )
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert lowered is not None
+    assert re.search(
+        rf"\}}\s+else\s+\{{\s*{re.escape(continuation)}", lowered.body_text
+    )
 
 
 def test_clang_vector_shift_right_uses_builtin_vector_operator(

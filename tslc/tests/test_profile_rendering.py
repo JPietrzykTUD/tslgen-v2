@@ -361,7 +361,7 @@ def test_representative_project_shape_is_byte_stable(
         backends=["cpp", "rust"],
     )
     expected = {
-        "cpp/CMakeLists.txt": "6068c515739bf8489a705fee3a791d4e4a785498e34780653e93d5584acc5a95",
+        "cpp/CMakeLists.txt": "8159716947d12e88565fd8eb907cae11ebdf99e2f6a00c46a24ec2bd2c916d64",
         "cpp/docs/input/tsl_api_docs.hpp": "698b236f80bd4c8000fb1ace21a144ea61db887378ddf44d2568cdd2bc7c43de",
         "cpp/include/tsl.hpp": "fdebd390b5777e6806b13f994ec33e3289bbf163cd91f9a3a6b183bbbc5ae5cb",
         "cpp/include/tsl_primitives.hpp": "1ed6539e2285a7af59dbd5212e32e931b19620fa96387c833dacb882d986d743",
@@ -428,6 +428,18 @@ def test_clang_vector_overlay_is_split_guarded_and_uses_hardware_facade(
     assert "-Wall -Wextra -Werror" in cmake
     assert "GNU|Clang|AppleClang|IntelLLVM" in cmake
     assert "/W4 /WX" in cmake
+    assert (
+        "target_compile_options(tsl_smoke PRIVATE "
+        "$<$<CXX_COMPILER_ID:MSVC>:/bigobj>)"
+    ) in cmake
+    assert (
+        "target_compile_options(tsl_values PRIVATE "
+        "$<$<CXX_COMPILER_ID:MSVC>:/bigobj>)"
+    ) in cmake
+    assert (
+        "target_compile_options(tsl_consumer PRIVATE "
+        "$<$<CXX_COMPILER_ID:MSVC>:/bigobj>)"
+    ) not in cmake
     assert "add_executable(tsl_consumer tests/consumer.cpp)" in cmake
     assert "add_custom_target(tsl_quality DEPENDS tsl_smoke tsl_consumer)" in cmake
     core = by["cpp/include/tsl_core.hpp"]

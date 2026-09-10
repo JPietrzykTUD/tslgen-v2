@@ -208,6 +208,11 @@ if(TSL_BUILD_TESTS)
   target_link_libraries(tsl_smoke PRIVATE tsl_generated)
   target_link_libraries(tsl_consumer PRIVATE tsl_generated)
   target_link_libraries(tsl_values PRIVATE tsl_generated)
+  # The exhaustive smoke/value translation units instantiate the complete
+  # generated profile and can exceed MSVC's default COFF section count.  This
+  # affects these generated verification artifacts, not ordinary consumers.
+  target_compile_options(tsl_smoke PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/bigobj>)
+  target_compile_options(tsl_values PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/bigobj>)
   if(TSL_STRICT_WARNINGS)
     _tsl_enable_strict_warnings(tsl_smoke)
     _tsl_enable_strict_warnings(tsl_consumer)
