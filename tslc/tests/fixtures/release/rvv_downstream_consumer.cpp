@@ -8,7 +8,8 @@ namespace {
 
 using Vec = tsl::simd<std::int32_t, tsl::rvv>;
 
-auto expected_lane(std::int32_t left, std::int32_t right) -> std::int32_t {
+auto scalar_expected_lane(std::int32_t left, std::int32_t right)
+    -> std::int32_t {
   return (left + right) * 3;
 }
 
@@ -52,7 +53,7 @@ int main() {
   }
 
   for (std::size_t lane = 0; lane < lanes; ++lane) {
-    const auto expected = expected_lane(left[lane], right[lane]);
+    const auto expected = scalar_expected_lane(left[lane], right[lane]);
     if (ordinary[lane] != expected || checked[lane] != expected) {
       return 4;
     }

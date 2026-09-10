@@ -45,7 +45,6 @@ class NativeEvidenceSpec:
     evidence_id: str
     filename: str
     target: str
-    requires_chorys: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,36 +94,22 @@ def load_config(
         evidence_id = _required_string(item, "id")
         filename = _required_string(item, "filename")
         target = _required_string(item, "target")
-        requires_chorys = item.get("requires_chorys")
         if Path(filename).name != filename:
             raise ReleaseProductionError("native evidence filenames must be basenames")
         if target not in {"sve", "rvv"}:
             raise ReleaseProductionError(
                 "native evidence target must be 'sve' or 'rvv'"
             )
-        if not isinstance(requires_chorys, bool):
-            raise ReleaseProductionError(
-                "native evidence requires_chorys must be a boolean"
-            )
-        if requires_chorys and target != "rvv":
-            raise ReleaseProductionError(
-                "only RVV native evidence may require CHORYS integration"
-            )
-        evidence.append(
-            NativeEvidenceSpec(evidence_id, filename, target, requires_chorys)
-        )
+        evidence.append(NativeEvidenceSpec(evidence_id, filename, target))
     if len({item.evidence_id for item in evidence}) != len(evidence):
         raise ReleaseProductionError("native evidence IDs must be unique")
     if len({item.filename for item in evidence}) != len(evidence):
         raise ReleaseProductionError("native evidence filenames must be unique")
     if len({item.target for item in evidence}) != len(evidence):
         raise ReleaseProductionError("native evidence targets must be unique")
-    if {item.target: item.requires_chorys for item in evidence} != {
-        "sve": False,
-        "rvv": True,
-    }:
+    if {item.target for item in evidence} != {"sve", "rvv"}:
         raise ReleaseProductionError(
-            "native evidence must require exactly SVE and RVV/CHORYS targets"
+            "native evidence must cover exactly the SVE and RVV targets"
         )
     try:
         generated_bundles = load_generated_bundle_config(payload, root=root)
@@ -739,22 +724,6 @@ def _validate_native_evidence(
         showcase.get("runs"), vector_bits=vector_bits, path=path
     )
 
-    chorys_revision: str | None = None
-    if spec.requires_chorys:
-        chorys = _evidence_object(suites, "chorys_integration", path)
-        if (
-            chorys.get("result") != "passed"
-            or chorys.get("actual_project") is not True
-            or chorys.get("scalar_oracle") is not True
-            or chorys.get("canaries_preserved") is not True
-        ):
-            raise ReleaseProductionError(
-                f"native evidence {path.name} has invalid CHORYS integration result"
-            )
-        _evidence_string(chorys, "source_repository", path)
-        chorys_revision = _evidence_string(chorys, "source_revision", path)
-        _evidence_string(chorys, "command", path)
-
     return {
         "id": spec.evidence_id,
         "filename": spec.filename,
@@ -768,11 +737,6 @@ def _validate_native_evidence(
         ),
         "runtime_vector_bits": vector_bits,
         "showcase_binary_sha256": showcase_binary,
-        **(
-            {"chorys_source_revision": chorys_revision}
-            if chorys_revision is not None
-            else {}
-        ),
         "reviewer": reviewer,
     }
 

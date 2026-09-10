@@ -1,4 +1,4 @@
-"""Generated RVV consumer shaped like the CHORYS integration boundary."""
+"""Generated RVV downstream consumer with scalar-oracle checks."""
 
 from __future__ import annotations
 
@@ -14,10 +14,12 @@ from tslc.diagnostics import has_errors
 
 pytestmark = pytest.mark.generated_build
 
-_FIXTURE = Path(__file__).parent / "fixtures" / "release" / "chorys_rvv_kernel.cpp"
+_FIXTURE = (
+    Path(__file__).parent / "fixtures" / "release" / "rvv_downstream_consumer.cpp"
+)
 
 
-def test_chorys_rvv_kernel_matches_scalar_oracle_at_multiple_vlens(
+def test_rvv_downstream_consumer_matches_scalar_oracle_at_multiple_vlens(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
     compiler = shutil.which("riscv64-linux-gnu-g++")
@@ -38,7 +40,7 @@ def test_chorys_rvv_kernel_matches_scalar_oracle_at_multiple_vlens(
     report = write_artifacts(result.artifacts, tmp_path / "generated")
     assert not has_errors(report.diagnostics), report.diagnostics
 
-    binary = tmp_path / "chorys-rvv-kernel"
+    binary = tmp_path / "rvv-downstream-consumer"
     compiled = subprocess.run(
         (
             compiler,
@@ -80,6 +82,6 @@ def test_chorys_rvv_kernel_matches_scalar_oracle_at_multiple_vlens(
             timeout=60,
         )
         assert executed.returncode == 0, (
-            f"CHORYS RVV fixture failed at VLEN={vlen}: "
+            f"RVV downstream consumer failed at VLEN={vlen}: "
             f"stdout={executed.stdout!r} stderr={executed.stderr!r}"
         )

@@ -2,9 +2,9 @@
 
 Date: 2026-09-08
 
-Status: compiler, generated-product, emulator, and CHORYS-shaped consumer
-evidence complete. Native RVV hardware and the actual CHORYS integration remain
-mandatory release-candidate attestations; this document does not claim them.
+Status: compiler, generated-product, emulator, and downstream-consumer evidence
+complete. Native RVV hardware remains a mandatory release-candidate
+attestation; this document does not claim it.
 
 ## Support boundary
 
@@ -90,11 +90,11 @@ runtime VL. The renderer now constructs the oracle by replaying exactly the
 runtime lanes in order, including repeated indices, byte scaling, and tiled
 masks. A focused planning test ratchets that behavior.
 
-## CHORYS-shaped consumer
+## Downstream consumer
 
-[`chorys_rvv_kernel.cpp`](../../tslc/tests/fixtures/release/chorys_rvv_kernel.cpp)
-is a generated-library consumer at the same boundary used by a CHORYS-style
-RISC-V integration:
+[`rvv_downstream_consumer.cpp`](../../tslc/tests/fixtures/release/rvv_downstream_consumer.cpp)
+is a representative generated-library consumer at an ordinary RISC-V
+application boundary:
 
 - it loads two runtime-VL vectors and applies an add/multiply transform through
   the ordinary API;
@@ -104,12 +104,10 @@ RISC-V integration:
   canary.
 
 The consumer cross-compiles with the RVV GCC toolchain under `-Wall -Wextra
--Werror` and the same binary passes under QEMU at VLEN 128 and 256.
-
-This is deliberately called *CHORYS-shaped*. The upstream CHORYS kernel and a
-native RVV machine are not present in this repository. Before `v1.0.0`, the
-actual integration must be built against the same generated-input identity and
-must agree with its scalar oracle on native hardware.
+-Werror` and the same binary passes under QEMU at VLEN 128 and 256. It is a
+generic portability regression test, not evidence for any particular
+downstream project. Before `v1.0.0`, the packaged RVV artifact must pass the
+declared suites and showcase on native RVV hardware.
 
 ## Reproducible commands
 
@@ -131,7 +129,7 @@ timeout --signal=KILL 60s qemu-riscv64 \
   ./tslctmp/rvv-slice7/cpp/build/rvv/tsl_values
 
 PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds \
-  tslc/tests/test_chorys_rvv_consumer.py
+  tslc/tests/test_rvv_downstream_consumer.py
 ```
 
 The profile-owned verifier now supplies all three vector lengths as typed
@@ -144,8 +142,6 @@ generated-artifact manifest digests.
 
 - Run the full RVV value suite on native baseline-V hardware and record the
   machine, compiler, flags, semantic-manifest digest, and exact outcome.
-- Build and run the actual CHORYS integration kernel against the same generated
-  product and scalar oracle.
 - Benchmark the exact fallback groups on native hardware. If cost invalidates a
   performance claim, optimize the implementation or narrow that claim; do not
   relabel a fallback as native.

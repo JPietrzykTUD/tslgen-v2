@@ -31,7 +31,7 @@ preconditions have been corrected and ratcheted.
 | Generated C++ documentation | Ready | Strict typed-manifest/Doxygen identity coverage includes core types, policies, primitives, overloads, ordinary/checked algorithms, and a CI-compiled example |
 | Generated Rust documentation | Ready | Strict missing-doc/link gates; correct target-feature selection model; two executable crate doctests; signature-only fragments labeled as text call forms |
 
-This verdict does not authorize the final tag. Native SVE and RVV/CHORYS
+This verdict does not authorize the final tag. Native SVE and RVV
 attestations and atomic reproducible release production remain separate release
 gates in Slices 13 and 14.
 
@@ -67,9 +67,9 @@ No critical or high-severity API/documentation finding remains.
 
 Full SVE and RVV C++ projects cross-compile and their value suites pass under
 QEMU at multiple vector lengths. That establishes compilation and functional
-evidence, not native performance or a real CHORYS deployment. Before the final
+evidence, not native performance or native-hardware execution. Before the final
 tag, the same release-candidate artifacts must pass on native SVE and native
-RVV/CHORYS machines. If either cannot be obtained, that profile must be labeled
+RVV machines. If either cannot be obtained, that profile must be labeled
 experimental rather than silently retaining the stable claim.
 
 This is a release-evidence gap, not an API/documentation inconsistency: the
@@ -329,6 +329,6 @@ changes. The committed slice records the final command results in
 Accept the four generated API/documentation surfaces for the v1 release
 candidate. Slice 13 now provides deterministic, exact, draft-first release
 production; its remote RC dry run still needs to execute. Do not cut the final
-tag until Slice 14 supplies native SVE and RVV/CHORYS attestations. If those
+tag until Slice 14 supplies native SVE and RVV attestations. If those
 hardware gates cannot be met, narrow the corresponding release status rather
 than weakening the documented contract.

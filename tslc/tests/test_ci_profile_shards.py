@@ -213,7 +213,7 @@ def test_scalable_showcase_is_a_required_generated_profile_gate() -> None:
 
     assert "needs.scope.outputs.generated_profiles == 'true'" in section
     assert "tslc/tests/test_scalable_release_showcase.py" in section
-    assert "tslc/tests/test_chorys_rvv_consumer.py" in section
+    assert "tslc/tests/test_rvv_downstream_consumer.py" in section
     assert "--run-generated-builds" in section
     assert "generated-scalable-showcase" in required
     assert "needs['generated-scalable-showcase'].result" in required

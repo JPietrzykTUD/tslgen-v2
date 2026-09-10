@@ -156,7 +156,7 @@ predicate through reviewed semantic fallback code.
 The exact excluded callable identities and edge scalar types are generated in
 the [support contract](tsl-v1-support.md). QEMU multi-vector-length correctness
 is recorded in the [scalable verification evidence](../supplementary/release/tsl-v1-scalable-verification.md);
-native SVE and RVV/CHORYS attestations remain final-release gates.
+native SVE and RVV attestations remain final-release gates.
 
 ## Implementation state
 

@@ -63,7 +63,6 @@ def _native_evidence_payload(
     compiler_input_sha256: str = "b" * 64,
     generated_bundle_index_sha256: str = "c" * 64,
     generated_bundle_manifest_sha256: str = "e" * 64,
-    requires_chorys: bool = False,
 ) -> dict[str, object]:
     payload: dict[str, object] = {
         "schema_version": 1,
@@ -130,18 +129,6 @@ def _native_evidence_payload(
             },
         },
     }
-    if requires_chorys:
-        suites = payload["suites"]
-        assert isinstance(suites, dict)
-        suites["chorys_integration"] = {
-            "result": "passed",
-            "actual_project": True,
-            "source_repository": "https://example.invalid/chorys",
-            "source_revision": "chorys-native-revision",
-            "command": "cmake --build build && ctest --test-dir build",
-            "scalar_oracle": True,
-            "canaries_preserved": True,
-        }
     return payload
 
 
@@ -547,7 +534,6 @@ def test_final_release_fails_closed_without_native_evidence(tmp_path: Path) -> N
             generated_bundle_manifest_sha256=(
                 bundle.artifact_manifest_sha256
             ),
-            requires_chorys=spec.requires_chorys,
         )
         (evidence_dir / spec.filename).write_text(
             json.dumps(payload), encoding="utf-8"
@@ -576,7 +562,7 @@ def test_final_release_fails_closed_without_native_evidence(tmp_path: Path) -> N
     ]
 
 
-def test_native_evidence_requires_reproducible_suites_and_actual_chorys(
+def test_native_evidence_requires_reproducible_suites_for_each_target(
     tmp_path: Path,
 ) -> None:
     config = release_production.load_config()
@@ -592,7 +578,6 @@ def test_native_evidence_requires_reproducible_suites_and_actual_chorys(
         payload = _native_evidence_payload(
             evidence_id=spec.evidence_id,
             target=spec.target,
-            requires_chorys=spec.requires_chorys,
         )
         path.write_text(json.dumps(payload), encoding="utf-8")
         records.append(
@@ -607,27 +592,6 @@ def test_native_evidence_requires_reproducible_suites_and_actual_chorys(
 
     release_production._verify_shared_native_input_identity(records)
     assert [record["target"] for record in records] == ["sve", "rvv"]
-    assert records[1]["chorys_source_revision"] == "chorys-native-revision"
-
-    rvv_spec = next(spec for spec in config.native_evidence if spec.target == "rvv")
-    invalid = _native_evidence_payload(
-        evidence_id=rvv_spec.evidence_id,
-        target=rvv_spec.target,
-        requires_chorys=False,
-    )
-    invalid_path = tmp_path / "invalid-rvv.json"
-    invalid_path.write_text(json.dumps(invalid), encoding="utf-8")
-    with pytest.raises(
-        release_production.ReleaseProductionError,
-        match="chorys_integration",
-    ):
-        release_production._validate_native_evidence(
-            invalid_path,
-            spec=rvv_spec,
-            metadata=metadata,
-            generated_bundle_index_sha256="c" * 64,
-            generated_bundle=_native_bundle(rvv_spec.target),
-        )
 
 
 def test_native_evidence_must_share_compiler_input_identity() -> None:

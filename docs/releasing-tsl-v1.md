@@ -93,7 +93,7 @@ candidate policy from being presented as a final release.
 Candidate staging can run before native evidence is available. A final release
 cannot. Its exact native evidence filenames and IDs are owned by
 `supplementary/release/tsl-v1-production.json`; release assembly requires both
-the SVE and RVV/CHORYS records and verifies that they name the generated bundle
+the SVE and RVV records and verifies that they name the generated bundle
 index shipped in the release and the exact target bundle's artifact manifest.
 
 The evidence files are deliberately separate from compiler semantics. They are
@@ -114,13 +114,11 @@ every placeholder with observed evidence. The release validator requires:
 - non-empty generated-value and differential suites with every planned case
   passed and no failure or skip;
 - the filter/gather/transform showcase, its binary digest, scalar-oracle and
-  canary results, and one exact run record for every observed vector length; and
-- for RVV, a passing run in the actual CHORYS project with its repository,
-  revision, command, scalar-oracle comparison, and canary result.
+  canary results, and one exact run record for every observed vector length.
 
-The checked-in CHORYS-shaped QEMU fixture is a portability regression test. It
-does not satisfy `actual_project: true` and cannot be substituted for the
-native upstream CHORYS record.
+The checked-in RVV downstream-consumer fixture is a portability regression
+test. It complements but does not substitute for execution on native RVV
+hardware.
 
 The evidence does not contain the final Git commit: doing so would be circular,
 because committing that evidence changes the commit. Instead, the compiler-

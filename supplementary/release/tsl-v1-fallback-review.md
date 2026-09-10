@@ -213,7 +213,7 @@ The review is backed by these repository-root commands:
 ./dev.sh test --primitives gather,gather_narrow_partial,scatter,extract_value_at,insert_value_at,set_mask_lane,load,store --profiles sve --backends cpp
 ./dev.sh test --profiles rvv --backends cpp --output-root ./tslctmp/rvv-slice7
 PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds tslc/tests/test_value_tests.py -k sve_runtime_semantics
-PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds tslc/tests/test_chorys_rvv_consumer.py
+PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds tslc/tests/test_rvv_downstream_consumer.py
 ```
 
 The focused SVE gate cross-compiles a real project and runs it with
@@ -224,7 +224,7 @@ predicate-lane mutation, indexed loads/stores, partial gather, equal-width
 conversion, checked lane-count mismatch, checked index bounds and alignment,
 inactive mask lanes, tail lanes, and scatter failure no-write behavior. The
 [RVV evidence record](tsl-v1-rvv-evidence.md) captures the exact inventory and
-CHORYS-shaped consumer boundary.
+generic downstream-consumer boundary.
 
 Before the final v1.0.0 tag, Slice 8 must append native benchmark attestations
 for representative identities from every group. If those runs expose an

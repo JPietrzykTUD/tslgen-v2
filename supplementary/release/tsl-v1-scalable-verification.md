@@ -122,7 +122,6 @@ artifact-manifest digest, and record:
 - operating system, compiler executable/version, and exact flags;
 - observed runtime vector length(s);
 - full generated value/differential outcome with no skips;
-- the actual CHORYS integration result and scalar-oracle comparison for RVV;
 - attestation file checksum and reviewer; and
 - separately labelled native performance evidence for any performance claim.
 

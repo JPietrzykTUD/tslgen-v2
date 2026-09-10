@@ -477,7 +477,7 @@ jobs:
             "tslctmp/ci-logs/scalable-showcase/docker-pull.log" \
             docker pull "${TSLC_CI_IMAGE}"
 
-      - name: Run SVE, RVV, and CHORYS-shaped generated consumers
+      - name: Run SVE and RVV generated consumers
         run: |
           bash .github/scripts/run_with_log.sh \
             "tslctmp/ci-logs/scalable-showcase/tests.log" \
@@ -489,7 +489,7 @@ jobs:
                 PYTHONPATH=tslc/src python -m pytest -q \
                   --run-generated-builds \
                   tslc/tests/test_scalable_release_showcase.py \
-                  tslc/tests/test_chorys_rvv_consumer.py
+                  tslc/tests/test_rvv_downstream_consumer.py
               '
 
       - name: Upload scalable-showcase logs

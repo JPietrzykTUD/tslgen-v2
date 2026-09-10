@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "id": "rvv-chorys-native",
+  "id": "rvv-native",
   "target": "rvv",
   "product_version": "1.0.0",
   "compiler_input_sha256": "REPLACE_WITH_64_HEX_COMPILER_INPUT_DIGEST",
@@ -67,15 +67,6 @@
           "command": "REPLACE_WITH_EXACT_SHOWCASE_COMMAND"
         }
       ]
-    },
-    "chorys_integration": {
-      "result": "passed",
-      "actual_project": true,
-      "source_repository": "REPLACE_WITH_CHORYS_REPOSITORY",
-      "source_revision": "REPLACE_WITH_CHORYS_SOURCE_REVISION",
-      "command": "REPLACE_WITH_EXACT_CHORYS_BUILD_AND_TEST_COMMAND",
-      "scalar_oracle": true,
-      "canaries_preserved": true
     }
   }
 }

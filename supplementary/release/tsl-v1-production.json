@@ -32,14 +32,12 @@
     {
       "id": "sve-native",
       "filename": "tsl-v1-native-sve.json",
-      "target": "sve",
-      "requires_chorys": false
+      "target": "sve"
     },
     {
-      "id": "rvv-chorys-native",
-      "filename": "tsl-v1-native-rvv-chorys.json",
-      "target": "rvv",
-      "requires_chorys": true
+      "id": "rvv-native",
+      "filename": "tsl-v1-native-rvv.json",
+      "target": "rvv"
     }
   ]
 }
