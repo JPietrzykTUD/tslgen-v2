@@ -9,6 +9,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from tslc.backend.algorithm_surface import (
+    ALGORITHM_CALLABLE_FORMS,
+    ALGORITHM_FORMS_BY_NAME,
+    AlgorithmBackendFormSupport,
+    AlgorithmCallableForm,
+    AlgorithmMaskForm,
+)
 from tslc.backend.cpp_public_declarations import (
     CppPublicDeclaration,
     CppPublicParameter,
@@ -2965,158 +2972,62 @@ def cpp_algorithm_declaration_holes() -> dict[str, str]:
     }
 
 
-_CHECKED_TWIN_IDENTITIES = {
-    ('predicate_unary', False): 'tsl::algo::predicate_unary#overload-3',
-    ('predicate_unary', True): 'tsl::algo::predicate_unary#overload-1',
-    ('predicate_binary', False): 'tsl::algo::predicate_binary#overload-3',
-    ('predicate_binary', True): 'tsl::algo::predicate_binary#overload-1',
-    ('count_binary', False): 'tsl::algo::count_binary#overload-3',
-    ('count_binary', True): 'tsl::algo::count_binary#overload-1',
-    ('count_masked_unary', False): 'tsl::algo::count_masked_unary#overload-3',
-    ('count_masked_unary', True): 'tsl::algo::count_masked_unary#overload-1',
-    ('count_masked_binary', False): 'tsl::algo::count_masked_binary#overload-3',
-    ('count_masked_binary', True): 'tsl::algo::count_masked_binary#overload-1',
-    ('count_selected_unary', False): (
-        'tsl::algo::count_selected_unary#overload-1'
-    ),
-    ('count_selected_binary', False): (
-        'tsl::algo::count_selected_binary#overload-1'
-    ),
-    ('select_unary', False): 'tsl::algo::select_unary#overload-3',
-    ('select_unary', True): 'tsl::algo::select_unary#overload-1',
-    ('select_binary', False): 'tsl::algo::select_binary#overload-3',
-    ('select_binary', True): 'tsl::algo::select_binary#overload-1',
-    ('select_masked_unary', False): (
-        'tsl::algo::select_masked_unary#overload-3'
-    ),
-    ('select_masked_unary', True): (
-        'tsl::algo::select_masked_unary#overload-1'
-    ),
-    ('select_masked_binary', False): (
-        'tsl::algo::select_masked_binary#overload-3'
-    ),
-    ('select_masked_binary', True): (
-        'tsl::algo::select_masked_binary#overload-1'
-    ),
-    ('select_indices_unary', False): (
-        'tsl::algo::select_indices_unary#overload-3'
-    ),
-    ('select_indices_unary', True): (
-        'tsl::algo::select_indices_unary#overload-1'
-    ),
-    ('select_indices_binary', False): (
-        'tsl::algo::select_indices_binary#overload-3'
-    ),
-    ('select_indices_binary', True): (
-        'tsl::algo::select_indices_binary#overload-1'
-    ),
-    ('select_masked_indices_unary', False): (
-        'tsl::algo::select_masked_indices_unary#overload-3'
-    ),
-    ('select_masked_indices_unary', True): (
-        'tsl::algo::select_masked_indices_unary#overload-1'
-    ),
-    ('select_masked_indices_binary', False): (
-        'tsl::algo::select_masked_indices_binary#overload-3'
-    ),
-    ('select_masked_indices_binary', True): (
-        'tsl::algo::select_masked_indices_binary#overload-1'
-    ),
-    ('select_selected_indices_unary', False): (
-        'tsl::algo::select_selected_indices_unary#overload-1'
-    ),
-    ('select_selected_indices_binary', False): (
-        'tsl::algo::select_selected_indices_binary#overload-1'
-    ),
-    ('transform_selected_unary', False): (
-        'tsl::algo::transform_selected_unary#overload-1'
-    ),
-    ('transform_selected_binary', False): (
-        'tsl::algo::transform_selected_binary#overload-1'
-    ),
-    ('consume_selected_unary', False): (
-        'tsl::algo::consume_selected_unary#overload-1'
-    ),
-    ('consume_selected_binary', False): (
-        'tsl::algo::consume_selected_binary#overload-1'
-    ),
-    ('aggregate_selected_unary', False): (
-        'tsl::algo::aggregate_selected_unary#overload-1'
-    ),
-    ('aggregate_selected_binary', False): (
-        'tsl::algo::aggregate_selected_binary#overload-1'
-    ),
-    ('transform_where_unary', False): (
-        'tsl::algo::transform_where_unary#overload-3'
-    ),
-    ('transform_where_unary', True): (
-        'tsl::algo::transform_where_unary#overload-1'
-    ),
-    ('transform_where_binary', False): (
-        'tsl::algo::transform_where_binary#overload-3'
-    ),
-    ('transform_where_binary', True): (
-        'tsl::algo::transform_where_binary#overload-1'
-    ),
-    ('transform_masked_unary', False): (
-        'tsl::algo::transform_masked_unary#overload-3'
-    ),
-    ('transform_masked_unary', True): (
-        'tsl::algo::transform_masked_unary#overload-1'
-    ),
-    ('transform_masked_binary', False): (
-        'tsl::algo::transform_masked_binary#overload-3'
-    ),
-    ('transform_masked_binary', True): (
-        'tsl::algo::transform_masked_binary#overload-1'
-    ),
-    ('transform_unary', False): 'tsl::algo::transform_unary#overload-3',
-    ('transform_unary', True): 'tsl::algo::transform_unary#overload-1',
-    ('transform_binary', False): 'tsl::algo::transform_binary#overload-3',
-    ('transform_binary', True): 'tsl::algo::transform_binary#overload-1',
-    ('consume_binary', False): 'tsl::algo::consume_binary#overload-3',
-    ('consume_binary', True): 'tsl::algo::consume_binary#overload-1',
-    ('consume_masked_unary', False): (
-        'tsl::algo::consume_masked_unary#overload-3'
-    ),
-    ('consume_masked_unary', True): (
-        'tsl::algo::consume_masked_unary#overload-1'
-    ),
-    ('consume_masked_binary', False): (
-        'tsl::algo::consume_masked_binary#overload-3'
-    ),
-    ('consume_masked_binary', True): (
-        'tsl::algo::consume_masked_binary#overload-1'
-    ),
-    ('aggregate_binary', False): 'tsl::algo::aggregate_binary#overload-3',
-    ('aggregate_binary', True): 'tsl::algo::aggregate_binary#overload-1',
-    ('aggregate_masked_unary', False): (
-        'tsl::algo::aggregate_masked_unary#overload-3'
-    ),
-    ('aggregate_masked_unary', True): (
-        'tsl::algo::aggregate_masked_unary#overload-1'
-    ),
-    ('aggregate_masked_binary', False): (
-        'tsl::algo::aggregate_masked_binary#overload-3'
-    ),
-    ('aggregate_masked_binary', True): (
-        'tsl::algo::aggregate_masked_binary#overload-1'
-    ),
-}
-
-
 def cpp_algorithm_checked_twin_identity(name: str, *, fixed: bool) -> str:
-    try:
-        return _CHECKED_TWIN_IDENTITIES[(name, fixed)]
-    except KeyError as error:
-        form = 'fixed' if fixed else 'policy'
+    form = ALGORITHM_FORMS_BY_NAME.get(name)
+    if (
+        form is None
+        or not form.family.has_contract
+        or form.mask_form is AlgorithmMaskForm.LAYOUT
+        or (fixed and form.family.has_scaled_form)
+    ):
+        form_name = 'fixed' if fixed else 'policy'
         raise ValueError(
-            f'checked C++ algorithm {name!r} has no explicit {form} twin'
-        ) from error
+            f'checked C++ algorithm {name!r} has no explicit {form_name} twin'
+        )
+    overload_index = 1 if fixed or form.family.has_scaled_form else 3
+    identity = f'tsl::algo::{name}#overload-{overload_index}'
+    if identity not in {
+        spec.declaration().identity for spec in _FUNCTION_SPECS
+    }:
+        form_name = 'fixed' if fixed else 'policy'
+        raise ValueError(
+            f'checked C++ algorithm {name!r} has no explicit {form_name} twin'
+        )
+    return identity
+
+
+def cpp_algorithm_form_support(
+    form: AlgorithmCallableForm,
+) -> AlgorithmBackendFormSupport:
+    """Join one target-neutral form to the exact C++ declaration inventory."""
+
+    if form not in ALGORITHM_CALLABLE_FORMS:
+        return AlgorithmBackendFormSupport(
+            "cpp",
+            form,
+            False,
+            "algorithm form is not registered in the shared surface",
+        )
+    if form.mask_form is AlgorithmMaskForm.LAYOUT:
+        return AlgorithmBackendFormSupport(
+            "cpp",
+            form,
+            False,
+            "C++ projects mask layout as a template axis on the default form",
+        )
+    if not any(spec.name == form.name for spec in _FUNCTION_SPECS):
+        return AlgorithmBackendFormSupport(
+            "cpp",
+            form,
+            False,
+            "algorithm form has no exact C++ declaration",
+        )
+    return AlgorithmBackendFormSupport("cpp", form, True)
 
 
 __all__ = (
     'cpp_algorithm_checked_twin_identity',
     'cpp_algorithm_declaration_holes',
+    'cpp_algorithm_form_support',
     'cpp_algorithm_public_declarations',
 )

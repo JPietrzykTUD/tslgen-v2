@@ -7,61 +7,12 @@ from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
 
-from tslc.catalog.preconditions import PreconditionErrorKind
-
-
-# Backend-neutral callable families shared by the generated C++ and Rust
-# whole-array algorithm surfaces. Backends may add overload or spelling
-# suffixes, but adding/removing a family is a v1 public-surface change.
-ALGORITHM_PUBLIC_FAMILIES = frozenset(
-    {
-        "aggregate_binary",
-        "aggregate_masked_binary",
-        "aggregate_masked_unary",
-        "aggregate_selected_binary",
-        "aggregate_selected_unary",
-        "aggregate_unary",
-        "bit_mask_count",
-        "byte_mask_count",
-        "consume_binary",
-        "consume_masked_binary",
-        "consume_masked_unary",
-        "consume_selected_binary",
-        "consume_selected_unary",
-        "consume_unary",
-        "count_binary",
-        "count_masked_binary",
-        "count_masked_unary",
-        "count_selected_binary",
-        "count_selected_unary",
-        "count_unary",
-        "for_each_chunk",
-        "integral_mask_chunk_count",
-        "mask_chunk_count",
-        "native_mask_chunk_count",
-        "predicate_binary",
-        "predicate_unary",
-        "select_binary",
-        "select_indices_binary",
-        "select_indices_unary",
-        "select_masked_binary",
-        "select_masked_indices_binary",
-        "select_masked_indices_unary",
-        "select_masked_unary",
-        "select_selected_indices_binary",
-        "select_selected_indices_unary",
-        "select_unary",
-        "transform_binary",
-        "transform_masked_binary",
-        "transform_masked_unary",
-        "transform_selected_binary",
-        "transform_selected_unary",
-        "transform_unary",
-        "transform_where_binary",
-        "transform_where_unary",
-    }
+from tslc.backend.algorithm_surface import (
+    ALGORITHM_FORMS_BY_NAME,
+    ALGORITHM_PUBLIC_FAMILIES,
+    AlgorithmResultKind,
 )
-
+from tslc.catalog.preconditions import PreconditionErrorKind
 
 ALGORITHM_ERROR_EXPLANATIONS: Mapping[PreconditionErrorKind, str] = (
     MappingProxyType(
@@ -108,12 +59,6 @@ class AlgorithmRangeConditionKind(StrEnum):
     COVERS = "covers"
     MASK_COVERS = "mask_covers"
     SELECTED_ADDRESSES = "selected_addresses"
-
-
-class AlgorithmResultKind(StrEnum):
-    VOID = "void"
-    COUNT = "count"
-    VALUE = "value"
 
 
 class AlgorithmMaskStorageKind(StrEnum):
@@ -691,6 +636,17 @@ ALGORITHM_CONTRACTS: Mapping[str, AlgorithmContract] = MappingProxyType(
 
 if len(ALGORITHM_CONTRACTS) != len(_ALGORITHM_CONTRACT_SEQUENCE):
     raise ValueError("algorithm contract names must be unique")
+if set(ALGORITHM_CONTRACTS) != {
+    name
+    for name, form in ALGORITHM_FORMS_BY_NAME.items()
+    if form.family.has_contract
+}:
+    raise ValueError("algorithm contracts must be bijective with surface forms")
+if any(
+    ALGORITHM_FORMS_BY_NAME[name].family.result_kind is not contract.result_kind
+    for name, contract in ALGORITHM_CONTRACTS.items()
+):
+    raise ValueError("algorithm contract results disagree with surface forms")
 
 
 __all__ = (

@@ -9,10 +9,8 @@ from pathlib import Path
 import sys
 
 from tslc.api import _ARITH_TYPE_TAGS, generate_project
-from tslc.backend.algorithm_contracts import (
-    ALGORITHM_CONTRACTS,
-    ALGORITHM_PUBLIC_FAMILIES,
-)
+from tslc.backend.algorithm_contracts import ALGORITHM_CONTRACTS
+from tslc.backend.algorithm_surface import ALGORITHM_PUBLIC_FAMILIES
 from tslc.backend.cpp_algorithm_contracts import cpp_checked_algorithm_families
 from tslc.backend.cpp_public_api import (
     CPP_CORE_PUBLIC_IDENTITIES,

@@ -601,8 +601,13 @@ selected vector alignment before dispatch. An all-inactive compacted operation
 accesses no memory and therefore does not reject an empty, unaligned view.
 [backend/cpp_checked_api.py](src/tslc/backend/cpp_checked_api.py) owns C++
 signature/check projection, and the backend-neutral algorithm family inventory
-in [backend/algorithm_contracts.py](src/tslc/backend/algorithm_contracts.py)
-prevents C++ and Rust algorithm surfaces from drifting.
+and repeated callable forms in
+[backend/algorithm_surface.py](src/tslc/backend/algorithm_surface.py) prevent
+C++ and Rust algorithm surfaces from drifting. Typed range and result checks
+remain owned by
+[backend/algorithm_contracts.py](src/tslc/backend/algorithm_contracts.py);
+each backend joins those target-neutral identities to its exact declaration
+records and explicitly classifies unsupported forms.
 
 The ordinary Rust API is finalized before source rendering by the frozen records
 in [backend/rust_api_model.py](src/tslc/backend/rust_api_model.py), the

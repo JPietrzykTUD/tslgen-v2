@@ -15,6 +15,7 @@ from tslc.backend.algorithm_contracts import (
     AlgorithmRangeRole,
     AlgorithmResultKind,
 )
+from tslc.backend.algorithm_surface import ALGORITHM_SCALED_CHECKED_TWINS
 from tslc.backend.precondition_error_rendering import rust_precondition_error
 from tslc.backend.public_declarations import (
     PublicDeclarationKind,
@@ -337,6 +338,11 @@ def rust_scaled_checked_algorithm_declaration(
             )
         )
     name = f"{contract.name}_scaled_checked"
+    ordinary_twin = ALGORITHM_SCALED_CHECKED_TWINS.get(name)
+    if ordinary_twin is None:
+        raise ValueError(
+            f"scaled checked Rust algorithm {name!r} has no registered twin"
+        )
     owner = "crate::profile::algo" if profile_wrapper else "crate::tsl_algorithm"
     return RustPublicDeclaration(
         identity=f"{owner}::{name}#algorithm",
@@ -372,7 +378,7 @@ def rust_scaled_checked_algorithm_declaration(
             "crate::PreconditionError>"
         ),
         result_form="result",
-        checked_of=f"{owner}::{contract.name}_scaled_raw#algorithm",
+        checked_of=f"{owner}::{ordinary_twin}#algorithm",
         error_form="result",
     )
 

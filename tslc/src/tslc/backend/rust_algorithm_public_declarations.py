@@ -10,6 +10,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from tslc.backend.algorithm_contracts import ALGORITHM_CONTRACTS
+from tslc.backend.algorithm_surface import (
+    ALGORITHM_CALLABLE_FORMS,
+    ALGORITHM_CHECKED_TWINS,
+    AlgorithmBackendFormSupport,
+    AlgorithmCallableForm,
+)
 from tslc.backend.public_declarations import (
     PublicDeclarationKind,
     PublicDeclarationStability,
@@ -44,107 +50,6 @@ _PROFILE_ALGORITHM_SUPPORT_REEXPORTS = (
     'MaskLayout',
 )
 
-_CHECKED_TWIN_IDENTITIES = {
-    'transform_unary_checked': 'transform_unary#algorithm-alias',
-    'transform_binary_checked': 'transform_binary#algorithm-alias',
-    'predicate_unary_checked': 'predicate_unary#algorithm-alias',
-    'predicate_binary_checked': 'predicate_binary#algorithm-alias',
-    'predicate_unary_mask_layout_checked': (
-        'predicate_unary_mask_layout#algorithm-alias'
-    ),
-    'predicate_binary_mask_layout_checked': (
-        'predicate_binary_mask_layout#algorithm-alias'
-    ),
-    'count_binary_checked': 'count_binary#algorithm-alias',
-    'count_masked_unary_checked': 'count_masked_unary#algorithm-alias',
-    'count_masked_binary_checked': 'count_masked_binary#algorithm-alias',
-    'count_masked_unary_mask_layout_checked': (
-        'count_masked_unary_mask_layout#algorithm-alias'
-    ),
-    'count_masked_binary_mask_layout_checked': (
-        'count_masked_binary_mask_layout#algorithm-alias'
-    ),
-    'count_selected_unary_checked': 'count_selected_unary#algorithm-alias',
-    'count_selected_binary_checked': 'count_selected_binary#algorithm-alias',
-    'select_unary_checked': 'select_unary#algorithm-alias',
-    'select_binary_checked': 'select_binary#algorithm-alias',
-    'select_masked_unary_checked': 'select_masked_unary#algorithm-alias',
-    'select_masked_binary_checked': 'select_masked_binary#algorithm-alias',
-    'select_masked_unary_mask_layout_checked': (
-        'select_masked_unary_mask_layout#algorithm-alias'
-    ),
-    'select_masked_binary_mask_layout_checked': (
-        'select_masked_binary_mask_layout#algorithm-alias'
-    ),
-    'select_indices_unary_checked': 'select_indices_unary#algorithm-alias',
-    'select_indices_binary_checked': 'select_indices_binary#algorithm-alias',
-    'select_masked_indices_unary_checked': (
-        'select_masked_indices_unary#algorithm-alias'
-    ),
-    'select_masked_indices_binary_checked': (
-        'select_masked_indices_binary#algorithm-alias'
-    ),
-    'select_masked_indices_unary_mask_layout_checked': (
-        'select_masked_indices_unary_mask_layout#algorithm-alias'
-    ),
-    'select_masked_indices_binary_mask_layout_checked': (
-        'select_masked_indices_binary_mask_layout#algorithm-alias'
-    ),
-    'select_selected_indices_unary_checked': (
-        'select_selected_indices_unary#algorithm-alias'
-    ),
-    'select_selected_indices_binary_checked': (
-        'select_selected_indices_binary#algorithm-alias'
-    ),
-    'transform_selected_unary_checked': (
-        'transform_selected_unary#algorithm-alias'
-    ),
-    'transform_selected_binary_checked': (
-        'transform_selected_binary#algorithm-alias'
-    ),
-    'consume_selected_unary_checked': 'consume_selected_unary#algorithm-alias',
-    'consume_selected_binary_checked': (
-        'consume_selected_binary#algorithm-alias'
-    ),
-    'aggregate_selected_unary_checked': (
-        'aggregate_selected_unary#algorithm-alias'
-    ),
-    'aggregate_selected_binary_checked': (
-        'aggregate_selected_binary#algorithm-alias'
-    ),
-    'transform_where_unary_checked': 'transform_where_unary#algorithm-alias',
-    'transform_where_unary_mask_layout_checked': (
-        'transform_where_unary_mask_layout#algorithm-alias'
-    ),
-    'transform_where_binary_checked': 'transform_where_binary#algorithm-alias',
-    'transform_where_binary_mask_layout_checked': (
-        'transform_where_binary_mask_layout#algorithm-alias'
-    ),
-    'transform_masked_unary_checked': (
-        'transform_masked_unary#algorithm-alias'
-    ),
-    'transform_masked_binary_checked': (
-        'transform_masked_binary#algorithm-alias'
-    ),
-    'transform_masked_unary_mask_layout_checked': (
-        'transform_masked_unary_mask_layout#algorithm-alias'
-    ),
-    'transform_masked_binary_mask_layout_checked': (
-        'transform_masked_binary_mask_layout#algorithm-alias'
-    ),
-    'consume_binary_checked': 'consume_binary#algorithm-alias',
-    'consume_masked_unary_checked': 'consume_masked_unary#algorithm-alias',
-    'consume_masked_binary_checked': 'consume_masked_binary#algorithm-alias',
-    'aggregate_binary_checked': 'aggregate_binary#algorithm-alias',
-    'aggregate_masked_unary_checked': (
-        'aggregate_masked_unary#algorithm-alias'
-    ),
-    'aggregate_masked_binary_checked': (
-        'aggregate_masked_binary#algorithm-alias'
-    ),
-}
-
-
 @dataclass(frozen=True, slots=True)
 class RustAlgorithmDeclarationSpec:
     hole: str
@@ -162,9 +67,11 @@ class RustAlgorithmDeclarationSpec:
         reachability: tuple[str, ...],
     ) -> RustPublicDeclaration:
         identity = f"{owner}::{self.name}#algorithm"
-        checked_twin = _CHECKED_TWIN_IDENTITIES.get(self.name)
+        checked_twin = ALGORITHM_CHECKED_TWINS.get(self.name)
         checked_of = (
-            f'{owner}::{checked_twin}' if checked_twin is not None else None
+            f'{owner}::{checked_twin}#algorithm-alias'
+            if checked_twin is not None
+            else None
         )
         result_form = (
             'implicit-unit'
@@ -3403,6 +3310,29 @@ def rust_profile_algorithm_public_declarations(
     return (*functions, *aliases)
 
 
+def rust_algorithm_form_support(
+    form: AlgorithmCallableForm,
+) -> AlgorithmBackendFormSupport:
+    """Join one target-neutral form to the exact Rust declaration inventory."""
+
+    if form not in ALGORITHM_CALLABLE_FORMS:
+        return AlgorithmBackendFormSupport(
+            "rust",
+            form,
+            False,
+            "algorithm form is not registered in the shared surface",
+        )
+    projected_names = {spec.name for spec in _SPECS} | set(ALGORITHM_CONTRACTS)
+    if form.name not in projected_names:
+        return AlgorithmBackendFormSupport(
+            "rust",
+            form,
+            False,
+            "algorithm form has no exact Rust declaration",
+        )
+    return AlgorithmBackendFormSupport("rust", form, True)
+
+
 def rust_profile_algorithm_module_declaration(
     reachability: tuple[str, ...],
 ) -> RustPublicDeclaration:
@@ -3508,6 +3438,7 @@ def _indent(text: str, spaces: int) -> str:
 
 
 __all__ = (
+    'rust_algorithm_form_support',
     'rust_profile_algorithm_aliases',
     'rust_profile_algorithm_declaration_holes',
     'rust_profile_algorithm_module_declaration',
