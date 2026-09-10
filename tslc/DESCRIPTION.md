@@ -495,6 +495,15 @@ a backend unsupported is not admitted as a coverage attempt for that backend.
 Helper dependency roots and helper
 admission both come from typed manifests in
 [backend/helper_requirements.py](src/tslc/backend/helper_requirements.py).
+[backend/algorithm_admission.py](src/tslc/backend/algorithm_admission.py)
+joins those exact primitive and mask-policy requirements to the shared
+algorithm families. C++ computes a project-wide intersection in
+[backend/cpp_algorithm_plan.py](src/tslc/backend/cpp_algorithm_plan.py); Rust
+retains a profile-local admission. Both expose deterministic gaps carrying the
+backend, profile, helper feature, semantic family, primitive, and mask policy,
+so optional compaction or mask helpers suppress only dependent forms. The same
+helper groups seed dependency closure, including Rust's mandatory contiguous
+load/store foundation.
 
 Backends differ idiomatically (a `BackendDialect`,
 [backend/translation.py](src/tslc/backend/translation.py), abstracts type
@@ -551,8 +560,8 @@ count. Neutral lowering never constructs a C++ or Rust lane-count expression.
   that plan's exact generic fallback. The target formatter in
   [backend/rust_algorithm.py](src/tslc/backend/rust_algorithm.py) consumes only
   those decided facts and static assets. Missing mandatory contiguous memory
-  support remains a typed unsupported profile record rather than an empty
-  formatter result. Static
+  support and missing optional family helpers remain typed admission gaps
+  rather than an empty formatter result or a template-time decision. Static
   algorithm-wrapper names are reserved by the compiler manifest in
   [backend/rust_algorithm_manifest.py](src/tslc/backend/rust_algorithm_manifest.py),
   with an asset-consistency test preventing drift.

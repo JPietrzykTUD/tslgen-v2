@@ -13,6 +13,7 @@ from tslc.backend.algorithm_contracts import ALGORITHM_CONTRACTS
 from tslc.backend.algorithm_surface import (
     ALGORITHM_CALLABLE_FORMS,
     ALGORITHM_CHECKED_TWINS,
+    ALGORITHM_FORMS_BY_NAME,
     AlgorithmBackendFormSupport,
     AlgorithmArity,
     AlgorithmCallableForm,
@@ -1247,13 +1248,17 @@ _SPECS = (
 
 def rust_profile_algorithm_public_declarations(
     reachability: tuple[str, ...],
+    *,
+    admitted_form_names: frozenset[str] | None = None,
 ) -> tuple[RustPublicDeclaration, ...]:
+    admitted_names = _admitted_algorithm_names(admitted_form_names)
     functions = tuple(
         spec.declaration(
             owner=_PROFILE_ALGORITHM_OWNER,
             reachability=reachability,
         )
         for spec in _SPECS
+        if admitted_names is None or spec.name in admitted_names
     )
     aliases = tuple(
         _algorithm_alias(
@@ -1262,8 +1267,29 @@ def rust_profile_algorithm_public_declarations(
             reachability=reachability,
         )
         for name in sorted(ALGORITHM_CONTRACTS)
+        if admitted_form_names is None or name in admitted_form_names
     )
     return (*functions, *aliases)
+
+
+def _admitted_algorithm_names(
+    form_names: frozenset[str] | None,
+) -> frozenset[str] | None:
+    if form_names is None:
+        return None
+    forms = tuple(ALGORITHM_FORMS_BY_NAME[name] for name in sorted(form_names))
+    return frozenset(
+        name
+        for form in forms
+        for name in (
+            form.name,
+            form.raw_name,
+            form.checked_name,
+            form.scaled_raw_name,
+            form.scaled_checked_name,
+        )
+        if name is not None
+    )
 
 
 def rust_algorithm_form_support(
@@ -1328,8 +1354,11 @@ def rust_profile_algorithm_support_reexports(
     )
 
 
-def rust_profile_algorithm_declaration_holes() -> dict[str, str]:
+def rust_profile_algorithm_declaration_holes(
+    admitted_form_names: frozenset[str] | None = None,
+) -> dict[str, str]:
     reachability = ('profile', 'algo')
+    admitted_names = _admitted_algorithm_names(admitted_form_names)
     holes: dict[str, str] = {}
     for spec in _SPECS:
         declaration = spec.declaration(
@@ -1337,7 +1366,10 @@ def rust_profile_algorithm_declaration_holes() -> dict[str, str]:
             reachability=reachability,
         )
         hole = spec.hole or _rust_algorithm_declaration_hole(declaration)
-        holes[hole] = _indent(declaration.render_definition_head(), 4)
+        head = declaration.render_definition_head()
+        if admitted_names is not None and spec.name not in admitted_names:
+            head = head.replace('pub ', 'pub(crate) ', 1)
+        holes[hole] = _indent(head, 4)
     return holes
 
 
@@ -1346,6 +1378,7 @@ def rust_profile_algorithm_aliases(
     *,
     owner: str,
     indent: int = 0,
+    admitted_form_names: frozenset[str] | None = None,
 ) -> str:
     return '\n'.join(
         _indent(
@@ -1361,6 +1394,7 @@ def rust_profile_algorithm_aliases(
             indent,
         )
         for name in sorted(ALGORITHM_CONTRACTS)
+        if admitted_form_names is None or name in admitted_form_names
     )
 
 

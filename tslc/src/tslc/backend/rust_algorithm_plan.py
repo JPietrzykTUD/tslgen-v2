@@ -5,6 +5,23 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from tslc.backend.algorithm_admission import (
+    AlgorithmFamilyRequirements,
+    AlgorithmFormRequirements,
+    AlgorithmHelperAdmission,
+    AlgorithmProfileAdmission,
+    AlgorithmRequirementGap,
+    BackendAlgorithmRequirements,
+    plan_algorithm_profile_admission,
+)
+from tslc.backend.algorithm_surface import (
+    ALGORITHM_SURFACE_FAMILIES,
+    AlgorithmCallableForm,
+    AlgorithmMaskForm,
+    AlgorithmSemanticFamily,
+    AlgorithmShape,
+    AlgorithmSurfaceFamily,
+)
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.helper_requirements import (
     PrimitiveRequirement,
@@ -12,6 +29,9 @@ from tslc.backend.helper_requirements import (
 )
 from tslc.backend.primitive_facade import plan_contiguous_memory_primitive_facades
 from tslc.backend.rust_algorithm_manifest import RUST_ALGORITHM_RESERVED_NAMES
+from tslc.backend.rust_algorithm_public_declarations import (
+    rust_algorithm_form_support,
+)
 from tslc.backend.rust_facades import (
     RustAlgorithmPrimitiveFacade,
     plan_rust_algorithm_primitive_facades,
@@ -22,6 +42,64 @@ from tslc.backend.rust_static_selection import (
 )
 from tslc.catalog.memory import MemoryAccess
 from tslc.lower.lowerer import LoweredSpecialization
+
+
+def _rust_family_features(family: AlgorithmSurfaceFamily) -> tuple[str, ...]:
+    """Primitive-backed support traits called by one Rust algorithm family."""
+
+    features: list[str] = []
+    if family.shape in {AlgorithmShape.SELECTED, AlgorithmShape.SELECTED_INDICES}:
+        features.append("selected_load")
+    if family.semantic_family is AlgorithmSemanticFamily.PREDICATE:
+        features.append("integral_mask")
+    if family.semantic_family is AlgorithmSemanticFamily.COUNT:
+        features.append("integral_mask")
+    if family.semantic_family is AlgorithmSemanticFamily.SELECT:
+        features.append("integral_mask")
+        if family.shape in {AlgorithmShape.PLAIN, AlgorithmShape.MASKED}:
+            features.extend(("compress_store", "mask_population_count"))
+    if (
+        family.semantic_family is AlgorithmSemanticFamily.TRANSFORM
+        and family.shape is AlgorithmShape.WHERE
+    ):
+        features.append("masked_store")
+    if family.shape is AlgorithmShape.WHERE or (
+        family.shape is AlgorithmShape.MASKED
+        and family.semantic_family
+        in {
+            AlgorithmSemanticFamily.SELECT,
+            AlgorithmSemanticFamily.TRANSFORM,
+            AlgorithmSemanticFamily.CONSUME,
+            AlgorithmSemanticFamily.AGGREGATE,
+        }
+    ):
+        features.append("mask_from_integral")
+    return tuple(dict.fromkeys(features))
+
+
+def _rust_form_features(form: AlgorithmCallableForm) -> tuple[str, ...]:
+    features = list(_rust_family_features(form.family))
+    if form.mask_form is AlgorithmMaskForm.LAYOUT:
+        features.extend(("integral_mask", "mask_from_integral"))
+    return tuple(dict.fromkeys(features))
+
+
+RUST_ALGORITHM_REQUIREMENTS = BackendAlgorithmRequirements(
+    "rust",
+    RUST_HELPER_MANIFEST,
+    tuple(
+        AlgorithmFamilyRequirements(
+            family,
+            tuple(
+                AlgorithmFormRequirements(form, _rust_form_features(form))
+                for form in family.callable_forms
+            ),
+        )
+        for family in ALGORITHM_SURFACE_FAMILIES
+    ),
+    mandatory_features=("contiguous_memory",),
+    optional_features=("gather_narrow",),
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,22 +115,6 @@ class RustAlgorithmImplTarget:
 
 
 @dataclass(frozen=True, slots=True)
-class RustAlgorithmHelperAdmission:
-    """One optional helper feature and its exact missing source requirements."""
-
-    feature_name: str
-    missing_requirements: tuple[PrimitiveRequirement, ...]
-
-    def __post_init__(self) -> None:
-        if not self.feature_name:
-            raise ValueError("Rust algorithm helper admissions require a feature")
-
-    @property
-    def supported(self) -> bool:
-        return not self.missing_requirements
-
-
-@dataclass(frozen=True, slots=True)
 class RustAlgorithmSelectedLoadTarget:
     """One exact static mapping admitted for a hardware selected-load impl."""
 
@@ -62,19 +124,6 @@ class RustAlgorithmSelectedLoadTarget:
     def __post_init__(self) -> None:
         if not self.mapping.uses_hardware:
             raise ValueError("Rust selected-load targets require hardware mappings")
-
-
-@dataclass(frozen=True, slots=True)
-class RustAlgorithmSupportGap:
-    """One missing mandatory primitive requirement for an algorithm module."""
-
-    profile_name: str
-    requirement: PrimitiveRequirement
-    reason: str
-
-    def __post_init__(self) -> None:
-        if not self.profile_name or not self.reason:
-            raise ValueError("Rust algorithm support gaps require context")
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,11 +138,10 @@ class RustAlgorithmProfilePlan:
     implementation_targets: tuple[RustAlgorithmImplTarget, ...]
     read_facade: RustAlgorithmPrimitiveFacade | None
     write_facade: RustAlgorithmPrimitiveFacade | None
-    helper_admissions: tuple[RustAlgorithmHelperAdmission, ...]
+    admission: AlgorithmProfileAdmission
     selected_load_targets: tuple[RustAlgorithmSelectedLoadTarget, ...]
     primitive_facades: tuple[RustAlgorithmPrimitiveFacade, ...]
     requires_rebind: bool
-    unsupported: tuple[RustAlgorithmSupportGap, ...]
 
     def __post_init__(self) -> None:
         if not self.profile_name:
@@ -108,11 +156,10 @@ class RustAlgorithmProfilePlan:
             )
         if any(mapping.uses_sized_vector for mapping in self.fixed_mappings):
             raise ValueError("Rust algorithm fixed policies require fixed mappings")
-        helper_names = tuple(item.feature_name for item in self.helper_admissions)
-        if len(set(helper_names)) != len(helper_names):
-            raise ValueError("Rust algorithm helper admissions must be unique")
-        if any(gap.profile_name != self.profile_name for gap in self.unsupported):
-            raise ValueError("Rust algorithm support gaps must match their profile")
+        if self.admission.backend_id != "rust":
+            raise ValueError("Rust algorithm admission must use the Rust backend")
+        if self.admission.profile_name != self.profile_name:
+            raise ValueError("Rust algorithm admission must match its profile")
         if (
             self.read_facade is not None
             and self.read_facade.memory_access is not MemoryAccess.READ
@@ -146,19 +193,22 @@ class RustAlgorithmProfilePlan:
 
     @property
     def supported(self) -> bool:
-        return not self.unsupported
+        return self.admission.supported
 
-    def helper(self, feature_name: str) -> RustAlgorithmHelperAdmission:
-        try:
-            return next(
-                item
-                for item in self.helper_admissions
-                if item.feature_name == feature_name
-            )
-        except StopIteration as exc:
-            raise KeyError(
-                f"Rust algorithm plan has no helper feature {feature_name!r}"
-            ) from exc
+    @property
+    def admitted_family_names(self) -> tuple[str, ...]:
+        return tuple(family.name for family in self.admission.admitted_families)
+
+    @property
+    def admitted_form_names(self) -> tuple[str, ...]:
+        return tuple(form.name for form in self.admission.admitted_forms)
+
+    @property
+    def gaps(self) -> tuple[AlgorithmRequirementGap, ...]:
+        return self.admission.gaps
+
+    def helper(self, feature_name: str) -> AlgorithmHelperAdmission:
+        return self.admission.helper(feature_name)
 
 
 @dataclass(frozen=True, slots=True)
@@ -240,22 +290,19 @@ def _plan_profile(
     is_fallback: bool,
 ) -> RustAlgorithmProfilePlan:
     memory = plan_contiguous_memory_primitive_facades(by_primitive)
-    unsupported = tuple(
-        RustAlgorithmSupportGap(
-            profile_name=profile_name,
-            requirement=PrimitiveRequirement(
-                "load" if access is MemoryAccess.READ else "store"
-            ),
-            reason=f"missing contiguous {access.value} primitive facade",
+    semantic_memory_requirements = frozenset(
+        PrimitiveRequirement(
+            "load" if binding.memory_access is MemoryAccess.READ else "store"
         )
-        for access in memory.missing_accesses
+        for binding in (memory.read, memory.write)
+        if binding is not None
     )
-    helper_admissions = tuple(
-        RustAlgorithmHelperAdmission(
-            feature.name,
-            RUST_HELPER_MANIFEST.missing_requirements(feature.name, by_primitive),
-        )
-        for feature in RUST_HELPER_MANIFEST.features
+    admission = plan_algorithm_profile_admission(
+        profile_name,
+        by_primitive,
+        RUST_ALGORITHM_REQUIREMENTS,
+        rust_algorithm_form_support,
+        satisfied_requirements=semantic_memory_requirements,
     )
     primitive_facades = plan_rust_algorithm_primitive_facades(
         by_primitive,
@@ -282,15 +329,14 @@ def _plan_profile(
         implementation_targets=_implementation_targets(static_mappings),
         read_facade=read_facade,
         write_facade=write_facade,
-        helper_admissions=helper_admissions,
+        admission=admission,
         selected_load_targets=_selected_load_targets(
             static_mappings,
             by_primitive,
-            helper_admissions,
+            admission.helpers,
         ),
         primitive_facades=primitive_facades,
         requires_rebind=any(facade.requires_rebind for facade in primitive_facades),
-        unsupported=unsupported,
     )
 
 
@@ -335,7 +381,7 @@ def _implementation_targets(
 def _selected_load_targets(
     mappings: tuple[RustStaticVectorMapping, ...],
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
-    admissions: tuple[RustAlgorithmHelperAdmission, ...],
+    admissions: tuple[AlgorithmHelperAdmission, ...],
 ) -> tuple[RustAlgorithmSelectedLoadTarget, ...]:
     selected_load = next(
         item for item in admissions if item.feature_name == "selected_load"
@@ -384,11 +430,10 @@ def _selected_load_targets(
 
 
 __all__ = (
-    "RustAlgorithmHelperAdmission",
+    "RUST_ALGORITHM_REQUIREMENTS",
     "RustAlgorithmImplTarget",
     "RustAlgorithmPlan",
     "RustAlgorithmProfilePlan",
     "RustAlgorithmSelectedLoadTarget",
-    "RustAlgorithmSupportGap",
     "plan_rust_algorithm",
 )

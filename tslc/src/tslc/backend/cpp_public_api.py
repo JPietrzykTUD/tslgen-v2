@@ -53,16 +53,36 @@ def _classified_item(
 
 
 def cpp_static_public_declarations(
-    *, supports_algorithm: bool,
+    *,
+    supports_algorithm: bool,
+    admitted_algorithm_forms: frozenset[str] | None = None,
 ) -> tuple[CppPublicDeclaration, ...]:
     """Classify static exported surfaces that are not lowered primitives."""
 
     core = cpp_exact_static_public_declarations()
-    algorithms = (
-        (
-            *cpp_algorithm_public_declarations(),
-            *cpp_checked_algorithm_declarations(),
+    algorithm_declarations = cpp_algorithm_public_declarations()
+    algorithm_aliases = tuple(
+        declaration
+        for declaration in algorithm_declarations
+        if declaration.kind is PublicDeclarationKind.TYPE_ALIAS
+    )
+    algorithm_functions = tuple(
+        declaration
+        for declaration in algorithm_declarations
+        if declaration.kind is PublicDeclarationKind.FUNCTION
+        and (
+            admitted_algorithm_forms is None
+            or declaration.name in admitted_algorithm_forms
         )
+    )
+    checked_functions = tuple(
+        declaration
+        for declaration in cpp_checked_algorithm_declarations()
+        if admitted_algorithm_forms is None
+        or declaration.name.removesuffix("_checked") in admitted_algorithm_forms
+    )
+    algorithms = (
+        (*algorithm_aliases, *algorithm_functions, *checked_functions)
         if supports_algorithm
         else ()
     )
@@ -221,7 +241,12 @@ def cpp_public_api_manifest(
     backend = CppBackend()
     model = model or cpp_project_render_model(profiles)
     declarations: list[CppPublicDeclaration] = list(
-        cpp_static_public_declarations(supports_algorithm=model.supports_algorithm)
+        cpp_static_public_declarations(
+            supports_algorithm=model.algorithm.supported,
+            admitted_algorithm_forms=frozenset(
+                model.algorithm.admitted_form_names
+            ),
+        )
     )
     for profile in model.profiles:
         declarations.extend(_cpp_profile_classifications(profile))

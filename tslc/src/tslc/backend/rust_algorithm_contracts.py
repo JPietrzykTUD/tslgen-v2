@@ -385,6 +385,8 @@ def rust_scaled_checked_algorithm_declaration(
 
 def rust_profile_scaled_checked_algorithm_declarations(
     reachability: tuple[str, ...],
+    *,
+    admitted_form_names: frozenset[str] | None = None,
 ) -> tuple[RustPublicDeclaration, ...]:
     return tuple(
         rust_scaled_checked_algorithm_declaration(
@@ -393,6 +395,7 @@ def rust_profile_scaled_checked_algorithm_declarations(
             profile_wrapper=True,
         )
         for contract in _selected_contracts()
+        if admitted_form_names is None or contract.name in admitted_form_names
     )
 
 
@@ -412,7 +415,10 @@ def _selected_contracts() -> tuple[AlgorithmContract, ...]:
     )
 
 
-def rust_algorithm_contract_holes() -> Mapping[str, str]:
+def rust_algorithm_contract_holes(
+    *,
+    admitted_form_names: frozenset[str] | None = None,
+) -> Mapping[str, str]:
     """Return all semantic fragments required by the Rust algorithm asset."""
 
     checks = {
@@ -427,9 +433,10 @@ def rust_algorithm_contract_holes() -> Mapping[str, str]:
         ("profile", "algo"),
         owner="crate::profile::algo",
         indent=4,
+        admitted_form_names=admitted_form_names,
     )
     return {
-        **rust_profile_algorithm_declaration_holes(),
+        **rust_profile_algorithm_declaration_holes(admitted_form_names),
         **checks,
         **{
             f"docs_{contract.name}": render_rust_algorithm_error_docs(contract)
@@ -450,6 +457,8 @@ def rust_algorithm_contract_holes() -> Mapping[str, str]:
         "profile_scaled_checked_algorithm_definitions": "\n\n".join(
             _render_rust_profile_scaled_checked(contract)
             for contract in _selected_contracts()
+            if admitted_form_names is None
+            or contract.name in admitted_form_names
         ),
     }
 

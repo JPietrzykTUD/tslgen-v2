@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from tslc.backend.cpp import CppBackend
+from tslc.backend.cpp_algorithm import cpp_unavailable_algorithm_helper_declaration
 from tslc.backend.cpp_algorithm_contracts import cpp_algorithm_contract_holes
 from tslc.backend.cpp_algorithm_public_declarations import (
     cpp_algorithm_declaration_holes,
@@ -311,11 +312,32 @@ def _cpp_dispatch(model: CppProjectRenderModel, assets: RenderAssets) -> str:
         profile_cases="\n".join(profile_cases),
         overlay_cases=(f"\n{rendered_overlay_cases}" if overlay_cases else ""),
         algorithm_include=(
-            f'\n{assets.text("cpp_dispatch_algorithm_include.hpp").rstrip()}'
-            if model.supports_algorithm
+            "\n"
+            + _cpp_unavailable_algorithm_helpers(model)
+            + assets.text("cpp_dispatch_algorithm_include.hpp").rstrip()
+            if model.algorithm.supported
             else ""
         ),
     )
+
+
+def _cpp_unavailable_algorithm_helpers(model: CppProjectRenderModel) -> str:
+    """Keep admitted templates parsable when an unrelated helper is absent."""
+
+    blocks: list[str] = []
+    for group in model.algorithm.unavailable_helpers:
+        declarations = "\n".join(
+            cpp_unavailable_algorithm_helper_declaration(requirement)
+            for requirement in group.requirements
+        )
+        blocks.append(
+            f"#if defined({group.profile_macro})\n"
+            "namespace tsl {\n"
+            f"{declarations}\n"
+            "}  // namespace tsl\n"
+            "#endif\n"
+        )
+    return "".join(blocks)
 
 
 def _cpp_documentation_facade(

@@ -106,7 +106,9 @@ def rust_algorithm_module(
         parts.append(mappings)
     algorithm_wrappers = assets.fill(
         _RUST_ALGORITHM_WRAPPER_ASSET,
-        **rust_algorithm_contract_holes(),
+        **rust_algorithm_contract_holes(
+            admitted_form_names=frozenset(plan.admitted_form_names)
+        ),
     ).rstrip()
     primitive_facades = rust_algorithm_primitive_facades(plan.primitive_facades)
     if primitive_facades:

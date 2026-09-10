@@ -14,6 +14,10 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from tslc.backend.checked_api import applicable_checked_api_plan
+from tslc.backend.cpp_algorithm_plan import (
+    CppAlgorithmAdmissionPlan,
+    plan_cpp_algorithm_admission,
+)
 from tslc.backend.cpp_build_policy import (
     CppCompilerOption,
     cpp_profile_compile_options,
@@ -46,7 +50,6 @@ from tslc.backend.cpp_profile import (
     cpp_compiler_capability_condition,
     cpp_compiler_capability_diagnostic,
     cpp_extension_availability_condition,
-    cpp_profiles_support_algorithm,
     cpp_system_header_name,
 )
 from tslc.backend.emitted_profile import EmittedProfile, used_extensions
@@ -195,7 +198,7 @@ class CppProjectRenderModel:
     compiler_capability_probes: str
     compiler_capability_definitions: tuple[str, ...]
     value_test_compile_options: tuple[CppCompilerOption, ...]
-    supports_algorithm: bool
+    algorithm: CppAlgorithmAdmissionPlan
     profile_detection: CppProfileDetectionPlan
     consumer_kind: CppConsumerKind
     system_header_groups: tuple[CppSystemHeaderGroup, ...]
@@ -239,7 +242,7 @@ def cpp_project_render_model(
             )
         ),
         value_test_compile_options=cpp_value_test_compile_options(),
-        supports_algorithm=cpp_profiles_support_algorithm(profiles),
+        algorithm=plan_cpp_algorithm_admission(profiles),
         profile_detection=cpp_profile_detection_plan(
             tuple(profile.profile for profile in profiles),
             candidates=cpp_profile_detection_candidates(profiles),

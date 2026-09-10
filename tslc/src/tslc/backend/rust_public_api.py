@@ -463,12 +463,18 @@ def rust_public_api_manifest(
             )
             declarations.extend(
                 rust_profile_algorithm_public_declarations(
-                    algorithm_reachability
+                    algorithm_reachability,
+                    admitted_form_names=frozenset(
+                        algorithm_profile.admitted_form_names
+                    ),
                 )
             )
             declarations.extend(
                 rust_profile_scaled_checked_algorithm_declarations(
-                    algorithm_reachability
+                    algorithm_reachability,
+                    admitted_form_names=frozenset(
+                        algorithm_profile.admitted_form_names
+                    ),
                 )
             )
     fallback = static_selection_plan.fallback_module.specializations_by_primitive()
@@ -522,12 +528,18 @@ def rust_public_api_manifest(
         )
         declarations.extend(
             rust_profile_algorithm_public_declarations(
-                fallback_algorithm_reachability
+                fallback_algorithm_reachability,
+                admitted_form_names=frozenset(
+                    algorithm_plan.fallback.admitted_form_names
+                ),
             )
         )
         declarations.extend(
             rust_profile_scaled_checked_algorithm_declarations(
-                fallback_algorithm_reachability
+                fallback_algorithm_reachability,
+                admitted_form_names=frozenset(
+                    algorithm_plan.fallback.admitted_form_names
+                ),
             )
         )
     return BackendPublicApiManifest(

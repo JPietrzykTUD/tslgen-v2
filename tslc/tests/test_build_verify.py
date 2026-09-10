@@ -5,6 +5,7 @@ Skips a backend whose toolchain is unavailable; fails on any build error.
 
 from __future__ import annotations
 
+from copy import copy
 import os
 from pathlib import Path
 import shutil
@@ -12,12 +13,15 @@ import shlex
 import subprocess
 import tarfile
 import textwrap
+from types import MappingProxyType
 
 import pytest
 
 from tslc.api import generate_project, verify_project, write_artifacts
+from tslc.compiler_assets import load_default_render_assets
 from tslc.diagnostics import has_errors
 from tslc.maintenance.build_verified import BUILD_VERIFIED_PRIMITIVE_SETS
+from tslc.output.artifacts import ArtifactSet
 from tslc.output.verify_model import (
     BackendToolchain,
     VerifyBackend,
@@ -25,6 +29,7 @@ from tslc.output.verify_model import (
     VerifyProfile,
     VerifyProject,
 )
+from tslc.render.cpp_project import cpp_artifacts
 
 pytestmark = pytest.mark.generated_build
 
@@ -103,6 +108,112 @@ def test_generated_profiles_build(
     # Each selected Rust profile also passes strict compiler, rustdoc, and
     # selected Clippy gates before its generated tests compile.
     assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_cpp_incomplete_compaction_keeps_admitted_algorithms_compilable(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    compiler = shutil.which("c++")
+    if compiler is None:
+        pytest.skip("a native C++ compiler is required")
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        profiles=["scalar"],
+        backends=["cpp"],
+        render_artifacts=False,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    profile = copy(result.emitted_profiles[0])
+    specializations = {
+        name: specs
+        for name, specs in profile.specializations("cpp").items()
+        if name != "compress_store"
+    }
+    object.__setattr__(
+        profile,
+        "specializations_by_backend",
+        MappingProxyType({"cpp": MappingProxyType(specializations)}),
+    )
+    artifacts = ArtifactSet.create(
+        tuple(
+            cpp_artifacts(
+                (profile,),
+                load_default_render_assets(),
+                media_type="text/x-c++",
+            )
+        )
+    )
+    generated = tmp_path / "generated"
+    write_report = write_artifacts(artifacts, generated)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    public_api = (generated / "cpp" / "public-api.json").read_text(
+        encoding="utf-8"
+    )
+    assert '"name": "transform_unary"' in public_api
+    assert '"name": "predicate_unary"' in public_api
+    assert '"name": "select_unary"' not in public_api
+
+    source = tmp_path / "partial_algorithm.cpp"
+    source.write_text(
+        textwrap.dedent(
+            """
+            #include <tsl.hpp>
+
+            struct identity {
+              template <class Vec>
+              typename Vec::register_type operator()(
+                  typename ::tsl::reg_param<Vec>::type value) const {
+                return value;
+              }
+            };
+
+            struct never {
+              template <class Vec>
+              typename Vec::mask_type operator()(
+                  typename ::tsl::reg_param<Vec>::type) const {
+                return {};
+              }
+            };
+
+            int main() {
+              int input[]{1, 2};
+              int output[]{0, 0};
+              ::tsl::algo::fixed_integral_mask_type<1, int> masks[2]{};
+              ::tsl::algo::transform_unary<
+                  ::tsl::dataparallel::fixed<1>,
+                  ::tsl::algo::alignment::unaligned>(
+                      identity{}, input, output, 2);
+              (void)::tsl::algo::predicate_unary<
+                  ::tsl::dataparallel::fixed<1>,
+                  ::tsl::algo::alignment::unaligned>(
+                      never{}, input, masks, 2);
+              return output[0] == 1 ? 0 : 1;
+            }
+            """
+        ),
+        encoding="utf-8",
+    )
+    executable = tmp_path / "partial_algorithm"
+    compiled = subprocess.run(
+        (
+            compiler,
+            "-std=c++17",
+            "-DTSL_PROFILE_SCALAR",
+            f"-I{generated / 'cpp' / 'include'}",
+            str(source),
+            "-o",
+            str(executable),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert compiled.returncode == 0, compiled.stderr
+    executed = subprocess.run(
+        (str(executable),), check=False, capture_output=True, text=True
+    )
+    assert executed.returncode == 0, executed.stderr
 
 
 def test_clang_vector_overlay_builds_and_runs_through_opt_in_target(

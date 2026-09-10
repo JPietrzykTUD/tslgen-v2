@@ -442,9 +442,9 @@ def test_backend_closure_seed_primitives_are_capability_owned() -> None:
     assert RUST_BACKEND.helper_manifest is RUST_HELPER_MANIFEST
     assert CPP_BACKEND.closure_seed_primitives(catalog) == ("load", "store")
     assert RUST_BACKEND.closure_seed_primitives(catalog) == (
+        "load",
         "store",
         "to_array",
-        "load",
     )
     renamed_catalog = FakeCatalog(
         {"read_contiguous", "write_contiguous", "to_array"}
