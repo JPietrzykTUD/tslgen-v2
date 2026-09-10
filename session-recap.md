@@ -30,7 +30,7 @@ workflow now share explicit ownership of the same product facts:
 All locally implementable slices in
 [`todo/v1-0.md`](todo/v1-0.md) are complete. The final `v1.0.0` tag is not yet
 authorized or justified: native SVE evidence, native RVV evidence against the
-actual CHORYS checkout, and the remote release-candidate run remain release
+packaged RVV artifact, and the remote release-candidate run remain release
 gates.
 
 ## 1. Funding research and proposal drafts
@@ -271,7 +271,7 @@ workflow-only special cases.
 
 QEMU establishes repeatable semantic coverage, not native performance or full
 hardware confidence. The final release therefore still requires one native
-SVE run and one native RVV run tied to the actual CHORYS consumer.
+SVE run and one native RVV run tied to the packaged target artifacts.
 
 ## 6. Generated C++ product quality
 
@@ -379,9 +379,16 @@ and is deterministic; its archive was 56,997,715 bytes in the recorded run.
 Native acceptance evidence is fail-closed. Versioned JSON schemas and templates
 bind an attestation to compiler inputs, the release bundle index, target
 manifest, machine and toolchain identities, commands, value/differential
-results, and the required showcase. RVV/CHORYS evidence must identify and run
-the actual CHORYS repository revision; a generated approximation cannot satisfy
-that gate.
+results, and the required showcase. The SVE and RVV records apply the same
+target-neutral evidence contract to their respective native machines.
+
+A later design review removed an unsupported CHORYS coupling from this release
+contract. CHORYS remains valid funding/project context, but there is no CHORYS
+checkout, kernel, or authoritative build contract in this repository. Commit
+`96cd2b5b` therefore makes native RVV evidence project-neutral, renames the
+existing generated fixture as a generic RVV downstream consumer, and retains
+its ordinary/checked scalar-oracle and no-write-canary coverage in required CI.
+Neither compiler semantics nor generated APIs changed.
 
 ## 10. PIVOT downstream evidence
 
@@ -438,6 +445,7 @@ produced:
 | Rust benchmark ratchet | 4,938 selected slots; evidence current |
 | PIVOT suite | 86 passed |
 | PIVOT mypy | 17 source files passed |
+| Project-neutral native-evidence correction | 22 release/CI tests and the RVV downstream consumer passed |
 | Whitespace/error-marker check | passed |
 
 Earlier slice-specific gates additionally exercised full generated projects,
@@ -498,6 +506,7 @@ The v1 branch contains the following reviewed slices after baseline
 | `3ae5e615` | Eliminate the remaining generated MSVC warning sources |
 | `cf1000b1` | Make exhaustive generated MSVC verification portable |
 | `f358e5b4` | Close generated shift compile-time return branches |
+| `96cd2b5b` | Keep native RVV evidence project-neutral |
 
 Every implementation slice was followed by a focused design review, fixes for
 identified boundary or maintainability problems, proportionate validation, and
@@ -509,13 +518,12 @@ The following are external execution gates, not locally hidden TODOs:
 
 1. Run the exact packaged SVE artifact on supported native SVE hardware and
    provide the schema-valid, traceable attestation.
-2. Run the exact packaged RVV artifact on supported native RVV hardware.
-3. Build and execute the declared showcase against the actual CHORYS repository
-   and revision, then provide the combined RVV/CHORYS native attestation.
-4. Run the non-publishing release-candidate workflow when explicitly authorized.
-5. Review all remote and native evidence. Fix branch-owned failures through the
+2. Run the exact packaged RVV artifact and declared showcase on supported native
+   RVV hardware, then provide the schema-valid, traceable attestation.
+3. Run the non-publishing release-candidate workflow when explicitly authorized.
+4. Review all remote and native evidence. Fix branch-owned failures through the
    same review/validation/commit loop.
-6. Only after every required gate is green, authorize and create the final
+5. Only after every required gate is green, authorize and create the final
    `v1.0.0` tag and allow the atomic workflow to publish it.
 
 The automatic run for `fe9c16db` passed editor, Python, coverage, Clang, Rust,
