@@ -156,14 +156,9 @@ class CppAlgorithmAdmissionPlan:
         )
         if self.admitted_families != expected_families:
             raise ValueError("C++ admitted families must derive from admitted forms")
-        expected_header_families = tuple(
-            family
-            for family in _CPP_SPLIT_ALGORITHM_SEMANTIC_FAMILIES
-            if family in self.admitted_semantic_families
-        )
         if tuple(
             header.semantic_family for header in self.family_headers
-        ) != expected_header_families:
+        ) != self.admitted_semantic_families:
             raise ValueError(
                 "C++ algorithm family headers must follow admitted semantic order"
             )
@@ -187,15 +182,6 @@ class CppAlgorithmAdmissionPlan:
         )
         return tuple(
             family for family in AlgorithmSemanticFamily if family in admitted
-        )
-
-    @property
-    def remaining_semantic_families(self) -> tuple[AlgorithmSemanticFamily, ...]:
-        split = frozenset(
-            header.semantic_family for header in self.family_headers
-        )
-        return tuple(
-            family for family in self.admitted_semantic_families if family not in split
         )
 
     @property
@@ -249,7 +235,7 @@ def plan_cpp_algorithm_admission(
         admitted_forms,
         tuple(
             _cpp_algorithm_family_header(family)
-            for family in _CPP_SPLIT_ALGORITHM_SEMANTIC_FAMILIES
+            for family in AlgorithmSemanticFamily
             if family in admitted_semantic_families
         ),
         tuple(
@@ -277,16 +263,6 @@ def _cpp_algorithm_family_header(
         if family is AlgorithmSemanticFamily.UTILITY
         else f"tsl_algorithm_detail_{family_name}.hpp",
     )
-
-
-_CPP_SPLIT_ALGORITHM_SEMANTIC_FAMILIES = (
-    AlgorithmSemanticFamily.UTILITY,
-    AlgorithmSemanticFamily.ITERATION,
-    AlgorithmSemanticFamily.PREDICATE,
-    AlgorithmSemanticFamily.COUNT,
-    AlgorithmSemanticFamily.SELECT,
-    AlgorithmSemanticFamily.TRANSFORM,
-)
 
 
 __all__ = (

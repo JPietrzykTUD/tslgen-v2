@@ -191,19 +191,10 @@ def _cpp_static_headers(model: CppProjectRenderModel) -> tuple[str, ...]:
         for header in model.algorithm.family_headers
         if header.detail_header is not None
     )
-    remaining_headers = (
-        (
-            "tsl_algorithm_detail_loops.hpp",
-            "tsl_algorithm_families.hpp",
-        )
-        if model.algorithm.remaining_semantic_families
-        else ()
-    )
     return (
         *_CPP_BASE_STATIC_HEADERS,
         *family_detail_headers,
         *(header.public_header for header in model.algorithm.family_headers),
-        *remaining_headers,
         "tsl_algorithm.hpp",
         "tsl_algorithm_checked.hpp",
         "tsl_x86_traits.hpp",
@@ -221,10 +212,6 @@ def _cpp_static_header(
         public_headers = tuple(
             family_header.public_header
             for family_header in model.algorithm.family_headers
-        ) + (
-            ("tsl_algorithm_families.hpp",)
-            if model.algorithm.remaining_semantic_families
-            else ()
         )
         return assets.fill(
             header,
@@ -245,16 +232,6 @@ def _cpp_static_header(
                     ),
                 ),
             )
-    if header == "tsl_algorithm_families.hpp":
-        return assets.fill(
-            header,
-            **cpp_algorithm_declaration_holes(
-                _cpp_algorithm_form_names(
-                    model.algorithm.remaining_semantic_families
-                ),
-                include_aliases=False,
-            ),
-        )
     holes = cpp_static_declaration_holes(header)
     return assets.fill(header, **holes) if holes else assets.text(header)
 

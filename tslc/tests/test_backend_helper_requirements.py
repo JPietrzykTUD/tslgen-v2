@@ -135,18 +135,7 @@ def test_cpp_algorithm_admission_is_granular_around_compaction() -> None:
     assert plan.supported
     assert tuple(
         header.semantic_family for header in plan.family_headers
-    ) == (
-        AlgorithmSemanticFamily.UTILITY,
-        AlgorithmSemanticFamily.ITERATION,
-        AlgorithmSemanticFamily.PREDICATE,
-        AlgorithmSemanticFamily.COUNT,
-        AlgorithmSemanticFamily.SELECT,
-        AlgorithmSemanticFamily.TRANSFORM,
-    )
-    assert plan.remaining_semantic_families == (
-        AlgorithmSemanticFamily.CONSUME,
-        AlgorithmSemanticFamily.AGGREGATE,
-    )
+    ) == tuple(AlgorithmSemanticFamily)
     assert "transform_unary" in plan.admitted_family_names
     assert "predicate_unary" in plan.admitted_family_names
     absent = {
