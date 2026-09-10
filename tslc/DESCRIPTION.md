@@ -577,11 +577,10 @@ count. Neutral lowering never constructs a C++ or Rust lane-count expression.
   explicitly re-exports public policy/representation types, mask layouts,
   kernel traits, and callable algorithms from private generated children.
   Representation, mask, kernel-trait, and range/address-validation substrate
-  modules depend only on shared substrate; the temporary family implementation
-  module may consume them but is never imported by them. Iteration, predicate,
-  count, selection/index, and transform implementations already have focused
-  private children; consume and aggregate remain in the temporary family owner
-  until their ordered layout slices move them.
+  modules depend only on shared substrate; semantic-family modules may consume
+  them but are never imported by them. Utility, iteration, predicate, count,
+  selection/index, transform, consume, and aggregate implementations each have
+  one focused private child derived in semantic-family order.
 
 The public safety surface is a typed projection, not a renderer convention.
 [backend/checked_api.py](src/tslc/backend/checked_api.py) admits a `_checked`

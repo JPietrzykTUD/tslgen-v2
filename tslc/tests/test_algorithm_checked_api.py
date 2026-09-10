@@ -116,12 +116,14 @@ def test_generated_checked_surface_exactly_projects_the_registry() -> None:
     rust = "\n".join(
         assets.fill(name, **holes)
         for name in (
+            "tsl_algorithm_utility.rs",
             "tsl_algorithm_iteration.rs",
             "tsl_algorithm_predicate.rs",
             "tsl_algorithm_count.rs",
             "tsl_algorithm_select.rs",
             "tsl_algorithm_transform.rs",
-            "tsl_algorithm_families.rs",
+            "tsl_algorithm_consume.rs",
+            "tsl_algorithm_aggregate.rs",
         )
     )
     profile = "\n".join(

@@ -16,19 +16,9 @@ from tslc.diagnostics import has_errors
 
 def test_root_algorithm_exports_are_projected_from_exact_declarations() -> None:
     root = rust_algorithm_facade_root_module(load_default_render_assets())
-    split_families = (
-        AlgorithmSemanticFamily.ITERATION,
-        AlgorithmSemanticFamily.PREDICATE,
-        AlgorithmSemanticFamily.COUNT,
-        AlgorithmSemanticFamily.SELECT,
-        AlgorithmSemanticFamily.TRANSFORM,
-    )
-    remaining_families = tuple(
-        family for family in AlgorithmSemanticFamily if family not in split_families
-    )
     export_groups = tuple(
-        (family.value, (family,)) for family in split_families
-    ) + (("families", remaining_families),)
+        (family.value, (family,)) for family in AlgorithmSemanticFamily
+    )
 
     projected_names: list[str] = []
     for module_name, families in export_groups:
@@ -68,12 +58,7 @@ def test_root_algorithm_uses_private_one_way_substrate_modules(
         "masks",
         "kernel_traits",
         "validation",
-        "iteration",
-        "predicate",
-        "count",
-        "select",
-        "transform",
-        "families",
+        *(family.value for family in AlgorithmSemanticFamily),
     )
 
     for module_name in private_modules:
@@ -83,21 +68,27 @@ def test_root_algorithm_uses_private_one_way_substrate_modules(
     assert "pub use self::representation::{" in root
     assert "pub use self::masks::{" in root
     assert "pub use self::kernel_traits::{" in root
-    assert "pub use self::families::{" in root
+    for family in AlgorithmSemanticFamily:
+        assert f"pub use self::{family.value}::{{" in root
+    assert "families" not in root
 
     substrate_modules = ("representation", "masks", "kernel_traits", "validation")
     substrate = tuple(
         artifacts[f"rust/src/tsl_algorithm/{module_name}.rs"]
         for module_name in substrate_modules
     )
-    assert all("super::families" not in content for content in substrate)
-    assert all("tsl_algorithm::families" not in content for content in substrate)
-    assert "use super::*;" in artifacts["rust/src/tsl_algorithm/families.rs"]
+    for family in AlgorithmSemanticFamily:
+        assert all(f"super::{family.value}" not in content for content in substrate)
+    utility = artifacts["rust/src/tsl_algorithm/utility.rs"]
     iteration = artifacts["rust/src/tsl_algorithm/iteration.rs"]
     predicate = artifacts["rust/src/tsl_algorithm/predicate.rs"]
     count = artifacts["rust/src/tsl_algorithm/count.rs"]
     selection = artifacts["rust/src/tsl_algorithm/select.rs"]
     transform = artifacts["rust/src/tsl_algorithm/transform.rs"]
+    consume = artifacts["rust/src/tsl_algorithm/consume.rs"]
+    aggregate = artifacts["rust/src/tsl_algorithm/aggregate.rs"]
+    assert "integral_mask_chunk_count" in utility
+    assert "for_each_chunk_raw" not in utility
     assert "for_each_chunk_raw" in iteration
     assert "predicate_unary_raw" not in iteration
     assert "predicate_unary_raw" in predicate
@@ -111,15 +102,19 @@ def test_root_algorithm_uses_private_one_way_substrate_modules(
     assert "transform_where_binary_raw" in transform
     assert "transform_masked_binary_mask_layout_raw" in transform
     assert "consume_selected_unary_raw" not in transform
+    assert "consume_selected_unary_raw" in consume
+    assert "consume_masked_binary_raw" in consume
+    assert "aggregate_selected_unary_raw" not in consume
+    assert "aggregate_selected_unary_raw" in aggregate
+    assert "aggregate_masked_binary_raw" in aggregate
+    assert "consume_selected_unary_raw" not in aggregate
+    assert "rust/src/tsl_algorithm/families.rs" not in artifacts
 
     public_inventory = artifacts["rust/public-api.json"]
     assert "tsl_algorithm::representation" not in public_inventory
     assert "tsl_algorithm::masks" not in public_inventory
     assert "tsl_algorithm::kernel_traits" not in public_inventory
     assert "tsl_algorithm::validation" not in public_inventory
-    assert "tsl_algorithm::iteration" not in public_inventory
-    assert "tsl_algorithm::predicate" not in public_inventory
-    assert "tsl_algorithm::count" not in public_inventory
-    assert "tsl_algorithm::select" not in public_inventory
-    assert "tsl_algorithm::transform" not in public_inventory
+    for family in AlgorithmSemanticFamily:
+        assert f"tsl_algorithm::{family.value}" not in public_inventory
     assert "tsl_algorithm::families" not in public_inventory

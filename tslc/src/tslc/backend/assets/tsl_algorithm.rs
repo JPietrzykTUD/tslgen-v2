@@ -31,6 +31,12 @@ use self::validation::{chunk_count_for_lanes, selected_address_error};
 pub(crate) use self::validation::{selected_row_pointer, selected_row_scale};
 
 #[doc(hidden)]
+mod utility;
+pub use self::utility::{
+@{algorithm_utility_reexports}
+};
+
+#[doc(hidden)]
 mod iteration;
 pub use self::iteration::{
 @{algorithm_iteration_reexports}
@@ -61,7 +67,13 @@ pub use self::transform::{
 };
 
 #[doc(hidden)]
-mod families;
-pub use self::families::{
-@{algorithm_family_reexports}
+mod consume;
+pub use self::consume::{
+@{algorithm_consume_reexports}
+};
+
+#[doc(hidden)]
+mod aggregate;
+pub use self::aggregate::{
+@{algorithm_aggregate_reexports}
 };

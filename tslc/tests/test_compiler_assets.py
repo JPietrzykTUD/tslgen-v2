@@ -178,12 +178,14 @@ def test_rust_project_renderer_consumes_injected_assets() -> None:
             "tsl_algorithm_masks.rs": "// injected masks\n",
             "tsl_algorithm_kernel_traits.rs": "// injected kernels\n",
             "tsl_algorithm_validation.rs": "// injected validation\n",
+            "tsl_algorithm_utility.rs": "// injected utility\n",
             "tsl_algorithm_iteration.rs": "// injected iteration\n",
             "tsl_algorithm_predicate.rs": "// injected predicate\n",
             "tsl_algorithm_count.rs": "// injected count\n",
             "tsl_algorithm_select.rs": "// injected select\n",
             "tsl_algorithm_transform.rs": "// injected transform\n",
-            "tsl_algorithm_families.rs": "// injected families\n",
+            "tsl_algorithm_consume.rs": "// injected consume\n",
+            "tsl_algorithm_aggregate.rs": "// injected aggregate\n",
             "tsl_rust_cpu_identity.rs": "// injected CPU identity\n",
             "tsl_rust_policy_json.rs": "// injected policy JSON\n",
             "tsl_rust_variant_policy.rs": "// injected policy consumer\n",
@@ -245,6 +247,9 @@ def test_rust_project_renderer_consumes_injected_assets() -> None:
     assert rendered["rust/src/tsl_algorithm/validation.rs"] == (
         "// injected validation\n"
     )
+    assert rendered["rust/src/tsl_algorithm/utility.rs"] == (
+        "// injected utility\n"
+    )
     assert rendered["rust/src/tsl_algorithm/iteration.rs"] == (
         "// injected iteration\n"
     )
@@ -256,8 +261,11 @@ def test_rust_project_renderer_consumes_injected_assets() -> None:
     assert rendered["rust/src/tsl_algorithm/transform.rs"] == (
         "// injected transform\n"
     )
-    assert rendered["rust/src/tsl_algorithm/families.rs"] == (
-        "// injected families\n"
+    assert rendered["rust/src/tsl_algorithm/consume.rs"] == (
+        "// injected consume\n"
+    )
+    assert rendered["rust/src/tsl_algorithm/aggregate.rs"] == (
+        "// injected aggregate\n"
     )
     assert rendered["rust/src/tsl_facade.rs"] == "// injected facade\n\n"
     assert rendered["rust/src/tsl_rust_cpu_identity.rs"] == (

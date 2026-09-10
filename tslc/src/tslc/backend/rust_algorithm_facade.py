@@ -37,29 +37,21 @@ def rust_algorithm_facade_root_module(assets: RenderAssets) -> str:
         f"algorithm_{family.value}_reexports": _rust_algorithm_reexports(
             rust_algorithm_facade_export_names((family,))
         )
-        for family, _, _ in _RUST_ALGORITHM_SPLIT_FAMILY_ASSETS
+        for family, _, _ in _RUST_ALGORITHM_FAMILY_ASSETS
     }
-    return assets.fill(
-        "tsl_algorithm.rs",
-        **family_exports,
-        algorithm_family_reexports=_rust_algorithm_reexports(
-            rust_algorithm_facade_export_names(
-                _RUST_ALGORITHM_REMAINING_FAMILIES
-            )
-        ),
-    )
+    return assets.fill("tsl_algorithm.rs", **family_exports)
 
 
 def rust_algorithm_facade_child_modules(
     assets: RenderAssets,
 ) -> tuple[RustAlgorithmFacadeChildModule, ...]:
-    """Render private substrate modules followed by the temporary family owner."""
+    """Render private substrate modules followed by ordered semantic families."""
 
     modules = tuple(
         RustAlgorithmFacadeChildModule(module_name, assets.text(asset_name))
         for module_name, asset_name in _RUST_ALGORITHM_SUBSTRATE_ASSETS
     )
-    split_families = tuple(
+    families = tuple(
         RustAlgorithmFacadeChildModule(
             module_name,
             assets.fill(
@@ -69,20 +61,9 @@ def rust_algorithm_facade_child_modules(
                 ),
             ),
         )
-        for family, module_name, asset_name in _RUST_ALGORITHM_SPLIT_FAMILY_ASSETS
+        for family, module_name, asset_name in _RUST_ALGORITHM_FAMILY_ASSETS
     )
-    families = RustAlgorithmFacadeChildModule(
-        "families",
-        assets.fill(
-            "tsl_algorithm_families.rs",
-            **rust_algorithm_contract_holes(
-                admitted_form_names=_rust_algorithm_form_names(
-                    _RUST_ALGORITHM_REMAINING_FAMILIES
-                )
-            ),
-        ),
-    )
-    return (*modules, *split_families, families)
+    return (*modules, *families)
 
 
 def rust_algorithm_facade_export_names(
@@ -130,32 +111,9 @@ _RUST_ALGORITHM_SUBSTRATE_ASSETS = (
     ("kernel_traits", "tsl_algorithm_kernel_traits.rs"),
     ("validation", "tsl_algorithm_validation.rs"),
 )
-_RUST_ALGORITHM_SPLIT_FAMILY_ASSETS = (
-    (
-        AlgorithmSemanticFamily.ITERATION,
-        "iteration",
-        "tsl_algorithm_iteration.rs",
-    ),
-    (
-        AlgorithmSemanticFamily.PREDICATE,
-        "predicate",
-        "tsl_algorithm_predicate.rs",
-    ),
-    (AlgorithmSemanticFamily.COUNT, "count", "tsl_algorithm_count.rs"),
-    (AlgorithmSemanticFamily.SELECT, "select", "tsl_algorithm_select.rs"),
-    (
-        AlgorithmSemanticFamily.TRANSFORM,
-        "transform",
-        "tsl_algorithm_transform.rs",
-    ),
-)
-_RUST_ALGORITHM_REMAINING_FAMILIES = tuple(
-    family
+_RUST_ALGORITHM_FAMILY_ASSETS = tuple(
+    (family, family.value, f"tsl_algorithm_{family.value}.rs")
     for family in AlgorithmSemanticFamily
-    if family
-    not in {
-        entry[0] for entry in _RUST_ALGORITHM_SPLIT_FAMILY_ASSETS
-    }
 )
 
 
