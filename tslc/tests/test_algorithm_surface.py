@@ -26,6 +26,7 @@ from tslc.backend.cpp_algorithm_public_declarations import (
     cpp_algorithm_form_support,
     cpp_algorithm_public_declarations,
     cpp_iteration_predicate_count_declarations,
+    cpp_selection_declarations,
 )
 from tslc.backend.public_declarations import PublicDeclarationKind
 from tslc.backend.rust_algorithm_contracts import (
@@ -37,6 +38,7 @@ from tslc.backend.rust_algorithm_public_declarations import (
     rust_iteration_predicate_count_function_declarations,
     rust_profile_algorithm_declaration_holes,
     rust_profile_algorithm_public_declarations,
+    rust_selection_function_declarations,
 )
 
 
@@ -209,6 +211,104 @@ def test_first_slice_projectors_accept_additive_semantic_forms() -> None:
                 f"{form.name}_checked",
                 f"{form.name}_raw",
             ]
+
+
+def test_selection_forms_project_to_existing_exact_records_and_holes() -> None:
+    cpp = cpp_algorithm_public_declarations()
+    cpp_holes = cpp_algorithm_declaration_holes()
+    reachability = ("crate", "profile", "selection:test", "algo")
+    rust = rust_profile_algorithm_public_declarations(reachability)
+    rust_holes = rust_profile_algorithm_declaration_holes()
+
+    for form in ALGORITHM_CALLABLE_FORMS:
+        if form.family.semantic_family is not AlgorithmSemanticFamily.SELECT:
+            continue
+        if form.mask_form is AlgorithmMaskForm.DEFAULT:
+            cpp_projected = cpp_selection_declarations(form)
+            assert cpp_projected == tuple(
+                declaration
+                for declaration in cpp
+                if declaration.kind is PublicDeclarationKind.FUNCTION
+                and declaration.name == form.family.name
+            )
+            assert all(
+                f"algorithm_declaration_{declaration.name}_"
+                f"{declaration.identity.rsplit('-', 1)[-1]}" in cpp_holes
+                for declaration in cpp_projected
+            )
+
+        rust_projected = rust_selection_function_declarations(
+            form,
+            reachability,
+        )
+        projected_identities = {
+            declaration.identity for declaration in rust_projected
+        }
+        assert rust_projected == tuple(
+            declaration
+            for declaration in rust
+            if declaration.identity in projected_identities
+        )
+        assert all(
+            f"profile_algorithm_declaration_{declaration.name}" in rust_holes
+            for declaration in rust_projected
+        )
+
+
+def test_selection_projectors_accept_masked_index_and_scaled_forms() -> None:
+    masked_indices = AlgorithmSurfaceFamily(
+        "synthetic_select_masked_indices_binary",
+        AlgorithmSemanticFamily.SELECT,
+        AlgorithmArity.BINARY,
+        AlgorithmShape.MASKED_INDICES,
+        AlgorithmResultKind.COUNT,
+        has_contract=True,
+        has_mask_layout_form=True,
+    )
+    selected_indices = AlgorithmSurfaceFamily(
+        "synthetic_select_selected_indices_unary",
+        AlgorithmSemanticFamily.SELECT,
+        AlgorithmArity.UNARY,
+        AlgorithmShape.SELECTED_INDICES,
+        AlgorithmResultKind.COUNT,
+        has_contract=True,
+        has_scaled_form=True,
+    )
+    reachability = ("crate", "profile", "selection:synthetic", "algo")
+
+    masked_default, masked_layout = masked_indices.callable_forms
+    cpp_masked = cpp_selection_declarations(masked_default)
+    assert len(cpp_masked) == 4
+    assert any(
+        parameter.name == "masks" and parameter.type_spelling == "const MaskRange&"
+        for parameter in cpp_masked[-1].parameters
+    )
+    assert [
+        declaration.name
+        for declaration in rust_selection_function_declarations(
+            masked_layout,
+            reachability,
+        )
+    ] == [
+        "synthetic_select_masked_indices_binary_mask_layout_checked",
+        "synthetic_select_masked_indices_binary_mask_layout_raw",
+    ]
+
+    selected = selected_indices.callable_forms[0]
+    cpp_selected = cpp_selection_declarations(selected)
+    assert len(cpp_selected) == 2
+    assert cpp_selected[0].template_parameters[1].name == "Scale"
+    assert [
+        declaration.name
+        for declaration in rust_selection_function_declarations(
+            selected,
+            reachability,
+        )
+    ] == [
+        "synthetic_select_selected_indices_unary_checked",
+        "synthetic_select_selected_indices_unary_raw",
+        "synthetic_select_selected_indices_unary_scaled_raw",
+    ]
 
 
 def test_unregistered_form_is_explicitly_unsupported_by_both_backends() -> None:

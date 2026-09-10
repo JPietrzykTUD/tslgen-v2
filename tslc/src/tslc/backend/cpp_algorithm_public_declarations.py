@@ -370,6 +370,218 @@ def cpp_iteration_predicate_count_declarations(
     return tuple(spec.declaration() for spec in specs)
 
 
+def _cpp_selection_templates(
+    form: AlgorithmCallableForm,
+    *,
+    pointer: bool,
+    fixed: bool,
+) -> tuple[CppTemplateParameter, ...]:
+    parameters = [_cpp_parallelism_parameter(fixed=fixed)]
+    if form.family.shape is AlgorithmShape.SELECTED_INDICES:
+        parameters.append(_cpp_value_parameter("Scale", default="0"))
+    else:
+        parameters.append(
+            _cpp_type_parameter("Alignment", default="alignment::detect")
+        )
+    if form.family.shape in {
+        AlgorithmShape.MASKED,
+        AlgorithmShape.MASKED_INDICES,
+    }:
+        parameters.append(
+            _cpp_type_parameter("MaskLayout", default="mask_layout::integral")
+        )
+    parameters.append(_cpp_type_parameter("Op"))
+
+    if pointer:
+        parameters.append(_cpp_type_parameter("T"))
+    elif form.family.arity is AlgorithmArity.UNARY:
+        parameters.append(_cpp_type_parameter("InputRange"))
+    else:
+        parameters.extend(
+            (
+                _cpp_type_parameter("LeftRange"),
+                _cpp_type_parameter("RightRange"),
+            )
+        )
+
+    if form.family.shape in {
+        AlgorithmShape.MASKED,
+        AlgorithmShape.MASKED_INDICES,
+    } and not pointer:
+        parameters.append(_cpp_type_parameter("MaskRange"))
+    if form.family.shape in {
+        AlgorithmShape.INDICES,
+        AlgorithmShape.MASKED_INDICES,
+    }:
+        parameters.append(
+            _cpp_type_parameter("IndexT" if pointer else "IndexRange")
+        )
+    elif form.family.shape is AlgorithmShape.SELECTED_INDICES:
+        parameters.extend(
+            (
+                _cpp_type_parameter(
+                    "InputIndexT" if pointer else "InputIndexRange"
+                ),
+                _cpp_type_parameter(
+                    "OutputIndexT" if pointer else "OutputIndexRange"
+                ),
+            )
+        )
+    elif not pointer:
+        parameters.append(_cpp_type_parameter("OutputRange"))
+    return tuple(parameters)
+
+
+def _cpp_selection_parameters(
+    form: AlgorithmCallableForm,
+    *,
+    pointer: bool,
+    fixed: bool,
+) -> tuple[CppPublicParameter, ...]:
+    parameters = [_cpp_algorithm_parameter("predicate", "Op&&")]
+    if form.family.arity is AlgorithmArity.UNARY:
+        parameters.append(
+            _cpp_algorithm_parameter(
+                "input", "const T*" if pointer else "const InputRange&"
+            )
+        )
+    else:
+        parameters.extend(
+            (
+                _cpp_algorithm_parameter(
+                    "left", "const T*" if pointer else "const LeftRange&"
+                ),
+                _cpp_algorithm_parameter(
+                    "right", "const T*" if pointer else "const RightRange&"
+                ),
+            )
+        )
+
+    if form.family.shape in {
+        AlgorithmShape.MASKED,
+        AlgorithmShape.MASKED_INDICES,
+    }:
+        if pointer:
+            storage = (
+                "fixed_mask_storage_type<MaskLayout, ParallelN, T>"
+                if fixed
+                else (
+                    "typename detail::mask_for<MaskLayout, "
+                    "Parallelism, T>::type"
+                )
+            )
+            mask_type = f"const {storage}*"
+        else:
+            mask_type = "const MaskRange&"
+        parameters.append(_cpp_algorithm_parameter("masks", mask_type))
+
+    if form.family.shape in {
+        AlgorithmShape.PLAIN,
+        AlgorithmShape.MASKED,
+    }:
+        parameters.append(
+            _cpp_algorithm_parameter(
+                "output", "T*" if pointer else "OutputRange&"
+            )
+        )
+    elif form.family.shape in {
+        AlgorithmShape.INDICES,
+        AlgorithmShape.MASKED_INDICES,
+    }:
+        parameters.append(
+            _cpp_algorithm_parameter(
+                "indices", "IndexT*" if pointer else "IndexRange&"
+            )
+        )
+    else:
+        parameters.extend(
+            (
+                _cpp_algorithm_parameter(
+                    "input_indices",
+                    "const InputIndexT*"
+                    if pointer
+                    else "const InputIndexRange&",
+                ),
+                _cpp_algorithm_parameter(
+                    "output_indices",
+                    "OutputIndexT*" if pointer else "OutputIndexRange&",
+                ),
+            )
+        )
+
+    if pointer:
+        count_name = (
+            "selected_count"
+            if form.family.shape is AlgorithmShape.SELECTED_INDICES
+            else "count"
+        )
+        parameters.append(_cpp_algorithm_parameter(count_name, "std::size_t"))
+    return tuple(parameters)
+
+
+def _cpp_selection_form_specs(
+    form: AlgorithmCallableForm,
+) -> tuple[CppAlgorithmDeclarationSpec, ...]:
+    specs: list[CppAlgorithmDeclarationSpec] = []
+    fixed_options = (
+        (True,)
+        if form.family.shape is AlgorithmShape.SELECTED_INDICES
+        else (False, True)
+    )
+    for pointer in (True, False):
+        for fixed in fixed_options:
+            overload_index = (2 if fixed else 4) if pointer else (1 if fixed else 3)
+            specs.append(
+                _cpp_algorithm_spec(
+                    form,
+                    overload_index,
+                    _cpp_selection_templates(
+                        form,
+                        pointer=pointer,
+                        fixed=fixed,
+                    ),
+                    _cpp_selection_parameters(
+                        form,
+                        pointer=pointer,
+                        fixed=fixed,
+                    ),
+                    "std::size_t",
+                )
+            )
+    return tuple(specs)
+
+
+def _cpp_selection_specs() -> tuple[CppAlgorithmDeclarationSpec, ...]:
+    return tuple(
+        spec
+        for form in ALGORITHM_CALLABLE_FORMS
+        if form.family.semantic_family is AlgorithmSemanticFamily.SELECT
+        and form.mask_form is AlgorithmMaskForm.DEFAULT
+        for spec in _cpp_selection_form_specs(form)
+    )
+
+
+def cpp_selection_declarations(
+    form: AlgorithmCallableForm,
+) -> tuple[CppPublicDeclaration, ...]:
+    """Project one selection form into exact C++ function declarations."""
+
+    if (
+        form.family.semantic_family is not AlgorithmSemanticFamily.SELECT
+        or form.mask_form is not AlgorithmMaskForm.DEFAULT
+    ):
+        raise ValueError("form is not a default C++ selection form")
+    if form.family.shape not in {
+        AlgorithmShape.PLAIN,
+        AlgorithmShape.MASKED,
+        AlgorithmShape.INDICES,
+        AlgorithmShape.MASKED_INDICES,
+        AlgorithmShape.SELECTED_INDICES,
+    }:
+        raise ValueError("C++ selection form has an unsupported shape")
+    return tuple(spec.declaration() for spec in _cpp_selection_form_specs(form))
+
+
 _FUNCTION_SPECS: tuple[CppAlgorithmDeclarationSpec, ...] = (
     CppAlgorithmDeclarationSpec(
         hole='algorithm_declaration_integral_mask_chunk_count_2',
@@ -996,739 +1208,7 @@ _FUNCTION_SPECS: tuple[CppAlgorithmDeclarationSpec, ...] = (
         result_type='void',
     ),
     *_cpp_count_specs(selected=False),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_unary_4',
-        name='select_unary',
-        overload_index=4,
-        template_parameters=(
-            CppTemplateParameter(name='Parallelism', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='::tsl::dataparallel::native', constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='input', type_spelling='const T*', role='algorithm-parameter:input'),
-            CppPublicParameter(name='output', type_spelling='T*', role='algorithm-parameter:output'),
-            CppPublicParameter(name='count', type_spelling='std::size_t', role='algorithm-parameter:count'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_unary_2',
-        name='select_unary',
-        overload_index=2,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='input', type_spelling='const T*', role='algorithm-parameter:input'),
-            CppPublicParameter(name='output', type_spelling='T*', role='algorithm-parameter:output'),
-            CppPublicParameter(name='count', type_spelling='std::size_t', role='algorithm-parameter:count'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_unary_3',
-        name='select_unary',
-        overload_index=3,
-        template_parameters=(
-            CppTemplateParameter(name='Parallelism', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='::tsl::dataparallel::native', constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='InputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='OutputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='input', type_spelling='const InputRange&', role='algorithm-parameter:input'),
-            CppPublicParameter(name='output', type_spelling='OutputRange&', role='algorithm-parameter:output'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_unary_1',
-        name='select_unary',
-        overload_index=1,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='InputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='OutputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='input', type_spelling='const InputRange&', role='algorithm-parameter:input'),
-            CppPublicParameter(name='output', type_spelling='OutputRange&', role='algorithm-parameter:output'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_binary_4',
-        name='select_binary',
-        overload_index=4,
-        template_parameters=(
-            CppTemplateParameter(name='Parallelism', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='::tsl::dataparallel::native', constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='left', type_spelling='const T*', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const T*', role='algorithm-parameter:right'),
-            CppPublicParameter(name='output', type_spelling='T*', role='algorithm-parameter:output'),
-            CppPublicParameter(name='count', type_spelling='std::size_t', role='algorithm-parameter:count'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_binary_2',
-        name='select_binary',
-        overload_index=2,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='left', type_spelling='const T*', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const T*', role='algorithm-parameter:right'),
-            CppPublicParameter(name='output', type_spelling='T*', role='algorithm-parameter:output'),
-            CppPublicParameter(name='count', type_spelling='std::size_t', role='algorithm-parameter:count'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_binary_3',
-        name='select_binary',
-        overload_index=3,
-        template_parameters=(
-            CppTemplateParameter(name='Parallelism', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='::tsl::dataparallel::native', constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='LeftRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='RightRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='OutputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='left', type_spelling='const LeftRange&', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const RightRange&', role='algorithm-parameter:right'),
-            CppPublicParameter(name='output', type_spelling='OutputRange&', role='algorithm-parameter:output'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_binary_1',
-        name='select_binary',
-        overload_index=1,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='LeftRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='RightRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='OutputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='left', type_spelling='const LeftRange&', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const RightRange&', role='algorithm-parameter:right'),
-            CppPublicParameter(name='output', type_spelling='OutputRange&', role='algorithm-parameter:output'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_masked_unary_4',
-        name='select_masked_unary',
-        overload_index=4,
-        template_parameters=(
-            CppTemplateParameter(name='Parallelism', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='::tsl::dataparallel::native', constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='input', type_spelling='const T*', role='algorithm-parameter:input'),
-            CppPublicParameter(name='masks', type_spelling='const typename detail::mask_for<MaskLayout, Parallelism, T>::type*', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='output', type_spelling='T*', role='algorithm-parameter:output'),
-            CppPublicParameter(name='count', type_spelling='std::size_t', role='algorithm-parameter:count'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_masked_unary_2',
-        name='select_masked_unary',
-        overload_index=2,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='input', type_spelling='const T*', role='algorithm-parameter:input'),
-            CppPublicParameter(name='masks', type_spelling='const fixed_mask_storage_type<MaskLayout, ParallelN, T>*', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='output', type_spelling='T*', role='algorithm-parameter:output'),
-            CppPublicParameter(name='count', type_spelling='std::size_t', role='algorithm-parameter:count'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_masked_unary_3',
-        name='select_masked_unary',
-        overload_index=3,
-        template_parameters=(
-            CppTemplateParameter(name='Parallelism', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='::tsl::dataparallel::native', constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='InputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='MaskRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='OutputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='input', type_spelling='const InputRange&', role='algorithm-parameter:input'),
-            CppPublicParameter(name='masks', type_spelling='const MaskRange&', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='output', type_spelling='OutputRange&', role='algorithm-parameter:output'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_masked_unary_1',
-        name='select_masked_unary',
-        overload_index=1,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='InputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='MaskRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='OutputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='input', type_spelling='const InputRange&', role='algorithm-parameter:input'),
-            CppPublicParameter(name='masks', type_spelling='const MaskRange&', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='output', type_spelling='OutputRange&', role='algorithm-parameter:output'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_masked_binary_4',
-        name='select_masked_binary',
-        overload_index=4,
-        template_parameters=(
-            CppTemplateParameter(name='Parallelism', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='::tsl::dataparallel::native', constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='left', type_spelling='const T*', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const T*', role='algorithm-parameter:right'),
-            CppPublicParameter(name='masks', type_spelling='const typename detail::mask_for<MaskLayout, Parallelism, T>::type*', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='output', type_spelling='T*', role='algorithm-parameter:output'),
-            CppPublicParameter(name='count', type_spelling='std::size_t', role='algorithm-parameter:count'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_masked_binary_2',
-        name='select_masked_binary',
-        overload_index=2,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='left', type_spelling='const T*', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const T*', role='algorithm-parameter:right'),
-            CppPublicParameter(name='masks', type_spelling='const fixed_mask_storage_type<MaskLayout, ParallelN, T>*', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='output', type_spelling='T*', role='algorithm-parameter:output'),
-            CppPublicParameter(name='count', type_spelling='std::size_t', role='algorithm-parameter:count'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_masked_binary_3',
-        name='select_masked_binary',
-        overload_index=3,
-        template_parameters=(
-            CppTemplateParameter(name='Parallelism', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='::tsl::dataparallel::native', constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='LeftRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='RightRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='MaskRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='OutputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='left', type_spelling='const LeftRange&', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const RightRange&', role='algorithm-parameter:right'),
-            CppPublicParameter(name='masks', type_spelling='const MaskRange&', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='output', type_spelling='OutputRange&', role='algorithm-parameter:output'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_masked_binary_1',
-        name='select_masked_binary',
-        overload_index=1,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='LeftRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='RightRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='MaskRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='OutputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='left', type_spelling='const LeftRange&', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const RightRange&', role='algorithm-parameter:right'),
-            CppPublicParameter(name='masks', type_spelling='const MaskRange&', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='output', type_spelling='OutputRange&', role='algorithm-parameter:output'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_indices_unary_4',
-        name='select_indices_unary',
-        overload_index=4,
-        template_parameters=(
-            CppTemplateParameter(name='Parallelism', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='::tsl::dataparallel::native', constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='IndexT', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='input', type_spelling='const T*', role='algorithm-parameter:input'),
-            CppPublicParameter(name='indices', type_spelling='IndexT*', role='algorithm-parameter:indices'),
-            CppPublicParameter(name='count', type_spelling='std::size_t', role='algorithm-parameter:count'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_indices_unary_2',
-        name='select_indices_unary',
-        overload_index=2,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='IndexT', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='input', type_spelling='const T*', role='algorithm-parameter:input'),
-            CppPublicParameter(name='indices', type_spelling='IndexT*', role='algorithm-parameter:indices'),
-            CppPublicParameter(name='count', type_spelling='std::size_t', role='algorithm-parameter:count'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_indices_unary_3',
-        name='select_indices_unary',
-        overload_index=3,
-        template_parameters=(
-            CppTemplateParameter(name='Parallelism', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='::tsl::dataparallel::native', constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='InputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='IndexRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='input', type_spelling='const InputRange&', role='algorithm-parameter:input'),
-            CppPublicParameter(name='indices', type_spelling='IndexRange&', role='algorithm-parameter:indices'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_indices_unary_1',
-        name='select_indices_unary',
-        overload_index=1,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='InputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='IndexRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='input', type_spelling='const InputRange&', role='algorithm-parameter:input'),
-            CppPublicParameter(name='indices', type_spelling='IndexRange&', role='algorithm-parameter:indices'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_indices_binary_4',
-        name='select_indices_binary',
-        overload_index=4,
-        template_parameters=(
-            CppTemplateParameter(name='Parallelism', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='::tsl::dataparallel::native', constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='IndexT', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='left', type_spelling='const T*', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const T*', role='algorithm-parameter:right'),
-            CppPublicParameter(name='indices', type_spelling='IndexT*', role='algorithm-parameter:indices'),
-            CppPublicParameter(name='count', type_spelling='std::size_t', role='algorithm-parameter:count'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_indices_binary_2',
-        name='select_indices_binary',
-        overload_index=2,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='IndexT', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='left', type_spelling='const T*', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const T*', role='algorithm-parameter:right'),
-            CppPublicParameter(name='indices', type_spelling='IndexT*', role='algorithm-parameter:indices'),
-            CppPublicParameter(name='count', type_spelling='std::size_t', role='algorithm-parameter:count'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_indices_binary_3',
-        name='select_indices_binary',
-        overload_index=3,
-        template_parameters=(
-            CppTemplateParameter(name='Parallelism', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='::tsl::dataparallel::native', constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='LeftRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='RightRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='IndexRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='left', type_spelling='const LeftRange&', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const RightRange&', role='algorithm-parameter:right'),
-            CppPublicParameter(name='indices', type_spelling='IndexRange&', role='algorithm-parameter:indices'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_indices_binary_1',
-        name='select_indices_binary',
-        overload_index=1,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='LeftRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='RightRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='IndexRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='left', type_spelling='const LeftRange&', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const RightRange&', role='algorithm-parameter:right'),
-            CppPublicParameter(name='indices', type_spelling='IndexRange&', role='algorithm-parameter:indices'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_masked_indices_unary_4',
-        name='select_masked_indices_unary',
-        overload_index=4,
-        template_parameters=(
-            CppTemplateParameter(name='Parallelism', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='::tsl::dataparallel::native', constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='IndexT', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='input', type_spelling='const T*', role='algorithm-parameter:input'),
-            CppPublicParameter(name='masks', type_spelling='const typename detail::mask_for<MaskLayout, Parallelism, T>::type*', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='indices', type_spelling='IndexT*', role='algorithm-parameter:indices'),
-            CppPublicParameter(name='count', type_spelling='std::size_t', role='algorithm-parameter:count'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_masked_indices_unary_2',
-        name='select_masked_indices_unary',
-        overload_index=2,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='IndexT', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='input', type_spelling='const T*', role='algorithm-parameter:input'),
-            CppPublicParameter(name='masks', type_spelling='const fixed_mask_storage_type<MaskLayout, ParallelN, T>*', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='indices', type_spelling='IndexT*', role='algorithm-parameter:indices'),
-            CppPublicParameter(name='count', type_spelling='std::size_t', role='algorithm-parameter:count'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_masked_indices_unary_3',
-        name='select_masked_indices_unary',
-        overload_index=3,
-        template_parameters=(
-            CppTemplateParameter(name='Parallelism', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='::tsl::dataparallel::native', constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='InputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='MaskRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='IndexRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='input', type_spelling='const InputRange&', role='algorithm-parameter:input'),
-            CppPublicParameter(name='masks', type_spelling='const MaskRange&', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='indices', type_spelling='IndexRange&', role='algorithm-parameter:indices'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_masked_indices_unary_1',
-        name='select_masked_indices_unary',
-        overload_index=1,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='InputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='MaskRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='IndexRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='input', type_spelling='const InputRange&', role='algorithm-parameter:input'),
-            CppPublicParameter(name='masks', type_spelling='const MaskRange&', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='indices', type_spelling='IndexRange&', role='algorithm-parameter:indices'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_masked_indices_binary_4',
-        name='select_masked_indices_binary',
-        overload_index=4,
-        template_parameters=(
-            CppTemplateParameter(name='Parallelism', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='::tsl::dataparallel::native', constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='IndexT', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='left', type_spelling='const T*', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const T*', role='algorithm-parameter:right'),
-            CppPublicParameter(name='masks', type_spelling='const typename detail::mask_for<MaskLayout, Parallelism, T>::type*', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='indices', type_spelling='IndexT*', role='algorithm-parameter:indices'),
-            CppPublicParameter(name='count', type_spelling='std::size_t', role='algorithm-parameter:count'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_masked_indices_binary_2',
-        name='select_masked_indices_binary',
-        overload_index=2,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='IndexT', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='left', type_spelling='const T*', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const T*', role='algorithm-parameter:right'),
-            CppPublicParameter(name='masks', type_spelling='const fixed_mask_storage_type<MaskLayout, ParallelN, T>*', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='indices', type_spelling='IndexT*', role='algorithm-parameter:indices'),
-            CppPublicParameter(name='count', type_spelling='std::size_t', role='algorithm-parameter:count'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_masked_indices_binary_3',
-        name='select_masked_indices_binary',
-        overload_index=3,
-        template_parameters=(
-            CppTemplateParameter(name='Parallelism', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='::tsl::dataparallel::native', constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='LeftRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='RightRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='MaskRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='IndexRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='left', type_spelling='const LeftRange&', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const RightRange&', role='algorithm-parameter:right'),
-            CppPublicParameter(name='masks', type_spelling='const MaskRange&', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='indices', type_spelling='IndexRange&', role='algorithm-parameter:indices'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_masked_indices_binary_1',
-        name='select_masked_indices_binary',
-        overload_index=1,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='LeftRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='RightRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='MaskRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='IndexRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='left', type_spelling='const LeftRange&', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const RightRange&', role='algorithm-parameter:right'),
-            CppPublicParameter(name='masks', type_spelling='const MaskRange&', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='indices', type_spelling='IndexRange&', role='algorithm-parameter:indices'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_selected_indices_unary_2',
-        name='select_selected_indices_unary',
-        overload_index=2,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Scale', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default='0', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='InputIndexT', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='OutputIndexT', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='input', type_spelling='const T*', role='algorithm-parameter:input'),
-            CppPublicParameter(name='input_indices', type_spelling='const InputIndexT*', role='algorithm-parameter:input_indices'),
-            CppPublicParameter(name='output_indices', type_spelling='OutputIndexT*', role='algorithm-parameter:output_indices'),
-            CppPublicParameter(name='selected_count', type_spelling='std::size_t', role='algorithm-parameter:selected_count'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_selected_indices_unary_1',
-        name='select_selected_indices_unary',
-        overload_index=1,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Scale', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default='0', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='InputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='InputIndexRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='OutputIndexRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='input', type_spelling='const InputRange&', role='algorithm-parameter:input'),
-            CppPublicParameter(name='input_indices', type_spelling='const InputIndexRange&', role='algorithm-parameter:input_indices'),
-            CppPublicParameter(name='output_indices', type_spelling='OutputIndexRange&', role='algorithm-parameter:output_indices'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_selected_indices_binary_2',
-        name='select_selected_indices_binary',
-        overload_index=2,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Scale', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default='0', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='InputIndexT', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='OutputIndexT', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='left', type_spelling='const T*', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const T*', role='algorithm-parameter:right'),
-            CppPublicParameter(name='input_indices', type_spelling='const InputIndexT*', role='algorithm-parameter:input_indices'),
-            CppPublicParameter(name='output_indices', type_spelling='OutputIndexT*', role='algorithm-parameter:output_indices'),
-            CppPublicParameter(name='selected_count', type_spelling='std::size_t', role='algorithm-parameter:selected_count'),
-        ),
-        result_type='std::size_t',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_select_selected_indices_binary_1',
-        name='select_selected_indices_binary',
-        overload_index=1,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Scale', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default='0', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='LeftRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='RightRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='InputIndexRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='OutputIndexRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='predicate', type_spelling='Op&&', role='algorithm-parameter:predicate'),
-            CppPublicParameter(name='left', type_spelling='const LeftRange&', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const RightRange&', role='algorithm-parameter:right'),
-            CppPublicParameter(name='input_indices', type_spelling='const InputIndexRange&', role='algorithm-parameter:input_indices'),
-            CppPublicParameter(name='output_indices', type_spelling='OutputIndexRange&', role='algorithm-parameter:output_indices'),
-        ),
-        result_type='std::size_t',
-    ),
+    *_cpp_selection_specs(),
     *_cpp_count_specs(selected=True),
     CppAlgorithmDeclarationSpec(
         hole='algorithm_declaration_transform_selected_unary_2',
@@ -2761,4 +2241,5 @@ __all__ = (
     'cpp_algorithm_form_support',
     'cpp_algorithm_public_declarations',
     'cpp_iteration_predicate_count_declarations',
+    'cpp_selection_declarations',
 )
