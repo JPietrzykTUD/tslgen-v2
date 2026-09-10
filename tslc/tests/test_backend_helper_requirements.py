@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from types import SimpleNamespace
 
+from tslc.backend.algorithm_surface import AlgorithmSemanticFamily
 from tslc.backend.cpp_algorithm import cpp_unavailable_algorithm_helper_declaration
 from tslc.backend.cpp_algorithm_plan import plan_cpp_algorithm_admission
 from tslc.backend.helper_requirements import (
@@ -132,6 +133,20 @@ def test_cpp_algorithm_admission_is_granular_around_compaction() -> None:
     plan = plan_cpp_algorithm_admission((profile,))  # type: ignore[arg-type]
 
     assert plan.supported
+    assert tuple(
+        header.semantic_family for header in plan.family_headers
+    ) == (
+        AlgorithmSemanticFamily.UTILITY,
+        AlgorithmSemanticFamily.ITERATION,
+        AlgorithmSemanticFamily.PREDICATE,
+        AlgorithmSemanticFamily.COUNT,
+    )
+    assert plan.remaining_semantic_families == (
+        AlgorithmSemanticFamily.SELECT,
+        AlgorithmSemanticFamily.TRANSFORM,
+        AlgorithmSemanticFamily.CONSUME,
+        AlgorithmSemanticFamily.AGGREGATE,
+    )
     assert "transform_unary" in plan.admitted_family_names
     assert "predicate_unary" in plan.admitted_family_names
     absent = {

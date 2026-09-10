@@ -1134,12 +1134,24 @@ def cpp_algorithm_public_declarations() -> tuple[CppPublicDeclaration, ...]:
     )
 
 
-def cpp_algorithm_declaration_holes() -> dict[str, str]:
+def cpp_algorithm_declaration_holes(
+    admitted_form_names: frozenset[str] | None = None,
+    *,
+    include_aliases: bool = True,
+) -> dict[str, str]:
+    """Render exact declaration holes, optionally limited by typed form identity."""
+
     holes: dict[str, str] = {}
-    for alias_spec in _ALIAS_SPECS:
-        declaration = alias_spec.declaration()
-        holes[alias_spec.hole] = declaration.render_head(multiline=True) + ';'
+    if include_aliases:
+        for alias_spec in _ALIAS_SPECS:
+            declaration = alias_spec.declaration()
+            holes[alias_spec.hole] = declaration.render_head(multiline=True) + ';'
     for function_spec in _FUNCTION_SPECS:
+        if (
+            admitted_form_names is not None
+            and function_spec.name not in admitted_form_names
+        ):
+            continue
         declaration = function_spec.declaration()
         hole = function_spec.hole or _cpp_algorithm_declaration_hole(
             declaration,

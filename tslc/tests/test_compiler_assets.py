@@ -487,7 +487,16 @@ def test_algorithm_assets_have_one_typed_declaration_hole_per_record() -> None:
     cpp_holes = cpp_algorithm_declaration_holes()
     rust_holes = rust_profile_algorithm_declaration_holes()
 
-    cpp_asset = assets.text("tsl_algorithm.hpp")
+    cpp_asset = "\n".join(
+        assets.text(name)
+        for name in (
+            "tsl_algorithm_utility.hpp",
+            "tsl_algorithm_iteration.hpp",
+            "tsl_algorithm_predicate.hpp",
+            "tsl_algorithm_count.hpp",
+            "tsl_algorithm_families.hpp",
+        )
+    )
     rust_asset = "\n".join(
         assets.text(name)
         for name in (

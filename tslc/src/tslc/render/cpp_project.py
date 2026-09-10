@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import json
 
+from tslc.backend.algorithm_surface import (
+    ALGORITHM_CALLABLE_FORMS,
+    AlgorithmSemanticFamily,
+)
 from tslc.backend.cpp import CppBackend
 from tslc.backend.cpp_algorithm import cpp_unavailable_algorithm_helper_declaration
 from tslc.backend.cpp_algorithm_contracts import cpp_algorithm_contract_holes
@@ -29,16 +33,12 @@ from tslc.render._common import text
 from tslc.render.cpp_build import _cpp_cmakelists
 from tslc.value_tests.model import ValueTestProjectPlan
 
-_CPP_STATIC_HEADERS = (
+_CPP_BASE_STATIC_HEADERS = (
     "tsl_core.hpp",
     "tsl_dataparallel.hpp",
     "tsl_algorithm_tags.hpp",
     "tsl_algorithm_detail_core.hpp",
     "tsl_algorithm_detail_mask.hpp",
-    "tsl_algorithm_detail_loops.hpp",
-    "tsl_algorithm.hpp",
-    "tsl_algorithm_checked.hpp",
-    "tsl_x86_traits.hpp",
 )
 
 
@@ -54,10 +54,10 @@ def cpp_artifacts(
     artifacts = [
         text(
             f"cpp/include/{header}",
-            _cpp_static_header(header, assets),
+            _cpp_static_header(header, assets, model),
             media_type=media_type,
         )
-        for header in _CPP_STATIC_HEADERS
+        for header in _cpp_static_headers(model)
     ] + [
         text(
             f"cpp/include/{group.header_name}",
@@ -185,13 +185,88 @@ def cpp_artifacts(
     return artifacts
 
 
-def _cpp_static_header(header: str, assets: RenderAssets) -> str:
+def _cpp_static_headers(model: CppProjectRenderModel) -> tuple[str, ...]:
+    family_detail_headers = tuple(
+        header.detail_header
+        for header in model.algorithm.family_headers
+        if header.detail_header is not None
+    )
+    remaining_headers = (
+        (
+            "tsl_algorithm_detail_loops.hpp",
+            "tsl_algorithm_families.hpp",
+        )
+        if model.algorithm.remaining_semantic_families
+        else ()
+    )
+    return (
+        *_CPP_BASE_STATIC_HEADERS,
+        *family_detail_headers,
+        *(header.public_header for header in model.algorithm.family_headers),
+        *remaining_headers,
+        "tsl_algorithm.hpp",
+        "tsl_algorithm_checked.hpp",
+        "tsl_x86_traits.hpp",
+    )
+
+
+def _cpp_static_header(
+    header: str,
+    assets: RenderAssets,
+    model: CppProjectRenderModel,
+) -> str:
     if header == "tsl_algorithm_checked.hpp":
         return assets.fill(header, **cpp_algorithm_contract_holes())
     if header == "tsl_algorithm.hpp":
-        return assets.fill(header, **cpp_algorithm_declaration_holes())
+        public_headers = tuple(
+            family_header.public_header
+            for family_header in model.algorithm.family_headers
+        ) + (
+            ("tsl_algorithm_families.hpp",)
+            if model.algorithm.remaining_semantic_families
+            else ()
+        )
+        return assets.fill(
+            header,
+            algorithm_family_includes="\n".join(
+                f'#include "{family_header}"'
+                for family_header in public_headers
+            ),
+        )
+    for family_header in model.algorithm.family_headers:
+        if header == family_header.public_header:
+            return assets.fill(
+                header,
+                **cpp_algorithm_declaration_holes(
+                    _cpp_algorithm_form_names((family_header.semantic_family,)),
+                    include_aliases=(
+                        family_header.semantic_family
+                        is AlgorithmSemanticFamily.UTILITY
+                    ),
+                ),
+            )
+    if header == "tsl_algorithm_families.hpp":
+        return assets.fill(
+            header,
+            **cpp_algorithm_declaration_holes(
+                _cpp_algorithm_form_names(
+                    model.algorithm.remaining_semantic_families
+                ),
+                include_aliases=False,
+            ),
+        )
     holes = cpp_static_declaration_holes(header)
     return assets.fill(header, **holes) if holes else assets.text(header)
+
+
+def _cpp_algorithm_form_names(
+    semantic_families: tuple[AlgorithmSemanticFamily, ...],
+) -> frozenset[str]:
+    return frozenset(
+        form.name
+        for form in ALGORITHM_CALLABLE_FORMS
+        if form.family.semantic_family in semantic_families
+    )
 
 
 def _cpp_profile_header(

@@ -99,12 +99,34 @@ class CppUnavailableAlgorithmHelpers:
 
 
 @dataclass(frozen=True, slots=True)
+class CppAlgorithmFamilyHeader:
+    """Generated public/detail headers owned by one semantic family."""
+
+    semantic_family: AlgorithmSemanticFamily
+    public_header: str
+    detail_header: str | None
+
+    def __post_init__(self) -> None:
+        family_name = self.semantic_family.value
+        if self.public_header != f"tsl_algorithm_{family_name}.hpp":
+            raise ValueError("C++ algorithm public header must follow family identity")
+        expected_detail = (
+            None
+            if self.semantic_family is AlgorithmSemanticFamily.UTILITY
+            else f"tsl_algorithm_detail_{family_name}.hpp"
+        )
+        if self.detail_header != expected_detail:
+            raise ValueError("C++ algorithm detail header must follow family identity")
+
+
+@dataclass(frozen=True, slots=True)
 class CppAlgorithmAdmissionPlan:
     """Project-wide C++ forms supported by every selectable profile."""
 
     profiles: tuple[AlgorithmProfileAdmission, ...]
     admitted_families: tuple[AlgorithmSurfaceFamily, ...]
     admitted_forms: tuple[AlgorithmCallableForm, ...]
+    family_headers: tuple[CppAlgorithmFamilyHeader, ...]
     unavailable_helpers: tuple[CppUnavailableAlgorithmHelpers, ...]
 
     def __post_init__(self) -> None:
@@ -134,6 +156,17 @@ class CppAlgorithmAdmissionPlan:
         )
         if self.admitted_families != expected_families:
             raise ValueError("C++ admitted families must derive from admitted forms")
+        expected_header_families = tuple(
+            family
+            for family in _CPP_SPLIT_ALGORITHM_SEMANTIC_FAMILIES
+            if family in self.admitted_semantic_families
+        )
+        if tuple(
+            header.semantic_family for header in self.family_headers
+        ) != expected_header_families:
+            raise ValueError(
+                "C++ algorithm family headers must follow admitted semantic order"
+            )
 
     @property
     def supported(self) -> bool:
@@ -146,6 +179,24 @@ class CppAlgorithmAdmissionPlan:
     @property
     def admitted_form_names(self) -> tuple[str, ...]:
         return tuple(form.name for form in self.admitted_forms)
+
+    @property
+    def admitted_semantic_families(self) -> tuple[AlgorithmSemanticFamily, ...]:
+        admitted = frozenset(
+            family.semantic_family for family in self.admitted_families
+        )
+        return tuple(
+            family for family in AlgorithmSemanticFamily if family in admitted
+        )
+
+    @property
+    def remaining_semantic_families(self) -> tuple[AlgorithmSemanticFamily, ...]:
+        split = frozenset(
+            header.semantic_family for header in self.family_headers
+        )
+        return tuple(
+            family for family in self.admitted_semantic_families if family not in split
+        )
 
     @property
     def gaps(self) -> tuple[AlgorithmRequirementGap, ...]:
@@ -189,10 +240,18 @@ def plan_cpp_algorithm_admission(
         for family in ALGORITHM_SURFACE_FAMILIES
         if any(form in admitted_form_set for form in family.callable_forms)
     )
+    admitted_semantic_families = frozenset(
+        family.semantic_family for family in admitted_families
+    )
     return CppAlgorithmAdmissionPlan(
         profile_plans,
         admitted_families,
         admitted_forms,
+        tuple(
+            _cpp_algorithm_family_header(family)
+            for family in _CPP_SPLIT_ALGORITHM_SEMANTIC_FAMILIES
+            if family in admitted_semantic_families
+        ),
         tuple(
             CppUnavailableAlgorithmHelpers(
                 profile.profile_name,
@@ -207,9 +266,31 @@ def plan_cpp_algorithm_admission(
     )
 
 
+def _cpp_algorithm_family_header(
+    family: AlgorithmSemanticFamily,
+) -> CppAlgorithmFamilyHeader:
+    family_name = family.value
+    return CppAlgorithmFamilyHeader(
+        family,
+        f"tsl_algorithm_{family_name}.hpp",
+        None
+        if family is AlgorithmSemanticFamily.UTILITY
+        else f"tsl_algorithm_detail_{family_name}.hpp",
+    )
+
+
+_CPP_SPLIT_ALGORITHM_SEMANTIC_FAMILIES = (
+    AlgorithmSemanticFamily.UTILITY,
+    AlgorithmSemanticFamily.ITERATION,
+    AlgorithmSemanticFamily.PREDICATE,
+    AlgorithmSemanticFamily.COUNT,
+)
+
+
 __all__ = (
     "CPP_ALGORITHM_REQUIREMENTS",
     "CppAlgorithmAdmissionPlan",
+    "CppAlgorithmFamilyHeader",
     "CppUnavailableAlgorithmHelpers",
     "plan_cpp_algorithm_admission",
 )

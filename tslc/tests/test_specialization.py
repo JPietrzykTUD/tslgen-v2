@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from tslc.api import generate_project
+from tslc.backend.algorithm_surface import AlgorithmSemanticFamily
 from tslc.backend.primitive_facade import (
     DataparallelPrimitiveFacadeKind,
     classify_dataparallel_primitive_facade,
@@ -431,7 +432,15 @@ def test_artifact_layout(specialization_result) -> None:
         "cpp/include/tsl_algorithm_tags.hpp",
         "cpp/include/tsl_algorithm_detail_core.hpp",
         "cpp/include/tsl_algorithm_detail_mask.hpp",
+        "cpp/include/tsl_algorithm_detail_iteration.hpp",
+        "cpp/include/tsl_algorithm_detail_predicate.hpp",
+        "cpp/include/tsl_algorithm_detail_count.hpp",
         "cpp/include/tsl_algorithm_detail_loops.hpp",
+        "cpp/include/tsl_algorithm_utility.hpp",
+        "cpp/include/tsl_algorithm_iteration.hpp",
+        "cpp/include/tsl_algorithm_predicate.hpp",
+        "cpp/include/tsl_algorithm_count.hpp",
+        "cpp/include/tsl_algorithm_families.hpp",
         "cpp/include/tsl_algorithm.hpp",
         "cpp/include/tsl_x86_traits.hpp",
         "cpp/include/tsl.hpp",
@@ -633,14 +642,34 @@ def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
             "tsl_algorithm_tags.hpp",
             "tsl_algorithm_detail_core.hpp",
             "tsl_algorithm_detail_mask.hpp",
+            "tsl_algorithm_detail_iteration.hpp",
+            "tsl_algorithm_detail_predicate.hpp",
+            "tsl_algorithm_detail_count.hpp",
             "tsl_algorithm_detail_loops.hpp",
+            "tsl_algorithm_utility.hpp",
+            "tsl_algorithm_iteration.hpp",
+            "tsl_algorithm_predicate.hpp",
+            "tsl_algorithm_count.hpp",
+            "tsl_algorithm_families.hpp",
             "tsl_algorithm.hpp",
         )
     )
     dispatch = specialization_artifacts["cpp/include/tsl.hpp"]
     avx2 = specialization_artifacts["cpp/include/tsl_avx2.hpp"]
 
-    assert '#include "tsl_algorithm_detail_loops.hpp"' in umbrella
+    family_headers = (
+        "tsl_algorithm_utility.hpp",
+        "tsl_algorithm_iteration.hpp",
+        "tsl_algorithm_predicate.hpp",
+        "tsl_algorithm_count.hpp",
+        "tsl_algorithm_families.hpp",
+    )
+    for header in family_headers:
+        assert f'#include "{header}"' in umbrella
+    assert tuple(umbrella.index(header) for header in family_headers) == tuple(
+        sorted(umbrella.index(header) for header in family_headers)
+    )
+    assert '#include "tsl_algorithm_detail_loops.hpp"' not in umbrella
     assert "namespace tsl::algo" in helper
     assert "#include <iterator>" in helper
     assert "template <class Vec>\nstruct vector_tag" in helper
@@ -659,7 +688,7 @@ def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
     assert "range_data" in helper
     assert "std::size(range)" in helper
     assert all(
-        declaration.render_head(multiline=True) in umbrella
+        declaration.render_head(multiline=True) in helper
         for declaration in cpp_algorithm_public_declarations()
     )
     assert "transform_unary_loop_peel_to_aligned" in helper
@@ -740,7 +769,9 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     assert "mod representation;" in helper_root
     assert "pub mod representation;" not in helper_root
     assert "pub use self::representation::{" in helper_root
-    assert "pub use self::families::{" in helper_root
+    for family in AlgorithmSemanticFamily:
+        assert f"pub use self::{family.value}::{{" in helper_root
+    assert "pub use self::families::{" not in helper_root
     assert "#[doc(hidden)]\npub mod tsl_test_core;" in lib
     assert "#[doc(hidden)]\npub mod primitive {" in lib
     assert "#[cfg(doc)]\n#[doc(hidden)]\npub mod tsl_documentation;" in lib
@@ -1329,7 +1360,8 @@ def test_generated_public_manifests_match_the_finalized_backend_plans(
         item["reachability"][-1] != "algo"
         for item in algorithm_modules
     )
-    assert "pub mod algo {" in specialization_artifacts["rust/src/tsl_avx2.rs"]
+    assert "pub mod algo;" in specialization_artifacts["rust/src/tsl_avx2.rs"]
+    assert "rust/src/tsl_avx2/algo.rs" in specialization_artifacts
     assert "pub use tsl_facade::load_masked_checked;" in specialization_artifacts[
         "rust/src/lib.rs"
     ]
