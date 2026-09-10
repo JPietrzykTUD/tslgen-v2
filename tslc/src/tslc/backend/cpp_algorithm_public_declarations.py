@@ -582,6 +582,178 @@ def cpp_selection_declarations(
     return tuple(spec.declaration() for spec in _cpp_selection_form_specs(form))
 
 
+def _cpp_transform_templates(
+    form: AlgorithmCallableForm,
+    *,
+    pointer: bool,
+    fixed: bool,
+) -> tuple[CppTemplateParameter, ...]:
+    parameters = [_cpp_parallelism_parameter(fixed=fixed)]
+    if form.family.shape is AlgorithmShape.SELECTED:
+        parameters.append(_cpp_value_parameter("Scale", default="0"))
+    else:
+        parameters.append(
+            _cpp_type_parameter("Alignment", default="alignment::detect")
+        )
+    if form.family.shape in {AlgorithmShape.WHERE, AlgorithmShape.MASKED}:
+        parameters.append(
+            _cpp_type_parameter("MaskLayout", default="mask_layout::integral")
+        )
+    parameters.append(_cpp_type_parameter("Op"))
+    if pointer:
+        parameters.append(_cpp_type_parameter("T"))
+    elif form.family.arity is AlgorithmArity.UNARY:
+        parameters.append(_cpp_type_parameter("InputRange"))
+    else:
+        parameters.extend(
+            (
+                _cpp_type_parameter("LeftRange"),
+                _cpp_type_parameter("RightRange"),
+            )
+        )
+    if form.family.shape in {AlgorithmShape.WHERE, AlgorithmShape.MASKED}:
+        if not pointer:
+            parameters.append(_cpp_type_parameter("MaskRange"))
+    elif form.family.shape is AlgorithmShape.SELECTED:
+        parameters.append(
+            _cpp_type_parameter("IndexT" if pointer else "IndexRange")
+        )
+    if not pointer:
+        parameters.append(_cpp_type_parameter("OutputRange"))
+    return tuple(parameters)
+
+
+def _cpp_transform_parameters(
+    form: AlgorithmCallableForm,
+    *,
+    pointer: bool,
+    fixed: bool,
+) -> tuple[CppPublicParameter, ...]:
+    parameters = [_cpp_algorithm_parameter("op", "Op&&")]
+    if form.family.arity is AlgorithmArity.UNARY:
+        parameters.append(
+            _cpp_algorithm_parameter(
+                "input", "const T*" if pointer else "const InputRange&"
+            )
+        )
+    else:
+        parameters.extend(
+            (
+                _cpp_algorithm_parameter(
+                    "left", "const T*" if pointer else "const LeftRange&"
+                ),
+                _cpp_algorithm_parameter(
+                    "right", "const T*" if pointer else "const RightRange&"
+                ),
+            )
+        )
+    if form.family.shape in {AlgorithmShape.WHERE, AlgorithmShape.MASKED}:
+        if pointer:
+            storage = (
+                "fixed_mask_storage_type<MaskLayout, ParallelN, T>"
+                if fixed
+                else (
+                    "typename detail::mask_for<MaskLayout, "
+                    "Parallelism, T>::type"
+                )
+            )
+            mask_type = f"const {storage}*"
+        else:
+            mask_type = "const MaskRange&"
+        parameters.append(_cpp_algorithm_parameter("masks", mask_type))
+    elif form.family.shape is AlgorithmShape.SELECTED:
+        parameters.append(
+            _cpp_algorithm_parameter(
+                "indices", "const IndexT*" if pointer else "const IndexRange&"
+            )
+        )
+    parameters.append(
+        _cpp_algorithm_parameter(
+            "output", "T*" if pointer else "OutputRange&"
+        )
+    )
+    if pointer:
+        count_name = (
+            "selected_count"
+            if form.family.shape is AlgorithmShape.SELECTED
+            else "count"
+        )
+        parameters.append(_cpp_algorithm_parameter(count_name, "std::size_t"))
+    return tuple(parameters)
+
+
+def _cpp_transform_form_specs(
+    form: AlgorithmCallableForm,
+) -> tuple[CppAlgorithmDeclarationSpec, ...]:
+    specs: list[CppAlgorithmDeclarationSpec] = []
+    axes: tuple[tuple[bool, bool], ...]
+    if form.family.shape is AlgorithmShape.PLAIN:
+        axes = (
+            (True, False),
+            (False, False),
+            (True, True),
+            (False, True),
+        )
+    elif form.family.shape is AlgorithmShape.SELECTED:
+        axes = ((True, True), (False, True))
+    else:
+        axes = (
+            (True, False),
+            (True, True),
+            (False, False),
+            (False, True),
+        )
+    for pointer, fixed in axes:
+        overload_index = (2 if fixed else 4) if pointer else (1 if fixed else 3)
+        specs.append(
+            _cpp_algorithm_spec(
+                form,
+                overload_index,
+                _cpp_transform_templates(form, pointer=pointer, fixed=fixed),
+                _cpp_transform_parameters(form, pointer=pointer, fixed=fixed),
+                "void",
+            )
+        )
+    return tuple(specs)
+
+
+def _cpp_transform_specs() -> tuple[CppAlgorithmDeclarationSpec, ...]:
+    return tuple(
+        spec
+        for shape in (
+            AlgorithmShape.PLAIN,
+            AlgorithmShape.WHERE,
+            AlgorithmShape.MASKED,
+            AlgorithmShape.SELECTED,
+        )
+        for form in ALGORITHM_CALLABLE_FORMS
+        if form.family.semantic_family is AlgorithmSemanticFamily.TRANSFORM
+        and form.family.shape is shape
+        and form.mask_form is AlgorithmMaskForm.DEFAULT
+        for spec in _cpp_transform_form_specs(form)
+    )
+
+
+def cpp_transform_declarations(
+    form: AlgorithmCallableForm,
+) -> tuple[CppPublicDeclaration, ...]:
+    """Project one transform form into exact C++ function declarations."""
+
+    if (
+        form.family.semantic_family is not AlgorithmSemanticFamily.TRANSFORM
+        or form.mask_form is not AlgorithmMaskForm.DEFAULT
+    ):
+        raise ValueError("form is not a default C++ transform form")
+    if form.family.shape not in {
+        AlgorithmShape.PLAIN,
+        AlgorithmShape.WHERE,
+        AlgorithmShape.MASKED,
+        AlgorithmShape.SELECTED,
+    }:
+        raise ValueError("C++ transform form has an unsupported shape")
+    return tuple(spec.declaration() for spec in _cpp_transform_form_specs(form))
+
+
 _FUNCTION_SPECS: tuple[CppAlgorithmDeclarationSpec, ...] = (
     CppAlgorithmDeclarationSpec(
         hole='algorithm_declaration_integral_mask_chunk_count_2',
@@ -716,583 +888,11 @@ _FUNCTION_SPECS: tuple[CppAlgorithmDeclarationSpec, ...] = (
         result_type='std::size_t',
     ),
     *_cpp_iteration_specs(),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_transform_unary_4',
-        name='transform_unary',
-        overload_index=4,
-        template_parameters=(
-            CppTemplateParameter(name='Parallelism', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='::tsl::dataparallel::native', constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='op', type_spelling='Op&&', role='algorithm-parameter:op'),
-            CppPublicParameter(name='input', type_spelling='const T*', role='algorithm-parameter:input'),
-            CppPublicParameter(name='output', type_spelling='T*', role='algorithm-parameter:output'),
-            CppPublicParameter(name='count', type_spelling='std::size_t', role='algorithm-parameter:count'),
-        ),
-        result_type='void',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_transform_unary_3',
-        name='transform_unary',
-        overload_index=3,
-        template_parameters=(
-            CppTemplateParameter(name='Parallelism', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='::tsl::dataparallel::native', constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='InputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='OutputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='op', type_spelling='Op&&', role='algorithm-parameter:op'),
-            CppPublicParameter(name='input', type_spelling='const InputRange&', role='algorithm-parameter:input'),
-            CppPublicParameter(name='output', type_spelling='OutputRange&', role='algorithm-parameter:output'),
-        ),
-        result_type='void',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_transform_unary_2',
-        name='transform_unary',
-        overload_index=2,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='op', type_spelling='Op&&', role='algorithm-parameter:op'),
-            CppPublicParameter(name='input', type_spelling='const T*', role='algorithm-parameter:input'),
-            CppPublicParameter(name='output', type_spelling='T*', role='algorithm-parameter:output'),
-            CppPublicParameter(name='count', type_spelling='std::size_t', role='algorithm-parameter:count'),
-        ),
-        result_type='void',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_transform_unary_1',
-        name='transform_unary',
-        overload_index=1,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='InputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='OutputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='op', type_spelling='Op&&', role='algorithm-parameter:op'),
-            CppPublicParameter(name='input', type_spelling='const InputRange&', role='algorithm-parameter:input'),
-            CppPublicParameter(name='output', type_spelling='OutputRange&', role='algorithm-parameter:output'),
-        ),
-        result_type='void',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_transform_binary_4',
-        name='transform_binary',
-        overload_index=4,
-        template_parameters=(
-            CppTemplateParameter(name='Parallelism', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='::tsl::dataparallel::native', constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='op', type_spelling='Op&&', role='algorithm-parameter:op'),
-            CppPublicParameter(name='left', type_spelling='const T*', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const T*', role='algorithm-parameter:right'),
-            CppPublicParameter(name='output', type_spelling='T*', role='algorithm-parameter:output'),
-            CppPublicParameter(name='count', type_spelling='std::size_t', role='algorithm-parameter:count'),
-        ),
-        result_type='void',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_transform_binary_3',
-        name='transform_binary',
-        overload_index=3,
-        template_parameters=(
-            CppTemplateParameter(name='Parallelism', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='::tsl::dataparallel::native', constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='LeftRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='RightRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='OutputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='op', type_spelling='Op&&', role='algorithm-parameter:op'),
-            CppPublicParameter(name='left', type_spelling='const LeftRange&', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const RightRange&', role='algorithm-parameter:right'),
-            CppPublicParameter(name='output', type_spelling='OutputRange&', role='algorithm-parameter:output'),
-        ),
-        result_type='void',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_transform_binary_2',
-        name='transform_binary',
-        overload_index=2,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='op', type_spelling='Op&&', role='algorithm-parameter:op'),
-            CppPublicParameter(name='left', type_spelling='const T*', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const T*', role='algorithm-parameter:right'),
-            CppPublicParameter(name='output', type_spelling='T*', role='algorithm-parameter:output'),
-            CppPublicParameter(name='count', type_spelling='std::size_t', role='algorithm-parameter:count'),
-        ),
-        result_type='void',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_transform_binary_1',
-        name='transform_binary',
-        overload_index=1,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='LeftRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='RightRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='OutputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='op', type_spelling='Op&&', role='algorithm-parameter:op'),
-            CppPublicParameter(name='left', type_spelling='const LeftRange&', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const RightRange&', role='algorithm-parameter:right'),
-            CppPublicParameter(name='output', type_spelling='OutputRange&', role='algorithm-parameter:output'),
-        ),
-        result_type='void',
-    ),
+    *_cpp_transform_specs(),
     *_cpp_predicate_specs(),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_transform_where_unary_4',
-        name='transform_where_unary',
-        overload_index=4,
-        template_parameters=(
-            CppTemplateParameter(name='Parallelism', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='::tsl::dataparallel::native', constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='op', type_spelling='Op&&', role='algorithm-parameter:op'),
-            CppPublicParameter(name='input', type_spelling='const T*', role='algorithm-parameter:input'),
-            CppPublicParameter(name='masks', type_spelling='const typename detail::mask_for<MaskLayout, Parallelism, T>::type*', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='output', type_spelling='T*', role='algorithm-parameter:output'),
-            CppPublicParameter(name='count', type_spelling='std::size_t', role='algorithm-parameter:count'),
-        ),
-        result_type='void',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_transform_where_unary_2',
-        name='transform_where_unary',
-        overload_index=2,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='op', type_spelling='Op&&', role='algorithm-parameter:op'),
-            CppPublicParameter(name='input', type_spelling='const T*', role='algorithm-parameter:input'),
-            CppPublicParameter(name='masks', type_spelling='const fixed_mask_storage_type<MaskLayout, ParallelN, T>*', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='output', type_spelling='T*', role='algorithm-parameter:output'),
-            CppPublicParameter(name='count', type_spelling='std::size_t', role='algorithm-parameter:count'),
-        ),
-        result_type='void',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_transform_where_unary_3',
-        name='transform_where_unary',
-        overload_index=3,
-        template_parameters=(
-            CppTemplateParameter(name='Parallelism', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='::tsl::dataparallel::native', constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='InputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='MaskRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='OutputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='op', type_spelling='Op&&', role='algorithm-parameter:op'),
-            CppPublicParameter(name='input', type_spelling='const InputRange&', role='algorithm-parameter:input'),
-            CppPublicParameter(name='masks', type_spelling='const MaskRange&', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='output', type_spelling='OutputRange&', role='algorithm-parameter:output'),
-        ),
-        result_type='void',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_transform_where_unary_1',
-        name='transform_where_unary',
-        overload_index=1,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='InputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='MaskRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='OutputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='op', type_spelling='Op&&', role='algorithm-parameter:op'),
-            CppPublicParameter(name='input', type_spelling='const InputRange&', role='algorithm-parameter:input'),
-            CppPublicParameter(name='masks', type_spelling='const MaskRange&', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='output', type_spelling='OutputRange&', role='algorithm-parameter:output'),
-        ),
-        result_type='void',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_transform_where_binary_4',
-        name='transform_where_binary',
-        overload_index=4,
-        template_parameters=(
-            CppTemplateParameter(name='Parallelism', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='::tsl::dataparallel::native', constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='op', type_spelling='Op&&', role='algorithm-parameter:op'),
-            CppPublicParameter(name='left', type_spelling='const T*', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const T*', role='algorithm-parameter:right'),
-            CppPublicParameter(name='masks', type_spelling='const typename detail::mask_for<MaskLayout, Parallelism, T>::type*', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='output', type_spelling='T*', role='algorithm-parameter:output'),
-            CppPublicParameter(name='count', type_spelling='std::size_t', role='algorithm-parameter:count'),
-        ),
-        result_type='void',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_transform_where_binary_2',
-        name='transform_where_binary',
-        overload_index=2,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='op', type_spelling='Op&&', role='algorithm-parameter:op'),
-            CppPublicParameter(name='left', type_spelling='const T*', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const T*', role='algorithm-parameter:right'),
-            CppPublicParameter(name='masks', type_spelling='const fixed_mask_storage_type<MaskLayout, ParallelN, T>*', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='output', type_spelling='T*', role='algorithm-parameter:output'),
-            CppPublicParameter(name='count', type_spelling='std::size_t', role='algorithm-parameter:count'),
-        ),
-        result_type='void',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_transform_where_binary_3',
-        name='transform_where_binary',
-        overload_index=3,
-        template_parameters=(
-            CppTemplateParameter(name='Parallelism', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='::tsl::dataparallel::native', constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='LeftRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='RightRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='MaskRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='OutputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='op', type_spelling='Op&&', role='algorithm-parameter:op'),
-            CppPublicParameter(name='left', type_spelling='const LeftRange&', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const RightRange&', role='algorithm-parameter:right'),
-            CppPublicParameter(name='masks', type_spelling='const MaskRange&', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='output', type_spelling='OutputRange&', role='algorithm-parameter:output'),
-        ),
-        result_type='void',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_transform_where_binary_1',
-        name='transform_where_binary',
-        overload_index=1,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='LeftRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='RightRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='MaskRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='OutputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='op', type_spelling='Op&&', role='algorithm-parameter:op'),
-            CppPublicParameter(name='left', type_spelling='const LeftRange&', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const RightRange&', role='algorithm-parameter:right'),
-            CppPublicParameter(name='masks', type_spelling='const MaskRange&', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='output', type_spelling='OutputRange&', role='algorithm-parameter:output'),
-        ),
-        result_type='void',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_transform_masked_unary_4',
-        name='transform_masked_unary',
-        overload_index=4,
-        template_parameters=(
-            CppTemplateParameter(name='Parallelism', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='::tsl::dataparallel::native', constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='op', type_spelling='Op&&', role='algorithm-parameter:op'),
-            CppPublicParameter(name='input', type_spelling='const T*', role='algorithm-parameter:input'),
-            CppPublicParameter(name='masks', type_spelling='const typename detail::mask_for<MaskLayout, Parallelism, T>::type*', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='output', type_spelling='T*', role='algorithm-parameter:output'),
-            CppPublicParameter(name='count', type_spelling='std::size_t', role='algorithm-parameter:count'),
-        ),
-        result_type='void',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_transform_masked_unary_2',
-        name='transform_masked_unary',
-        overload_index=2,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='op', type_spelling='Op&&', role='algorithm-parameter:op'),
-            CppPublicParameter(name='input', type_spelling='const T*', role='algorithm-parameter:input'),
-            CppPublicParameter(name='masks', type_spelling='const fixed_mask_storage_type<MaskLayout, ParallelN, T>*', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='output', type_spelling='T*', role='algorithm-parameter:output'),
-            CppPublicParameter(name='count', type_spelling='std::size_t', role='algorithm-parameter:count'),
-        ),
-        result_type='void',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_transform_masked_unary_3',
-        name='transform_masked_unary',
-        overload_index=3,
-        template_parameters=(
-            CppTemplateParameter(name='Parallelism', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='::tsl::dataparallel::native', constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='InputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='MaskRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='OutputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='op', type_spelling='Op&&', role='algorithm-parameter:op'),
-            CppPublicParameter(name='input', type_spelling='const InputRange&', role='algorithm-parameter:input'),
-            CppPublicParameter(name='masks', type_spelling='const MaskRange&', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='output', type_spelling='OutputRange&', role='algorithm-parameter:output'),
-        ),
-        result_type='void',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_transform_masked_unary_1',
-        name='transform_masked_unary',
-        overload_index=1,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='InputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='MaskRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='OutputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='op', type_spelling='Op&&', role='algorithm-parameter:op'),
-            CppPublicParameter(name='input', type_spelling='const InputRange&', role='algorithm-parameter:input'),
-            CppPublicParameter(name='masks', type_spelling='const MaskRange&', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='output', type_spelling='OutputRange&', role='algorithm-parameter:output'),
-        ),
-        result_type='void',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_transform_masked_binary_4',
-        name='transform_masked_binary',
-        overload_index=4,
-        template_parameters=(
-            CppTemplateParameter(name='Parallelism', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='::tsl::dataparallel::native', constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='op', type_spelling='Op&&', role='algorithm-parameter:op'),
-            CppPublicParameter(name='left', type_spelling='const T*', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const T*', role='algorithm-parameter:right'),
-            CppPublicParameter(name='masks', type_spelling='const typename detail::mask_for<MaskLayout, Parallelism, T>::type*', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='output', type_spelling='T*', role='algorithm-parameter:output'),
-            CppPublicParameter(name='count', type_spelling='std::size_t', role='algorithm-parameter:count'),
-        ),
-        result_type='void',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_transform_masked_binary_2',
-        name='transform_masked_binary',
-        overload_index=2,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='op', type_spelling='Op&&', role='algorithm-parameter:op'),
-            CppPublicParameter(name='left', type_spelling='const T*', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const T*', role='algorithm-parameter:right'),
-            CppPublicParameter(name='masks', type_spelling='const fixed_mask_storage_type<MaskLayout, ParallelN, T>*', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='output', type_spelling='T*', role='algorithm-parameter:output'),
-            CppPublicParameter(name='count', type_spelling='std::size_t', role='algorithm-parameter:count'),
-        ),
-        result_type='void',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_transform_masked_binary_3',
-        name='transform_masked_binary',
-        overload_index=3,
-        template_parameters=(
-            CppTemplateParameter(name='Parallelism', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='::tsl::dataparallel::native', constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='LeftRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='RightRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='MaskRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='OutputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='op', type_spelling='Op&&', role='algorithm-parameter:op'),
-            CppPublicParameter(name='left', type_spelling='const LeftRange&', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const RightRange&', role='algorithm-parameter:right'),
-            CppPublicParameter(name='masks', type_spelling='const MaskRange&', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='output', type_spelling='OutputRange&', role='algorithm-parameter:output'),
-        ),
-        result_type='void',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_transform_masked_binary_1',
-        name='transform_masked_binary',
-        overload_index=1,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Alignment', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='alignment::detect', constraint=None),
-            CppTemplateParameter(name='MaskLayout', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default='mask_layout::integral', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='LeftRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='RightRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='MaskRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='OutputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='op', type_spelling='Op&&', role='algorithm-parameter:op'),
-            CppPublicParameter(name='left', type_spelling='const LeftRange&', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const RightRange&', role='algorithm-parameter:right'),
-            CppPublicParameter(name='masks', type_spelling='const MaskRange&', role='algorithm-parameter:masks'),
-            CppPublicParameter(name='output', type_spelling='OutputRange&', role='algorithm-parameter:output'),
-        ),
-        result_type='void',
-    ),
     *_cpp_count_specs(selected=False),
     *_cpp_selection_specs(),
     *_cpp_count_specs(selected=True),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_transform_selected_unary_2',
-        name='transform_selected_unary',
-        overload_index=2,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Scale', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default='0', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='IndexT', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='op', type_spelling='Op&&', role='algorithm-parameter:op'),
-            CppPublicParameter(name='input', type_spelling='const T*', role='algorithm-parameter:input'),
-            CppPublicParameter(name='indices', type_spelling='const IndexT*', role='algorithm-parameter:indices'),
-            CppPublicParameter(name='output', type_spelling='T*', role='algorithm-parameter:output'),
-            CppPublicParameter(name='selected_count', type_spelling='std::size_t', role='algorithm-parameter:selected_count'),
-        ),
-        result_type='void',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_transform_selected_unary_1',
-        name='transform_selected_unary',
-        overload_index=1,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Scale', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default='0', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='InputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='IndexRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='OutputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='op', type_spelling='Op&&', role='algorithm-parameter:op'),
-            CppPublicParameter(name='input', type_spelling='const InputRange&', role='algorithm-parameter:input'),
-            CppPublicParameter(name='indices', type_spelling='const IndexRange&', role='algorithm-parameter:indices'),
-            CppPublicParameter(name='output', type_spelling='OutputRange&', role='algorithm-parameter:output'),
-        ),
-        result_type='void',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_transform_selected_binary_2',
-        name='transform_selected_binary',
-        overload_index=2,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Scale', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default='0', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='T', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='IndexT', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='op', type_spelling='Op&&', role='algorithm-parameter:op'),
-            CppPublicParameter(name='left', type_spelling='const T*', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const T*', role='algorithm-parameter:right'),
-            CppPublicParameter(name='indices', type_spelling='const IndexT*', role='algorithm-parameter:indices'),
-            CppPublicParameter(name='output', type_spelling='T*', role='algorithm-parameter:output'),
-            CppPublicParameter(name='selected_count', type_spelling='std::size_t', role='algorithm-parameter:selected_count'),
-        ),
-        result_type='void',
-    ),
-    CppAlgorithmDeclarationSpec(
-        hole='algorithm_declaration_transform_selected_binary_1',
-        name='transform_selected_binary',
-        overload_index=1,
-        template_parameters=(
-            CppTemplateParameter(name='ParallelN', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default=None, constraint=None),
-            CppTemplateParameter(name='Scale', kind=CppTemplateParameterKind.VALUE, type_spelling='std::size_t', default='0', constraint=None),
-            CppTemplateParameter(name='Op', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='LeftRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='RightRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='IndexRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-            CppTemplateParameter(name='OutputRange', kind=CppTemplateParameterKind.TYPE, type_spelling=None, default=None, constraint=None),
-        ),
-        parameters=(
-            CppPublicParameter(name='op', type_spelling='Op&&', role='algorithm-parameter:op'),
-            CppPublicParameter(name='left', type_spelling='const LeftRange&', role='algorithm-parameter:left'),
-            CppPublicParameter(name='right', type_spelling='const RightRange&', role='algorithm-parameter:right'),
-            CppPublicParameter(name='indices', type_spelling='const IndexRange&', role='algorithm-parameter:indices'),
-            CppPublicParameter(name='output', type_spelling='OutputRange&', role='algorithm-parameter:output'),
-        ),
-        result_type='void',
-    ),
     CppAlgorithmDeclarationSpec(
         hole='algorithm_declaration_aggregate_selected_unary_2',
         name='aggregate_selected_unary',
@@ -2242,4 +1842,5 @@ __all__ = (
     'cpp_algorithm_public_declarations',
     'cpp_iteration_predicate_count_declarations',
     'cpp_selection_declarations',
+    'cpp_transform_declarations',
 )
