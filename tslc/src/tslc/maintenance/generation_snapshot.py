@@ -98,6 +98,12 @@ SNAPSHOT_CASES: dict[str, SnapshotCase] = {
             _ARITH_TYPE_TAGS,
         ),
         SnapshotCase(
+            "support-files",
+            None,
+            ("scalar", "avx2"),
+            _ARITH_TYPE_TAGS,
+        ),
+        SnapshotCase(
             "lowering-reuse",
             None,
             ("skylake", "cascadelake"),
@@ -214,6 +220,38 @@ def compare_snapshot_directories(baseline: Path, candidate: Path) -> SnapshotCom
     file_difference = _first_difference(baseline_files, candidate_files, "generated_tree")
     if file_difference is not None:
         differences.append(file_difference)
+    return SnapshotComparison(tuple(differences))
+
+
+def compare_public_api_manifests(
+    baseline: Path,
+    candidate: Path,
+) -> SnapshotComparison:
+    """Compare exact per-backend API records independently of tree layout."""
+
+    baseline_root = _generated_project_root(baseline)
+    candidate_root = _generated_project_root(candidate)
+    baseline_paths = _public_api_manifest_paths(baseline_root)
+    candidate_paths = _public_api_manifest_paths(candidate_root)
+    path_difference = _first_difference(
+        [path.as_posix() for path in baseline_paths],
+        [path.as_posix() for path in candidate_paths],
+        "public_api.paths",
+    )
+    if path_difference is not None:
+        return SnapshotComparison((path_difference,))
+    differences: list[str] = []
+    for relative_path in baseline_paths:
+        backend = relative_path.parts[0]
+        baseline_document = _load_document(baseline_root / relative_path)
+        candidate_document = _load_document(candidate_root / relative_path)
+        difference = _first_difference(
+            baseline_document,
+            candidate_document,
+            f"{backend}.public_api",
+        )
+        if difference is not None:
+            differences.append(difference)
     return SnapshotComparison(tuple(differences))
 
 
@@ -351,6 +389,24 @@ def _load_document(path: Path) -> dict[str, object]:
     return value
 
 
+def _generated_project_root(path: Path) -> Path:
+    generated = path / _GENERATED_DIR
+    return generated if generated.is_dir() else path
+
+
+def _public_api_manifest_paths(root: Path) -> tuple[Path, ...]:
+    paths = tuple(
+        sorted(
+            path.relative_to(root)
+            for path in root.glob("*/public-api.json")
+            if path.is_file()
+        )
+    )
+    if not paths:
+        raise SnapshotError(f"generated project has no public API manifests: {root}")
+    return paths
+
+
 def _first_difference(baseline: object, candidate: object, path: str) -> str | None:
     if type(baseline) is not type(candidate):
         return f"{path}: type {type(baseline).__name__} != {type(candidate).__name__}"
@@ -408,6 +464,26 @@ def _compare_command(
     return 1
 
 
+def _compare_public_api_command(
+    args: argparse.Namespace, parser: argparse.ArgumentParser
+) -> int:
+    del parser
+    try:
+        comparison = compare_public_api_manifests(
+            Path(args.baseline),
+            Path(args.candidate),
+        )
+    except SnapshotError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    if comparison.matches:
+        print("public API manifests match")
+        return 0
+    for difference in comparison.differences:
+        print(f"DIFF: {difference}", file=sys.stderr)
+    return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -420,6 +496,13 @@ def main(argv: list[str] | None = None) -> int:
     compare_parser.add_argument("--baseline", required=True)
     compare_parser.add_argument("--candidate", required=True)
     compare_parser.set_defaults(handler=_compare_command)
+    api_parser = subparsers.add_parser(
+        "compare-public-api",
+        help="compare exact generated API records while allowing layout changes",
+    )
+    api_parser.add_argument("--baseline", required=True)
+    api_parser.add_argument("--candidate", required=True)
+    api_parser.set_defaults(handler=_compare_public_api_command)
     args = parser.parse_args(argv)
     return int(args.handler(args, parser))
 
@@ -435,6 +518,7 @@ __all__ = (
     "SnapshotError",
     "build_snapshot_document",
     "capture",
+    "compare_public_api_manifests",
     "compare_snapshot_directories",
     "compare_snapshot_documents",
     "input_manifest_digest",
