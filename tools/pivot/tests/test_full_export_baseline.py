@@ -151,7 +151,7 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
         )
     ).hexdigest() == actual["skip_location_inventory_sha256"]
     assert actual["skip_semantic_inventory_sha256"] == (
-        "b8097b89dda26f6be583b012ef16877d29f60365e70f3f9353550f73c522dc72"
+        "ea9d50b4cff4508599cf9111146f67840645f19a86d8359c0dbb6db7c43331f2"
     )
 
 

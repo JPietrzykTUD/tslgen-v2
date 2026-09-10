@@ -853,11 +853,41 @@ def test_store_overload_dispatch(data_root, machine_profiles_path, tmp_path) -> 
         "[[maybe_unused]] typename Vec::base_type"
     ) in hpp
     assert "class Arg1" in hpp
+    assert (
+        "store_impl<Vec, Aligned>::apply(ptr, "
+        "::tsl::detail::scalar_or_register_arg<Vec>(data, 0))"
+    ) in hpp
     rs = (tmp_path / "rust" / "src" / "tsl_avx2.rs").read_text()
     # Rust: an arg-dispatch trait implemented for each concrete argument type.
     assert "pub trait StoreImplArg" in rs
     assert "for core::arch::x86_64::__m256i {" in rs
     assert "for i32 {" in rs
+
+
+def test_scalar_vector_overload_dispatch_explicitly_normalizes_scalar_calls(
+    data_root, machine_profiles_path, tmp_path
+) -> None:
+    from tslc.api import write_artifacts  # noqa: PLC0415
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["shift_right"],
+        profiles=["sse2"],
+        backends=["cpp"],
+        type_tags=["ui16"],
+    )
+    write_artifacts(result.artifacts, tmp_path)
+    core = (tmp_path / "cpp" / "include" / "tsl_core.hpp").read_text()
+    hpp = (tmp_path / "cpp" / "include" / "tsl_sse2.hpp").read_text()
+
+    assert "scalar_argument_conversion_probe(typename Vec::base_type)" in core
+    assert "scalar_or_register_arg(Arg& arg, int)" in core
+    assert "Arg& scalar_or_register_arg(Arg& arg, ...) noexcept" in core
+    assert (
+        "shift_right_impl<Vec, PreserveSign>::apply(data, "
+        "::tsl::detail::scalar_or_register_arg<Vec>(shift, 0))"
+    ) in hpp
 
 
 def test_store_scalar_dedup(data_root, machine_profiles_path, tmp_path) -> None:

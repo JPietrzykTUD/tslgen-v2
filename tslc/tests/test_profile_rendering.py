@@ -365,7 +365,7 @@ def test_representative_project_shape_is_byte_stable(
         "cpp/docs/input/tsl_api_docs.hpp": "698b236f80bd4c8000fb1ace21a144ea61db887378ddf44d2568cdd2bc7c43de",
         "cpp/include/tsl.hpp": "fdebd390b5777e6806b13f994ec33e3289bbf163cd91f9a3a6b183bbbc5ae5cb",
         "cpp/include/tsl_primitives.hpp": "1ed6539e2285a7af59dbd5212e32e931b19620fa96387c833dacb882d986d743",
-        "cpp/include/tsl_scalar.hpp": "7d728ed75c1c8a04ff43bd4f8bf80cce4a6c44af2a173b8bb1769715e7513e2c",
+        "cpp/include/tsl_scalar.hpp": "cea6fec2ff33f47d79ca5d8269afef27ffbb80dc379e54d17c9cd55373e02b2a",
         "cpp/tests/smoke_scalar.cpp": "43046adfe06468b6eb75f351dc8883cb1e35635e66f40fc3f033d41651554a1e",
         "rust/Cargo.toml": "994e9d912db23d0ba8d6f4763b54bdea83c838f6b8427af8e038be42b2f5f860",
         "rust/src/lib.rs": "0a57fa83b8458be54a2313e7ffc3b77c798accc546089acfda6c41f1421e25ad",

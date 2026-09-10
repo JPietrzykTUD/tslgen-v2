@@ -62,8 +62,9 @@ prim<v:=(v,sImm)> shift_left(data, shift):
           # UB in C++ (and the vector path already does this), so the scalar path must too. Covers
           # signed, unsigned, and (bit-pattern) float alike.
           tsil """
-              if (cast<static>(ui64, shift) >= value(type::size_bits(base::in))) {
-                complete(call<primitive=set_zero[Vec]>());
+              switch<compile>(cast<static>(ui64, shift) >= value(type::size_bits(base::in))) {
+                true => { complete(call<primitive=set_zero[Vec]>()); }
+                _ => {}
               }
               let<type>(UBase, base::unsigned_of(base::in));
               var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<UBase>]>(data));
@@ -80,8 +81,9 @@ prim<v:=(v,sImm)> shift_left(data, shift):
           reasons []
         implementation:
           tsil """
-              if (cast<static>(ui64, shift) >= value(type::size_bits(base::in))) {
-                complete(call<primitive=set_zero[Vec]>());
+              switch<compile>(cast<static>(ui64, shift) >= value(type::size_bits(base::in))) {
+                true => { complete(call<primitive=set_zero[Vec]>()); }
+                _ => {}
               }
               let<type>(UBase, base::unsigned_of(base::in));
               let<type>(UVec, vector::as_base(UBase));
@@ -419,8 +421,9 @@ prim<v:=(v,sImm)> shift_left(data, shift):
           reasons [intrinsic]
         implementation:
           tsil """
-            if (cast<static>(ui64, shift) >= value(type::size_bits(base::in))) {
-              complete(call<primitive=set_zero[Vec]>());
+            switch<compile>(cast<static>(ui64, shift) >= value(type::size_bits(base::in))) {
+              true => { complete(call<primitive=set_zero[Vec]>()); }
+              _ => {}
             }
             complete(intrin<vsll, build[infix="vx", infix_sep="_"]>(
               data,
@@ -2501,17 +2504,20 @@ prim<v:=(v,sImm)> shift_right(data, shift):
           reasons [intrinsic]
         implementation:
           tsil """
-            if (cast<static>(ui64, shift) >= value(type::size_bits(base::in))) {
-              if<generation>(value(type::is_signed(base::in))) {
-                if<compile>(PreserveSign) {
-                  complete(intrin<vsra, build[infix="vx", infix_sep="_"]>(
-                    data,
-                    value(type::size_bits(base::in)) - 1,
-                    value(vector::runtime_length)
-                  ));
+            switch<compile>(cast<static>(ui64, shift) >= value(type::size_bits(base::in))) {
+              true => {
+                if<generation>(value(type::is_signed(base::in))) {
+                  if<compile>(PreserveSign) {
+                    complete(intrin<vsra, build[infix="vx", infix_sep="_"]>(
+                      data,
+                      value(type::size_bits(base::in)) - 1,
+                      value(vector::runtime_length)
+                    ));
+                  }
                 }
+                complete(call<primitive=set_zero[Vec]>());
               }
-              complete(call<primitive=set_zero[Vec]>());
+              _ => {}
             }
             if<generation>(value(type::is_signed(base::in))) {
               var<const_infer>(shifted, intrin<vsra, build[infix="vx", infix_sep="_"]>(

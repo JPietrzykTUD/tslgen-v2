@@ -196,6 +196,13 @@ def test_sse_extract_value_stays_in_register(
         assert needle in lowered.body_text
         assert "to_array" not in lowered.body_text
         assert "store" not in lowered.body_text
+        if "cvtsi128_si64" in needle:
+            expected_static_dispatch = (
+                "if constexpr ((chunk_index) == 1)"
+                if backend_id == "cpp"
+                else "match chunk_index"
+            )
+            assert expected_static_dispatch in lowered.body_text
 
 @pytest.mark.parametrize(
     ("profile", "extension", "chunk_count"),
@@ -232,6 +239,12 @@ def test_wide_x86_extract_value_uses_register_chunks(
         assert "_mm512_extract" not in lowered.body_text
         assert "to_array" not in lowered.body_text
         assert "store" not in lowered.body_text
+        expected_static_dispatch = (
+            "if constexpr ((chunk_index) == 1)"
+            if backend_id == "cpp"
+            else "match chunk_index"
+        )
+        assert expected_static_dispatch in lowered.body_text
 
 @pytest.mark.parametrize("type_tag", ["ui8", "ui16", "f32", "f64"])
 def test_wasm_to_mask_builds_lane_bit_constants_without_memory(

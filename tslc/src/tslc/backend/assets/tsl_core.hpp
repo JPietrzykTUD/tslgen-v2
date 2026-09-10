@@ -359,6 +359,30 @@ inline std::size_t idx_offset(Idx index, std::size_t scale) {
 
 namespace detail {
 
+// A scalar/register overload family uses a generic public wrapper parameter so
+// overload resolution can distinguish register arguments.  Prefer an explicit
+// scalar conversion only when the corresponding implicit conversion is valid;
+// expression SFINAE otherwise preserves the register argument by reference.
+// This keeps ordinary C++ conversion semantics without inspecting intrinsic
+// register types through type traits, which strict GCC builds diagnose as
+// ignored attributes.
+template <class Vec>
+void scalar_argument_conversion_probe(typename Vec::base_type);
+
+template <class Vec, class Arg>
+TSL_FORCE_INLINE auto scalar_or_register_arg(Arg& arg, int)
+    noexcept(noexcept(static_cast<typename Vec::base_type>(arg)))
+    -> decltype(
+        scalar_argument_conversion_probe<Vec>(arg),
+        static_cast<typename Vec::base_type>(arg)) {
+    return static_cast<typename Vec::base_type>(arg);
+}
+
+template <class Vec, class Arg>
+TSL_FORCE_INLINE Arg& scalar_or_register_arg(Arg& arg, ...) noexcept {
+    return arg;
+}
+
 template <class Element, class Index>
 inline precondition_error indexed_memory_address_error(
     Index raw_index,

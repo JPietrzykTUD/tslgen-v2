@@ -298,6 +298,33 @@ def test_non_x86_abs_uses_native_intrinsics_and_keeps_fallback(
             _assert_generation_expanded(fallback_body)
 
 
+def test_interleave_fallback_expands_lane_pairs_without_constant_branches(
+    catalog: Catalog, machine_profiles
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["avx2"],
+            "interleave_lo",
+            ("si32",),
+        )
+        .selected
+        if selected.extension.name == "avx2"
+    )
+
+    for backend_id in ("cpp", "rust"):
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
+
+        assert lowered is not None
+        assert "result[2 * 0] = left_lanes[0]" in lowered.body_text
+        assert "result[2 * 0 + 1] = right_lanes[0]" in lowered.body_text
+        assert "% 2" not in lowered.body_text
+
+
 @pytest.mark.parametrize(
     ("profile_name", "extension_name", "type_tag", "intrinsic", "backends"),
     (
@@ -359,6 +386,12 @@ def test_align_right_lanes_prefers_native_cross_lane_operations(
             assert "for " in fallback_body
         else:
             _assert_generation_expanded(fallback_body)
+            expected_static_branch = (
+                "if constexpr (source <"
+                if backend_id == "cpp"
+                else "if source <"
+            )
+            assert expected_static_branch in fallback_body
 
 
 @pytest.mark.parametrize(
@@ -778,7 +811,10 @@ def test_sse2_equal_64_composes_word_equality_and_mask_conversion(
         assert cpp is not None
         assert "::tsl::equal<tsl::simd<uint32_t, tsl::sse>>" in cpp.body_text
         assert "::tsl::to_integral<tsl::simd<uint32_t, tsl::sse>>" in cpp.body_text
-        assert "::tsl::to_mask<Vec>(compact)" in cpp.body_text
+        assert (
+            "::tsl::to_mask<Vec>(static_cast<typename Vec::imask_type>(compact))"
+            in cpp.body_text
+        )
         assert "intrin<" not in cpp.body_text
         assert "to_array" not in cpp.body_text
 

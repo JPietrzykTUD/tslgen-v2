@@ -850,7 +850,7 @@ class CppBackend:
             "    if constexpr (selector::value == "
             f"::tsl::detail::variants::{variant_enum_name(primitive_name)}::{name}) {{\n"
             f"        return ::tsl::detail::primitives::{_impl_name(primitive_name, name)}"
-            f"<{signature.impl_args}>::apply({signature.argument_names});\n"
+            f"<{signature.impl_args}>::apply({signature.argument_expressions});\n"
             "    }\n"
             for name in variants
         )
@@ -861,7 +861,7 @@ class CppBackend:
             f"{variant_dispatch}"
             f"    return ::tsl::detail::primitives::{_impl_name(primitive_name)}"
             f"<{signature.impl_args}>::apply("
-            f"{signature.argument_names});\n"
+            f"{signature.argument_expressions});\n"
             f"}}"
         )
         policy_wrapper = _dataparallel_primitive_facade_wrapper(
@@ -903,7 +903,7 @@ class CppBackend:
 class _WrapperSignature:
     template_params: tuple[CppTemplateParameter, ...]
     parameters: tuple[CppPublicParameter, ...]
-    argument_names: str
+    argument_expressions: str
     runtime_argument_names: tuple[str, ...]
     impl_args: str
     selector_args: str
@@ -1032,7 +1032,13 @@ def _wrapper_signature(
         for name, kind in zip(shape.param_names, shape.param_kinds)
         if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
     )
-    names = ", ".join(runtime_argument_names)
+    arguments = ", ".join(
+        _cpp_wrapper_argument(name, index, specializations)
+        for index, (name, kind) in enumerate(
+            zip(shape.param_names, shape.param_kinds)
+        )
+        if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
+    )
     impl_args = (
         "Vec"
         + (", ToVec" if has_target else "")
@@ -1056,7 +1062,7 @@ def _wrapper_signature(
     return _WrapperSignature(
         template_params=tuple(template_params),
         parameters=parameters,
-        argument_names=names,
+        argument_expressions=arguments,
         runtime_argument_names=runtime_argument_names,
         impl_args=impl_args,
         selector_args=selector_args,
@@ -1064,6 +1070,31 @@ def _wrapper_signature(
         result_kind=shape.result_kind,
         overload_identity=_cpp_overload_identity(specializations, "vector"),
     )
+
+
+def _cpp_wrapper_argument(
+    name: str,
+    index: int,
+    specializations: tuple[LoweredSpecialization, ...],
+) -> str:
+    """Normalize the scalar arm of a scalar/register overload explicitly.
+
+    The public parameter stays generic so a register argument selects the
+    register overload.  All other arguments retain the scalar conversion that
+    C++ overload resolution already performed, but make it explicit before the
+    implementation call so strict consumers do not inherit a narrowing warning
+    from the generated header.
+    """
+
+    kinds = {
+        specialization.param_kinds[index] for specialization in specializations
+    }
+    if kinds == {"s", "v"} and all(
+        specialization.effective_param_type_overrides[index] is None
+        for specialization in specializations
+    ):
+        return f"::tsl::detail::scalar_or_register_arg<Vec>({name}, 0)"
+    return name
 
 
 def _cpp_public_parameter_role(

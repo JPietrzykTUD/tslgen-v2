@@ -328,6 +328,18 @@ class _RustSyntax:
     def render_compile_switch(
         self, selector: RenderField, arms: tuple[tuple[str, RenderField], ...]
     ) -> RenderText:
+        if len(arms) == 2 and arms[0][0] == "true" and arms[1][0] == "_":
+            return render_sequence(
+                (
+                    literal_text("if "),
+                    selector,
+                    literal_text(" {\n        "),
+                    arms[0][1],
+                    literal_text("\n      } else {\n        "),
+                    arms[1][1],
+                    literal_text("\n      }"),
+                )
+            )
         parts: list[RenderField] = [literal_text("match "), selector, literal_text(" {\n      ")]
         for label, body in arms:
             parts.extend(

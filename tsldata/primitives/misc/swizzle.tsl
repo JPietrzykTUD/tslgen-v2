@@ -57,8 +57,10 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
               var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
               loop<generation, scoped>(i, 0, value(vector::length), 1) {
                 var<const_infer>(source, value(i) + offset);
-                if (source < value(vector::length)) { result[value(i)] = right_lanes[source]; }
-                else { result[value(i)] = left_lanes[source - value(vector::length)]; }
+                switch<compile>(source < value(vector::length)) {
+                  true => { result[value(i)] = right_lanes[source]; }
+                  _ => { result[value(i)] = left_lanes[source - value(vector::length)]; }
+                }
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -92,8 +94,10 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
               var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
               loop<generation, scoped>(i, 0, value(vector::length), 1) {
                 var<const_infer>(source, value(i) + offset);
-                if (source < value(vector::length)) { result[value(i)] = right_lanes[source]; }
-                else { result[value(i)] = left_lanes[source - value(vector::length)]; }
+                switch<compile>(source < value(vector::length)) {
+                  true => { result[value(i)] = right_lanes[source]; }
+                  _ => { result[value(i)] = left_lanes[source - value(vector::length)]; }
+                }
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -111,8 +115,10 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
             var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
               var<const_infer>(source, value(i) + offset);
-              if (source < value(vector::length)) { result[value(i)] = right_lanes[source]; }
-              else { result[value(i)] = left_lanes[source - value(vector::length)]; }
+              switch<compile>(source < value(vector::length)) {
+                true => { result[value(i)] = right_lanes[source]; }
+                _ => { result[value(i)] = left_lanes[source - value(vector::length)]; }
+              }
             }
             complete(call<primitive=from_array[Vec]>(result));
           """
@@ -136,8 +142,10 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
               var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
               loop<generation, scoped>(i, 0, value(vector::length), 1) {
                 var<const_infer>(source, value(i) + offset);
-                if (source < value(vector::length)) { result[value(i)] = right_lanes[source]; }
-                else { result[value(i)] = left_lanes[source - value(vector::length)]; }
+                switch<compile>(source < value(vector::length)) {
+                  true => { result[value(i)] = right_lanes[source]; }
+                  _ => { result[value(i)] = left_lanes[source - value(vector::length)]; }
+                }
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -173,8 +181,10 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
               var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
               loop<generation, scoped>(i, 0, value(vector::length), 1) {
                 var<const_infer>(source, value(i) + offset);
-                if (source < value(vector::length)) { result[value(i)] = right_lanes[source]; }
-                else { result[value(i)] = left_lanes[source - value(vector::length)]; }
+                switch<compile>(source < value(vector::length)) {
+                  true => { result[value(i)] = right_lanes[source]; }
+                  _ => { result[value(i)] = left_lanes[source - value(vector::length)]; }
+                }
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -221,8 +231,10 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
               var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
               loop<generation, scoped>(i, 0, value(vector::length), 1) {
                 var<const_infer>(source, value(i) + offset);
-                if (source < value(vector::length)) { result[value(i)] = right_lanes[source]; }
-                else { result[value(i)] = left_lanes[source - value(vector::length)]; }
+                switch<compile>(source < value(vector::length)) {
+                  true => { result[value(i)] = right_lanes[source]; }
+                  _ => { result[value(i)] = left_lanes[source - value(vector::length)]; }
+                }
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -269,8 +281,10 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
               var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
               loop<generation, scoped>(i, 0, value(vector::length), 1) {
                 var<const_infer>(source, value(i) + offset);
-                if (source < value(vector::length)) { result[value(i)] = right_lanes[source]; }
-                else { result[value(i)] = left_lanes[source - value(vector::length)]; }
+                switch<compile>(source < value(vector::length)) {
+                  true => { result[value(i)] = right_lanes[source]; }
+                  _ => { result[value(i)] = left_lanes[source - value(vector::length)]; }
+                }
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -311,8 +325,10 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
               var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
               loop<generation, scoped>(i, 0, value(vector::length), 1) {
                 var<const_infer>(source, value(i) + offset);
-                if (source < value(vector::length)) { result[value(i)] = right_lanes[source]; }
-                else { result[value(i)] = left_lanes[source - value(vector::length)]; }
+                switch<compile>(source < value(vector::length)) {
+                  true => { result[value(i)] = right_lanes[source]; }
+                  _ => { result[value(i)] = left_lanes[source - value(vector::length)]; }
+                }
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -333,8 +349,10 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
             var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
               var<const_infer>(source, value(i) + offset);
-              if (source < value(vector::length)) { result[value(i)] = right_lanes[source]; }
-              else { result[value(i)] = left_lanes[source - value(vector::length)]; }
+              switch<compile>(source < value(vector::length)) {
+                true => { result[value(i)] = right_lanes[source]; }
+                _ => { result[value(i)] = left_lanes[source - value(vector::length)]; }
+              }
             }
             complete(call<primitive=from_array[Vec]>(result));
           """
@@ -368,8 +386,10 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
               var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
               loop<generation, scoped>(i, 0, value(vector::length), 1) {
                 var<const_infer>(source, value(i) + offset);
-                if (source < value(vector::length)) { result[value(i)] = right[source]; }
-                else { result[value(i)] = left[source - value(vector::length)]; }
+                switch<compile>(source < value(vector::length)) {
+                  true => { result[value(i)] = right[source]; }
+                  _ => { result[value(i)] = left[source - value(vector::length)]; }
+                }
               }
               complete(result);
             """
@@ -550,9 +570,9 @@ prim<v:=(v,v)> interleave_lo(left, right):
               var<const_infer>(left_lanes, call<primitive=to_array[Vec]>(left));
               var<const_infer>(right_lanes, call<primitive=to_array[Vec]>(right));
               var<infer>(result, left_lanes);
-              loop<generation, scoped>(i, 0, value(vector::length), 1) {
-                if ((value(i) % 2) == 0) { result[value(i)] = left_lanes[value(i) / 2]; }
-                else { result[value(i)] = right_lanes[value(i) / 2]; }
+              loop<generation, scoped>(i, 0, value(vector::length) / 2, 1) {
+                result[2 * value(i)] = left_lanes[value(i)];
+                result[2 * value(i) + 1] = right_lanes[value(i)];
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -575,9 +595,9 @@ prim<v:=(v,v)> interleave_lo(left, right):
               var<const_infer>(left_lanes, call<primitive=to_array[Vec]>(left));
               var<const_infer>(right_lanes, call<primitive=to_array[Vec]>(right));
               var<infer>(result, left_lanes);
-              loop<generation, scoped>(i, 0, value(vector::length), 1) {
-                if ((value(i) % 2) == 0) { result[value(i)] = left_lanes[value(i) / 2]; }
-                else { result[value(i)] = right_lanes[value(i) / 2]; }
+              loop<generation, scoped>(i, 0, value(vector::length) / 2, 1) {
+                result[2 * value(i)] = left_lanes[value(i)];
+                result[2 * value(i) + 1] = right_lanes[value(i)];
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -599,9 +619,9 @@ prim<v:=(v,v)> interleave_lo(left, right):
               var<const_infer>(left_lanes, call<primitive=to_array[Vec]>(left));
               var<const_infer>(right_lanes, call<primitive=to_array[Vec]>(right));
               var<infer>(result, left_lanes);
-              loop<generation, scoped>(i, 0, value(vector::length), 1) {
-                if ((value(i) % 2) == 0) { result[value(i)] = left_lanes[value(i) / 2]; }
-                else { result[value(i)] = right_lanes[value(i) / 2]; }
+              loop<generation, scoped>(i, 0, value(vector::length) / 2, 1) {
+                result[2 * value(i)] = left_lanes[value(i)];
+                result[2 * value(i) + 1] = right_lanes[value(i)];
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -622,9 +642,9 @@ prim<v:=(v,v)> interleave_lo(left, right):
             var<const_infer>(left_lanes, call<primitive=to_array[Vec]>(left));
             var<const_infer>(right_lanes, call<primitive=to_array[Vec]>(right));
             var<infer>(result, left_lanes);
-            loop<generation, scoped>(i, 0, value(vector::length), 1) {
-              if ((value(i) % 2) == 0) { result[value(i)] = left_lanes[value(i) / 2]; }
-              else { result[value(i)] = right_lanes[value(i) / 2]; }
+            loop<generation, scoped>(i, 0, value(vector::length) / 2, 1) {
+              result[2 * value(i)] = left_lanes[value(i)];
+              result[2 * value(i) + 1] = right_lanes[value(i)];
             }
             complete(call<primitive=from_array[Vec]>(result));
           """
@@ -656,9 +676,9 @@ prim<v:=(v,v)> interleave_lo(left, right):
               reasons []
             tsil """
               var<init_register>(result);
-              loop<generation, scoped>(i, 0, value(vector::length), 1) {
-                if ((value(i) % 2) == 0) { result[value(i)] = left[value(i) / 2]; }
-                else { result[value(i)] = right[value(i) / 2]; }
+              loop<generation, scoped>(i, 0, value(vector::length) / 2, 1) {
+                result[2 * value(i)] = left[value(i)];
+                result[2 * value(i) + 1] = right[value(i)];
               }
               complete(result);
             """

@@ -489,6 +489,39 @@ def test_scalar_uniform_shift_left_keeps_narrowing_cast(
 
     assert cpp is not None
     assert "auto const ures = static_cast<uint16_t>" in cpp.body_text
+    if signature == "v:=(v,sImm)":
+        assert "if constexpr (static_cast<uint64_t>(shift) >= 16)" in cpp.body_text
+
+
+@pytest.mark.parametrize(
+    ("backend_id", "expected"),
+    (
+        ("cpp", "if constexpr (static_cast<uint64_t>(shift) >= 8)"),
+        ("rust", "if (shift) as u64 >= 8"),
+    ),
+)
+def test_scalar_immediate_shift_bound_uses_static_control(
+    catalog: Catalog,
+    machine_profiles,
+    backend_id: str,
+    expected: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog, machine_profiles["scalar"], "shift_left", ("si8",)
+        )
+        .selected
+        if selected.extension.name == "scalar"
+        and selected.primitive.signature == "v:=(v,sImm)"
+    )
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, backend_id)
+    ).specialization
+
+    assert lowered is not None
+    assert expected in lowered.body_text
 
 
 def test_clang_vector_shift_right_uses_builtin_vector_operator(

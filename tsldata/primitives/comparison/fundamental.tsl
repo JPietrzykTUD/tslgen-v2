@@ -233,7 +233,7 @@ prim<m:=(v,v)> equal(left, right):
             var<const_infer>(word_bits, call<primitive=to_integral[WordVec]>(word_equal));
             var<const_infer>(paired, word_bits & (word_bits >> 1));
             var<const_infer>(compact, (paired & 1) | ((paired >> 1) & 2));
-            complete(call<primitive=to_mask[Vec]>(compact));
+            complete(call<primitive=to_mask[Vec]>(cast<static>(vector::imask, compact)));
           """
     neon:
       arith:

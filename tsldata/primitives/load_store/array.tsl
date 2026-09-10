@@ -379,13 +379,16 @@ prim<s:=v[idx]> extract_value(a):
             var<const_typed>(scalar::size, lanes_per_chunk, 64 / value(type::size_bits(base::in)));
             var<const_infer>(chunk_index, cast<static>(scalar::size, Index) / lanes_per_chunk);
             var<typed>(scalar::ui64, chunk, cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(q0)));
-            if (chunk_index == 1) { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(q0, 8))); }
-            if (chunk_index == 2) { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(q1)); }
-            if (chunk_index == 3) { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(q1, 8))); }
-            if (chunk_index == 4) { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(q2)); }
-            if (chunk_index == 5) { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(q2, 8))); }
-            if (chunk_index == 6) { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(q3)); }
-            if (chunk_index == 7) { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(q3, 8))); }
+            switch<compile>(chunk_index) {
+              1 => { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(q0, 8))); }
+              2 => { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(q1)); }
+              3 => { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(q1, 8))); }
+              4 => { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(q2)); }
+              5 => { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(q2, 8))); }
+              6 => { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(q3)); }
+              7 => { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(q3, 8))); }
+              _ => {}
+            }
             var<const_infer>(lane_shift,
               (cast<static>(scalar::size, Index) % lanes_per_chunk) * value(type::size_bits(base::in))
             );
@@ -421,9 +424,12 @@ prim<s:=v[idx]> extract_value(a):
             var<const_typed>(scalar::size, lanes_per_chunk, 64 / value(type::size_bits(base::in)));
             var<const_infer>(chunk_index, cast<static>(scalar::size, Index) / lanes_per_chunk);
             var<typed>(scalar::ui64, chunk, cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(low)));
-            if (chunk_index == 1) { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(low, 8))); }
-            if (chunk_index == 2) { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(high)); }
-            if (chunk_index == 3) { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(high, 8))); }
+            switch<compile>(chunk_index) {
+              1 => { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(low, 8))); }
+              2 => { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(high)); }
+              3 => { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(high, 8))); }
+              _ => {}
+            }
             var<const_infer>(lane_shift,
               (cast<static>(scalar::size, Index) % lanes_per_chunk) * value(type::size_bits(base::in))
             );
@@ -455,8 +461,11 @@ prim<s:=v[idx]> extract_value(a):
             var<const_typed>(scalar::size, lanes_per_chunk, 64 / value(type::size_bits(base::in)));
             var<const_infer>(chunk_index, cast<static>(scalar::size, Index) / lanes_per_chunk);
             var<typed>(scalar::ui64, chunk, cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(a)));
-            if (chunk_index == 1) {
-              chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(a, 8)));
+            switch<compile>(chunk_index) {
+              1 => {
+                chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(a, 8)));
+              }
+              _ => {}
             }
             var<const_infer>(lane_shift,
               (cast<static>(scalar::size, Index) % lanes_per_chunk) * value(type::size_bits(base::in))
