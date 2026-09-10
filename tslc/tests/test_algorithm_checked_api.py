@@ -119,6 +119,7 @@ def test_generated_checked_surface_exactly_projects_the_registry() -> None:
             "tsl_algorithm_iteration.rs",
             "tsl_algorithm_predicate.rs",
             "tsl_algorithm_count.rs",
+            "tsl_algorithm_select.rs",
             "tsl_algorithm_families.rs",
         )
     )

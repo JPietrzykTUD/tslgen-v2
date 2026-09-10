@@ -49,6 +49,12 @@ pub use self::count::{
 };
 
 #[doc(hidden)]
+mod select;
+pub use self::select::{
+@{algorithm_select_reexports}
+};
+
+#[doc(hidden)]
 mod families;
 pub use self::families::{
 @{algorithm_family_reexports}

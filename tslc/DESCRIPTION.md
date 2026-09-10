@@ -579,9 +579,9 @@ count. Neutral lowering never constructs a C++ or Rust lane-count expression.
   Representation, mask, kernel-trait, and range/address-validation substrate
   modules depend only on shared substrate; the temporary family implementation
   module may consume them but is never imported by them. Iteration, predicate,
-  and count implementations already have focused private children; selection,
-  transform, consume, and aggregate remain in the temporary family owner until
-  their ordered layout slices move them.
+  count, and selection/index implementations already have focused private
+  children; transform, consume, and aggregate remain in the temporary family
+  owner until their ordered layout slices move them.
 
 The public safety surface is a typed projection, not a renderer convention.
 [backend/checked_api.py](src/tslc/backend/checked_api.py) admits a `_checked`
