@@ -607,7 +607,10 @@ C++ and Rust algorithm surfaces from drifting. Typed range and result checks
 remain owned by
 [backend/algorithm_contracts.py](src/tslc/backend/algorithm_contracts.py);
 each backend joins those target-neutral identities to its exact declaration
-records and explicitly classifies unsupported forms.
+records and explicitly classifies unsupported forms. Iteration, predicate, and
+count declarations and render-hole identities are expanded by focused backend
+builders from those shared forms; exceptional target signatures remain explicit
+inside the backend projection.
 
 The ordinary Rust API is finalized before source rendering by the frozen records
 in [backend/rust_api_model.py](src/tslc/backend/rust_api_model.py), the

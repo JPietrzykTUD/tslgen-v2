@@ -22,8 +22,10 @@ from tslc.backend.cpp_algorithm_contracts import (
 )
 from tslc.backend.cpp_algorithm_public_declarations import (
     cpp_algorithm_checked_twin_identity,
+    cpp_algorithm_declaration_holes,
     cpp_algorithm_form_support,
     cpp_algorithm_public_declarations,
+    cpp_iteration_predicate_count_declarations,
 )
 from tslc.backend.public_declarations import PublicDeclarationKind
 from tslc.backend.rust_algorithm_contracts import (
@@ -32,6 +34,8 @@ from tslc.backend.rust_algorithm_contracts import (
 from tslc.backend.rust_algorithm_manifest import RUST_ALGORITHM_RESERVED_NAMES
 from tslc.backend.rust_algorithm_public_declarations import (
     rust_algorithm_form_support,
+    rust_iteration_predicate_count_function_declarations,
+    rust_profile_algorithm_declaration_holes,
     rust_profile_algorithm_public_declarations,
 )
 
@@ -118,6 +122,93 @@ def test_checked_relations_derive_from_surface_forms() -> None:
         assert declaration.checked_of == (
             f"crate::profile::algo::{ordinary_name}#algorithm"
         )
+
+
+def test_first_slice_forms_project_to_the_existing_exact_records_and_holes() -> None:
+    cpp = cpp_algorithm_public_declarations()
+    cpp_holes = cpp_algorithm_declaration_holes()
+    reachability = ("crate", "profile", "selection:test", "algo")
+    rust = rust_profile_algorithm_public_declarations(reachability)
+    rust_holes = rust_profile_algorithm_declaration_holes()
+
+    for form in ALGORITHM_CALLABLE_FORMS:
+        if form.family.semantic_family not in {
+            AlgorithmSemanticFamily.ITERATION,
+            AlgorithmSemanticFamily.PREDICATE,
+            AlgorithmSemanticFamily.COUNT,
+        }:
+            continue
+        if form.mask_form is AlgorithmMaskForm.DEFAULT:
+            cpp_projected = cpp_iteration_predicate_count_declarations(form)
+            assert cpp_projected == tuple(
+                declaration
+                for declaration in cpp
+                if declaration.kind is PublicDeclarationKind.FUNCTION
+                and declaration.name == form.family.name
+            )
+            assert all(
+                f"algorithm_declaration_{declaration.name}_"
+                f"{declaration.identity.rsplit('-', 1)[-1]}" in cpp_holes
+                for declaration in cpp_projected
+            )
+
+        rust_projected = rust_iteration_predicate_count_function_declarations(
+            form,
+            reachability,
+        )
+        projected_identities = {
+            declaration.identity for declaration in rust_projected
+        }
+        assert rust_projected == tuple(
+            declaration
+            for declaration in rust
+            if declaration.identity in projected_identities
+        )
+        assert all(
+            f"profile_algorithm_declaration_{declaration.name}" in rust_holes
+            for declaration in rust_projected
+        )
+
+
+def test_first_slice_projectors_accept_additive_semantic_forms() -> None:
+    synthetic_unary = AlgorithmSurfaceFamily(
+        "synthetic_predicate_unary",
+        AlgorithmSemanticFamily.PREDICATE,
+        AlgorithmArity.UNARY,
+        AlgorithmShape.PLAIN,
+        AlgorithmResultKind.COUNT,
+        has_contract=True,
+        has_mask_layout_form=True,
+    )
+    synthetic_masked_binary = AlgorithmSurfaceFamily(
+        "synthetic_count_masked_binary",
+        AlgorithmSemanticFamily.COUNT,
+        AlgorithmArity.BINARY,
+        AlgorithmShape.MASKED,
+        AlgorithmResultKind.COUNT,
+        has_contract=True,
+        has_mask_layout_form=True,
+    )
+    reachability = ("crate", "profile", "selection:synthetic", "algo")
+
+    for family in (synthetic_unary, synthetic_masked_binary):
+        default_form, layout_form = family.callable_forms
+        cpp = cpp_iteration_predicate_count_declarations(default_form)
+        assert [declaration.overload for declaration in cpp] == [
+            "algorithm-overload-4",
+            "algorithm-overload-2",
+            "algorithm-overload-3",
+            "algorithm-overload-1",
+        ]
+        for form in (default_form, layout_form):
+            rust = rust_iteration_predicate_count_function_declarations(
+                form,
+                reachability,
+            )
+            assert [declaration.name for declaration in rust] == [
+                f"{form.name}_checked",
+                f"{form.name}_raw",
+            ]
 
 
 def test_unregistered_form_is_explicitly_unsupported_by_both_backends() -> None:
