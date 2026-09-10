@@ -11,6 +11,7 @@ from tslc.backend.emitted_profile import (
 )
 from tslc.backend.rust import RustBackend
 from tslc.backend.rust_api_model import RustFacadePlan
+from tslc.backend.rust_algorithm_plan import RustAlgorithmPlan
 from tslc.backend.rust_dispatch import RustDispatchPlan
 from tslc.backend.rust_documentation import rust_checked_api_examples
 from tslc.backend.rust_benchmark_context import (
@@ -77,6 +78,7 @@ def _rust_artifacts(
     media_type: str,
     selection_plan: RustPolicySelectionPlan,
     static_selection_plan: RustStaticSelectionPlan,
+    algorithm_plan: RustAlgorithmPlan,
     facade_plan: RustFacadePlan,
     dispatch_plan: RustDispatchPlan,
     consumption_plan: RustPolicyConsumptionRenderPlan,
@@ -86,6 +88,8 @@ def _rust_artifacts(
     """Render compiler-owned plans that were finalized for this artifact pass."""
 
     emitted_names = {profile.profile.name for profile in profiles}
+    if {profile.profile_name for profile in algorithm_plan.profiles} != emitted_names:
+        raise ValueError("Rust algorithm plan does not match the project profiles")
     if any(
         entry.profile.profile_name not in emitted_names
         for entry in consumption_plan.profiles
@@ -178,6 +182,7 @@ def _rust_artifacts(
             rust_public_api_manifest(
                 profiles,
                 static_selection_plan,
+                algorithm_plan,
                 facade_plan,
                 dispatch_plan,
             ).serialize(),
@@ -201,6 +206,9 @@ def _rust_artifacts(
             )
         )
     for emitted_profile in profiles:
+        algorithm_profile = algorithm_plan.profile(emitted_profile.profile.name)
+        if algorithm_profile is None:
+            raise ValueError("Rust project rendering requires algorithm profiles")
         benchmark_layout = benchmark_layout_plan.profile(emitted_profile.profile.name)
         if benchmark_layout is None:
             raise ValueError("Rust project rendering requires benchmark layout profiles")
@@ -276,8 +284,10 @@ def _rust_artifacts(
             ).rstrip(),
             registrations=registrations,
             bodies=bodies,
-            algorithm=rust_algorithm_module(
-                by_primitive, emitted_profile.extensions, assets
+            algorithm=(
+                rust_algorithm_module(algorithm_profile, assets)
+                if algorithm_profile.supported
+                else ""
             ),
         )
         artifacts.append(
@@ -348,8 +358,10 @@ def _rust_artifacts(
             fallback_by_primitive, fallback_extensions
         ),
         bodies=fallback_bodies,
-        algorithm=rust_algorithm_module(
-            fallback_by_primitive, fallback_extensions, assets
+        algorithm=(
+            rust_algorithm_module(algorithm_plan.fallback, assets)
+            if algorithm_plan.fallback.supported
+            else ""
         ),
     )
     artifacts.append(

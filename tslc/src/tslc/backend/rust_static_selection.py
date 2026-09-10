@@ -108,6 +108,7 @@ class RustStaticProfileSelection:
     requirement: RustTargetRequirement
     stronger_requirements: tuple[RustTargetRequirement, ...]
     mappings: tuple[RustStaticVectorMapping, ...]
+    native_mappings: tuple[RustStaticVectorMapping, ...]
 
     def __post_init__(self) -> None:
         if not self.profile_name:
@@ -120,6 +121,15 @@ class RustStaticProfileSelection:
         keys = tuple((item.type_tag, item.lanes) for item in self.mappings)
         if len(set(keys)) != len(keys):
             raise ValueError("Rust static profile mappings must be unique")
+        native_types = tuple(item.type_tag for item in self.native_mappings)
+        if len(set(native_types)) != len(native_types):
+            raise ValueError("Rust static native mappings must be unique by type")
+        if any(item not in self.mappings for item in self.native_mappings):
+            raise ValueError(
+                "Rust static native mappings must reuse exact profile mappings"
+            )
+        if any(item.uses_sized_vector for item in self.native_mappings):
+            raise ValueError("Rust static native mappings must be fixed representations")
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,6 +198,12 @@ class RustStaticSelectionPlan:
             (profile for profile in self.profiles if profile.profile_name == profile_name),
             None,
         )
+
+    @property
+    def fallback_native_mappings(self) -> tuple[RustStaticVectorMapping, ...]:
+        """The exact scalar representation used by fallback ``Native`` policies."""
+
+        return tuple(mapping for mapping in self.fallback_mappings if mapping.lanes == 1)
 
 
 class RustStaticSelectionError(ValueError):
@@ -404,6 +420,7 @@ def _plan_rust_static_selection(
                 )
             ),
             mappings=mappings,
+            native_mappings=_native_profile_mappings(emitted_profile, mappings),
         )
         for emitted_profile, requirement, mappings in sorted(
             candidates,
@@ -420,6 +437,35 @@ def _plan_rust_static_selection(
         fallback_mappings,
         fallback_module,
     ), ()
+
+
+def _native_profile_mappings(
+    emitted_profile: EmittedProfile,
+    mappings: tuple[RustStaticVectorMapping, ...],
+) -> tuple[RustStaticVectorMapping, ...]:
+    """Select one native policy mapping while retaining the exact static record."""
+
+    by_type: dict[str, list[RustStaticVectorMapping]] = defaultdict(list)
+    for mapping in mappings:
+        if not mapping.uses_sized_vector:
+            by_type[mapping.type_tag].append(mapping)
+
+    def preference(mapping: RustStaticVectorMapping) -> tuple[int, int, str]:
+        extension = (
+            emitted_profile.extensions.get(mapping.extension_name)
+            if mapping.extension_name is not None
+            else None
+        )
+        return (
+            extension.metadata.native_sort_order or 0 if extension is not None else 0,
+            mapping.total_bits,
+            extension.isa_name if extension is not None else "",
+        )
+
+    return tuple(
+        max(by_type[type_tag], key=preference)
+        for type_tag in sorted(by_type)
+    )
 
 
 def _fallback_module(

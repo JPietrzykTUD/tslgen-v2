@@ -543,9 +543,16 @@ count. Neutral lowering never constructs a C++ or Rust lane-count expression.
   public signature per emitted Rust primitive; concrete profile availability
   stays in the specialization explorer, while normal builds select their
   `profile` alias from compile-target cfgs with an exact generic fallback.
-  Profile-local algorithm trait impls
-  share typed Scalar/Generic/concrete render targets in
-  [backend/rust_algorithm.py](src/tslc/backend/rust_algorithm.py). Static
+  [backend/rust_algorithm_plan.py](src/tslc/backend/rust_algorithm_plan.py)
+  finalizes profile-local algorithm admission, exact static/native mappings,
+  memory and optional-helper bindings, implementation targets, and primitive
+  facades before rendering. It reuses the mapping records selected by
+  `RustStaticSelectionPlan`; profiles without a compile-target selection reuse
+  that plan's exact generic fallback. The target formatter in
+  [backend/rust_algorithm.py](src/tslc/backend/rust_algorithm.py) consumes only
+  those decided facts and static assets. Missing mandatory contiguous memory
+  support remains a typed unsupported profile record rather than an empty
+  formatter result. Static
   algorithm-wrapper names are reserved by the compiler manifest in
   [backend/rust_algorithm_manifest.py](src/tslc/backend/rust_algorithm_manifest.py),
   with an asset-consistency test preventing drift.
@@ -629,8 +636,8 @@ the plan at the post-lowering boundary, exposing one compiler-owned input for
 Rust source, rustdoc, fixture, benchmark, and dispatch projections.
 For artifact production,
 [backend/rust_capability.py](src/tslc/backend/rust_capability.py) constructs the
-static-selection, facade, dispatch, policy-consumption, and benchmark-layout
-plans once. The private project boundary in
+static-selection, algorithm, facade, dispatch, policy-consumption, and
+benchmark-layout plans once. The private project boundary in
 [render/rust_project.py](src/tslc/render/rust_project.py) trusts and formats
 those frozen plans; it does not replan or recompute-and-compare them.
 

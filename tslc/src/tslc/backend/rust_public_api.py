@@ -6,7 +6,6 @@ from collections.abc import Mapping
 import json
 
 from tslc.backend.emitted_profile import EmittedProfile
-from tslc.backend.primitive_facade import contiguous_memory_primitive_facades
 from tslc.backend.public_api_manifest import BackendPublicApiManifest
 from tslc.backend.public_declarations import (
     PublicDeclarationClassificationScope,
@@ -14,6 +13,7 @@ from tslc.backend.public_declarations import (
     PublicDeclarationStability,
 )
 from tslc.backend.rust import RustBackend
+from tslc.backend.rust_algorithm_plan import RustAlgorithmPlan
 from tslc.backend.rust_algorithm_contracts import (
     rust_profile_scaled_checked_algorithm_declarations,
 )
@@ -390,6 +390,7 @@ def rust_root_declaration_holes(
 def rust_public_api_manifest(
     profiles: tuple[EmittedProfile, ...],
     static_selection_plan: RustStaticSelectionPlan,
+    algorithm_plan: RustAlgorithmPlan,
     facade_plan: RustFacadePlan,
     dispatch_plan: RustDispatchPlan,
 ) -> BackendPublicApiManifest:
@@ -412,6 +413,9 @@ def rust_public_api_manifest(
         raise ValueError("Rust public manifest selection is foreign to the profiles")
     for selection in static_selection_plan.profiles:
         emitted_profile = profiles_by_name[selection.profile_name]
+        algorithm_profile = algorithm_plan.profile(selection.profile_name)
+        if algorithm_profile is None:
+            raise ValueError("Rust public manifest requires algorithm profile facts")
         reachability = (
             "crate",
             "profile",
@@ -441,7 +445,7 @@ def rust_public_api_manifest(
                     name, specializations, reachability=reachability
                 )
             )
-        if contiguous_memory_primitive_facades(by_primitive) is not None:
+        if algorithm_profile.supported:
             algorithm_reachability = (*reachability, "algo")
             declarations.append(
                 rust_profile_algorithm_module_declaration(reachability)
@@ -500,7 +504,7 @@ def rust_public_api_manifest(
                 reachability=fallback_reachability,
             )
         )
-    if contiguous_memory_primitive_facades(fallback) is not None:
+    if algorithm_plan.fallback.supported:
         fallback_algorithm_reachability = (*fallback_reachability, "algo")
         declarations.append(
             rust_profile_algorithm_module_declaration(fallback_reachability)

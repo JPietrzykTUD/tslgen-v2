@@ -23,6 +23,7 @@ from tslc.backend.precondition_error_rendering import (
     rust_precondition_error,
 )
 from tslc.backend.rust_algorithm_manifest import RUST_ALGORITHM_RESERVED_NAMES
+from tslc.backend.rust_algorithm_plan import plan_rust_algorithm
 from tslc.backend.rust_api_planner import plan_rust_facade
 from tslc.backend.rust_dispatch import plan_rust_dispatch
 from tslc.backend.rust_public_api import (
@@ -397,6 +398,7 @@ def _exact_backend_declarations(
             + "; ".join(item.message for item in errors)
         )
     static_selection = plan_rust_static_selection(result.emitted_profiles)
+    algorithm = plan_rust_algorithm(result.emitted_profiles, static_selection)
     facade = plan_rust_facade(result.emitted_profiles, static_selection)
     dispatch = plan_rust_dispatch(result.emitted_profiles, static_selection, facade)
     return {
@@ -408,6 +410,7 @@ def _exact_backend_declarations(
         "rust": rust_public_api_manifest(
             result.emitted_profiles,
             static_selection,
+            algorithm,
             facade,
             dispatch,
         ).payload(),

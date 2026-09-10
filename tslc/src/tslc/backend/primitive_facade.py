@@ -97,6 +97,36 @@ class DataparallelPrimitiveFacadeDecision:
             )
 
 
+@dataclass(frozen=True, slots=True)
+class ContiguousMemoryPrimitiveFacades:
+    """The independently classified contiguous read/write facade slots."""
+
+    read: DataparallelPrimitiveFacade | None
+    write: DataparallelPrimitiveFacade | None
+
+    @property
+    def missing_accesses(self) -> tuple[MemoryAccess, ...]:
+        return tuple(
+            access
+            for access, facade in (
+                (MemoryAccess.READ, self.read),
+                (MemoryAccess.WRITE, self.write),
+            )
+            if facade is None
+        )
+
+    @property
+    def complete(self) -> bool:
+        return not self.missing_accesses
+
+    def require_complete(
+        self,
+    ) -> tuple[DataparallelPrimitiveFacade, DataparallelPrimitiveFacade]:
+        if self.read is None or self.write is None:
+            raise ValueError("contiguous-memory facade pair is incomplete")
+        return self.read, self.write
+
+
 def classify_dataparallel_primitive_facade(
     primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
 ) -> DataparallelPrimitiveFacade | None:
@@ -164,6 +194,15 @@ def contiguous_memory_primitive_facades(
 ] | None:
     """Return the unique typed contiguous read/write pair, when available."""
 
+    plan = plan_contiguous_memory_primitive_facades(by_primitive)
+    return plan.require_complete() if plan.complete else None
+
+
+def plan_contiguous_memory_primitive_facades(
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
+) -> ContiguousMemoryPrimitiveFacades:
+    """Classify both mandatory contiguous-memory facade slots."""
+
     by_access: dict[MemoryAccess, DataparallelPrimitiveFacade] = {}
     for primitive_name in sorted(by_primitive):
         decision = plan_dataparallel_primitive_facade(
@@ -190,17 +229,20 @@ def contiguous_memory_primitive_facades(
                 f"multiple contiguous-memory facades provide {access.value} access"
             )
         by_access[access] = facade
-    read = by_access.get(MemoryAccess.READ)
-    write = by_access.get(MemoryAccess.WRITE)
-    return None if read is None or write is None else (read, write)
+    return ContiguousMemoryPrimitiveFacades(
+        read=by_access.get(MemoryAccess.READ),
+        write=by_access.get(MemoryAccess.WRITE),
+    )
 
 
 __all__ = (
     "DataparallelPrimitiveFacade",
     "DataparallelPrimitiveFacadeDecision",
     "DataparallelPrimitiveFacadeKind",
+    "ContiguousMemoryPrimitiveFacades",
     "classify_dataparallel_primitive_facade",
     "contiguous_memory_primitive_facades",
+    "plan_contiguous_memory_primitive_facades",
     "plan_dataparallel_primitive_facade",
 )
 

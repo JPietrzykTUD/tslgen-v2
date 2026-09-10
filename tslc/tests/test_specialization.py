@@ -27,12 +27,18 @@ from tslc.backend.rust_dispatch import plan_rust_dispatch
 from tslc.backend.rust_names import rust_profile_module_name
 from tslc.backend.rust_public_api import rust_public_api_manifest
 from tslc.backend.rust_static_selection import plan_rust_static_selection
+from tslc.backend.rust_algorithm_plan import (
+    RustAlgorithmImplTarget,
+    plan_rust_algorithm,
+)
 from tslc.backend.rust_algorithm import (
-    _RustAlgorithmImplTarget,
     _rust_algorithm_load_store_impl,
     _rust_algorithm_scalar_selected_load_impl,
 )
-from tslc.backend.rust_facades import rust_algorithm_primitive_facades
+from tslc.backend.rust_facades import (
+    plan_rust_algorithm_primitive_facades,
+    rust_algorithm_primitive_facades,
+)
 from tslc.catalog.memory import (
     MemoryAccess,
     MemoryAddressing,
@@ -370,13 +376,14 @@ def test_semantically_renamed_memory_primitives_retain_shared_facades() -> None:
             "write_contiguous": write_specs,
         }
     ) == (read_facade, write_facade)
-    rust = rust_algorithm_primitive_facades(
+    facade_records = plan_rust_algorithm_primitive_facades(
         {
             "read_contiguous": read_specs,
             "write_contiguous": write_specs,
         },
         reserved_names=frozenset(),
     )
+    rust = rust_algorithm_primitive_facades(facade_records)
     assert "pub unsafe fn read_contiguous<" in rust
     assert "Read_contiguousImpl<ALIGNED>" in rust
     assert "super::read_contiguous::<" in rust
@@ -384,16 +391,26 @@ def test_semantically_renamed_memory_primitives_retain_shared_facades() -> None:
     assert "Write_contiguousImplArg<" in rust
     assert "super::write_contiguous::<" in rust
 
+    rust_read_facade = next(
+        facade
+        for facade in facade_records
+        if facade.memory_access is MemoryAccess.READ
+    )
+    rust_write_facade = next(
+        facade
+        for facade in facade_records
+        if facade.memory_access is MemoryAccess.WRITE
+    )
     load_store = _rust_algorithm_load_store_impl(
-        _RustAlgorithmImplTarget("T", "Simd<T, Scalar>"),
-        read_facade,
-        write_facade,
+        RustAlgorithmImplTarget("T", "Simd<T, Scalar>"),
+        rust_read_facade,
+        rust_write_facade,
     )
     assert "Read_contiguousImpl<false>" in load_store
     assert "super::read_contiguous::<Simd<T, Scalar>, false>" in load_store
     assert "Write_contiguousImplArg<Simd<T, Scalar>, false>" in load_store
     assert "super::write_contiguous::<Simd<T, Scalar>, false, _>" in load_store
-    selected_load = _rust_algorithm_scalar_selected_load_impl(read_facade)
+    selected_load = _rust_algorithm_scalar_selected_load_impl(rust_read_facade)
     assert "Read_contiguousImpl<false>" in selected_load
     assert "super::read_contiguous::<Simd<T, Scalar>, false>" in selected_load
 
@@ -1146,11 +1163,12 @@ def test_generated_public_manifests_match_the_finalized_backend_plans(
 ) -> None:
     profiles = specialization_result.emitted_profiles
     static_selection = plan_rust_static_selection(profiles)
+    algorithm = plan_rust_algorithm(profiles, static_selection)
     facade = plan_rust_facade(profiles, static_selection)
     dispatch = plan_rust_dispatch(profiles, static_selection, facade)
     cpp_manifest = cpp_public_api_manifest(profiles)
     rust_manifest_plan = rust_public_api_manifest(
-        profiles, static_selection, facade, dispatch
+        profiles, static_selection, algorithm, facade, dispatch
     )
 
     assert json.loads(specialization_artifacts["cpp/public-api.json"]) == (
@@ -1167,6 +1185,7 @@ def test_generated_public_manifests_match_the_finalized_backend_plans(
     )
     reversed_profiles = tuple(reversed(profiles))
     reversed_selection = plan_rust_static_selection(reversed_profiles)
+    reversed_algorithm = plan_rust_algorithm(reversed_profiles, reversed_selection)
     reversed_facade = plan_rust_facade(reversed_profiles, reversed_selection)
     reversed_dispatch = plan_rust_dispatch(
         reversed_profiles,
@@ -1179,11 +1198,13 @@ def test_generated_public_manifests_match_the_finalized_backend_plans(
     assert rust_public_api_manifest(
         reversed_profiles,
         reversed_selection,
+        reversed_algorithm,
         reversed_facade,
         reversed_dispatch,
     ).serialize() == rust_public_api_manifest(
         profiles,
         static_selection,
+        algorithm,
         facade,
         dispatch,
     ).serialize()
