@@ -985,6 +985,12 @@ def test_rust_path_dependency_consumer_builds(
     packaged_paths = set(packaged.stdout.splitlines())
     assert {"Cargo.toml", "README.md", "src/lib.rs", "src/tsl_facade.rs"} <= packaged_paths
     assert {
+        "src/tsl_algorithm.rs",
+        "src/tsl_algorithm/representation.rs",
+        "src/tsl_algorithm/masks.rs",
+        "src/tsl_algorithm/kernel_traits.rs",
+        "src/tsl_algorithm/validation.rs",
+        "src/tsl_algorithm/families.rs",
         "src/tsl_scalar/algo.rs",
         "src/tsl_scalar/algo/support.rs",
         "src/tsl_scalar/algo/transform.rs",

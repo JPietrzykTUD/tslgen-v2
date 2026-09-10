@@ -3,6 +3,7 @@
             policy, count,
         )
     }
+
 @{profile_algorithm_declaration_mask_chunk_count}
         crate::tsl_algorithm::mask_chunk_count::<Profile, Policy, Layout, T>(
             policy, count,

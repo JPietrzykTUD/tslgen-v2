@@ -442,6 +442,11 @@ def test_artifact_layout(specialization_result) -> None:
         "cpp/tests/smoke_avx2.cpp",
         "rust/src/tsl_core.rs",
         "rust/src/tsl_algorithm.rs",
+        "rust/src/tsl_algorithm/representation.rs",
+        "rust/src/tsl_algorithm/masks.rs",
+        "rust/src/tsl_algorithm/kernel_traits.rs",
+        "rust/src/tsl_algorithm/validation.rs",
+        "rust/src/tsl_algorithm/families.rs",
         "rust/src/tsl_avx2.rs",
         "rust/src/lib.rs",
     } <= paths
@@ -689,7 +694,17 @@ def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
 def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     specialization_artifacts: dict[str, str]
 ) -> None:
-    helper = specialization_artifacts["rust/src/tsl_algorithm.rs"]
+    helper_root = specialization_artifacts["rust/src/tsl_algorithm.rs"]
+    helper = "\n".join(
+        (
+            helper_root,
+            *(
+                content
+                for path, content in sorted(specialization_artifacts.items())
+                if path.startswith("rust/src/tsl_algorithm/")
+            ),
+        )
+    )
     lib = specialization_artifacts["rust/src/lib.rs"]
     cargo = specialization_artifacts["rust/Cargo.toml"]
     avx2_parent = specialization_artifacts["rust/src/tsl_avx2.rs"]
@@ -715,6 +730,10 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     assert "avx2 = []" not in cargo
     assert "pub mod tsl_algorithm;" in lib
     assert "pub use tsl_algorithm::dataparallel;" in lib
+    assert "mod representation;" in helper_root
+    assert "pub mod representation;" not in helper_root
+    assert "pub use self::representation::{" in helper_root
+    assert "pub use self::families::{" in helper_root
     assert "#[doc(hidden)]\npub mod tsl_test_core;" in lib
     assert "#[doc(hidden)]\npub mod primitive {" in lib
     assert "#[cfg(doc)]\n#[doc(hidden)]\npub mod tsl_documentation;" in lib

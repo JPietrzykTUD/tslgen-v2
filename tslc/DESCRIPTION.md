@@ -572,6 +572,13 @@ count. Neutral lowering never constructs a C++ or Rust lane-count expression.
   algorithm-wrapper names are reserved by the compiler manifest in
   [backend/rust_algorithm_manifest.py](src/tslc/backend/rust_algorithm_manifest.py),
   with an asset-consistency test preventing drift.
+  [backend/rust_algorithm_facade.py](src/tslc/backend/rust_algorithm_facade.py)
+  separately formats the shared `tsl_algorithm` facade. Its stable root module
+  explicitly re-exports public policy/representation types, mask layouts,
+  kernel traits, and callable algorithms from private generated children.
+  Representation, mask, kernel-trait, and range/address-validation substrate
+  modules depend only on shared substrate; the temporary family implementation
+  module may consume them but is never imported by them.
 
 The public safety surface is a typed projection, not a renderer convention.
 [backend/checked_api.py](src/tslc/backend/checked_api.py) admits a `_checked`

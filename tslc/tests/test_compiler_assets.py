@@ -174,6 +174,11 @@ def test_rust_project_renderer_consumes_injected_assets() -> None:
             "rustfmt.toml": "# injected rustfmt\n",
             "tsl_core.rs": "// injected core\n",
             "tsl_algorithm.rs": "// injected algorithm\n",
+            "tsl_algorithm_representation.rs": "// injected representation\n",
+            "tsl_algorithm_masks.rs": "// injected masks\n",
+            "tsl_algorithm_kernel_traits.rs": "// injected kernels\n",
+            "tsl_algorithm_validation.rs": "// injected validation\n",
+            "tsl_algorithm_families.rs": "// injected families\n",
             "tsl_rust_cpu_identity.rs": "// injected CPU identity\n",
             "tsl_rust_policy_json.rs": "// injected policy JSON\n",
             "tsl_rust_variant_policy.rs": "// injected policy consumer\n",
@@ -225,6 +230,19 @@ def test_rust_project_renderer_consumes_injected_assets() -> None:
 
     assert rendered["rust/src/tsl_core.rs"] == "// injected core\n"
     assert rendered["rust/src/tsl_algorithm.rs"] == "// injected algorithm\n"
+    assert rendered["rust/src/tsl_algorithm/representation.rs"] == (
+        "// injected representation\n"
+    )
+    assert rendered["rust/src/tsl_algorithm/masks.rs"] == "// injected masks\n"
+    assert rendered["rust/src/tsl_algorithm/kernel_traits.rs"] == (
+        "// injected kernels\n"
+    )
+    assert rendered["rust/src/tsl_algorithm/validation.rs"] == (
+        "// injected validation\n"
+    )
+    assert rendered["rust/src/tsl_algorithm/families.rs"] == (
+        "// injected families\n"
+    )
     assert rendered["rust/src/tsl_facade.rs"] == "// injected facade\n\n"
     assert rendered["rust/src/tsl_rust_cpu_identity.rs"] == (
         "// injected CPU identity\n"

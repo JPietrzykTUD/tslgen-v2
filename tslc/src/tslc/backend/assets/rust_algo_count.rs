@@ -7,6 +7,7 @@
             policy, op, input,
         )
     }
+
 @{profile_algorithm_declaration_count_unary_raw}
         unsafe {
             crate::tsl_algorithm::count_unary_raw::<Profile, Policy, Op, T>(

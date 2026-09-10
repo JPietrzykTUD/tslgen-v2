@@ -8,6 +8,7 @@
             policy, op, input, indices,
         )
     }
+
 @{profile_algorithm_declaration_consume_selected_unary_raw}
         unsafe {
             crate::tsl_algorithm::consume_selected_unary_raw::<Profile, Policy, Op, T>(

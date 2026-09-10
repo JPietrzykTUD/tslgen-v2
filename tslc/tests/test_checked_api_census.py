@@ -35,7 +35,7 @@ def test_runtime_site_classification_does_not_leak_from_adjacent_context() -> No
 
     assert (
         _classify_runtime_site(
-            "tslc/src/tslc/backend/assets/tsl_algorithm.rs",
+            "tslc/src/tslc/backend/assets/tsl_algorithm_families.rs",
             "assert_eq",
             statement,
             context,

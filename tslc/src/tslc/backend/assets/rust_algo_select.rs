@@ -8,6 +8,7 @@
             policy, op, input, output,
         )
     }
+
 @{profile_algorithm_declaration_select_unary_raw}
         unsafe {
             crate::tsl_algorithm::select_unary_raw::<Profile, Policy, Op, T>(

@@ -16,7 +16,10 @@ from tslc.backend.rust_algorithm import (
     rust_algorithm_root_module,
     rust_algorithm_support_module,
 )
-from tslc.backend.rust_algorithm_contracts import rust_algorithm_contract_holes
+from tslc.backend.rust_algorithm_facade import (
+    rust_algorithm_facade_child_modules,
+    rust_algorithm_facade_root_module,
+)
 from tslc.backend.rust_algorithm_plan import (
     RustAlgorithmPlan,
     RustAlgorithmProfilePlan,
@@ -139,11 +142,16 @@ def _rust_artifacts(
         ),
         text(
             "rust/src/tsl_algorithm.rs",
-            assets.fill(
-                "tsl_algorithm.rs",
-                **rust_algorithm_contract_holes(),
-            ),
+            rust_algorithm_facade_root_module(assets),
             media_type=media_type,
+        ),
+        *(
+            text(
+                f"rust/src/tsl_algorithm/{module.module_name}.rs",
+                module.content,
+                media_type=media_type,
+            )
+            for module in rust_algorithm_facade_child_modules(assets)
         ),
         text(
             "rust/src/tsl_facade.rs",

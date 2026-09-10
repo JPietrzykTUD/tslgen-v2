@@ -113,7 +113,7 @@ def test_algorithm_contract_registry_covers_every_checked_family() -> None:
 def test_generated_checked_surface_exactly_projects_the_registry() -> None:
     assets = load_default_render_assets()
     holes = rust_algorithm_contract_holes()
-    rust = assets.fill("tsl_algorithm.rs", **holes)
+    rust = assets.fill("tsl_algorithm_families.rs", **holes)
     profile = "\n".join(
         assets.fill(name, **holes)
         for name in (
@@ -325,7 +325,7 @@ def test_generated_transform_checked_surfaces_use_contract_guards(
         "range_size(output)"
     )
 
-    rust = artifacts["rust/src/tsl_algorithm.rs"]
+    rust = artifacts["rust/src/tsl_algorithm/families.rs"]
     profile = artifacts["rust/src/tsl_scalar/algo/transform.rs"]
     assert "pub fn transform_unary_checked<" in rust
     assert "return Err(crate::PreconditionError::InsufficientOutput);" in rust

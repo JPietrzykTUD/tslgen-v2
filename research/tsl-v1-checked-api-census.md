@@ -183,21 +183,21 @@ It is not part of a generated runtime API contract.
 
 Sizes, lane counts, and mask-storage capacity are compiler-owned specialization facts.
 
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6730` — owner `aggregate_binary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::aggregate_binary requires a vector with at least one lane", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:5041` — owner `aggregate_selected_binary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::aggregate_selected_binary requires a vector with at least one lane", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:4921` — owner `aggregate_selected_unary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::aggregate_selected_unary requires a vector with at least one lane", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6654` — owner `aggregate_unary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::aggregate_unary requires a vector with at least one lane", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6370` — owner `consume_binary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::consume_binary requires a vector with at least one lane", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:4792` — owner `consume_selected_binary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::consume_selected_binary requires a vector with at least one lane", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:4675` — owner `consume_selected_unary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::consume_selected_unary requires a vector with at least one lane", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6301` — owner `consume_unary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::consume_unary requires a vector with at least one lane", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:869` — owner `for_each_chunk_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::for_each_chunk requires a vector with at least one lane", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6220` — owner `transform_binary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_binary requires a vector with at least one lane", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:4538` — owner `transform_selected_binary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_selected_binary requires a vector with at least one lane", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:4404` — owner `transform_selected_unary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_selected_unary requires a vector with at least one lane", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:6134` — owner `transform_unary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_unary requires a vector with at least one lane", );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:662` — owner `validate_integral_mask_vector` — `assert` — `assert!( lanes <= <V::ImaskType as IntegralMaskWord>::BITS, "{} requires an integral mask storage type with at least one bit per lane", helper_name, );`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:657` — owner `validate_integral_mask_vector` — `assert` — `assert!( lanes > 0, "{} requires a vector with at least one lane", helper_name, );`
+- `tslc/src/tslc/backend/assets/tsl_algorithm_families.rs:5950` — owner `aggregate_binary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::aggregate_binary requires a vector with at least one lane", );`
+- `tslc/src/tslc/backend/assets/tsl_algorithm_families.rs:4261` — owner `aggregate_selected_binary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::aggregate_selected_binary requires a vector with at least one lane", );`
+- `tslc/src/tslc/backend/assets/tsl_algorithm_families.rs:4141` — owner `aggregate_selected_unary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::aggregate_selected_unary requires a vector with at least one lane", );`
+- `tslc/src/tslc/backend/assets/tsl_algorithm_families.rs:5874` — owner `aggregate_unary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::aggregate_unary requires a vector with at least one lane", );`
+- `tslc/src/tslc/backend/assets/tsl_algorithm_families.rs:5590` — owner `consume_binary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::consume_binary requires a vector with at least one lane", );`
+- `tslc/src/tslc/backend/assets/tsl_algorithm_families.rs:4012` — owner `consume_selected_binary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::consume_selected_binary requires a vector with at least one lane", );`
+- `tslc/src/tslc/backend/assets/tsl_algorithm_families.rs:3895` — owner `consume_selected_unary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::consume_selected_unary requires a vector with at least one lane", );`
+- `tslc/src/tslc/backend/assets/tsl_algorithm_families.rs:5521` — owner `consume_unary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::consume_unary requires a vector with at least one lane", );`
+- `tslc/src/tslc/backend/assets/tsl_algorithm_families.rs:89` — owner `for_each_chunk_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::for_each_chunk requires a vector with at least one lane", );`
+- `tslc/src/tslc/backend/assets/tsl_algorithm_families.rs:5440` — owner `transform_binary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_binary requires a vector with at least one lane", );`
+- `tslc/src/tslc/backend/assets/tsl_algorithm_families.rs:3758` — owner `transform_selected_binary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_selected_binary requires a vector with at least one lane", );`
+- `tslc/src/tslc/backend/assets/tsl_algorithm_families.rs:3624` — owner `transform_selected_unary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_selected_unary requires a vector with at least one lane", );`
+- `tslc/src/tslc/backend/assets/tsl_algorithm_families.rs:5354` — owner `transform_unary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_unary requires a vector with at least one lane", );`
+- `tslc/src/tslc/backend/assets/tsl_algorithm_masks.rs:469` — owner `validate_integral_mask_vector` — `assert` — `assert!( lanes <= <V::ImaskType as IntegralMaskWord>::BITS, "{} requires an integral mask storage type with at least one bit per lane", helper_name, );`
+- `tslc/src/tslc/backend/assets/tsl_algorithm_masks.rs:464` — owner `validate_integral_mask_vector` — `assert` — `assert!( lanes > 0, "{} requires a vector with at least one lane", helper_name, );`
 - `tslc/src/tslc/backend/assets/tsl_core.hpp:589` — owner `require_same_lanes` — `throw` — `throw std::invalid_argument( "lane-preserving conversion requires equal source and target lane counts" );`
 - `tslc/src/tslc/backend/assets/tsl_core.hpp:587` — owner `require_same_lanes` — `trap` — `__builtin_trap();`
 - `tslc/src/tslc/backend/assets/tsl_core.rs:313` — owner `bit_cast` — `assert_eq` — `assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());`
@@ -208,7 +208,7 @@ Sizes, lane counts, and mask-storage capacity are compiler-owned specialization 
 
 The operand is an immediate rather than caller-controlled runtime data.
 
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:680` — owner `selected_row_scale` — `assert` — `assert!(scale > 0, "tsl::algo selected-row scale must be nonzero");`
+- `tslc/src/tslc/backend/assets/tsl_algorithm_validation.rs:11` — owner `selected_row_scale` — `assert` — `assert!(scale > 0, "tsl::algo selected-row scale must be nonzero");`
 - `tslc/src/tslc/backend/rust_signatures.py:174` — owner `_arithmetic_precondition` — `assert` — `f"const {{ assert!(({precondition.parameter_name} as "`
 
 ### `static_immediate_range` (1)
@@ -247,8 +247,8 @@ This is a compiler/backend defect if reachable, not invalid caller data.
 
 The condition is not part of the public call domain.
 
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:146` — owner `lane_is_set` — `debug_assert` — `debug_assert!(lane < <Self as IntegralMaskWord>::BITS);`
-- `tslc/src/tslc/backend/assets/tsl_algorithm.rs:133` — owner `one_at` — `debug_assert` — `debug_assert!(lane < <Self as IntegralMaskWord>::BITS);`
+- `tslc/src/tslc/backend/assets/tsl_algorithm_masks.rs:66` — owner `lane_is_set` — `debug_assert` — `debug_assert!(lane < <Self as IntegralMaskWord>::BITS);`
+- `tslc/src/tslc/backend/assets/tsl_algorithm_masks.rs:53` — owner `one_at` — `debug_assert` — `debug_assert!(lane < <Self as IntegralMaskWord>::BITS);`
 - `tslc/src/tslc/backend/assets/tsl_core.rs:772` — owner `ostream_write` — `unwrap` — `.unwrap()`
 
 ## Typed `caller_unsafe` public paths

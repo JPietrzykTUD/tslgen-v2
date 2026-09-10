@@ -6,6 +6,7 @@
             policy, op, input, masks,
         )
     }
+
 @{profile_algorithm_declaration_predicate_unary_raw}
         unsafe {
             crate::tsl_algorithm::predicate_unary_raw::<Profile, Policy, Op, T>(
