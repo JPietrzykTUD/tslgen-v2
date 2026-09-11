@@ -440,9 +440,16 @@ def test_machine_profiles_loaded(machine_profiles) -> None:
     )
     assert machine_profiles["neon"].flags_for_backend("cpp") == ()
     assert machine_profiles["sve"].features == frozenset({"sve"})
-    assert machine_profiles["sve"].flags_for_backend("cpp") == ("-mcpu=a64fx",)
-    for profile_name in ("sve", "sve128", "sve256", "sve512"):
+    expected_sve_flags = {
+        "sve": ("-march=armv8.2-a+sve", "-msve-vector-bits=scalable"),
+        "sve128": ("-march=armv8.2-a+sve", "-msve-vector-bits=128"),
+        "sve256": ("-march=armv8.2-a+sve", "-msve-vector-bits=256"),
+        "sve512": ("-march=armv8.2-a+sve", "-msve-vector-bits=512"),
+    }
+    for profile_name, expected_flags in expected_sve_flags.items():
         profile = machine_profiles[profile_name]
+        assert profile.flags_for_backend("cpp") == expected_flags
+        assert all(not flag.startswith("-mcpu=") for flag in expected_flags)
         assert profile.supported_backends == frozenset({"cpp"})
         assert profile.supports_backend("cpp")
         assert not profile.supports_backend("rust")
@@ -466,10 +473,6 @@ def test_machine_profiles_loaded(machine_profiles) -> None:
         {"sve_vector_bits_512"}
     )
     assert machine_profiles["sve512"].auto_detect_gate is None
-    assert machine_profiles["sve512"].flags_for_backend("cpp") == (
-        "-mcpu=a64fx",
-        "-msve-vector-bits=512",
-    )
     assert machine_profiles["skylake-oneapi"].compile_modes == frozenset(
         {"oneapi_fpga"}
     )

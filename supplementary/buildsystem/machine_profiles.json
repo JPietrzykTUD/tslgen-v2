@@ -138,7 +138,7 @@
     {
       "name": "sve",
       "target_features": "sve",
-      "backend_flags": {"cpp": ["-mcpu=a64fx"]},
+      "backend_flags": {"cpp": ["-march=armv8.2-a+sve", "-msve-vector-bits=scalable"]},
       "supported_backends": ["cpp"],
       "runner": {
         "kind": "qemu-aarch64",
@@ -163,7 +163,7 @@
       "name": "sve128",
       "target_features": "neon sve",
       "compile_modes": "sve_vector_bits_128",
-      "backend_flags": {"cpp": ["-mcpu=a64fx", "-msve-vector-bits=128"]},
+      "backend_flags": {"cpp": ["-march=armv8.2-a+sve", "-msve-vector-bits=128"]},
       "supported_backends": ["cpp"],
       "runner": {
         "kind": "qemu-aarch64",
@@ -176,7 +176,7 @@
       "name": "sve256",
       "target_features": "neon sve",
       "compile_modes": "sve_vector_bits_256",
-      "backend_flags": {"cpp": ["-mcpu=a64fx", "-msve-vector-bits=256"]},
+      "backend_flags": {"cpp": ["-march=armv8.2-a+sve", "-msve-vector-bits=256"]},
       "supported_backends": ["cpp"],
       "runner": {
         "kind": "qemu-aarch64",
@@ -189,7 +189,7 @@
       "name": "sve512",
       "target_features": "neon sve",
       "compile_modes": "sve_vector_bits_512",
-      "backend_flags": {"cpp": ["-mcpu=a64fx", "-msve-vector-bits=512"]},
+      "backend_flags": {"cpp": ["-march=armv8.2-a+sve", "-msve-vector-bits=512"]},
       "supported_backends": ["cpp"],
       "runner": {
         "kind": "qemu-aarch64",

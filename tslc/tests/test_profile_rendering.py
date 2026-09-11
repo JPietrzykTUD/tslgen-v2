@@ -1032,7 +1032,7 @@ def test_fixed_sve_profile_registers_guarded_static_cpp_simd_types(
     assert f"#if defined(TSL_PROFILE_SVE{width})" in dispatch
     assert (
         f"target_compile_options(tsl_profile_sve{width} INTERFACE "
-        "$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang,IntelLLVM>:-mcpu=a64fx> "
+        "$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang,IntelLLVM>:-march=armv8.2-a+sve> "
         f"$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang,IntelLLVM>:-msve-vector-bits={width}>)"
     ) in cmake
     assert f"__ARM_FEATURE_SVE_BITS == {width}" in cmake
@@ -1080,7 +1080,12 @@ def test_sve_profile_registers_scalable_cpp_simd_types(
         "target_compile_definitions(tsl_profile_sve INTERFACE TSL_PROFILE_SVE"
         in cmake
     )
-    assert "target_compile_options(tsl_profile_sve INTERFACE $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang,IntelLLVM>:-mcpu=a64fx>)" in cmake
+    assert (
+        "target_compile_options(tsl_profile_sve INTERFACE "
+        "$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang,IntelLLVM>:-march=armv8.2-a+sve> "
+        "$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang,IntelLLVM>:"
+        "-msve-vector-bits=scalable>)"
+    ) in cmake
     assert any(
         case.kind == "scalable_golden"
         and case.scalable is not None
