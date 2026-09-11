@@ -16,6 +16,7 @@ from tslc.maintenance.implementation_slot_ratchet import (
     classify_entries,
     deserialize,
     diff_snapshots,
+    implementation_coverage_gaps,
     implementation_quality_gaps,
     serialize,
 )
@@ -181,6 +182,51 @@ def test_quality_improvement_is_not_a_regression() -> None:
     assert [change.kind for change in diff.changes] == ["improved"]
 
 
+def test_portable_primitive_becoming_target_specific_is_a_regression() -> None:
+    baseline = _snapshot(ImplementationSlotClass.COMPOSED)
+    current = replace(baseline, target_specific_primitives=("probe",))
+
+    regressions = diff_snapshots(baseline, current).regressions
+
+    assert len(regressions) == 1
+    assert regressions[0].detail == (
+        "portable primitive contract became target-specific: probe"
+    )
+
+
+def test_target_specific_primitive_becoming_portable_is_an_improvement() -> None:
+    current = _snapshot(ImplementationSlotClass.COMPOSED)
+    baseline = replace(current, target_specific_primitives=("probe",))
+
+    diff = diff_snapshots(baseline, current)
+
+    assert not diff.regressions
+    assert [change.kind for change in diff.changes] == ["improved"]
+
+
+def test_new_target_specific_primitive_is_additive() -> None:
+    baseline = _snapshot(ImplementationSlotClass.COMPOSED)
+    new_key = replace(_KEY, primitive="new_target_primitive")
+    current = replace(
+        baseline,
+        slots={
+            **baseline.slots,
+            SlotIdentity(new_key, None): SlotRecord(
+                ImplementationSlotClass.UNSUPPORTED,
+                TargetSupportStatus.NOT_APPLICABLE,
+                "TSL-SELECT-TARGET-SPECIFIC-UNAVAILABLE",
+                None,
+            ),
+        },
+        target_specific_primitives=("new_target_primitive",),
+    )
+
+    diff = diff_snapshots(baseline, current)
+
+    assert not diff.regressions
+    assert [change.kind for change in diff.changes] == ["added"]
+
+
 def test_absent_slot_replaced_by_native_realization_is_an_improvement() -> None:
     absent = Snapshot(
         backend_profiles=(("cpp", ("avx2",)),),
@@ -235,6 +281,71 @@ def test_absent_unsupported_slot_is_not_an_implementation_quality_gap() -> None:
     )
 
     assert not implementation_quality_gaps(snapshot)
+
+
+def test_absent_shared_logical_slot_is_an_implementation_coverage_gap() -> None:
+    snapshot = Snapshot(
+        backend_profiles=(("cpp", ("avx2",)),),
+        types=("si32",),
+        slots={
+            SlotIdentity(_KEY, None): SlotRecord(
+                ImplementationSlotClass.UNSUPPORTED,
+                TargetSupportStatus.ABSENT,
+                "TSL-SELECT-NO-CANDIDATE",
+                None,
+            )
+        },
+        parity_extensions=("avx2",),
+    )
+
+    gaps = implementation_coverage_gaps(snapshot)
+
+    assert len(gaps) == 1
+    assert gaps[0].kind == "coverage-gap"
+
+
+def test_not_applicable_axis_is_not_an_implementation_coverage_gap() -> None:
+    snapshot = Snapshot(
+        backend_profiles=(("cpp", ("avx2",)),),
+        types=("si32",),
+        slots={
+            SlotIdentity(_KEY, None): SlotRecord(
+                ImplementationSlotClass.UNSUPPORTED,
+                TargetSupportStatus.NOT_APPLICABLE,
+                "TSL-SELECT-NO-COMPATIBLE-BASE-TARGET",
+                None,
+            )
+        },
+        parity_extensions=("avx2",),
+    )
+
+    assert not implementation_coverage_gaps(snapshot)
+
+
+def test_one_supported_profile_satisfies_the_logical_coverage_slot() -> None:
+    absent = SlotIdentity(_KEY, None)
+    supported = SlotIdentity(replace(_KEY, profile="skylake"), _REALIZATION)
+    snapshot = Snapshot(
+        backend_profiles=(("cpp", ("avx2", "skylake")),),
+        types=("si32",),
+        slots={
+            absent: SlotRecord(
+                ImplementationSlotClass.UNSUPPORTED,
+                TargetSupportStatus.ABSENT,
+                "TSL-SELECT-NO-CANDIDATE",
+                None,
+            ),
+            supported: SlotRecord(
+                ImplementationSlotClass.COMPOSED,
+                TargetSupportStatus.EMITTED,
+                None,
+                ImplementationState.COMPOSED.value,
+            ),
+        },
+        parity_extensions=("avx2",),
+    )
+
+    assert not implementation_coverage_gaps(snapshot)
 
 
 def test_new_unsupported_primitive_slot_is_additive_not_a_regression() -> None:

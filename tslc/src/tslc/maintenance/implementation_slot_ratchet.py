@@ -12,6 +12,8 @@ import sys
 from typing import cast
 
 from tslc.api import generate_project
+from tslc.authoring import check_catalog
+from tslc.catalog.model import PrimitivePortability
 from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS
 from tslc.diagnostics import has_errors
 from tslc.maintenance import _repo_context
@@ -28,7 +30,7 @@ from tslc.target_support import (
 )
 
 
-_BASELINE_VERSION = 1
+_BASELINE_VERSION = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +62,8 @@ class Snapshot:
     backend_profiles: tuple[tuple[str, tuple[str, ...]], ...]
     types: tuple[str, ...]
     slots: dict[SlotIdentity, SlotRecord]
+    parity_extensions: tuple[str, ...] = ()
+    target_specific_primitives: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,6 +156,8 @@ def classify_entries(
     *,
     backend_profiles: tuple[tuple[str, tuple[str, ...]], ...],
     types: tuple[str, ...],
+    parity_extensions: tuple[str, ...] = (),
+    target_specific_primitives: tuple[str, ...] = (),
 ) -> Snapshot:
     """Project compiler-owned exact outcomes without selecting or inspecting text."""
 
@@ -171,7 +177,13 @@ def classify_entries(
         previous = slots.setdefault(identity, record)
         if previous != record:
             raise ValueError(f"conflicting target-support outcome for {_label(identity)}")
-    return Snapshot(backend_profiles, types, slots)
+    return Snapshot(
+        backend_profiles,
+        types,
+        slots,
+        parity_extensions,
+        target_specific_primitives,
+    )
 
 
 def compute_snapshot(
@@ -201,8 +213,32 @@ def compute_snapshot(
         )
     )
     backends = tuple(backend for backend, _profiles in backend_profiles)
+    source_root = sources or context.data_root
+    checked = check_catalog((source_root,), backends=backends)
+    if checked.catalog is None or has_errors(checked.diagnostics):
+        return None, tuple(
+            f"[{diagnostic.severity}] {diagnostic.code}: {diagnostic.message}"
+            for diagnostic in checked.diagnostics
+            if diagnostic.severity == "error"
+        )
+    parity_extensions = tuple(
+        sorted(
+            extension.name
+            for extension in checked.catalog.extensions.values()
+            if all(extension.supports_backend(backend) for backend in backends)
+        )
+    )
+    target_specific_primitives = tuple(
+        sorted(
+            {
+                primitive.name
+                for primitive in checked.catalog.primitives
+                if primitive.portability is PrimitivePortability.TARGET_SPECIFIC
+            }
+        )
+    )
     result = generate_project(
-        [sources or context.data_root],
+        [source_root],
         machine_profiles_path=machine_profiles or context.machine_profiles_path,
         profiles=profiles,
         backend_profiles=dict(backend_profiles),
@@ -225,6 +261,8 @@ def compute_snapshot(
                 result.target_support.entries,
                 backend_profiles=backend_profiles,
                 types=DEFAULT_SCALAR_TYPE_TAGS,
+                parity_extensions=parity_extensions,
+                target_specific_primitives=target_specific_primitives,
             ),
             (),
         )
@@ -239,9 +277,40 @@ def diff_snapshots(baseline: Snapshot, current: Snapshot) -> DiffReport:
     if (
         baseline.backend_profiles != current.backend_profiles
         or baseline.types != current.types
+        or baseline.parity_extensions != current.parity_extensions
     ):
         changes.append(
             SlotChange(None, "regressed", "canonical backend/profile/type scope changed")
+        )
+    baseline_primitives = {identity.key.primitive for identity in baseline.slots}
+    newly_target_specific = sorted(
+        (
+            set(current.target_specific_primitives)
+            - set(baseline.target_specific_primitives)
+        )
+        & baseline_primitives
+    )
+    if newly_target_specific:
+        changes.append(
+            SlotChange(
+                None,
+                "regressed",
+                "portable primitive contract became target-specific: "
+                + ", ".join(newly_target_specific),
+            )
+        )
+    newly_portable = sorted(
+        set(baseline.target_specific_primitives)
+        - set(current.target_specific_primitives)
+    )
+    if newly_portable:
+        changes.append(
+            SlotChange(
+                None,
+                "improved",
+                "target-specific primitive contract became portable: "
+                + ", ".join(newly_portable),
+            )
         )
 
     old_by_key = _by_expected_key(baseline)
@@ -287,6 +356,58 @@ def implementation_quality_gaps(snapshot: Snapshot) -> tuple[SlotChange, ...]:
         )
         if record.status is TargetSupportStatus.EMITTED
         and record.classification is ImplementationSlotClass.UNSUPPORTED
+    )
+
+
+def implementation_coverage_gaps(snapshot: Snapshot) -> tuple[SlotChange, ...]:
+    """Return shared-extension logical slots with no supported realization."""
+
+    gaps: list[SlotChange] = []
+    grouped: dict[tuple[object, ...], list[tuple[SlotIdentity, SlotRecord]]] = (
+        defaultdict(list)
+    )
+    for identity, record in snapshot.slots.items():
+        if identity.key.target_extension not in snapshot.parity_extensions:
+            continue
+        grouped[_logical_slot_key(identity.key)].append((identity, record))
+    for _key, outcomes in sorted(grouped.items(), key=lambda item: item[0]):
+        records = tuple(record for _identity, record in outcomes)
+        if all(
+            record.status is TargetSupportStatus.NOT_APPLICABLE
+            for record in records
+        ):
+            continue
+        if any(_supported(record) for record in records):
+            continue
+        representative = min(
+            (identity for identity, _record in outcomes),
+            key=SlotIdentity.sort_key,
+        )
+        reasons = ", ".join(
+            sorted({record.reason_id or record.status.value for record in records})
+        )
+        gaps.append(
+            SlotChange(
+                representative,
+                "coverage-gap",
+                f"applicable slot has no supported realization ({reasons})",
+            )
+        )
+    return tuple(gaps)
+
+
+def _logical_slot_key(key: TargetSupportKey) -> tuple[object, ...]:
+    """Profile/backend-independent primitive × extension × datatype identity."""
+
+    return (
+        key.primitive,
+        key.signature,
+        key.attributes,
+        key.result_target or (),
+        key.overload or (),
+        key.type_tag,
+        key.target_extension,
+        key.conversion_target or "",
     )
 
 
@@ -414,6 +535,12 @@ def serialize(snapshot: Snapshot) -> str:
         + json.dumps(snapshot.backend_profiles, separators=(",", ":"))
         + ",",
         '  "types": ' + json.dumps(snapshot.types, separators=(",", ":")) + ",",
+        '  "parity_extensions": '
+        + json.dumps(snapshot.parity_extensions, separators=(",", ":"))
+        + ",",
+        '  "target_specific_primitives": '
+        + json.dumps(snapshot.target_specific_primitives, separators=(",", ":"))
+        + ",",
         '  "slots": [',
     ]
     ordered = sorted(grouped.items(), key=lambda item: item[0].sort_key())
@@ -452,6 +579,8 @@ def deserialize(text: str) -> Snapshot:
         ),
         types=tuple(payload["types"]),
         slots=slots,
+        parity_extensions=tuple(payload["parity_extensions"]),
+        target_specific_primitives=tuple(payload["target_specific_primitives"]),
     )
 
 
@@ -557,18 +686,28 @@ def _realization_from_payload(value: object) -> TargetSupportRealizationKey | No
 
 
 def format_report(diff: DiffReport, snapshot: Snapshot) -> str:
+    not_applicable = sum(
+        record.status is TargetSupportStatus.NOT_APPLICABLE
+        for record in snapshot.slots.values()
+    )
     classifications = Counter(
-        record.classification.value for record in snapshot.slots.values()
+        record.classification.value
+        for record in snapshot.slots.values()
+        if record.status is not TargetSupportStatus.NOT_APPLICABLE
     )
     lines = [
-        f"implementation slots: {len(snapshot.slots)} exact outcomes across "
+        f"implementation slots: {len(snapshot.slots) - not_applicable} applicable "
+        f"exact outcomes and {not_applicable} not-applicable axes across "
         f"{sum(len(profiles) for _backend, profiles in snapshot.backend_profiles)} "
-        "backend/profile scopes",
+        f"backend/profile scopes; parity scope={len(snapshot.parity_extensions)} "
+        f"shared extensions; target-specific primitives="
+        f"{len(snapshot.target_specific_primitives)}",
         "classifications: "
         + ", ".join(
             f"{classification.value}={classifications[classification.value]}"
             for classification in ImplementationSlotClass
         ),
+        f"shared logical coverage gaps: {len(implementation_coverage_gaps(snapshot))}",
     ]
     counts = Counter(item.kind for item in diff.changes)
     lines.append(
@@ -632,6 +771,15 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  ... and {len(quality_gaps) - 100} more")
         print(f"FAIL: {len(quality_gaps)} implementation-quality gap(s)")
         return 1
+    coverage_gaps = implementation_coverage_gaps(snapshot)
+    if coverage_gaps:
+        for gap in coverage_gaps[:100]:
+            assert gap.identity is not None
+            print(f"  coverage-gap: {_label(gap.identity)}: {gap.detail}")
+        if len(coverage_gaps) > 100:
+            print(f"  ... and {len(coverage_gaps) - 100} more")
+        print(f"FAIL: {len(coverage_gaps)} applicable implementation gap(s)")
+        return 1
     path = Path(args.baseline) if args.baseline else canonical_baseline_path(context)
     if args.update:
         previous = None
@@ -678,6 +826,7 @@ __all__ = (
     "deserialize",
     "diff_snapshots",
     "format_report",
+    "implementation_coverage_gaps",
     "implementation_quality_gaps",
     "main",
     "serialize",

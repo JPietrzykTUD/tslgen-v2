@@ -24,6 +24,7 @@ from tslc.catalog.model import (
     ImmediateValueRange,
     ParamTypeRule,
     Primitive,
+    PrimitivePortability,
     RESULT_DIM_BASE,
     RESULT_DIMENSIONS,
     RESULT_DIM_VECTOR,
@@ -106,6 +107,16 @@ def _build_primitives(
     overload = _primitive_overload(declaration)
     cross_lane_fields = declaration.fields_by_name("cross_lane")
     cross_lane = _bool_field(cross_lane_fields[0].field) if cross_lane_fields else False
+    portability_fields = declaration.fields_by_name("portability")
+    portability = PrimitivePortability.PORTABLE
+    if portability_fields:
+        portability_text = _field_text(portability_fields[0].field)
+        if portability_text is not None:
+            try:
+                portability = PrimitivePortability(portability_text)
+            except ValueError:
+                # Schema validation owns the source-located invalid-enum diagnostic.
+                pass
 
     def make(attributes: dict[str, str]) -> Primitive:
         return Primitive(
@@ -124,6 +135,7 @@ def _build_primitives(
             brief_description=brief_description,
             detailed_description=detailed_description,
             semantics=semantics,
+            portability=portability,
             arithmetic=arithmetic,
             operation=operation,
             preconditions=preconditions,

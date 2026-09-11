@@ -773,7 +773,7 @@ prim<m:=(m,m)> mask_interleave_lo(mask_a, mask_b):
     - {tags [interleave, wide, a_only], extension "generic", type "ui32", lane_count 16, case {inputs [255, 0], expected 21845}}
     - {tags [interleave, wide, b_only], extension "generic", type "ui32", lane_count 16, case {inputs [0, 255], expected 43690}}
   impls:
-    [scalar, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, avx512, avx2, sse, neon, sve]:
+    [scalar, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, avx512, avx2, sse, neon, sve, wasm128]:
       arith:
         requires:
           scalar []
@@ -790,6 +790,7 @@ prim<m:=(m,m)> mask_interleave_lo(mask_a, mask_b):
           sse [sse2]
           neon [neon]
           sve [sve]
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -857,7 +858,7 @@ prim<m:=(m,m)> mask_deinterleave_odd(mask_a, mask_b):
           reasons []
         implementation:
           tsil "complete(call<primitive=mask_false[Vec]>());"
-    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, avx512, avx2, sse, neon]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, avx512, avx2, sse, neon, wasm128]:
       arith:
         requires:
           generic []
@@ -872,6 +873,7 @@ prim<m:=(m,m)> mask_deinterleave_odd(mask_a, mask_b):
           avx2 [avx2]
           sse [sse2]
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false

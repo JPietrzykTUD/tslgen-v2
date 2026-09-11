@@ -51,6 +51,7 @@ _KNOWN_PRIMITIVE_FIELDS: dict[str, ParsedPrimitiveFieldKind] = {
     "operation": "operation",
     "operand_roles": "operand_roles",
     "overload": "overload",
+    "portability": "portability",
     "preconditions": "preconditions",
     "memory": "memory",
     "return_type": "return_type",

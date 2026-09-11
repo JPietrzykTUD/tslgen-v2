@@ -1,6 +1,7 @@
 description "Hardware entropy operations"
 
 prim<usize:=(ptr)> random_step(out):
+  portability target_specific
   operation random_step
   operand_roles:
     memory_destination out

@@ -875,6 +875,15 @@ class _GenerationSession:
                     reason_id="TSL-SELECT-FIXED-SHAPE-ONLY",
                 )
                 continue
+            if slot.disposition is SelectionSlotDisposition.NOT_APPLICABLE:
+                assert slot.inapplicability_reason is not None
+                self.target_support_entries[(key, None)] = TargetSupportEntry(
+                    key=key,
+                    realization=None,
+                    status=TargetSupportStatus.NOT_APPLICABLE,
+                    reason_id=slot.inapplicability_reason.value,
+                )
+                continue
             if not slot.selected:
                 self.target_support_entries[(key, None)] = TargetSupportEntry(
                     key=key,

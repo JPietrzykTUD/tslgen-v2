@@ -206,6 +206,8 @@ def _dump_catalog(catalog: Catalog, primitive: str | None) -> tuple[str, object,
         )
         if prim.result_target is not None:
             lines.append(f"    result_target: {prim.result_target}")
+        if prim.portability.value != "portable":
+            lines.append(f"    portability: {prim.portability.value}")
         if prim.operation is not None:
             roles = ", ".join(
                 f"{binding.role.value}={binding.parameter_name}"
@@ -269,6 +271,7 @@ def _primitive_json(prim: Primitive) -> dict:
         "signature": prim.signature,
         "parameters": list(prim.parameters),
         "attributes": dict(prim.attributes),
+        "portability": prim.portability.value,
         "result_target": list(prim.result_target) if prim.result_target else None,
         "operation": _operation_json(prim),
         "memory": (

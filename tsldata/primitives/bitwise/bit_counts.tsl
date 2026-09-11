@@ -571,7 +571,7 @@ prim<usize:=s> lzc_scalar(data):
     - {tags [basic], type "ui32", lane_count 8, case {inputs [16], expected 27}}
     - {tags [edge], type "ui32", lane_count 8, case {inputs [0], expected 32}}
   impls:
-    [scalar, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, sve, wasm128]:
+    [scalar, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx512, avx2, sse, neon, sve, wasm128]:
       ?i?:
         prefer_fixed_native true
         requires:
@@ -583,6 +583,10 @@ prim<usize:=s> lzc_scalar(data):
           clang_v128_bool []
           clang_v256_bool []
           clang_v512_bool []
+          avx512 []
+          avx2 []
+          sse []
+          neon []
           sve [sve]
           wasm128 [simd128]
         safety:
@@ -602,6 +606,10 @@ prim<usize:=s> lzc_scalar(data):
           clang_v128_bool []
           clang_v256_bool []
           clang_v512_bool []
+          avx512 []
+          avx2 []
+          sse []
+          neon []
           sve [sve]
           wasm128 [simd128]
         safety:

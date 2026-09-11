@@ -50,6 +50,10 @@ as the style and shape reference.
   embed benchmark C++ or renderer policy in source data.
 - Unsupported combinations should remain explicit and diagnosable. Do not add
   placeholder bodies that merely make coverage appear complete.
+- Primitive families are portable by default. Use `portability target_specific`
+  only when the public operation itself is inherently target-specific and has
+  no target-independent implementation promise; never use it to excuse a
+  missing native, composed, or generic fallback.
 
 ## Implementation Strategy Order
 

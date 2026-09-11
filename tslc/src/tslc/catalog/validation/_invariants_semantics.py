@@ -20,6 +20,20 @@ def validate_semantic_contracts(
         by_name[primitive.name].append(primitive)
     for name, expanded in sorted(by_name.items()):
         declarations = _unique_source_declarations(expanded)
+        first_declaration = declarations[0]
+        for primitive in declarations[1:]:
+            if primitive.portability is first_declaration.portability:
+                continue
+            diagnostics.append(
+                _mismatch(
+                    name,
+                    "portability contract",
+                    primitive,
+                    primitive.source,
+                    first_declaration,
+                    first_declaration.source,
+                )
+            )
         contracted = tuple(item for item in declarations if item.operation is not None)
         preconditioned = tuple(item for item in declarations if item.preconditions)
         if not contracted and not preconditioned:

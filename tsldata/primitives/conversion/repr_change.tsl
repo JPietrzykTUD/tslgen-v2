@@ -414,6 +414,28 @@ prim<v:=(vt,v,sImm)>[cast=reinterpret] insert(orig, data, index):
               tsil """
                   complete(intrin<_mm512_insertf64x4>(orig, data, index));
                 """
+    [sse, avx2]:
+      f?:
+        requires:
+          sse [sse2, avx512f]
+          avx2 [avx, avx512f]
+        ToExtension:
+          avx512:
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
+            implementation:
+              tsl """
+                  let<type>(OutVec, vector::as_extension(ToExtension));
+                  var<infer>(result, call<primitive=to_array[OutVec]>(orig));
+                  var<const_infer>(chunk, call<primitive=to_array[Vec]>(data));
+                  var<const_infer>(start, cast<static>(scalar::size, index) * value(vector::length));
+                  loop<generation, scoped>(i, 0, value(vector::length), 1) {
+                    result[start + value(i)] = chunk[value(i)];
+                  }
+                  complete(call<primitive=from_array[OutVec]>(result));
+                """
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
         requires []

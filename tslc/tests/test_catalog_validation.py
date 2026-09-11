@@ -117,6 +117,20 @@ def test_valid_tiny_catalog_has_no_validation_diagnostics() -> None:
     assert _diagnostics(_base_source()) == ()
 
 
+def test_invalid_primitive_portability_is_diagnosed() -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            "  impls:\n",
+            "  portability sometimes\n  impls:\n",
+        )
+    )
+
+    diagnostic = next(
+        item for item in diagnostics if item.code == "TSL-CATALOG-INVALID-ENUM"
+    )
+    assert "portability value 'sometimes'" in diagnostic.message
+
+
 def test_valid_overload_registry_has_no_schema_diagnostics() -> None:
     diagnostics = _diagnostics(
         _base_source(

@@ -91,7 +91,7 @@ The exact callable-family records below are projected from
 `coverage/tsl-v1-public-api.json`; generated projects also carry their
 scope-exact backend declaration manifests.
 
-Public-API baseline SHA-256: `d980572e9061775302913d2962c7dbb3a2e917972dfd03a062de749c32c5e7f4`.
+Public-API baseline SHA-256: `e42e58051f0bce23ece37b43f91d5b7e8bdfe6de68eec5918102eb4923a02bdf`.
 
 ### Primitive callable families
 

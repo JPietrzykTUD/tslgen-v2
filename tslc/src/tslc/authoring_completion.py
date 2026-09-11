@@ -40,6 +40,7 @@ from tslc.catalog.model import (
     Catalog,
     IntrinsicNameOrder,
     Primitive,
+    PrimitivePortability,
     RESULT_DIM_VECTOR,
 )
 from tslc.catalog.preconditions import precondition_values
@@ -515,6 +516,9 @@ def _value_completions(
     elif field == "operation" and context.block_path == ("primitive",):
         values = primitive_operation_values()
         detail = "primitive operation"
+    elif field == "portability" and context.block_path == ("primitive",):
+        values = tuple(item.value for item in PrimitivePortability)
+        detail = "primitive portability"
     elif field == "preconditions" and context.block_path == ("primitive",):
         values = precondition_values()
         detail = "primitive precondition"

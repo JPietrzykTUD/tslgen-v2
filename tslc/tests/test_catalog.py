@@ -18,6 +18,7 @@ from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import (
     Catalog,
+    PrimitivePortability,
     PrimitiveValueMode,
     TargetConstraint,
 )
@@ -68,6 +69,18 @@ def test_scalar_extension_has_no_intrinsic_compose(catalog: Catalog) -> None:
     scalar = catalog.extensions["scalar"]
     assert scalar.family == "scalar"
     assert scalar.compose_prefix == {}  # scalar has no intrinsic prefix
+
+
+def test_primitive_portability_is_typed_and_defaults_portable(
+    catalog: Catalog,
+) -> None:
+    random_step = catalog.primitive("random_step")
+    add = catalog.primitive("add")
+
+    assert random_step is not None
+    assert add is not None
+    assert random_step.portability is PrimitivePortability.TARGET_SPECIFIC
+    assert add.portability is PrimitivePortability.PORTABLE
 
 
 def test_target_constraint_matches_exact_double_width(catalog: Catalog) -> None:

@@ -483,12 +483,31 @@ def test_same_name_wrapping_shift_family_rejects_different_count_vocabularies() 
     assert diagnostic.related
 
 
+def test_same_name_family_rejects_different_portability_contracts() -> None:
+    source = (
+        "prim<v:=v> family(data):\n"
+        "  portability target_specific\n"
+        "prim<v:=(v,v)> family(left, right):\n"
+        '  brief_description "Portable overload."\n'
+    )
+
+    diagnostic = next(
+        item
+        for item in _all_diagnostics(source)
+        if item.code == "TSL-CATALOG-INCONSISTENT-OPERATION-FAMILY"
+        and "portability contract" in item.message
+    )
+
+    assert diagnostic.related
+
+
 def test_cli_projection_exposes_normalized_operation_roles() -> None:
     _, catalog, diagnostics = _build(_binary_source())
     assert diagnostics == ()
 
     shown = _primitive(catalog.primitives[0])
 
+    assert shown["portability"] == "portable"
     assert shown["operation"] == {
         "name": "bit_and",
         "operand_roles": {

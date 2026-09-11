@@ -603,7 +603,7 @@ def test_primitive_explorer_projects_file_slots_counts_and_dependencies(
         and item.sites > 1
         for item in div.call_preconditions
     )
-    assert any(slot.status == "missing" for slot in corpus.slots)
+    assert all(slot.status != "missing" for slot in corpus.slots)
 
     def unexpected_selection(*args, **kwargs):
         raise AssertionError("a selected primitive caused the explorer matrix to rebuild")

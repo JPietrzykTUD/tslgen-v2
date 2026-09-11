@@ -247,6 +247,11 @@ prim<v:=(v,v)> add(left, right):
   and `PrimitiveValueMode`. Selection, lowering, dependency closure, benchmark
   inventory, and value-test planning consume those typed fields rather than
   comparing raw attribute strings or recognizing primitive names.
+- **Primitive portability**: primitive families are portable by default.
+  `portability target_specific` is the narrow source-owned declaration that an
+  operation itself has no target-independent availability promise. Selection
+  uses that fact only to classify an otherwise absent slot as not applicable;
+  it never changes candidate ranking or excuses a missing portable fallback.
 - **Type-group keys**: `?i?` (any int), `f?` (any float), `arith` (all), plus
   concrete tags. Ranked by **specificity** — `si32` beats `?i?` beats `arith`.
 - **Extension fallback**: extensions form `inherits` chains (e.g. `avx2_vl →

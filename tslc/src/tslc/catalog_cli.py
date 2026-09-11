@@ -189,6 +189,7 @@ def _primitive(item: Primitive) -> dict[str, object]:
         ],
         "tests": len(item.tests),
         "brief": item.brief_description,
+        "portability": item.portability.value,
         "arithmetic": _arithmetic(item),
         "operation": _operation(item),
         "preconditions": [condition.kind.value for condition in item.preconditions],

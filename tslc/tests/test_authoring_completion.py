@@ -488,6 +488,16 @@ def test_operation_completion_projects_horizontal_add_from_typed_vocabulary(
     }
 
 
+def test_portability_completion_uses_the_typed_vocabulary(catalog: Catalog) -> None:
+    baseline = (
+        "prim<usize:=(ptr)> probe(out):\n"
+        "  portability target_specific\n"
+    )
+    edited = baseline.split("target_specific", 1)[0] + "target_"
+
+    assert _labels(catalog, baseline, edited) == {"target_specific"}
+
+
 def test_operation_completion_projects_remaining_memory_semantics(
     catalog: Catalog,
 ) -> None:

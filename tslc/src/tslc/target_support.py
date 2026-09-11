@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 
 class TargetSupportStatus(StrEnum):
     ABSENT = "absent"
+    NOT_APPLICABLE = "not_applicable"
     SELECTED = "selected"
     LOWERED = "lowered"
     PRUNED = "pruned"

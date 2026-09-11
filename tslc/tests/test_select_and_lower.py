@@ -24,7 +24,10 @@ from _select_lower_core_support import (
 )
 from tslc.lower.dependencies import VectorIdentity
 from tslc.lower.lowerer import LoweredArithmeticPreconditionKind
-from tslc.select.selector import SelectionSlotDisposition
+from tslc.select.selector import (
+    SelectionSlotDisposition,
+    SelectionSlotInapplicability,
+)
 
 
 def test_lowerer_keeps_target_vector_resolution_boundary() -> None:
@@ -54,6 +57,47 @@ def test_selector_classifies_runtime_scalable_fixed_shapes_before_lowering(
     assert scalable[0].disposition is SelectionSlotDisposition.FIXED_SHAPE_ONLY
     assert scalable[0].fixed_shape_kinds == frozenset({"s[]"})
     assert not any(slot.extension.name == "sve" for slot in selection.selected)
+
+
+def test_selector_classifies_an_empty_representation_target_axis_as_not_applicable(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    selection = Selector().select_profile(
+        catalog,
+        machine_profiles["scalar"],
+        "convert_up",
+        ("f64",),
+        backend_id="cpp",
+        collect_slots=True,
+    )
+
+    slot = next(item for item in selection.slots if item.extension.name == "scalar")
+    assert slot.selected == ()
+    assert slot.disposition is SelectionSlotDisposition.NOT_APPLICABLE
+    assert slot.inapplicability_reason is (
+        SelectionSlotInapplicability.NO_COMPATIBLE_BASE_TARGET
+    )
+
+
+def test_selector_classifies_unavailable_target_specific_operation(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    selection = Selector().select_profile(
+        catalog,
+        machine_profiles["sse"],
+        "random_step",
+        ("ui64",),
+        backend_id="cpp",
+        collect_slots=True,
+    )
+
+    assert len(selection.slots) == 1
+    assert selection.slots[0].disposition is SelectionSlotDisposition.NOT_APPLICABLE
+    assert selection.slots[0].inapplicability_reason is (
+        SelectionSlotInapplicability.TARGET_SPECIFIC_UNAVAILABLE
+    )
 
 
 @pytest.mark.parametrize(

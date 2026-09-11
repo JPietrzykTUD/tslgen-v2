@@ -109,6 +109,17 @@ It must not infer a generic kind from the parameter name.
 
 Keep source constraints in the source contract.
 
+Primitive families are portable by default. For an operation whose public
+contract is inherently target-specific and deliberately unavailable elsewhere,
+declare the same portability contract on every overload:
+
+```tsl
+portability target_specific
+```
+
+Do not use target-specific portability to hide an implementation gap. Exhaust
+native implementation, primitive composition, and generic fallback first.
+
 ### Typed Pointer Parameter Overrides
 
 When a public pointer parameter needs a more specific pointee type, use an

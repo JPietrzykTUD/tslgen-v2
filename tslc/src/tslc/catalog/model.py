@@ -86,6 +86,13 @@ class PrimitiveValueMode(StrEnum):
     ZERO = "zero"
 
 
+class PrimitivePortability(StrEnum):
+    """Whether a primitive promises a portable implementation surface."""
+
+    PORTABLE = "portable"
+    TARGET_SPECIFIC = "target_specific"
+
+
 class TestComparison(StrEnum):
     """How authored expected lane values are compared to generated results."""
 
@@ -357,6 +364,10 @@ class Primitive:
     brief_description: str | None = None
     detailed_description: str | None = None
     semantics: str | None = None
+    # Portable primitives are expected to remain implementable for every
+    # otherwise-valid selector slot. Target-specific primitives deliberately
+    # expose only the implementation/feature combinations authored below.
+    portability: PrimitivePortability = PrimitivePortability.PORTABLE
     # Explicit language-neutral arithmetic operations, operand roles, and
     # guarantees. Selection and backend code must not infer these facts from
     # primitive names, signature positions, prose, or implementation text.

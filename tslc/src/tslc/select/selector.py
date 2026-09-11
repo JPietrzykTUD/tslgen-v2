@@ -37,6 +37,9 @@ from tslc.catalog.model import (
     GenericParam,
     Implementation,
     Primitive,
+    PrimitivePortability,
+    RESULT_DIM_BASE,
+    RESULT_DIM_EXTENSION,
 )
 from tslc.catalog.scalar_types import scalar_bit_width
 from tslc.catalog.signatures import parse_signature
@@ -113,6 +116,17 @@ class SelectionSlotDisposition(StrEnum):
     ABSENT = "absent"
     SELECTED = "selected"
     FIXED_SHAPE_ONLY = "fixed_shape_only"
+    NOT_APPLICABLE = "not_applicable"
+
+
+class SelectionSlotInapplicability(StrEnum):
+    """Stable reason why an otherwise-enumerated selector axis has no slot."""
+
+    NO_COMPATIBLE_BASE_TARGET = "TSL-SELECT-NO-COMPATIBLE-BASE-TARGET"
+    NO_COMPATIBLE_EXTENSION_TARGET = (
+        "TSL-SELECT-NO-COMPATIBLE-EXTENSION-TARGET"
+    )
+    TARGET_SPECIFIC_UNAVAILABLE = "TSL-SELECT-TARGET-SPECIFIC-UNAVAILABLE"
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,6 +140,7 @@ class SelectionSlotResult:
     selected: tuple[SelectedImplementation, ...]
     disposition: SelectionSlotDisposition
     fixed_shape_kinds: frozenset[str] = frozenset()
+    inapplicability_reason: SelectionSlotInapplicability | None = None
 
     def __post_init__(self) -> None:
         if bool(self.selected) != (
@@ -137,6 +152,12 @@ class SelectionSlotResult:
         ):
             raise ValueError(
                 "fixed-shape slot disposition must match fixed signature kinds"
+            )
+        if (self.inapplicability_reason is not None) != (
+            self.disposition is SelectionSlotDisposition.NOT_APPLICABLE
+        ):
+            raise ValueError(
+                "not-applicable slot disposition must carry exactly one reason"
             )
 
 
@@ -300,6 +321,12 @@ class Selector:
                 )
                 selected.extend(slot_selected)
                 if collect_slots or fixed_shape_only:
+                    disposition, inapplicability = _slot_disposition(
+                        primitive,
+                        slot,
+                        slot_selected,
+                        fixed_shape_kinds,
+                    )
                     evaluated_slots.append(
                         SelectionSlotResult(
                             primitive=primitive,
@@ -307,16 +334,9 @@ class Selector:
                             type_tag=slot.type_tag,
                             to_target=slot.to_target,
                             selected=slot_selected,
-                            disposition=(
-                                SelectionSlotDisposition.FIXED_SHAPE_ONLY
-                                if fixed_shape_only
-                                else (
-                                    SelectionSlotDisposition.SELECTED
-                                    if slot_selected
-                                    else SelectionSlotDisposition.ABSENT
-                                )
-                            ),
+                            disposition=disposition,
                             fixed_shape_kinds=fixed_shape_kinds,
+                            inapplicability_reason=inapplicability,
                         )
                     )
         return ProfileSelectionResult(
@@ -385,6 +405,12 @@ class Selector:
                 else ()
             )
             if collect_slots:
+                disposition, inapplicability = _slot_disposition(
+                    primitive,
+                    slot,
+                    slot_selected,
+                    frozenset(),
+                )
                 evaluated.append(
                     SelectionSlotResult(
                         primitive=primitive,
@@ -392,11 +418,8 @@ class Selector:
                         type_tag=slot.type_tag,
                         to_target=slot.to_target,
                         selected=slot_selected,
-                        disposition=(
-                            SelectionSlotDisposition.SELECTED
-                            if slot_selected
-                            else SelectionSlotDisposition.ABSENT
-                        ),
+                        disposition=disposition,
+                        inapplicability_reason=inapplicability,
                     )
                 )
             if slot_selected:
@@ -908,6 +931,34 @@ class Selector:
             return (None,)
         type_bits = self.support.type_bit_width_or_default(type_tag)
         return tuple(size // type_bits for size in extension.size_bits if size >= type_bits)
+
+
+def _slot_disposition(
+    primitive: Primitive,
+    slot: _SelectionSlot,
+    selected: tuple[SelectedImplementation, ...],
+    fixed_shape_kinds: frozenset[str],
+) -> tuple[SelectionSlotDisposition, SelectionSlotInapplicability | None]:
+    if not slot.target_resolved:
+        assert primitive.result_target is not None
+        dimension = primitive.result_target[0]
+        reason = {
+            RESULT_DIM_BASE: SelectionSlotInapplicability.NO_COMPATIBLE_BASE_TARGET,
+            RESULT_DIM_EXTENSION: (
+                SelectionSlotInapplicability.NO_COMPATIBLE_EXTENSION_TARGET
+            ),
+        }[dimension]
+        return SelectionSlotDisposition.NOT_APPLICABLE, reason
+    if fixed_shape_kinds:
+        return SelectionSlotDisposition.FIXED_SHAPE_ONLY, None
+    if selected:
+        return SelectionSlotDisposition.SELECTED, None
+    if primitive.portability is PrimitivePortability.TARGET_SPECIFIC:
+        return (
+            SelectionSlotDisposition.NOT_APPLICABLE,
+            SelectionSlotInapplicability.TARGET_SPECIFIC_UNAVAILABLE,
+        )
+    return SelectionSlotDisposition.ABSENT, None
 
 
 def _compiler_capability_frontier(

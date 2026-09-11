@@ -1632,7 +1632,7 @@
         "raw_memory",
         "raw_pointer"
       ],
-      "implementation_count": 15,
+      "implementation_count": 16,
       "family": "contiguous_memory_contract",
       "checked_source_status": "declared",
       "preconditions": [
@@ -1893,7 +1893,7 @@
         "raw_memory",
         "raw_pointer"
       ],
-      "implementation_count": 15,
+      "implementation_count": 16,
       "family": "contiguous_memory_contract",
       "checked_source_status": "declared",
       "preconditions": [
