@@ -15,7 +15,7 @@ from typing import Any
 
 from tslc._cli_options import merge_toolchains, parse_assignments, split_csv
 from tslc.authoring import check_catalog
-from tslc.backend.registry import backend_capabilities
+from tslc.backend.registry import backend_capabilities, registered_backend_ids
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.model import Catalog
 from tslc.diagnostics import has_errors
@@ -124,7 +124,7 @@ def _settings(args: argparse.Namespace, project: ProjectConfig | None) -> _Setti
         if args.backends
         else project.backends
         if project is not None
-        else ("cpp", "rust")
+        else registered_backend_ids()
     )
     base_toolchains = merge_toolchains(
         project.toolchains if project is not None else {},

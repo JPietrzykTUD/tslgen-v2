@@ -98,12 +98,14 @@ def audit_metadata(
     profiles: Iterable[str] = _DEFAULT_PROFILES,
     primitives: Iterable[str] | None = None,
     type_tags: Iterable[str] = _DEFAULT_TYPES,
-    backends: Iterable[str] = registered_backend_ids(),
+    backends: Iterable[str] | None = None,
 ) -> MetadataAuditResult:
     """Return source metadata suggestions without writing files."""
 
     selected_checks = frozenset(checks)
-    backend_ids = tuple(backends)
+    backend_ids = (
+        tuple(backends) if backends is not None else registered_backend_ids()
+    )
     inputs, diagnostics = _load_inputs(source_paths, backend_ids)
     if inputs is None:
         return MetadataAuditResult(suggestions=(), diagnostics=diagnostics)
@@ -203,7 +205,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--profiles", default="scalar,sse2,avx,avx2,skylake")
     parser.add_argument("--primitives", default=None, help="comma-separated primitive names")
     parser.add_argument("--types", default=",".join(_DEFAULT_TYPES))
-    parser.add_argument("--backends", default="cpp,rust")
+    parser.add_argument("--backends", default=None)
     parser.add_argument(
         "--apply",
         choices=("safety", "requires", "all"),
@@ -230,7 +232,9 @@ def main(argv: list[str] | None = None) -> int:
         profiles=tuple(split_csv(args.profiles)),
         primitives=tuple(split_csv(args.primitives)) if args.primitives else None,
         type_tags=tuple(split_csv(args.types)),
-        backends=tuple(split_csv(args.backends)),
+        backends=(
+            tuple(split_csv(args.backends)) if args.backends is not None else None
+        ),
     )
     for diagnostic in result.diagnostics:
         print(format_diagnostic(diagnostic), file=sys.stderr)

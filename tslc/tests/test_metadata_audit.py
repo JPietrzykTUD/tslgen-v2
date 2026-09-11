@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from tslc.diagnostics import has_errors
+from tslc.maintenance import metadata_audit
 from tslc.maintenance.metadata_audit import (
     apply_suggestions,
     audit_metadata,
@@ -13,6 +14,49 @@ from tslc.maintenance.metadata_audit import (
 )
 from tslc.pipeline import GenerationRequest, generate
 from tslc.sources import expand_source_paths
+
+
+def test_metadata_audit_resolves_omitted_backends_for_each_call(
+    monkeypatch,
+) -> None:
+    backend_ids = [("future",), ("next",)]
+    captured: list[tuple[str, ...]] = []
+    monkeypatch.setattr(
+        metadata_audit,
+        "registered_backend_ids",
+        lambda: backend_ids.pop(0),
+    )
+
+    def fake_load_inputs(source_paths, backends):
+        del source_paths
+        captured.append(backends)
+        return None, ()
+
+    monkeypatch.setattr(metadata_audit, "_load_inputs", fake_load_inputs)
+
+    metadata_audit.audit_metadata(())
+    metadata_audit.audit_metadata(())
+    metadata_audit.audit_metadata((), backends=())
+
+    assert captured == [("future",), ("next",), ()]
+
+
+def test_metadata_audit_cli_preserves_omitted_backend_selection(
+    monkeypatch,
+    capsys,
+) -> None:
+    captured: list[object] = []
+
+    def fake_audit_metadata(source_paths, **kwargs):
+        del source_paths
+        captured.append(kwargs["backends"])
+        return metadata_audit.MetadataAuditResult((), ())
+
+    monkeypatch.setattr(metadata_audit, "audit_metadata", fake_audit_metadata)
+
+    assert metadata_audit.main(["--sources", "unused", "--checks", "safety"]) == 0
+    assert captured == [None]
+    assert capsys.readouterr().out.endswith("0 suggestion(s), 0 applicable\n")
 
 
 def test_safety_suggestion_applies_missing_direct_facts(tmp_path: Path) -> None:

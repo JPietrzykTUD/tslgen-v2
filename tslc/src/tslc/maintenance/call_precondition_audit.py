@@ -76,11 +76,16 @@ def build_call_precondition_audit(index: CatalogIndex) -> CallPreconditionAudit:
 def audit_call_preconditions(
     source_paths: Iterable[Path | str],
     *,
-    backends: Iterable[str] = registered_backend_ids(),
+    backends: Iterable[str] | None = None,
 ) -> tuple[CallPreconditionAudit | None, tuple[Diagnostic, ...]]:
     """Validate a corpus and return its exact authored call-proof inventory."""
 
-    checked = check_catalog(source_paths, backends=backends)
+    checked = check_catalog(
+        source_paths,
+        backends=(
+            tuple(backends) if backends is not None else registered_backend_ids()
+        ),
+    )
     if checked.index is None or has_errors(checked.diagnostics):
         return None, checked.diagnostics
     return build_call_precondition_audit(checked.index), checked.diagnostics
@@ -156,13 +161,15 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument("--sources", nargs="+", required=True)
-    parser.add_argument("--backends", default="cpp,rust")
+    parser.add_argument("--backends", default=None)
     parser.add_argument("--format", choices=("text", "json"), default="text")
     args = parser.parse_args(argv)
 
     audit, diagnostics = audit_call_preconditions(
         tuple(Path(value) for value in args.sources),
-        backends=tuple(split_csv(args.backends)),
+        backends=(
+            tuple(split_csv(args.backends)) if args.backends is not None else None
+        ),
     )
     for diagnostic in diagnostics:
         print(format_diagnostic(diagnostic), file=sys.stderr)

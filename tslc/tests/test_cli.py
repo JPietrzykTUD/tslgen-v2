@@ -253,6 +253,35 @@ def test_cli_backend_profile_scopes_are_forwarded(monkeypatch, capsys) -> None:
     assert capsys.readouterr().err == ""
 
 
+def test_legacy_cli_resolves_omitted_backends_from_live_registry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend_ids = [("future",), ("next",)]
+    monkeypatch.setattr(cli, "registered_backend_ids", lambda: backend_ids.pop(0))
+    parser = cli._generation_parser(
+        use_project_config=False,
+        command="generate",
+    )
+    arguments = [
+        "--sources",
+        "tsldata",
+        "--machine-profiles",
+        "profiles.json",
+    ]
+
+    first = cli._generation_settings(parser.parse_args(arguments), None, "generate")
+    second = cli._generation_settings(parser.parse_args(arguments), None, "generate")
+    explicit = cli._generation_settings(
+        parser.parse_args([*arguments, "--backends", "chosen"]),
+        None,
+        "generate",
+    )
+
+    assert first[2] == ["future"]
+    assert second[2] == ["next"]
+    assert explicit[2] == ["chosen"]
+
+
 def test_cli_omitted_primitives_uses_all_catalog_default(monkeypatch, capsys) -> None:
     calls: dict[str, object] = {}
 

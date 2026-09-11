@@ -6,6 +6,7 @@ from hashlib import sha256
 import json
 from pathlib import Path
 
+from tslc import authoring
 from tslc.authoring import (
     ParsedDocumentCache,
     SourceOverlay,
@@ -20,6 +21,7 @@ from tslc.diagnostics import (
     format_diagnostics_json,
 )
 from tslc.sources import SourceDocument
+from tslc.syntax.ast import OuterTslParseResult
 
 
 def _document(path: Path, text: str) -> SourceDocument:
@@ -72,6 +74,107 @@ def test_undecodable_string_escape_reaches_authoring_as_a_diagnostic(
     result = check_catalog((path,))
 
     assert "TSL-OUTER-PARSE-BAD-STRING" in [d.code for d in result.diagnostics]
+
+
+def test_check_catalog_resolves_omitted_backends_for_each_call(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "catalog.tsl"
+    source.write_text('description "catalog"\n', encoding="utf-8")
+    backend_ids = [("future",), ("next",)]
+    captured: list[tuple[str, ...]] = []
+    monkeypatch.setattr(
+        authoring,
+        "registered_backend_ids",
+        lambda: backend_ids.pop(0),
+    )
+
+    def fake_check_documents(
+        documents: tuple[SourceDocument, ...],
+        *,
+        required_backends: tuple[str, ...],
+        cache: object,
+    ) -> authoring.CheckResult:
+        del documents, cache
+        captured.append(required_backends)
+        return authoring.CheckResult(catalog=None, diagnostics=())
+
+    monkeypatch.setattr(authoring, "check_documents", fake_check_documents)
+
+    authoring.check_catalog((source,))
+    authoring.check_catalog((source,))
+    authoring.check_catalog((source,), backends=())
+
+    assert captured == [("future",), ("next",), ()]
+
+
+def test_document_checks_resolve_omitted_backends_for_each_call(
+    monkeypatch,
+) -> None:
+    backend_ids = [("future",), ("next",)]
+    captured: list[tuple[str, ...]] = []
+    monkeypatch.setattr(
+        authoring,
+        "registered_backend_ids",
+        lambda: backend_ids.pop(0),
+    )
+
+    def fake_check_parsed_documents(
+        parsed: OuterTslParseResult,
+        *,
+        required_backends: tuple[str, ...],
+        index_cache: object,
+    ) -> authoring.CheckResult:
+        del parsed, index_cache
+        captured.append(required_backends)
+        return authoring.CheckResult(catalog=None, diagnostics=())
+
+    monkeypatch.setattr(
+        authoring,
+        "check_parsed_documents",
+        fake_check_parsed_documents,
+    )
+
+    authoring.check_documents(())
+    authoring.check_documents(())
+    authoring.check_documents((), required_backends=())
+
+    assert captured == [("future",), ("next",), ()]
+
+
+def test_parsed_document_checks_resolve_omitted_backends_for_each_call(
+    monkeypatch,
+) -> None:
+    backend_ids = [("future",)]
+    captured: list[tuple[str, ...]] = []
+    monkeypatch.setattr(
+        authoring,
+        "registered_backend_ids",
+        lambda: backend_ids[0],
+    )
+
+    def fake_validate_catalog(
+        catalog,
+        parsed,
+        *,
+        required_backends,
+        supported_backends,
+        compiler_capabilities,
+    ):
+        del catalog, parsed, supported_backends, compiler_capabilities
+        captured.append(required_backends)
+        return ()
+
+    monkeypatch.setattr(authoring, "validate_catalog", fake_validate_catalog)
+    parsed = OuterTslParseResult(documents=(), diagnostics=())
+
+    authoring.check_parsed_documents(parsed)
+    backend_ids[0] = ("next",)
+    authoring.check_parsed_documents(parsed)
+    authoring.check_parsed_documents(parsed, required_backends=())
+
+    assert captured == [("future",), ("next",), ()]
 
 
 def test_overlays_replace_disk_text_without_writing(tmp_path: Path) -> None:

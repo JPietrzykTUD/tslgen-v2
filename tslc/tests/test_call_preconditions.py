@@ -6,6 +6,7 @@ from dataclasses import replace
 import json
 from pathlib import Path
 
+from tslc.authoring import CheckResult
 from tslc.catalog.arithmetic import ArithmeticOperandBinding
 from tslc.catalog.call_preconditions import (
     CallArgumentBinding,
@@ -18,6 +19,7 @@ from tslc.catalog.model import Catalog, Primitive, PrimitiveMaskMode
 from tslc.catalog.preconditions import PreconditionKind, PrimitivePrecondition
 from tslc.catalog.validation import validate_call_precondition_dispositions
 from tslc.diagnostics import SourceSpan
+from tslc.maintenance import call_precondition_audit
 from tslc.maintenance.call_precondition_audit import (
     audit_call_preconditions,
     serialize_call_precondition_audit,
@@ -306,6 +308,57 @@ def test_current_corpus_call_precondition_report_is_complete_and_deterministic(
     payload = json.loads(first)
     assert payload["schema_version"] == 1
     assert payload["summary"]["unresolved"] == 0
+
+
+def test_call_precondition_audit_resolves_omitted_backends_for_each_call(
+    monkeypatch,
+) -> None:
+    backend_ids = [("future",), ("next",)]
+    captured: list[tuple[str, ...]] = []
+    monkeypatch.setattr(
+        call_precondition_audit,
+        "registered_backend_ids",
+        lambda: backend_ids.pop(0),
+    )
+
+    def fake_check_catalog(source_paths, *, backends):
+        del source_paths
+        captured.append(backends)
+        return CheckResult(None, ())
+
+    monkeypatch.setattr(
+        call_precondition_audit,
+        "check_catalog",
+        fake_check_catalog,
+    )
+
+    call_precondition_audit.audit_call_preconditions(())
+    call_precondition_audit.audit_call_preconditions(())
+    call_precondition_audit.audit_call_preconditions((), backends=())
+
+    assert captured == [("future",), ("next",), ()]
+
+
+def test_call_precondition_audit_cli_preserves_omitted_backend_selection(
+    monkeypatch,
+    capsys,
+) -> None:
+    captured: list[object] = []
+
+    def fake_audit_call_preconditions(source_paths, *, backends):
+        del source_paths
+        captured.append(backends)
+        return call_precondition_audit.CallPreconditionAudit(()), ()
+
+    monkeypatch.setattr(
+        call_precondition_audit,
+        "audit_call_preconditions",
+        fake_audit_call_preconditions,
+    )
+
+    assert call_precondition_audit.main(["--sources", "unused"]) == 0
+    assert captured == [None]
+    assert capsys.readouterr().out.startswith("call-precondition audit schema 1\n")
 
 
 def _primitive(

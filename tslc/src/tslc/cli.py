@@ -14,6 +14,7 @@ from tslc.api import (
     verify_project,
     write_artifacts,
 )
+from tslc.backend.registry import registered_backend_ids
 from tslc.backend.rust_package import DEFAULT_RUST_PACKAGE_CONFIG
 from tslc.generation_command import (
     GenerationCommandSettings,
@@ -212,7 +213,7 @@ def _generation_parser(
     )
     parser.add_argument(
         "--backends",
-        default=None if use_project_config else "cpp,rust",
+        default=None,
         help="comma-separated backends",
     )
     parser.add_argument(
@@ -386,7 +387,7 @@ def _generation_settings(
         if args.backends is not None
         else list(project.backends)
         if project is not None
-        else ["cpp", "rust"]
+        else list(registered_backend_ids())
     )
     output_root: str | Path | None = (
         args.output_root
