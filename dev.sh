@@ -29,6 +29,8 @@ Modes:
   ./${self} audit      audit source metadata or call preconditions
   ./${self} ratchet    coverage regression gate vs the committed baseline   (no compiler needed)
   ./${self} target-ratchet
+  ./${self} implementation-ratchet
+                       classify/ratchet every exact v1 implementation slot   (no compiler needed)
   ./${self} benchmark-ratchet
                        reject new variant benchmark coverage gaps             (no compiler needed)
   ./${self} release-contract
@@ -68,9 +70,9 @@ EOF
 mode="build"
 if (( $# > 0 )); then
   case "$1" in
-    generate|build|test|document|document-site|explain|preview|analyze|editor-install|editor-package-runtime|check|doctor|list|show|audit|ratchet|target-ratchet|benchmark-ratchet|release-contract|dump) mode="$1"; shift ;;
+    generate|build|test|document|document-site|explain|preview|analyze|editor-install|editor-package-runtime|check|doctor|list|show|audit|ratchet|target-ratchet|implementation-ratchet|benchmark-ratchet|release-contract|dump) mode="$1"; shift ;;
     -h|--help|help) usage; exit 0 ;;
-    *) echo "usage: $0 [generate|build|test|document|document-site|explain|preview|analyze|editor-install|editor-package-runtime|check|doctor|list|show|audit|ratchet|target-ratchet|benchmark-ratchet|release-contract|dump] [extra flags...]" >&2; exit 2 ;;
+    *) echo "usage: $0 [generate|build|test|document|document-site|explain|preview|analyze|editor-install|editor-package-runtime|check|doctor|list|show|audit|ratchet|target-ratchet|implementation-ratchet|benchmark-ratchet|release-contract|dump] [extra flags...]" >&2; exit 2 ;;
   esac
 fi
 extra_args=("$@")
@@ -175,6 +177,7 @@ case "$mode" in
     ;;
   ratchet) exec python -m tslc coverage ratchet "${extra_args[@]}" ;;
   target-ratchet) exec python -m tslc coverage target-ratchet "${extra_args[@]}" ;;
+  implementation-ratchet) exec python -m tslc coverage implementation-ratchet "${extra_args[@]}" ;;
   benchmark-ratchet) exec python -m tslc.maintenance.benchmark_coverage "${extra_args[@]}" ;;
   release-contract) exec python -m tslc release contract "${extra_args[@]}" ;;
   dump)    exec python -m tslc inspect "${extra_args[@]}" ;;

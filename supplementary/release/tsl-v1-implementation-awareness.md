@@ -47,8 +47,10 @@ does not select implementations or infer semantic state.
 
 The stable state set is `native | composed | fallback | unknown`:
 
-- `native`: one direct expression or one target intrinsic in the selected body;
-- `composed`: typed calls, control flow, or multiple direct operations;
+- `native`: a direct target expression, operation, intrinsic, or intrinsic
+  sequence in the selected body, including irreducible local representation
+  mechanics;
+- `composed`: typed primitive calls, control flow, or shared semantic regions;
 - `fallback`: an explicit portable fallback body or fallback extension family;
 - `unknown`: opaque target text or incomplete typed evidence prevents a
   stronger claim.
@@ -93,6 +95,16 @@ analysis API: `coverage target-ratchet` treats an emitted `unknown` (or missing
 state) as a quality gap, while a fallback in the accelerated core requires an
 exact reviewed exception. General authoring tools still report unknown and
 unresolved states instead of hiding or guessing them.
+
+The complementary `coverage implementation-ratchet` covers every exact corpus
+slot in every backend/profile scope of the v1 product contract. It maps
+`fallback` to `generic_fallback`, and maps non-emitted or emitted-unknown
+outcomes to `unsupported` while retaining the original pipeline stage, state,
+and stable reason. The mapping consumes `TargetSupportEntry` directly and never
+classifies rendered target text. Its baseline ratchets exact realization
+identities and quality degradation; grouping identical records across profiles
+is only a serialization compression. Every emitted unknown is also an absolute
+quality failure, including during a baseline update.
 
 ## Deferred beyond v1
 

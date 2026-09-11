@@ -37,7 +37,7 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(mask_a & mask_b);"
+          tsil "complete(op<bit_and>(mask_a, mask_b));"
     sve:
       arith:
         requires [sve]
@@ -120,7 +120,7 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(mask_a & mask_b);"
+          tsil "complete(op<bit_and>(mask_a, mask_b));"
     sse_vl:
       arith:
         requires [sse2, avx512f, avx512vl]
@@ -129,7 +129,7 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(mask_a & mask_b);"
+          tsil "complete(op<bit_and>(mask_a, mask_b));"
     avx2:
       arith:
         requires {si8 [avx, avx2], ui8 [avx, avx2], si16 [avx, avx2], ui16 [avx, avx2], si32 [avx, avx2], ui32 [avx, avx2], si64 [avx, avx2], ui64 [avx, avx2], f32 [avx], f64 [avx]}
@@ -192,7 +192,7 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(mask_a & mask_b);"
+          tsil "complete(op<bit_and>(mask_a, mask_b));"
     [generic, oneapi_fpga]:
       arith:
         requires:
@@ -205,7 +205,7 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
         implementation:
           tsil """
               var<const_infer>(valid_lanes, mask<all>());
-              complete((mask_a & mask_b) & valid_lanes);
+              complete(op<bit_and>(op<bit_and>(mask_a, mask_b), valid_lanes));
             """
 prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
   operation mask_or
@@ -246,7 +246,7 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(mask_a | mask_b);"
+          tsil "complete(op<bit_or>(mask_a, mask_b));"
     sve:
       arith:
         requires [sve]
@@ -329,7 +329,7 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(mask_a | mask_b);"
+          tsil "complete(op<bit_or>(mask_a, mask_b));"
     sse_vl:
       arith:
         requires [sse2, avx512f, avx512vl]
@@ -338,7 +338,7 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(mask_a | mask_b);"
+          tsil "complete(op<bit_or>(mask_a, mask_b));"
     avx2:
       arith:
         requires {si8 [avx, avx2], ui8 [avx, avx2], si16 [avx, avx2], ui16 [avx, avx2], si32 [avx, avx2], ui32 [avx, avx2], si64 [avx, avx2], ui64 [avx, avx2], f32 [avx], f64 [avx]}
@@ -383,7 +383,7 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(mask_a | mask_b);"
+          tsil "complete(op<bit_or>(mask_a, mask_b));"
     [generic, oneapi_fpga]:
       arith:
         requires:
@@ -396,7 +396,7 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
         implementation:
           tsil """
               var<const_infer>(valid_lanes, mask<all>());
-              complete((mask_a | mask_b) & valid_lanes);
+              complete(op<bit_and>(op<bit_or>(mask_a, mask_b), valid_lanes));
             """
 prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
   operation mask_xor
@@ -437,7 +437,7 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(mask_a ^ mask_b);"
+          tsil "complete(op<bit_xor>(mask_a, mask_b));"
     sve:
       arith:
         requires [sve]
@@ -520,7 +520,7 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(mask_a ^ mask_b);"
+          tsil "complete(op<bit_xor>(mask_a, mask_b));"
     sse_vl:
       arith:
         requires [sse2, avx512f, avx512vl]
@@ -529,7 +529,7 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(mask_a ^ mask_b);"
+          tsil "complete(op<bit_xor>(mask_a, mask_b));"
     avx2:
       arith:
         requires {si8 [avx, avx2], ui8 [avx, avx2], si16 [avx, avx2], ui16 [avx, avx2], si32 [avx, avx2], ui32 [avx, avx2], si64 [avx, avx2], ui64 [avx, avx2], f32 [avx], f64 [avx]}
@@ -574,7 +574,7 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(mask_a ^ mask_b);"
+          tsil "complete(op<bit_xor>(mask_a, mask_b));"
     [generic, oneapi_fpga]:
       arith:
         requires:
@@ -587,7 +587,7 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
         implementation:
           tsil """
               var<const_infer>(valid_lanes, mask<all>());
-              complete((mask_a ^ mask_b) & valid_lanes);
+              complete(op<bit_and>(op<bit_xor>(mask_a, mask_b), valid_lanes));
             """
 prim<m:=m> mask_binary_not(mask):
   operation mask_not
@@ -778,7 +778,7 @@ prim<m:=m> mask_binary_not(mask):
         implementation:
           tsil """
               var<const_infer>(valid_lanes, mask<all>());
-              complete(op<bit_negate>(mask) & valid_lanes);
+              complete(op<bit_and>(op<bit_negate>(mask), valid_lanes));
             """
 prim<usize:=m> mask_population_count(mask):
   operation mask_population_count

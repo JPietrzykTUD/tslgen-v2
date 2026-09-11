@@ -1927,11 +1927,11 @@ prim<v:=v>[cast=convert] cast(data):
                 cpp:
                   capabilities [convertvector]
             safety:
-              internal_unsafe false
+              internal_unsafe true
               caller_unsafe false
-              reasons []
+              reasons [compiler_builtin, intrinsic]
             implementation:
-              tsil "complete(__builtin_convertvector(data, type(register::generic(ToType))));"
+              tsil "complete(intrin<__builtin_convertvector>(data, type(register::generic(ToType))));"
           arith:
             prefer_fixed_native true
             safety:
@@ -1974,11 +1974,11 @@ prim<v:=v>[cast=convert] cast(data):
                 cpp:
                   capabilities [convertvector]
             safety:
-              internal_unsafe false
+              internal_unsafe true
               caller_unsafe false
-              reasons []
+              reasons [compiler_builtin, intrinsic]
             implementation:
-              tsil "complete(__builtin_convertvector(data, type(register::generic(ToType))));"
+              tsil "complete(intrin<__builtin_convertvector>(data, type(register::generic(ToType))));"
           arith:
             prefer_fixed_native true
             safety:
@@ -2021,11 +2021,11 @@ prim<v:=v>[cast=convert] cast(data):
                 cpp:
                   capabilities [convertvector]
             safety:
-              internal_unsafe false
+              internal_unsafe true
               caller_unsafe false
-              reasons []
+              reasons [compiler_builtin, intrinsic]
             implementation:
-              tsil "complete(__builtin_convertvector(data, type(register::generic(ToType))));"
+              tsil "complete(intrin<__builtin_convertvector>(data, type(register::generic(ToType))));"
           arith:
             prefer_fixed_native true
             safety:
@@ -2052,11 +2052,11 @@ prim<v:=v>[cast=convert] cast(data):
                 cpp:
                   capabilities [convertvector]
             safety:
-              internal_unsafe false
+              internal_unsafe true
               caller_unsafe false
-              reasons []
+              reasons [compiler_builtin, intrinsic]
             implementation:
-              tsil "complete(__builtin_convertvector(data, type(register::generic(ToType))));"
+              tsil "complete(intrin<__builtin_convertvector>(data, type(register::generic(ToType))));"
           arith:
             prefer_fixed_native true
             safety:

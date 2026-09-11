@@ -1002,7 +1002,7 @@ prim<v:=(v,v)> div(dividend, divisor):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(dividend / divisor);"
+          tsil "complete(op<div>(dividend, divisor));"
       ?i?:
         prefer_fixed_native true
         requires []

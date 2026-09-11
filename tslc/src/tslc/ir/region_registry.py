@@ -178,7 +178,7 @@ DEFAULT_TSIL_REGION_DESCRIPTORS: tuple[TsilRegionDescriptor, ...] = (
     ),
     TsilRegionDescriptor(
         "op",
-        "Render a backend-specific operator.",
+        "Render a typed direct operator.",
         ("op<name>(arg0, arg1, ...)",),
         _authoring((_value(dynamic_values="operator"),)),
     ),

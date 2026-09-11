@@ -22,6 +22,7 @@ from tslc.maintenance import (
     coverage_inventory,
     coverage_ratchet,
     generation_snapshot,
+    implementation_slot_ratchet,
     performance_benchmark,
     stage_dump,
 )
@@ -74,6 +75,11 @@ def test_no_maintenance_module_probes_the_checkout_at_import_time() -> None:
         pytest.param(coverage_inventory, ["--check"], id="coverage_inventory"),
         pytest.param(stage_dump, ["--stage", "catalog"], id="stage_dump"),
         pytest.param(coverage_ratchet, [], id="coverage_ratchet"),
+        pytest.param(
+            implementation_slot_ratchet,
+            [],
+            id="implementation_slot_ratchet",
+        ),
         pytest.param(checked_api_census, [], id="checked_api_census"),
         pytest.param(benchmark_coverage, [], id="benchmark_coverage"),
         pytest.param(

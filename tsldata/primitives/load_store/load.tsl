@@ -472,13 +472,13 @@ prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [compiler_builtin, raw_pointer]
+          reasons [compiler_builtin, intrinsic, raw_pointer]
         implementation:
           tsil """
             using BoolMaskT = bool __attribute__((ext_vector_type(Vec::vector_element_count)));
             complete(
-              __builtin_masked_load(
-                __builtin_convertvector(mask, type(BoolMaskT)),
+              intrin<__builtin_masked_load>(
+                intrin<__builtin_convertvector>(mask, type(BoolMaskT)),
                 ptr,
                 call<primitive=set_zero[Vec]>()
               )
@@ -494,11 +494,11 @@ prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [compiler_builtin, raw_pointer]
+          reasons [compiler_builtin, intrinsic, raw_pointer]
         implementation:
           tsil """
             complete(
-              __builtin_masked_load(
+              intrin<__builtin_masked_load>(
                 mask,
                 ptr,
                 call<primitive=set_zero[Vec]>()
@@ -845,13 +845,13 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [compiler_builtin, raw_pointer]
+          reasons [compiler_builtin, intrinsic, raw_pointer]
         implementation:
           tsil """
             using BoolMaskT = bool __attribute__((ext_vector_type(Vec::vector_element_count)));
             complete(
-              __builtin_masked_load(
-                __builtin_convertvector(mask, type(BoolMaskT)),
+              intrin<__builtin_masked_load>(
+                intrin<__builtin_convertvector>(mask, type(BoolMaskT)),
                 ptr,
                 data
               )
@@ -867,11 +867,11 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [compiler_builtin, raw_pointer]
+          reasons [compiler_builtin, intrinsic, raw_pointer]
         implementation:
           tsil """
             complete(
-              __builtin_masked_load(
+              intrin<__builtin_masked_load>(
                 mask,
                 ptr,
                 data

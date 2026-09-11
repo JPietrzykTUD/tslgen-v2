@@ -460,7 +460,7 @@ def _maintenance_group(group: str, arguments: list[str]) -> int:
     if not arguments or arguments[0] in ("-h", "--help"):
         choices = {
             "audit": "metadata, call-preconditions",
-            "coverage": "ratchet, target-ratchet, inventory",
+            "coverage": "ratchet, target-ratchet, implementation-ratchet, inventory",
             "release": "contract",
         }[group]
         print(f"usage: tslc {group} {{{choices.replace(', ', ',')}}} [options]")
@@ -492,6 +492,12 @@ def _maintenance_group(group: str, arguments: list[str]) -> int:
         from tslc.maintenance.target_support_ratchet import main as target_ratchet_main
 
         return _run_configured_maintenance(target_ratchet_main, rest)
+    if group == "coverage" and action == "implementation-ratchet":
+        from tslc.maintenance.implementation_slot_ratchet import (
+            main as implementation_ratchet_main,
+        )
+
+        return _run_configured_maintenance(implementation_ratchet_main, rest)
     if group == "release" and action == "contract":
         from tslc.maintenance.release_contract_cli import main as release_contract_main
 

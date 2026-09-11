@@ -58,7 +58,7 @@ prim<m:=(v,v)> equal(left, right):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(left == right);"
+          tsil "complete(op<equal>(left, right));"
     generic:
       arith:
         requires []
@@ -426,7 +426,7 @@ prim<m:=(v,v)> nequal(left, right):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(left != right);"
+          tsil "complete(op<not_equal>(left, right));"
     generic:
       arith:
         requires []
@@ -749,7 +749,7 @@ prim<m:=(v,v)> less_than(left, right):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(left < right);"
+          tsil "complete(op<less_than>(left, right));"
     generic:
       arith:
         requires []
@@ -1258,7 +1258,7 @@ prim<m:=(v,v)> greater_than(left, right):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(left > right);"
+          tsil "complete(op<greater_than>(left, right));"
     generic:
       arith:
         requires []
@@ -1587,7 +1587,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(left <= right);"
+          tsil "complete(op<less_than_or_equal>(left, right));"
     generic:
       arith:
         requires []
@@ -2047,7 +2047,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(left >= right);"
+          tsil "complete(op<greater_than_or_equal>(left, right));"
     generic:
       arith:
         requires []

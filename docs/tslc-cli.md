@@ -296,6 +296,7 @@ tslc audit call-preconditions
 tslc audit call-preconditions --format json
 tslc coverage ratchet
 tslc coverage target-ratchet
+tslc coverage implementation-ratchet
 tslc coverage inventory
 tslc coverage inventory --profiles scalar,avx2 --backends cpp,rust
 tslc coverage inventory --format json
@@ -327,6 +328,23 @@ reviewing the line-oriented exact diff.
 `--require-complete` additionally turns every current absent, selected-only,
 policy-deferred, or pruned stable slot into a failing release gate; the normal
 ratchet permits already-recorded gaps while rejecting new regressions.
+
+`coverage implementation-ratchet` classifies every exact selector-owned slot
+in all backend/profile scopes of the generated-library v1 contract as `native`,
+`composed`, `generic_fallback`, or `unsupported`. It covers the complete TSL
+corpus and stable scalar type set, including compiler-capability alternatives,
+conversion targets, monomorphizations, and authored variants. The projection
+consumes the final target-support trace; it never reads rendered source or
+interprets opaque target text. An emitted `unknown` therefore maps fail-closed
+to `unsupported` with reason `TSL-IMPLEMENTATION-UNCLASSIFIED`.
+
+The baseline groups byte-identical outcomes across profiles to remain compact,
+but deserialization restores and compares every exact profile identity. A
+native-to-composed, composed-to-generic-fallback, supported-to-unsupported, lost
+realization, or canonical-scope change fails. New non-emitted primitive slots
+and quality improvements do not block additive corpus work. Any emitted unknown
+implementation is an absolute quality failure, including during `--update`. Run
+`./dev.sh implementation-ratchet --update` only after reviewing the exact diff.
 
 `explain` and the selection/lowered `inspect` stages default to the same
 automatic compiler-capability frontier as ordinary generation. Pass

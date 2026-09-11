@@ -3846,11 +3846,11 @@
   "implementation_states": [
     {
       "id": "native",
-      "meaning": "the selected body is one direct expression or one target intrinsic"
+      "meaning": "the selected body is a direct target expression, operation, intrinsic, or intrinsic sequence"
     },
     {
       "id": "composed",
-      "meaning": "the selected body composes typed primitive calls, control flow, or multiple direct operations"
+      "meaning": "the selected body composes typed primitive calls, control flow, or shared semantic regions"
     },
     {
       "id": "fallback",

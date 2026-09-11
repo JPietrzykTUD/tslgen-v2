@@ -83,6 +83,7 @@ overlay.
 - Generated-library changes: [CHANGELOG.md](CHANGELOG.md)
 - Generated-library v1 support contract: [docs/tsl-v1-support.md](docs/tsl-v1-support.md)
 - Exact v1 SVE/RVV support ratchet: [coverage/tsl-v1-target-support.json](coverage/tsl-v1-target-support.json)
+- Exact v1 implementation-slot quality ratchet: [coverage/tsl-v1-implementation-slots.json](coverage/tsl-v1-implementation-slots.json)
 - Editor setup and architecture: [docs/tsl-editor.md](docs/tsl-editor.md)
 - Repository charter: [CHARTER.md](CHARTER.md)
 - Compiler charter: [tslc/CHARTER.md](tslc/CHARTER.md)

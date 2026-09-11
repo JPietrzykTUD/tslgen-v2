@@ -369,6 +369,10 @@ class LoweringEffects:
         if self._implementation_state_suppression_depth == 0:
             self.implementation_state_facts.mark_intrinsic()
 
+    def mark_direct_operation(self) -> None:
+        if self._implementation_state_suppression_depth == 0:
+            self.implementation_state_facts.mark_direct_operation()
+
     def mark_call(self) -> None:
         if self._implementation_state_suppression_depth == 0:
             self.implementation_state_facts.mark_call()

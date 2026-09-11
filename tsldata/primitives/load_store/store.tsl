@@ -854,12 +854,12 @@ prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [compiler_builtin, raw_pointer]
+          reasons [compiler_builtin, intrinsic, raw_pointer]
         implementation:
           tsil """
             using BoolMaskT = bool __attribute__((ext_vector_type(Vec::vector_element_count)));
-            __builtin_masked_store(
-              __builtin_convertvector(mask, type(BoolMaskT)),
+            intrin<__builtin_masked_store>(
+              intrin<__builtin_convertvector>(mask, type(BoolMaskT)),
               data,
               ptr
             );
@@ -874,10 +874,10 @@ prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [compiler_builtin, raw_pointer]
+          reasons [compiler_builtin, intrinsic, raw_pointer]
         implementation:
           tsil """
-            __builtin_masked_store(
+            intrin<__builtin_masked_store>(
               mask,
               data,
               ptr

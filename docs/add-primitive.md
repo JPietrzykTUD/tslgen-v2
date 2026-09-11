@@ -233,12 +233,22 @@ impls:
           """
 ```
 
-Prefer this order:
+Use the canonical implementation order from `tsldata/AGENTS.md`:
 
-1. Use a direct intrinsic.
-2. Compose existing primitives.
-3. Add a small reusable helper primitive.
-4. Use a generic typed-TSIL fallback.
+1. Define the observable contract and its value evidence.
+2. Use a native target implementation: an exact intrinsic, compiler builtin or
+   documented vector operator, or a short target-local intrinsic sequence that
+   contains only irreducible representation mechanics.
+3. Otherwise compose existing TSL primitives through typed calls.
+4. If a stable, target-independent semantic operation is missing, add and test
+   it as a prerequisite primitive first; do not promote target-local plumbing.
+5. Otherwise use an explicit generic-extension fallback when its supporting
+   conversions and dispatch are available.
+6. Otherwise leave the slot explicitly unsupported with an actionable reason.
+
+Native describes direct target ownership, not one instruction or a performance
+promise. Keep target-local glue inside its owning native or composed body; it is
+not another fallback tier.
 
 
 Target features and compiler capabilities are independent requirement axes.

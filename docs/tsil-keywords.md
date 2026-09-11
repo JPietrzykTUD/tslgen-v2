@@ -95,7 +95,7 @@ The order matches the descriptor registry.
 | --- | --- | --- |
 | `intrin` | Call | Invoke a target intrinsic. |
 | `helper` | Call | Invoke a compiler-owned helper. |
-| `op` | Call | Render a backend-specific operator. |
+| `op` | Call | Render a typed direct operator. |
 | `var` | Call | Declare local storage. |
 | `let` | Call | Bind a lowering-time type alias. |
 | `mask` | Call | Construct or update a mask. |
@@ -222,12 +222,14 @@ op<name>(arg0, arg1, ...)
 Supported names:
 
 ```text
-add  sub  mul  bit_negate
+add  sub  mul  div  shift_right  bit_and  bit_or  bit_xor  bit_negate  negate
+equal  not_equal  less_than  greater_than  less_than_or_equal
+greater_than_or_equal
 ```
 
-Use `op` only when backend semantics or spelling differ.
-
-Portable operators can remain raw text.
+Use `op` when an operator is the direct implementation evidence for a primitive
+body or when its backend semantics or spelling differ. Ordinary target
+expressions inside an already typed composed body can remain raw text.
 
 Lowering looks up `op_<name>`.
 

@@ -65,7 +65,7 @@ prim<v:=(m,v,v)>[mask=pass_through] select(mask, true_values, false_values):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(mask ? true_values : false_values);"
+          tsil "complete(select_expr(mask, true_values, false_values));"
     [generic, oneapi_fpga]:
       arith:
         requires:

@@ -969,6 +969,15 @@ verification, so the attestation identifies the bytes that were compiled.
   absent, selected-only, deferred, or pruned applicable slot is still a
   failure; impossible source/target pairs must be declared as reviewed typed
   exclusions rather than hidden in the baseline.
+  The corpus-wide
+  [implementation_slot_ratchet.py](src/tslc/maintenance/implementation_slot_ratchet.py)
+  consumes the same trace across every backend/profile scope in the v1 product
+  contract and projects exactly four fail-closed quality classes: native,
+  composed, generic fallback, and unsupported. Emitted unknown state is
+  unsupported in this quality view rather than guessed from opaque target text,
+  and is an absolute gate failure even during a baseline update.
+  Its compact baseline groups identical records across profiles only while
+  serializing; comparison restores every exact selector realization.
 - **Honest edges**: [support_policy.py](src/tslc/support_policy.py) centralizes
   what the compiler can emit today; some keyword forms are *recognized so a
   body skips cleanly* rather than leaking through as raw text.

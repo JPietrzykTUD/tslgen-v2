@@ -1018,7 +1018,7 @@ def test_clang_mask_kernels_use_direct_comparison_and_integral_bridge(
         equal_slot, catalog, create_backend_dialect(catalog, "cpp")
     ).specialization
     assert equal is not None
-    assert equal.body_text == "return left == right;"
+    assert equal.body_text == "return (left == right);"
 
     to_integral_slot = _by_key(catalog, profile, "to_integral")[
         ("f32", "clang_v256")
@@ -1056,7 +1056,7 @@ def test_clang_mask_kernels_use_direct_comparison_and_integral_bridge(
         bool_equal_slot, catalog, create_backend_dialect(catalog, "cpp")
     ).specialization
     assert bool_equal is not None
-    assert bool_equal.body_text == "return left == right;"
+    assert bool_equal.body_text == "return (left == right);"
 
     bool_to_integral_slot = _by_key(catalog, profile, "to_integral")[
         ("f32", "clang_v256_bool")

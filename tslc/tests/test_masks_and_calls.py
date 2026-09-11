@@ -82,7 +82,7 @@ def _dependencies_for_body(catalog, machine_profiles, body):
 def test_m_kind_lowers_to_mask_type(catalog: Catalog, machine_profiles) -> None:
     cpp = _scalar_spec(catalog, machine_profiles, "nequal", "cpp")
     assert cpp.result_kind == "m"
-    assert cpp.body_text == "return left != right;"
+    assert cpp.body_text == "return (left != right);"
     # the wrapper/apply return type is the mask type, not register/base.
     from tslc.backend.cpp import _result_type  # noqa: PLC0415
 

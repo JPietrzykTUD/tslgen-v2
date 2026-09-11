@@ -53,7 +53,7 @@ def test_clang_select_prefers_exact_compiler_vector_operation(
     ).specialization
 
     assert lowered is not None
-    assert lowered.body_text == "return mask ? true_values : false_values;"
+    assert lowered.body_text == "return ((mask) ? (true_values) : (false_values));"
 
 
 @pytest.mark.parametrize("primitive", ["hadd", "hand", "hor"])

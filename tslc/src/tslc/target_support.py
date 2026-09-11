@@ -28,6 +28,18 @@ class TargetSupportStatus(StrEnum):
     EMITTED = "emitted"
 
 
+class ImplementationSlotClass(StrEnum):
+    """Fail-closed quality class for one finalized implementation slot."""
+
+    NATIVE = "native"
+    COMPOSED = "composed"
+    GENERIC_FALLBACK = "generic_fallback"
+    UNSUPPORTED = "unsupported"
+
+
+UNCLASSIFIED_IMPLEMENTATION_REASON = "TSL-IMPLEMENTATION-UNCLASSIFIED"
+
+
 @dataclass(frozen=True, slots=True)
 class TargetSupportKey:
     """One expected public specialization slot before body selection."""
@@ -114,6 +126,36 @@ class TargetSupportTrace:
     entries: tuple[TargetSupportEntry, ...]
 
 
+def implementation_slot_class(entry: TargetSupportEntry) -> ImplementationSlotClass:
+    """Project one exact pipeline outcome into the four corpus quality classes.
+
+    Only finalized emitted implementations may claim a supported class.  An
+    emitted ``unknown`` remains usable by ordinary partial generation, but the
+    quality projection treats it as unsupported because typed compiler facts
+    cannot justify a stronger classification.
+    """
+
+    if entry.status is not TargetSupportStatus.EMITTED:
+        return ImplementationSlotClass.UNSUPPORTED
+    return {
+        ImplementationState.NATIVE: ImplementationSlotClass.NATIVE,
+        ImplementationState.COMPOSED: ImplementationSlotClass.COMPOSED,
+        ImplementationState.FALLBACK: ImplementationSlotClass.GENERIC_FALLBACK,
+        ImplementationState.UNKNOWN: ImplementationSlotClass.UNSUPPORTED,
+        None: ImplementationSlotClass.UNSUPPORTED,
+    }[entry.implementation_state]
+
+
+def implementation_slot_reason(entry: TargetSupportEntry) -> str | None:
+    """Return the stable reason for an unsupported slot classification."""
+
+    if implementation_slot_class(entry) is not ImplementationSlotClass.UNSUPPORTED:
+        return None
+    if entry.status is TargetSupportStatus.EMITTED:
+        return UNCLASSIFIED_IMPLEMENTATION_REASON
+    return entry.reason_id
+
+
 def target_support_key(
     profile: str,
     backend: str,
@@ -163,11 +205,15 @@ def realization_key(
 
 
 __all__ = (
+    "ImplementationSlotClass",
     "TargetSupportEntry",
     "TargetSupportKey",
     "TargetSupportRealizationKey",
     "TargetSupportStatus",
     "TargetSupportTrace",
+    "UNCLASSIFIED_IMPLEMENTATION_REASON",
+    "implementation_slot_class",
+    "implementation_slot_reason",
     "realization_key",
     "target_support_key",
 )

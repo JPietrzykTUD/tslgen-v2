@@ -1859,10 +1859,10 @@ prim<v:=(v,sImm)> shift_right(data, shift):
                   var<const_infer>(result, cast<static>(UnsignedT, data) >> cast<static>(UnsignedT, shift));
                   complete(cast<static>(base::in, result));
                 } else<compile> {
-                  complete(data >> shift);
+                  complete(op<shift_right>(data, shift));
                 }
               } else<generation> {
-                complete(data >> shift);
+                complete(op<shift_right>(data, shift));
               }
             """
       f?:
@@ -1901,10 +1901,10 @@ prim<v:=(v,sImm)> shift_right(data, shift):
                   var<const_infer>(udata, call<primitive=reinterpret[Vec, UnsignedVec]>(data));
                   complete(call<primitive=reinterpret[UnsignedVec, Vec]>(udata >> shift));
                 } else<compile> {
-                  complete(data >> shift);
+                  complete(op<shift_right>(data, shift));
                 }
               } else<generation> {
-                complete(data >> shift);
+                complete(op<shift_right>(data, shift));
               }
             """
       f?:
@@ -2975,10 +2975,10 @@ prim<v:=(v,s)> shift_right(data, shift):
                   var<const_infer>(result, cast<static>(UnsignedT, data) >> cast<static>(UnsignedT, shift));
                   complete(cast<static>(base::in, result));
                 } else<compile> {
-                  complete(data >> shift);
+                  complete(op<shift_right>(data, shift));
                 }
               } else<generation> {
-                complete(data >> shift);
+                complete(op<shift_right>(data, shift));
               }
             """
       f?:
@@ -3023,10 +3023,10 @@ prim<v:=(v,s)> shift_right(data, shift):
                   var<const_infer>(udata, call<primitive=reinterpret[Vec, UnsignedVec]>(data));
                   complete(call<primitive=reinterpret[UnsignedVec, Vec]>(udata >> shift));
                 } else<compile> {
-                  complete(data >> shift);
+                  complete(op<shift_right>(data, shift));
                 }
               } else<generation> {
-                complete(data >> shift);
+                complete(op<shift_right>(data, shift));
               }
             """
       f?:
@@ -4102,10 +4102,10 @@ prim<v:=(v,v)> shift_right(data, shift):
                   var<const_infer>(result, cast<static>(UnsignedT, data) >> cast<static>(UnsignedT, shift));
                   complete(cast<static>(base::in, result));
                 } else<compile> {
-                  complete(data >> shift);
+                  complete(op<shift_right>(data, shift));
                 }
               } else<compile> {
-                complete(data >> shift);
+                complete(op<shift_right>(data, shift));
               }
             """
       f?:

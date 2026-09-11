@@ -335,7 +335,7 @@ Their review record is `supplementary/release/tsl-v1-fallback-review.md`.
 
 The coarse implementation-state meanings are:
 
-- `native`: the selected body is one direct expression or one target intrinsic
-- `composed`: the selected body composes typed primitive calls, control flow, or multiple direct operations
+- `native`: the selected body is a direct target expression, operation, intrinsic, or intrinsic sequence
+- `composed`: the selected body composes typed primitive calls, control flow, or shared semantic regions
 - `fallback`: the selected extension family or lowered body explicitly uses a portable fallback
 - `unknown`: opaque target text or incomplete typed evidence prevents a stronger claim

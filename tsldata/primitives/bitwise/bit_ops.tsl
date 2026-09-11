@@ -48,7 +48,7 @@ prim<v:=(v,v)> binary_and(left, right):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(left & right);"
+          tsil "complete(op<bit_and>(left, right));"
       f?:
         prefer_fixed_native true
         requires []
@@ -300,7 +300,7 @@ prim<v:=(v,v)> binary_andnot(left, right):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(op<bit_negate>(left) & right);"
+          tsil "complete(op<bit_and>(op<bit_negate>(left), right));"
       f?:
         prefer_fixed_native true
         requires []
@@ -559,7 +559,7 @@ prim<v:=(v,v)> binary_or(left, right):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(left | right);"
+          tsil "complete(op<bit_or>(left, right));"
       f?:
         prefer_fixed_native true
         requires []
@@ -825,7 +825,7 @@ prim<v:=(v,v)> binary_xor(left, right):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(left ^ right);"
+          tsil "complete(op<bit_xor>(left, right));"
       f?:
         prefer_fixed_native true
         requires []

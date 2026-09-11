@@ -59,9 +59,9 @@ prim<s:=v> hadd(vec):
         safety:
           internal_unsafe true
           caller_unsafe false
-          reasons [compiler_builtin]
+          reasons [compiler_builtin, intrinsic]
         implementation:
-          tsil "complete(__builtin_reduce_in_order_fadd(vec, cast<static>(base::in, 0)));"
+          tsil "complete(intrin<__builtin_reduce_in_order_fadd>(vec, cast<static>(base::in, 0)));"
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       ?i?:
         prefer_fixed_native true

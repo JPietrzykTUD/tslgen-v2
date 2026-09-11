@@ -34,7 +34,7 @@ _REGION_FACTS = (
         "Invoke a compiler-owned helper.",
         ("helper<name>(args)", "helper<name, template_arg, ...>(args)"),
     ),
-    ("op", "Render a backend-specific operator.", ("op<name>(arg0, arg1, ...)",)),
+    ("op", "Render a typed direct operator.", ("op<name>(arg0, arg1, ...)",)),
     (
         "var",
         "Declare local storage.",

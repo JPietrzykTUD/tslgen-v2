@@ -46,8 +46,8 @@ _EFFECT = RegionImplementationEffect
 REGION_LOWERING_REGISTRATIONS: tuple[RegionLoweringRegistration, ...] = (
     RegionLoweringRegistration("intrin", IntrinLowerer, _EFFECT.INTRINSIC),
     RegionLoweringRegistration("helper", HelperLowerer, _EFFECT.COMPOSITION),
-    RegionLoweringRegistration("op", OpLowerer, _EFFECT.COMPOSITION),
-    RegionLoweringRegistration("var", VarLowerer, _EFFECT.COMPOSITION),
+    RegionLoweringRegistration("op", OpLowerer, _EFFECT.DIRECT_OPERATION),
+    RegionLoweringRegistration("var", VarLowerer, _EFFECT.NEUTRAL),
     RegionLoweringRegistration("let", LetLowerer, _EFFECT.NEUTRAL),
     RegionLoweringRegistration("mask", MaskLowerer, _EFFECT.COMPOSITION),
     RegionLoweringRegistration("mem", MemLowerer, _EFFECT.COMPOSITION),
@@ -59,7 +59,7 @@ REGION_LOWERING_REGISTRATIONS: tuple[RegionLoweringRegistration, ...] = (
     RegionLoweringRegistration("call", CallLowerer, _EFFECT.CALL),
     RegionLoweringRegistration("if", IfLowerer, _EFFECT.CONTROL),
     RegionLoweringRegistration(
-        "select_expr", SelectExprLowerer, _EFFECT.COMPOSITION
+        "select_expr", SelectExprLowerer, _EFFECT.DIRECT_OPERATION
     ),
     RegionLoweringRegistration(
         "assume_aligned", AssumeAlignedLowerer, _EFFECT.COMPOSITION

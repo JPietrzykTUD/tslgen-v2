@@ -40,6 +40,12 @@ def test_cli_reports_installed_version(monkeypatch, capsys) -> None:
     assert capsys.readouterr().out == "tslc 9.8.7-test\n"
 
 
+def test_coverage_help_lists_implementation_slot_ratchet(capsys) -> None:
+    assert cli.main(["coverage", "--help"]) == 0
+
+    assert "implementation-ratchet" in capsys.readouterr().out
+
+
 def test_cli_test_flag_enables_existing_value_test_paths(
     monkeypatch, tmp_path, capsys
 ) -> None:

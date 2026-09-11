@@ -73,7 +73,7 @@ prim<im:=m> to_integral(mask):
             var<const_typed>(
               BoolMaskT,
               packed,
-              __builtin_convertvector(mask, type(BoolMaskT))
+              intrin<__builtin_convertvector>(mask, type(BoolMaskT))
             );
             var<const_typed>(
               ImaskT,
@@ -759,7 +759,7 @@ prim<m:=im> to_mask(mask):
               packed,
               ::tsl::bit_cast<BoolMaskT>(normalized)
             );
-            complete(-__builtin_convertvector(packed, type(MaskT)));
+            complete(op<negate>(intrin<__builtin_convertvector>(packed, type(MaskT))));
           """
     [clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:

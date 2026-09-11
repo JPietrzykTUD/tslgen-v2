@@ -65,6 +65,12 @@ jobs:
             "tslctmp/ci-logs/coverage-ratchet/target-ratchet.log" \
             bash dev.sh target-ratchet --require-complete
 
+      - name: Run exact implementation-slot quality ratchet
+        run: |
+          bash .github/scripts/run_with_log.sh \
+            "tslctmp/ci-logs/coverage-ratchet/implementation-ratchet.log" \
+            bash dev.sh implementation-ratchet
+
       - name: Run benchmark coverage ratchet
         run: |
           bash .github/scripts/run_with_log.sh \

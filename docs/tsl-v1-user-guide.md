@@ -167,6 +167,13 @@ and Rust expose the same final post-dependency-closure state; `tslc analyze` and
 unknown state and unreviewed accelerated fallback where the support policy
 requires stronger evidence.
 
+The corpus-wide implementation-slot ratchet turns those compiler facts and
+explicit non-emitted outcomes into the fail-closed release-quality classes
+`native`, `composed`, `generic_fallback`, and `unsupported`. In that report only,
+an emitted `unknown` is `unsupported` because the compiler lacks typed evidence
+for a stronger claim; ordinary generated APIs retain the underlying `unknown`
+state so no information is hidden.
+
 Use state to inspect and qualify an implementation, then measure on the target
 machine before making a performance decision. The exact meanings and query
 surface are frozen in the
