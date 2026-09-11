@@ -735,6 +735,17 @@ missing form, behavioral axis, or backend declaration identity. Existing paired
 examples remain the broader behavioral evidence and are required to stay wired
 into the generated-consumer execution gate.
 
+Compile cost is repository measurement evidence, not a compiler semantic or a
+render-stage decision. The non-networked
+[support compile-cost script](../supplementary/benchmarks/measure_support_compile_cost.py)
+generates a fixed scalar/AVX2 project, then compares frozen generated roots by
+invoking GCC, Clang, the declared Rust MSRV, and current stable directly. It
+records preprocessing volume, compiler-reported token records, and interleaved
+clean-build wall/CPU samples without interpreting target text. The durable
+[Slice 0/final report](../research/tsl-v1-support-file-compile-cost.md) is
+informational until a stable runner and noise band exist; it does not alter
+backend admission, artifact layout, or the public packaging contract.
+
 The repository release projection is split by ownership across
 [maintenance/release_contract_model.py](src/tslc/maintenance/release_contract_model.py),
 [maintenance/release_contract_policy.py](src/tslc/maintenance/release_contract_policy.py),

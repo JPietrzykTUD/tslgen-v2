@@ -12,6 +12,9 @@ state belong to the specialization reference. The opaque root ``Simd`` and
 TSL 1.x Rust surface. ``tsl_core`` and ``tsl_algorithm`` remain reachable
 because generated signatures depend on them, but are intentionally hidden from
 the stable index and their representations are not a stable ABI.
+Those root and profile algorithm paths remain stable facades even though their
+implementations are divided into private support and semantic-family modules;
+the split does not introduce Cargo features or selective-compilation promises.
 
 Normal crate builds select the best generated profile through compile-target
 ``cfg(target_feature)`` predicates and use the generated generic fallback when

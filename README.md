@@ -24,7 +24,7 @@ editors/      Editor clients; compiler semantics remain in tslc
 docs/         Human-authored maintainer guides
 examples/     Checked-in C++ and Rust generated-library consumers
 .github/      GitHub Actions workflows, actions, and workflow-only scripts
-supplementary/ Machine profiles, generated-doc inputs, and reusable CI helpers
+supplementary/ Machine profiles, generated-doc inputs, measurement and CI helpers
 coverage/     Coverage and benchmark ratchet evidence
 tools/        Downstream packages; tools/pivot/ owns standalone PIVOT export
 tslctmp/      Local generated output and scratch space; do not commit
@@ -87,6 +87,7 @@ overlay.
 - Repository charter: [CHARTER.md](CHARTER.md)
 - Compiler charter: [tslc/CHARTER.md](tslc/CHARTER.md)
 - Architecture narrative: [tslc/DESCRIPTION.md](tslc/DESCRIPTION.md)
+- Support-file compile-cost evidence: [research/tsl-v1-support-file-compile-cost.md](research/tsl-v1-support-file-compile-cost.md)
 - Active planning guide: [PLANS.md](PLANS.md)
 - Repository instructions: [AGENTS.md](AGENTS.md)
 - Claude Code import bridge: [CLAUDE.md](CLAUDE.md)

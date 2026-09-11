@@ -5,6 +5,9 @@ Capture date: 2026-09-10
 Status: Slice 0 complete; informational evidence whose compatibility gates
 remain owned by typed manifests and executable checks
 
+The final same-host comparison and reproducible method are recorded in the
+[support-file compile-cost report](tsl-v1-support-file-compile-cost.md).
+
 ## Compatibility authority
 
 The reviewed compatibility authority is
