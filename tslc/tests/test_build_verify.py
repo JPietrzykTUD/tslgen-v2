@@ -1522,6 +1522,300 @@ def test_rust_scalar_only_release_matrix(
         )
 
 
+def test_rust_core_scalar_cast_matrix(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    if shutil.which("cargo") is None:
+        pytest.skip("cargo is required")
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=_build_verified("test_rust_core_scalar_cast_matrix"),
+        profiles=["scalar", "avx2"],
+        backends=["rust"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    generated = tmp_path / "generated"
+    write_report = write_artifacts(result.artifacts, generated)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    scalar_tests = generated / "rust" / "tests" / "core_scalar_casts.rs"
+    scalar_tests.write_text(
+        textwrap.dedent(
+            r"""
+            use tsl::tsl_core::detail::helpers::{
+                saturating_cast_value, scalar_as_cast_value,
+            };
+
+            macro_rules! assert_float_eq {
+                ($actual:expr, $expected:expr) => {{
+                    let actual = $actual;
+                    let expected = $expected;
+                    if expected.is_nan() {
+                        assert!(actual.is_nan());
+                    } else {
+                        assert_eq!(actual.to_bits(), expected.to_bits());
+                    }
+                }};
+            }
+
+            macro_rules! check_scalar_as_source {
+                ($source:ty, $value:expr) => {{
+                    let value: $source = $value;
+                    assert_eq!(scalar_as_cast_value::<$source, i8>(value), value as i8);
+                    assert_eq!(scalar_as_cast_value::<$source, u8>(value), value as u8);
+                    assert_eq!(scalar_as_cast_value::<$source, i16>(value), value as i16);
+                    assert_eq!(scalar_as_cast_value::<$source, u16>(value), value as u16);
+                    assert_eq!(scalar_as_cast_value::<$source, i32>(value), value as i32);
+                    assert_eq!(scalar_as_cast_value::<$source, u32>(value), value as u32);
+                    assert_eq!(scalar_as_cast_value::<$source, i64>(value), value as i64);
+                    assert_eq!(scalar_as_cast_value::<$source, u64>(value), value as u64);
+                    assert_float_eq!(
+                        scalar_as_cast_value::<$source, f32>(value),
+                        value as f32
+                    );
+                    assert_float_eq!(
+                        scalar_as_cast_value::<$source, f64>(value),
+                        value as f64
+                    );
+                }};
+            }
+
+            macro_rules! check_saturating_signed_source {
+                ($source:ty, $value:expr) => {{
+                    let value: $source = $value;
+                    let wide = value as i128;
+                    assert_eq!(
+                        saturating_cast_value::<$source, i8>(value),
+                        wide.clamp(i8::MIN as i128, i8::MAX as i128) as i8
+                    );
+                    assert_eq!(
+                        saturating_cast_value::<$source, u8>(value),
+                        wide.clamp(0, u8::MAX as i128) as u8
+                    );
+                    assert_eq!(
+                        saturating_cast_value::<$source, i16>(value),
+                        wide.clamp(i16::MIN as i128, i16::MAX as i128) as i16
+                    );
+                    assert_eq!(
+                        saturating_cast_value::<$source, u16>(value),
+                        wide.clamp(0, u16::MAX as i128) as u16
+                    );
+                    assert_eq!(
+                        saturating_cast_value::<$source, i32>(value),
+                        wide.clamp(i32::MIN as i128, i32::MAX as i128) as i32
+                    );
+                    assert_eq!(
+                        saturating_cast_value::<$source, u32>(value),
+                        wide.clamp(0, u32::MAX as i128) as u32
+                    );
+                    assert_eq!(
+                        saturating_cast_value::<$source, i64>(value),
+                        wide.clamp(i64::MIN as i128, i64::MAX as i128) as i64
+                    );
+                    assert_eq!(
+                        saturating_cast_value::<$source, u64>(value),
+                        wide.clamp(0, u64::MAX as i128) as u64
+                    );
+                    assert_float_eq!(
+                        saturating_cast_value::<$source, f32>(value),
+                        value as f32
+                    );
+                    assert_float_eq!(
+                        saturating_cast_value::<$source, f64>(value),
+                        value as f64
+                    );
+                }};
+            }
+
+            macro_rules! check_saturating_unsigned_source {
+                ($source:ty, $value:expr) => {{
+                    let value: $source = $value;
+                    let wide = value as u128;
+                    assert_eq!(
+                        saturating_cast_value::<$source, i8>(value),
+                        wide.min(i8::MAX as u128) as i8
+                    );
+                    assert_eq!(
+                        saturating_cast_value::<$source, u8>(value),
+                        wide.min(u8::MAX as u128) as u8
+                    );
+                    assert_eq!(
+                        saturating_cast_value::<$source, i16>(value),
+                        wide.min(i16::MAX as u128) as i16
+                    );
+                    assert_eq!(
+                        saturating_cast_value::<$source, u16>(value),
+                        wide.min(u16::MAX as u128) as u16
+                    );
+                    assert_eq!(
+                        saturating_cast_value::<$source, i32>(value),
+                        wide.min(i32::MAX as u128) as i32
+                    );
+                    assert_eq!(
+                        saturating_cast_value::<$source, u32>(value),
+                        wide.min(u32::MAX as u128) as u32
+                    );
+                    assert_eq!(
+                        saturating_cast_value::<$source, i64>(value),
+                        wide.min(i64::MAX as u128) as i64
+                    );
+                    assert_eq!(
+                        saturating_cast_value::<$source, u64>(value),
+                        wide.min(u64::MAX as u128) as u64
+                    );
+                    assert_float_eq!(
+                        saturating_cast_value::<$source, f32>(value),
+                        value as f32
+                    );
+                    assert_float_eq!(
+                        saturating_cast_value::<$source, f64>(value),
+                        value as f64
+                    );
+                }};
+            }
+
+            macro_rules! check_saturating_float_source {
+                ($source:ty, $value:expr) => {{
+                    let value: $source = $value;
+                    let wide = value as f64;
+                    assert_eq!(saturating_cast_value::<$source, i8>(value), value as i8);
+                    assert_eq!(saturating_cast_value::<$source, u8>(value), value as u8);
+                    assert_eq!(saturating_cast_value::<$source, i16>(value), value as i16);
+                    assert_eq!(saturating_cast_value::<$source, u16>(value), value as u16);
+                    assert_eq!(saturating_cast_value::<$source, i32>(value), value as i32);
+                    assert_eq!(saturating_cast_value::<$source, u32>(value), value as u32);
+                    assert_eq!(saturating_cast_value::<$source, i64>(value), value as i64);
+                    assert_eq!(saturating_cast_value::<$source, u64>(value), value as u64);
+                    let expected_f32 = if wide.is_nan() {
+                        f32::NAN
+                    } else if wide > f32::MAX as f64 {
+                        f32::MAX
+                    } else if wide < -(f32::MAX as f64) {
+                        -f32::MAX
+                    } else {
+                        wide as f32
+                    };
+                    assert_float_eq!(
+                        saturating_cast_value::<$source, f32>(value),
+                        expected_f32
+                    );
+                    assert_float_eq!(
+                        saturating_cast_value::<$source, f64>(value),
+                        wide
+                    );
+                }};
+            }
+
+            #[test]
+            fn every_ordinary_scalar_pair_matches_rust_as() {
+                check_scalar_as_source!(i8, i8::MIN);
+                check_scalar_as_source!(i8, i8::MAX);
+                check_scalar_as_source!(u8, u8::MIN);
+                check_scalar_as_source!(u8, u8::MAX);
+                check_scalar_as_source!(i16, i16::MIN);
+                check_scalar_as_source!(i16, i16::MAX);
+                check_scalar_as_source!(u16, u16::MIN);
+                check_scalar_as_source!(u16, u16::MAX);
+                check_scalar_as_source!(i32, i32::MIN);
+                check_scalar_as_source!(i32, i32::MAX);
+                check_scalar_as_source!(u32, u32::MIN);
+                check_scalar_as_source!(u32, u32::MAX);
+                check_scalar_as_source!(i64, i64::MIN);
+                check_scalar_as_source!(i64, i64::MAX);
+                check_scalar_as_source!(u64, u64::MIN);
+                check_scalar_as_source!(u64, u64::MAX);
+                for value in [f32::NEG_INFINITY, -0.0, 0.0, f32::MAX, f32::INFINITY, f32::NAN] {
+                    check_scalar_as_source!(f32, value);
+                }
+                for value in [f64::NEG_INFINITY, -0.0, 0.0, f64::MAX, f64::INFINITY, f64::NAN] {
+                    check_scalar_as_source!(f64, value);
+                }
+            }
+
+            #[test]
+            fn every_saturating_scalar_pair_clamps_at_the_declared_bounds() {
+                check_saturating_signed_source!(i8, i8::MIN);
+                check_saturating_signed_source!(i8, i8::MAX);
+                check_saturating_signed_source!(i16, i16::MIN);
+                check_saturating_signed_source!(i16, i16::MAX);
+                check_saturating_signed_source!(i32, i32::MIN);
+                check_saturating_signed_source!(i32, i32::MAX);
+                check_saturating_signed_source!(i64, i64::MIN);
+                check_saturating_signed_source!(i64, i64::MAX);
+                check_saturating_unsigned_source!(u8, u8::MIN);
+                check_saturating_unsigned_source!(u8, u8::MAX);
+                check_saturating_unsigned_source!(u16, u16::MIN);
+                check_saturating_unsigned_source!(u16, u16::MAX);
+                check_saturating_unsigned_source!(u32, u32::MIN);
+                check_saturating_unsigned_source!(u32, u32::MAX);
+                check_saturating_unsigned_source!(u64, u64::MIN);
+                check_saturating_unsigned_source!(u64, u64::MAX);
+                for value in [f32::NEG_INFINITY, -0.0, 0.0, f32::MAX, f32::INFINITY, f32::NAN] {
+                    check_saturating_float_source!(f32, value);
+                }
+                for value in [
+                    f64::NEG_INFINITY,
+                    -(f32::MAX as f64) * 2.0,
+                    -0.0,
+                    0.0,
+                    (f32::MAX as f64) * 2.0,
+                    f64::INFINITY,
+                    f64::NAN,
+                ] {
+                    check_saturating_float_source!(f64, value);
+                }
+            }
+
+            #[derive(Clone, Copy)]
+            struct Unsupported;
+
+            #[test]
+            fn unsupported_scalar_types_fail_closed() {
+                assert!(std::panic::catch_unwind(|| {
+                    scalar_as_cast_value::<Unsupported, i8>(Unsupported)
+                })
+                .is_err());
+                assert!(std::panic::catch_unwind(|| {
+                    scalar_as_cast_value::<i8, Unsupported>(1)
+                })
+                .is_err());
+                assert!(std::panic::catch_unwind(|| {
+                    saturating_cast_value::<Unsupported, i8>(Unsupported)
+                })
+                .is_err());
+                assert!(std::panic::catch_unwind(|| {
+                    saturating_cast_value::<i8, Unsupported>(1)
+                })
+                .is_err());
+            }
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    tested = subprocess.run(
+        (
+            "cargo",
+            "test",
+            "--quiet",
+            "--manifest-path",
+            str(generated / "rust" / "Cargo.toml"),
+            "--no-default-features",
+            "--test",
+            "core_scalar_casts",
+            "--target-dir",
+            str(tmp_path / "rust-cast-target"),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert tested.returncode == 0, tested.stderr + tested.stdout
+
+
 def test_rust_neon_compile_target_builds(
     data_root: Path,
     machine_profiles_path: Path,

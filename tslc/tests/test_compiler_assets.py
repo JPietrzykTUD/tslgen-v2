@@ -41,6 +41,7 @@ from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.preconditions import PreconditionErrorKind
 from tslc.compiler_assets import (
     RenderAssets,
+    _is_render_asset_name,
     load_default_render_assets,
     load_default_tsl_grammar,
 )
@@ -101,6 +102,69 @@ CPP_CORE_RUNTIME_SYMBOLS = {
     "tsl_core_detail_io.hpp": ("ostream_write(",),
 }
 
+RUST_CORE_RUNTIME_MODULES = (
+    "memory",
+    "scalar",
+    "mask",
+    "io",
+)
+
+RUST_CORE_RUNTIME_SYMBOLS = {
+    "tsl_core_memory.rs": (
+        "pub fn ptr_add<",
+        "pub fn ptr_add_mut<",
+        "pub trait IndexBase",
+        "pub(crate) fn indexed_memory_address_error<",
+        "pub fn idx_offset<",
+        "pub trait TslByteCount",
+        "pub unsafe fn mem_copy<",
+        "pub unsafe fn mem_alloc(",
+        "pub unsafe fn mem_alloc_aligned(",
+        "pub unsafe fn mem_free(",
+    ),
+    "tsl_core_scalar.rs": (
+        "pub(crate) unsafe trait ValidBitPattern",
+        "pub(crate) fn bit_cast<",
+        "pub(crate) unsafe fn reinterpret_unchecked<",
+        "pub trait LaneArith",
+        "pub trait BaseTypeDispatch",
+        "pub fn require_same_lanes(",
+        "pub unsafe fn random_step_u64(",
+        "pub fn arith_add<",
+        "pub fn scalar_as_cast_value<",
+        "pub fn saturating_cast_value<",
+    ),
+    "tsl_core_mask.rs": (
+        "pub trait TslMaskLaneValue",
+        "pub trait TslPopCount",
+        "pub trait TslCtz",
+        "pub trait TslClz",
+        "pub trait TslImask",
+        "pub fn popcount<",
+        "pub fn ctz<",
+        "pub fn clz<",
+        "pub fn imask_insert<",
+        "pub fn imask_extract<",
+    ),
+    "tsl_core_io.rs": (
+        "pub trait TslBits",
+        "pub fn ostream_write<",
+    ),
+}
+
+RUST_SCALAR_TYPES = (
+    "i8",
+    "u8",
+    "i16",
+    "u16",
+    "i32",
+    "u32",
+    "i64",
+    "u64",
+    "f32",
+    "f64",
+)
+
 
 def test_checked_error_assets_match_the_typed_error_registry() -> None:
     assets = load_default_render_assets()
@@ -151,7 +215,7 @@ def test_rust_cpu_identity_uses_msrv_compatible_cpuid_calls() -> None:
 
 def test_allocation_helpers_define_shared_total_contract() -> None:
     cpp_core = load_default_render_assets().text("tsl_core_detail_memory.hpp")
-    rust_core = load_default_render_assets().text("tsl_core.rs")
+    rust_core = load_default_render_assets().text("tsl_core_memory.rs")
 
     assert "#if defined(_MSC_VER)\n#include <malloc.h>" in cpp_core
     assert "if (count_bytes == 0)" in cpp_core
@@ -206,6 +270,71 @@ def test_cpp_core_runtime_symbols_have_one_focused_asset_owner() -> None:
             )
 
 
+def test_rust_core_facade_preserves_runtime_reachability_through_private_modules() -> None:
+    assets = load_default_render_assets()
+    facade = assets.text("tsl_core.rs")
+    compact = " ".join(facade.split())
+
+    for module in RUST_CORE_RUNTIME_MODULES:
+        assert f"mod {module};" in facade
+        assert f"pub mod {module};" not in facade
+    assert "pub use memory::{" in facade
+    assert "pub use scalar::{" in facade
+    assert "pub use mask::{" in facade
+    assert "pub use io::{ostream_write, TslBits};" in facade
+    assert "pub(crate) use memory::indexed_memory_address_error;" in compact
+    assert (
+        "pub(crate) use scalar::{bit_cast, reinterpret_unchecked, ValidBitPattern};"
+        in compact
+    )
+    assert "pub mod detail" in facade
+    assert "pub mod helpers" in facade
+    assert "saturating_cast_value, scalar_as_cast_value" in compact
+    assert "pub use super::super::scalar::random_step_u64;" in compact
+
+    for module in RUST_CORE_RUNTIME_MODULES:
+        content = assets.text(f"tsl_core_{module}.rs")
+        assert all(
+            f"super::{sibling}::" not in content
+            for sibling in RUST_CORE_RUNTIME_MODULES
+            if sibling != module
+        )
+
+
+def test_rust_core_runtime_symbols_have_one_focused_asset_owner() -> None:
+    assets = load_default_render_assets()
+    contents = {
+        asset: assets.text(asset)
+        for asset in ("tsl_core.rs", *RUST_CORE_RUNTIME_SYMBOLS)
+    }
+
+    for owner, symbols in RUST_CORE_RUNTIME_SYMBOLS.items():
+        for symbol in symbols:
+            assert symbol in contents[owner]
+            assert all(
+                symbol not in content
+                for asset, content in contents.items()
+                if asset != owner
+            )
+
+
+def test_rust_scalar_cast_matrix_keeps_every_guarded_scalar_pair() -> None:
+    scalar = load_default_render_assets().text("tsl_core_scalar.rs")
+
+    assert scalar.count("core::mem::transmute_copy") == 62
+    assert scalar.count(
+        "assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>())"
+    ) == 2
+    for scalar_type in RUST_SCALAR_TYPES:
+        assert scalar.count(f"type_is_same::<T, {scalar_type}>()") == 2
+        assert scalar.count(
+            f"core::mem::transmute_copy::<T, {scalar_type}>(&value)"
+        ) == 2
+        assert scalar.count(f"type_is_same::<U, {scalar_type}>()") == 4
+    assert scalar.count('panic!("unsupported scalar-as cast")') == 1
+    assert scalar.count('panic!("unsupported saturating cast")') == 4
+
+
 def test_render_assets_freeze_and_fill_templates() -> None:
     files = {"plain.txt": "plain", "demo.tmpl": "hello @{name}"}
     assets = RenderAssets(files)
@@ -218,6 +347,23 @@ def test_render_assets_freeze_and_fill_templates() -> None:
         assets.text("missing.txt")
     with pytest.raises(TypeError):
         assets.files["plain.txt"] = "changed"  # type: ignore[index]
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    (
+        ("tsl_core.rs", True),
+        (".clang-format", True),
+        (".tsl_core.rs.swp", False),
+        ("#tsl_core.rs#", False),
+        ("tsl_core.rs~", False),
+    ),
+)
+def test_render_asset_names_exclude_editor_temporary_files(
+    name: str, expected: bool
+) -> None:
+    assert _is_render_asset_name(name) is expected
+
 
 def test_parser_consumes_injected_grammar() -> None:
     document = SourceDocument(
@@ -260,6 +406,10 @@ def test_rust_project_renderer_consumes_injected_assets() -> None:
         {
             "rustfmt.toml": "# injected rustfmt\n",
             "tsl_core.rs": "// injected core\n",
+            "tsl_core_memory.rs": "// injected core memory\n",
+            "tsl_core_scalar.rs": "// injected core scalar\n",
+            "tsl_core_mask.rs": "// injected core mask\n",
+            "tsl_core_io.rs": "// injected core io\n",
             "tsl_algorithm.rs": "// injected algorithm\n",
             "tsl_algorithm_representation.rs": "// injected representation\n",
             "tsl_algorithm_masks.rs": "// injected masks\n",
@@ -323,6 +473,14 @@ def test_rust_project_renderer_consumes_injected_assets() -> None:
     }
 
     assert rendered["rust/src/tsl_core.rs"] == "// injected core\n"
+    assert rendered["rust/src/tsl_core/memory.rs"] == (
+        "// injected core memory\n"
+    )
+    assert rendered["rust/src/tsl_core/scalar.rs"] == (
+        "// injected core scalar\n"
+    )
+    assert rendered["rust/src/tsl_core/mask.rs"] == "// injected core mask\n"
+    assert rendered["rust/src/tsl_core/io.rs"] == "// injected core io\n"
     assert rendered["rust/src/tsl_algorithm.rs"] == "// injected algorithm\n"
     assert rendered["rust/src/tsl_algorithm/representation.rs"] == (
         "// injected representation\n"

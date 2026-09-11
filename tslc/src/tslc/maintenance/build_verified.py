@@ -95,6 +95,10 @@ BUILD_VERIFIED_PRIMITIVE_SETS: Mapping[str, tuple[str, ...]] = MappingProxyType(
             "inv",
         ),
         "test_rust_compile_target_selects_static_mapping": ("add",),
+        "test_rust_core_scalar_cast_matrix": (
+            "convert_lanes",
+            "convert_down",
+        ),
         "test_rust_scalar_only_release_matrix": ("add",),
         "test_rust_neon_compile_target_builds": ("add",),
         "test_cpp_auto_profile_configures": ("add",),

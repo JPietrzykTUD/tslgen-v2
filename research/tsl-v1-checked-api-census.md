@@ -198,11 +198,11 @@ Sizes, lane counts, and mask-storage capacity are compiler-owned specialization 
 - `tslc/src/tslc/backend/assets/tsl_algorithm_transform.rs:232` — owner `transform_selected_binary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_selected_binary requires a vector with at least one lane", );`
 - `tslc/src/tslc/backend/assets/tsl_algorithm_transform.rs:98` — owner `transform_selected_unary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_selected_unary requires a vector with at least one lane", );`
 - `tslc/src/tslc/backend/assets/tsl_algorithm_transform.rs:1332` — owner `transform_unary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_unary requires a vector with at least one lane", );`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:313` — owner `bit_cast` — `assert_eq` — `assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:327` — owner `reinterpret_unchecked` — `assert_eq` — `assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:791` — owner `require_same_lanes` — `assert_eq` — `assert_eq!( source_lanes, target_lanes, "lane-preserving conversion requires equal source and target lane counts" );`
 - `tslc/src/tslc/backend/assets/tsl_core_detail_scalar.hpp:178` — owner `require_same_lanes` — `throw` — `throw std::invalid_argument( "lane-preserving conversion requires equal source and target lane counts" );`
 - `tslc/src/tslc/backend/assets/tsl_core_detail_scalar.hpp:176` — owner `require_same_lanes` — `trap` — `__builtin_trap();`
+- `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:31` — owner `bit_cast` — `assert_eq` — `assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());`
+- `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:45` — owner `reinterpret_unchecked` — `assert_eq` — `assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());`
+- `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:143` — owner `require_same_lanes` — `assert_eq` — `assert_eq!( source_lanes, target_lanes, "lane-preserving conversion requires equal source and target lane counts" );`
 
 ### `static_immediate_nonzero` (2)
 
@@ -237,11 +237,11 @@ The checked signature must establish an addressable extent.
 
 This is a compiler/backend defect if reachable, not invalid caller data.
 
-- `tslc/src/tslc/backend/assets/tsl_core.rs:1175` — owner `saturating_cast_value` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:1132` — owner `saturating_from_f64` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:1047` — owner `saturating_from_i128` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:1090` — owner `saturating_from_u128` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:1004` — owner `scalar_as_cast_value` — `panic` — `panic!("unsupported scalar-as cast")`
+- `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:475` — owner `saturating_cast_value` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:432` — owner `saturating_from_f64` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:347` — owner `saturating_from_i128` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:390` — owner `saturating_from_u128` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:304` — owner `scalar_as_cast_value` — `panic` — `panic!("unsupported scalar-as cast")`
 
 ### `implementation_invariant` (3)
 
@@ -249,7 +249,7 @@ The condition is not part of the public call domain.
 
 - `tslc/src/tslc/backend/assets/tsl_algorithm_masks.rs:66` — owner `lane_is_set` — `debug_assert` — `debug_assert!(lane < <Self as IntegralMaskWord>::BITS);`
 - `tslc/src/tslc/backend/assets/tsl_algorithm_masks.rs:53` — owner `one_at` — `debug_assert` — `debug_assert!(lane < <Self as IntegralMaskWord>::BITS);`
-- `tslc/src/tslc/backend/assets/tsl_core.rs:772` — owner `ostream_write` — `unwrap` — `.unwrap()`
+- `tslc/src/tslc/backend/assets/tsl_core_io.rs:51` — owner `ostream_write` — `unwrap` — `.unwrap()`
 
 ## Typed `caller_unsafe` public paths
 

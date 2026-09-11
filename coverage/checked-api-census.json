@@ -788,78 +788,6 @@
       "family": "tooling_only"
     },
     {
-      "id": "tslc/src/tslc/backend/assets/tsl_core.rs|bit_cast|assert_eq|51144d90f8521bbf|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_core.rs",
-      "owner": "bit_cast",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());",
-      "family": "static_representation_or_lane_shape"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_core.rs|ostream_write|unwrap|cd6918d80f05076c|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_core.rs",
-      "owner": "ostream_write",
-      "kind": "unwrap",
-      "excerpt": ".unwrap()",
-      "family": "implementation_invariant"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_core.rs|reinterpret_unchecked|assert_eq|51144d90f8521bbf|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_core.rs",
-      "owner": "reinterpret_unchecked",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());",
-      "family": "static_representation_or_lane_shape"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_core.rs|require_same_lanes|assert_eq|e6c81f2c22bfe916|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_core.rs",
-      "owner": "require_same_lanes",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( source_lanes, target_lanes, \"lane-preserving conversion requires equal source and target lane counts\" );",
-      "family": "static_representation_or_lane_shape"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_core.rs|saturating_cast_value|panic|31bc5c2ea1c997c3|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_core.rs",
-      "owner": "saturating_cast_value",
-      "kind": "panic",
-      "excerpt": "panic!(\"unsupported saturating cast\")",
-      "family": "implementation_exhaustiveness"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_core.rs|saturating_from_f64|panic|31bc5c2ea1c997c3|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_core.rs",
-      "owner": "saturating_from_f64",
-      "kind": "panic",
-      "excerpt": "panic!(\"unsupported saturating cast\")",
-      "family": "implementation_exhaustiveness"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_core.rs|saturating_from_i128|panic|31bc5c2ea1c997c3|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_core.rs",
-      "owner": "saturating_from_i128",
-      "kind": "panic",
-      "excerpt": "panic!(\"unsupported saturating cast\")",
-      "family": "implementation_exhaustiveness"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_core.rs|saturating_from_u128|panic|31bc5c2ea1c997c3|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_core.rs",
-      "owner": "saturating_from_u128",
-      "kind": "panic",
-      "excerpt": "panic!(\"unsupported saturating cast\")",
-      "family": "implementation_exhaustiveness"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_core.rs|scalar_as_cast_value|panic|39705acd529a5916|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_core.rs",
-      "owner": "scalar_as_cast_value",
-      "kind": "panic",
-      "excerpt": "panic!(\"unsupported scalar-as cast\")",
-      "family": "implementation_exhaustiveness"
-    },
-    {
       "id": "tslc/src/tslc/backend/assets/tsl_core_detail_scalar.hpp|require_same_lanes|throw|8a50669413a63275|0",
       "path": "tslc/src/tslc/backend/assets/tsl_core_detail_scalar.hpp",
       "owner": "require_same_lanes",
@@ -874,6 +802,78 @@
       "kind": "trap",
       "excerpt": "__builtin_trap();",
       "family": "static_representation_or_lane_shape"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_core_io.rs|ostream_write|unwrap|cd6918d80f05076c|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_core_io.rs",
+      "owner": "ostream_write",
+      "kind": "unwrap",
+      "excerpt": ".unwrap()",
+      "family": "implementation_invariant"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_core_scalar.rs|bit_cast|assert_eq|51144d90f8521bbf|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_core_scalar.rs",
+      "owner": "bit_cast",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());",
+      "family": "static_representation_or_lane_shape"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_core_scalar.rs|reinterpret_unchecked|assert_eq|51144d90f8521bbf|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_core_scalar.rs",
+      "owner": "reinterpret_unchecked",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());",
+      "family": "static_representation_or_lane_shape"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_core_scalar.rs|require_same_lanes|assert_eq|e6c81f2c22bfe916|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_core_scalar.rs",
+      "owner": "require_same_lanes",
+      "kind": "assert_eq",
+      "excerpt": "assert_eq!( source_lanes, target_lanes, \"lane-preserving conversion requires equal source and target lane counts\" );",
+      "family": "static_representation_or_lane_shape"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_core_scalar.rs|saturating_cast_value|panic|31bc5c2ea1c997c3|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_core_scalar.rs",
+      "owner": "saturating_cast_value",
+      "kind": "panic",
+      "excerpt": "panic!(\"unsupported saturating cast\")",
+      "family": "implementation_exhaustiveness"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_core_scalar.rs|saturating_from_f64|panic|31bc5c2ea1c997c3|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_core_scalar.rs",
+      "owner": "saturating_from_f64",
+      "kind": "panic",
+      "excerpt": "panic!(\"unsupported saturating cast\")",
+      "family": "implementation_exhaustiveness"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_core_scalar.rs|saturating_from_i128|panic|31bc5c2ea1c997c3|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_core_scalar.rs",
+      "owner": "saturating_from_i128",
+      "kind": "panic",
+      "excerpt": "panic!(\"unsupported saturating cast\")",
+      "family": "implementation_exhaustiveness"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_core_scalar.rs|saturating_from_u128|panic|31bc5c2ea1c997c3|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_core_scalar.rs",
+      "owner": "saturating_from_u128",
+      "kind": "panic",
+      "excerpt": "panic!(\"unsupported saturating cast\")",
+      "family": "implementation_exhaustiveness"
+    },
+    {
+      "id": "tslc/src/tslc/backend/assets/tsl_core_scalar.rs|scalar_as_cast_value|panic|39705acd529a5916|0",
+      "path": "tslc/src/tslc/backend/assets/tsl_core_scalar.rs",
+      "owner": "scalar_as_cast_value",
+      "kind": "panic",
+      "excerpt": "panic!(\"unsupported scalar-as cast\")",
+      "family": "implementation_exhaustiveness"
     },
     {
       "id": "tslc/src/tslc/backend/assets/tsl_rust_policy_json.rs|Err|expect|f647d570b2ec41dd|0",

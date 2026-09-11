@@ -740,11 +740,16 @@ profile list.
 A static substrate ships as assets. C++ keeps
 [backend/assets/tsl_core.hpp](src/tslc/backend/assets/tsl_core.hpp) as its stable
 facade over a directly includable type foundation and focused memory, scalar,
-integral-mask, and I/O runtime headers. Rust keeps
-[tsl_core.rs](src/tslc/backend/assets/tsl_core.rs) as its current facade defining
-`SimdVector` and helpers. Whole-file scaffolding and stable profile metadata
-also live there as named templates; Python renderers supply only finalized,
-typed holes and dynamic declarations. Backend target-text values use
+integral-mask, and I/O runtime headers. Rust likewise keeps
+[tsl_core.rs](src/tslc/backend/assets/tsl_core.rs) as the stable facade defining
+its public representation types while private generated `tsl_core` children own
+memory/allocation, scalar arithmetic and conversion, integral-mask, and text-I/O
+runtime support. Explicit root and `detail::helpers` re-exports preserve the
+existing visibility and generated paths; typed vector registrations append
+their destination-validity proofs only to the scalar child. Whole-file
+scaffolding and stable profile metadata also live there as named templates;
+Python renderers supply only finalized, typed holes and dynamic declarations.
+Backend target-text values use
 [target_text.py](src/tslc/target_text.py); [render/](src/tslc/render/) only formats
 finalized, validated profiles, prebuilt value-test plans, and prebuilt
 benchmark plans into a per-profile project with a top-level dispatch

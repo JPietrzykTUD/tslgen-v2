@@ -137,7 +137,27 @@ def _rust_artifacts(
         ),
         text(
             "rust/src/tsl_core.rs",
-            _rust_core(profiles, assets),
+            _rust_core(assets),
+            media_type=media_type,
+        ),
+        text(
+            "rust/src/tsl_core/memory.rs",
+            assets.text("tsl_core_memory.rs"),
+            media_type=media_type,
+        ),
+        text(
+            "rust/src/tsl_core/scalar.rs",
+            _rust_core_scalar(profiles, assets),
+            media_type=media_type,
+        ),
+        text(
+            "rust/src/tsl_core/mask.rs",
+            assets.text("tsl_core_mask.rs"),
+            media_type=media_type,
+        ),
+        text(
+            "rust/src/tsl_core/io.rs",
+            assets.text("tsl_core_io.rs"),
             media_type=media_type,
         ),
         text(
@@ -490,12 +510,20 @@ def _rust_profile_algorithm_artifacts(
     )
 
 
-def _rust_core(profiles: Sequence[EmittedProfile], assets: RenderAssets) -> str:
-    core = assets.fill(
-        "tsl_core.rs", **rust_static_declaration_holes()
-    ).rstrip()
+def _rust_core(assets: RenderAssets) -> str:
+    return f'{assets.fill("tsl_core.rs", **rust_static_declaration_holes()).rstrip()}\n'
+
+
+def _rust_core_scalar(
+    profiles: Sequence[EmittedProfile], assets: RenderAssets
+) -> str:
+    scalar = assets.text("tsl_core_scalar.rs").rstrip()
     register_impls = _rust_valid_bit_pattern_impls(profiles)
-    return f"{core}\n\n{register_impls}\n" if register_impls else f"{core}\n"
+    return (
+        f"{scalar}\n\n{register_impls}\n"
+        if register_impls
+        else f"{scalar}\n"
+    )
 
 
 def _rust_valid_bit_pattern_impls(profiles: Sequence[EmittedProfile]) -> str:

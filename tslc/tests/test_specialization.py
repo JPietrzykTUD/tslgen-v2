@@ -461,6 +461,10 @@ def test_artifact_layout(specialization_result) -> None:
         "docs/specializations/specializations.json",
         "cpp/tests/smoke_avx2.cpp",
         "rust/src/tsl_core.rs",
+        "rust/src/tsl_core/memory.rs",
+        "rust/src/tsl_core/scalar.rs",
+        "rust/src/tsl_core/mask.rs",
+        "rust/src/tsl_core/io.rs",
         "rust/src/tsl_algorithm.rs",
         "rust/src/tsl_algorithm/representation.rs",
         "rust/src/tsl_algorithm/masks.rs",
@@ -1601,6 +1605,7 @@ def test_cpp_profile_specializes_dataparallel_simd_for_registered_vectors(
 def test_rust_specialization_structure(specialization_artifacts: dict[str, str]) -> None:
     avx2 = specialization_artifacts["rust/src/tsl_avx2.rs"]
     core = specialization_artifacts["rust/src/tsl_core.rs"]
+    scalar = specialization_artifacts["rust/src/tsl_core/scalar.rs"]
     lib = specialization_artifacts["rust/src/lib.rs"]
 
     assert "pub enum ImplementationState" in core
@@ -1613,15 +1618,15 @@ def test_rust_specialization_structure(specialization_artifacts: dict[str, str])
     assert "pub trait StaticSimdVector: SimdVector" in core
     assert "type RegisterType: Copy;" in core
     assert "pub(crate) mod representation_sealed" in core
-    assert "pub(crate) unsafe trait ValidBitPattern: Copy" in core
-    assert "pub(crate) fn bit_cast<From: Copy, To: ValidBitPattern>" in core
+    assert "pub(crate) unsafe trait ValidBitPattern: Copy" in scalar
+    assert "pub(crate) fn bit_cast<From: Copy, To: ValidBitPattern>" in scalar
     assert "pub fn bit_cast<" not in core
     assert (
         "pub(crate) unsafe fn reinterpret_unchecked<From: Copy, To: ValidBitPattern>"
-        in core
+        in scalar
     )
     assert (
-        "unsafe impl ValidBitPattern for core::arch::x86_64::__m256i {}" in core
+        "unsafe impl ValidBitPattern for core::arch::x86_64::__m256i {}" in scalar
     )
     assert "type Extension;" in core
     assert "type WithBaseType<ToBase>;" in core
