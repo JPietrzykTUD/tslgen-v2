@@ -29,7 +29,7 @@ _EXPECTED_COMPILER_IMPORTS = (
     ),
     (
         "tslc.backend.rust_algorithm",
-        ("rust_dataparallel_fixed_lane_count", "rust_fixed_vector_spelling"),
+        ("rust_fixed_vector_spelling",),
     ),
     ("tslc.backend.rust_translation", ("rust_raw_identifier",)),
     (

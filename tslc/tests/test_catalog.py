@@ -297,6 +297,15 @@ def test_extension_compiler_metadata_is_promoted(catalog: Catalog) -> None:
     assert avx2.headers_for_backend("cpp") == ("immintrin.h",)
     assert avx2.metadata.backend["rust"].type_name == "Avx2"
     assert avx2.metadata.backend["rust"].arch_module == "x86_64"
+    assert sve.headers_for_backend("cpp") == ("arm_sve.h", "vector")
+    assert catalog.extensions["sve128"].headers_for_backend("cpp") == (
+        "arm_sve.h",
+        "vector",
+    )
+    assert catalog.extensions["rvv"].headers_for_backend("cpp") == (
+        "riscv_vector.h",
+        "vector",
+    )
     assert neon.metadata.backend["rust"].arch_module == "aarch64"
     assert sve.runtime_lane_count["cpp"] == "svcntb() / sizeof({base_type})"
     assert (

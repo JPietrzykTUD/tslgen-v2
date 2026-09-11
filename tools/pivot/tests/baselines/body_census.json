@@ -132,9 +132,9 @@
         "call_and_local": 5,
         "call_only": 1588,
         "native_leaf": 2206,
-        "synthetic_fixed": 3074
+        "synthetic_fixed": 3126
       },
-      "entries": 6873,
+      "entries": 6925,
       "failures": 0,
       "feature_combinations": [
         {
@@ -229,7 +229,7 @@
           ]
         },
         {
-          "count": 2924,
+          "count": 2976,
           "features": [
             "residual_expression",
             "result_only",
@@ -251,27 +251,27 @@
         "multi_statement": 1593,
         "multiple_locals": 3,
         "nested_typed_call": 1423,
-        "residual_expression": 6723,
-        "result_only": 6868,
+        "residual_expression": 6775,
+        "result_only": 6920,
         "rust_unsafe_frame": 3113,
-        "synthetic_fixed": 3074,
-        "typed_call": 4667,
+        "synthetic_fixed": 3126,
+        "typed_call": 4719,
         "typed_local": 5
       },
       "multi_statement": 1593,
       "origins": {
-        "fixed_wrapper": 3074,
+        "fixed_wrapper": 3126,
         "lowered_source": 3799
       }
     }
   },
-  "location_digest": "33259034d2718b967f62da79d44667e59cc15deb30938ebc0b29c254279d9132",
+  "location_digest": "e1578a1483a1f68d268f28e3329a2168f31e008bb5de271220008ae14a9c47c8",
   "schema": "tslc-pivot-body-census-v2",
-  "semantic_digest": "4a9d5be5d69aa190c68fc45cee4c4c141d2632408a773698674b555f105679e2",
+  "semantic_digest": "c7a131b8cc8d42c4ce62ec87c61a6f236ce9ef31d0b84b3d97cc07e397313034",
   "summary": {
-    "entries": 17134,
+    "entries": 17186,
     "failures": 0,
-    "fixed_wrappers": 6200,
+    "fixed_wrappers": 6252,
     "multi_statement": 4560,
     "nominal_collision_entries": 640,
     "nominal_collision_groups": 320

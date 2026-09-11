@@ -1007,6 +1007,7 @@ def test_fixed_sve_profile_registers_guarded_static_cpp_simd_types(
     cpp = by_path[f"cpp/include/tsl_{profile}.hpp"]
     cmake = by_path["cpp/CMakeLists.txt"]
     dispatch = by_path["cpp/include/tsl.hpp"]
+    assert "#include <vector>" in cpp
     assert cpp.startswith(
         f"#if (defined(__ARM_FEATURE_SVE_BITS) && "
         f"(__ARM_FEATURE_SVE_BITS == {width}))\n"

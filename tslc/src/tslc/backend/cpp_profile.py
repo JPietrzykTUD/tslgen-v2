@@ -108,12 +108,6 @@ def _cpp_includes(
     extensions: Mapping[str, Extension],
 ) -> str:
     lines = list(_cpp_system_header_includes(emitted_exts, extensions))
-    if any(
-        ext in extensions
-        and DEFAULT_SUPPORT_POLICY.uses_scalable_vector(extensions[ext])
-        for ext in emitted_exts
-    ):
-        lines.append("#include <vector>")
     lines.extend(
         (
             '#include "tsl_core.hpp"',

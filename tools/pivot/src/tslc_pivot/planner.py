@@ -9,10 +9,7 @@ from tslc.backend.registry import (
     create_backend_dialect,
     registered_compiler_capabilities,
 )
-from tslc.backend.rust_algorithm import (
-    rust_dataparallel_fixed_lane_count,
-    rust_fixed_vector_spelling,
-)
+from tslc.backend.rust_algorithm import rust_fixed_vector_spelling
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.backend.signature_types import (
     BackendSignatureTypes,
@@ -758,7 +755,12 @@ def _fixed_lane_count(
 ) -> int | None:
     if language is PivotLanguage.CPP:
         return cpp_dataparallel_fixed_lane_count(slot.extension, slot.type_tag)
-    return rust_dataparallel_fixed_lane_count(slot.extension, slot.type_tag)
+    if (
+        DEFAULT_SUPPORT_POLICY.uses_sized_vector(slot.extension)
+        or not slot.extension.supports_backend("rust")
+    ):
+        return None
+    return DEFAULT_SUPPORT_POLICY.lane_count(slot.extension, slot.type_tag)
 
 
 def _fixed_vector_spelling(

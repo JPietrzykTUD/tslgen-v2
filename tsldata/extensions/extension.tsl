@@ -397,7 +397,7 @@ extension sve:
     cpp ["tsl_test_sve.hpp"]
   cpp:
     supported true
-    headers ["arm_sve.h"]
+    headers ["arm_sve.h", "vector"]
   rust:
     supported false
   vector_register_types:
@@ -470,7 +470,7 @@ extension rvv:
     cpp ["tsl_test_rvv.hpp"]
   cpp:
     supported true
-    headers ["riscv_vector.h"]
+    headers ["riscv_vector.h", "vector"]
     compiler_capabilities [riscv_vector]
   rust:
     supported false

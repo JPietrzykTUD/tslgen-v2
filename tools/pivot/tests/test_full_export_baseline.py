@@ -69,9 +69,9 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
     assert provenance["command"] == CANONICAL_FULL_EXPORT_COMMAND
     assert actual["summary"] == {
         "documents": 206,
-        "definitions": 17_134,
-        "skips": 38_560,
-        "nominal_definition_identities": 16_814,
+        "definitions": 17_186,
+        "skips": 38_934,
+        "nominal_definition_identities": 16_866,
         "definition_identity_collisions": {
             "groups": 320,
             "entries": 640,
@@ -80,13 +80,13 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
             "exact_duplicate_only_groups": 0,
         },
         "languages": {
-            "cpp": {"documents": 103, "definitions": 10_261, "skips": 27_906},
-            "rust": {"documents": 103, "definitions": 6_873, "skips": 10_654},
+            "cpp": {"documents": 103, "definitions": 10_261, "skips": 28_093},
+            "rust": {"documents": 103, "definitions": 6_925, "skips": 10_841},
         },
     }
     artifacts = actual["artifacts"]
     assert artifacts["ordered_content_sha256"] == (
-        "176229c087dce0ca8b06cd7987ce17595032dd305b84991a58337c769074d214"
+        "4069b8fd135e5c74de150bfba00540b5b832ca33803c21f332d34254ddbe664e"
     )
     assert actual["skip_category_scheme"] == "reason-prefix-v1"
     assert actual["unclassified_skip_count"] == 0
@@ -97,9 +97,9 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
         "callee_resolution": 288,
         "forwarded_call_arguments": 3_838,
         "local_declaration": 900,
-        "residual_target_text": 12_254,
+        "residual_target_text": 12_510,
         "schema_conflict": 650,
-        "signature_admissibility": 13_358,
+        "signature_admissibility": 13_476,
         "specialization_admissibility": 7_272,
     }
     assert actual["skip_fields"] == [
@@ -123,7 +123,7 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
     ]
     skip_records = actual["skips"]
     assert skip_records == sorted(skip_records, key=_canonical_json)
-    assert sum(record[-1] for record in skip_records) == 38_560
+    assert sum(record[-1] for record in skip_records) == 38_934
     assert all(len(record) == len(actual["skip_fields"]) for record in skip_records)
     assert all(
         record[6] is None
@@ -151,7 +151,7 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
         )
     ).hexdigest() == actual["skip_location_inventory_sha256"]
     assert actual["skip_semantic_inventory_sha256"] == (
-        "ea9d50b4cff4508599cf9111146f67840645f19a86d8359c0dbb6db7c43331f2"
+        "c20502005cc8c4df61f9c01271a3a0e1f535f343a68d95d2576096585c2cb8e6"
     )
 
 
@@ -166,7 +166,7 @@ def _assert_complete_body_census(
     )
     assert tuple(len(census.entries) for census in result.body_censuses) == (
         10_261,
-        6_873,
+        6_925,
     )
     assert tuple(census.multi_statement_count for census in result.body_censuses) == (
         2_967,
@@ -183,7 +183,7 @@ def _assert_complete_body_census(
             ("call_and_local", 5),
             ("call_only", 1_588),
             ("native_leaf", 2_206),
-            ("synthetic_fixed", 3_074),
+            ("synthetic_fixed", 3_126),
         ),
     )
     assert Counter(
@@ -192,7 +192,7 @@ def _assert_complete_body_census(
         for entry in census.entries
         if entry.category is not None
     ) == {
-        "synthetic_fixed": 6_200,
+        "synthetic_fixed": 6_252,
         "native_leaf": 6_374,
         "call_only": 4_478,
         "call_and_local": 82,
