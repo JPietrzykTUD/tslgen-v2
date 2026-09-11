@@ -724,6 +724,17 @@ maintenance path parses or hashes generated target text to reconstruct this
 contract. The schema-v3 release baseline ratchets the reviewed scalar/AVX2
 records in addition to the per-project scope-exact manifests.
 
+Executable whole-array coverage is a test-owned projection. The frozen cases in
+[tests/algorithm_conformance.py](tests/algorithm_conformance.py) key behavior
+evidence to the shared family/form inventory without carrying target code.
+Separate [C++](tests/algorithm_conformance_cpp.py) and
+[Rust](tests/algorithm_conformance_rust.py) adapters consume the exact backend
+declaration records, emit one compile witness per stable callable identity, and
+exercise a shared expected-result case. Completeness diagnostics report the
+missing form, behavioral axis, or backend declaration identity. Existing paired
+examples remain the broader behavioral evidence and are required to stay wired
+into the generated-consumer execution gate.
+
 The repository release projection is split by ownership across
 [maintenance/release_contract_model.py](src/tslc/maintenance/release_contract_model.py),
 [maintenance/release_contract_policy.py](src/tslc/maintenance/release_contract_policy.py),

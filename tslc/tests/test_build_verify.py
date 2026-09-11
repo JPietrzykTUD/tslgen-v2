@@ -17,7 +17,23 @@ from types import MappingProxyType
 
 import pytest
 
+from algorithm_conformance import (
+    ALGORITHM_CONFORMANCE_CASES,
+    SHARED_ALGORITHM_BEHAVIOR_CASE,
+    conformance_issues,
+)
+from algorithm_conformance_cpp import (
+    cpp_algorithm_compile_identities,
+    render_cpp_algorithm_behavior,
+    render_cpp_algorithm_compile_witness,
+)
+from algorithm_conformance_rust import (
+    render_rust_algorithm_behavior,
+    render_rust_algorithm_compile_witness,
+    rust_algorithm_compile_identities,
+)
 from tslc.api import generate_project, verify_project, write_artifacts
+from tslc.backend.algorithm_surface import ALGORITHM_CALLABLE_FORMS
 from tslc.compiler_assets import load_default_render_assets
 from tslc.diagnostics import has_errors
 from tslc.maintenance.build_verified import BUILD_VERIFIED_PRIMITIVE_SETS
@@ -1520,6 +1536,169 @@ def test_rust_scalar_only_release_matrix(
         assert completed.returncode == 0, (
             f"{name} failed:\n{completed.stderr}{completed.stdout}"
         )
+
+
+def test_algorithm_conformance_compile_witnesses(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    compiler = shutil.which("c++")
+    cargo = shutil.which("cargo")
+    if compiler is None or cargo is None:
+        pytest.skip("C++ and Rust toolchains are required")
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=_build_verified("test_algorithm_conformance_compile_witnesses"),
+        profiles=["scalar"],
+        type_tags=["si32"],
+        backends=["cpp", "rust"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    generated = tmp_path / "generated"
+    write_report = write_artifacts(result.artifacts, generated)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    cpp_source, cpp_witnessed = render_cpp_algorithm_compile_witness()
+    rust_source, rust_witnessed = render_rust_algorithm_compile_witness()
+    assert conformance_issues(
+        ALGORITHM_CONFORMANCE_CASES,
+        ALGORITHM_CALLABLE_FORMS,
+        cpp_expected=cpp_algorithm_compile_identities(),
+        cpp_witnessed=cpp_witnessed,
+        rust_expected=rust_algorithm_compile_identities(),
+        rust_witnessed=rust_witnessed,
+    ) == ()
+
+    cpp_path = tmp_path / "algorithm_conformance.cpp"
+    cpp_path.write_text(cpp_source, encoding="utf-8")
+    cpp_executable = tmp_path / "algorithm_conformance"
+    compiled = subprocess.run(
+        (
+            compiler,
+            "-std=c++17",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-DTSL_PROFILE_SCALAR",
+            f"-I{generated / 'cpp' / 'include'}",
+            str(cpp_path),
+            "-o",
+            str(cpp_executable),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert compiled.returncode == 0, compiled.stderr + compiled.stdout
+    executed = subprocess.run(
+        (str(cpp_executable),),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert executed.returncode == 0, executed.stderr + executed.stdout
+
+    behavior_case = SHARED_ALGORITHM_BEHAVIOR_CASE
+    cpp_behavior_path = tmp_path / "algorithm_behavior.cpp"
+    cpp_behavior_path.write_text(
+        render_cpp_algorithm_behavior(behavior_case),
+        encoding="utf-8",
+    )
+    cpp_behavior_executable = tmp_path / "algorithm_behavior"
+    behavior_compiled = subprocess.run(
+        (
+            compiler,
+            "-std=c++17",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-DTSL_PROFILE_SCALAR",
+            f"-I{generated / 'cpp' / 'include'}",
+            str(cpp_behavior_path),
+            "-o",
+            str(cpp_behavior_executable),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert behavior_compiled.returncode == 0, (
+        behavior_compiled.stderr + behavior_compiled.stdout
+    )
+    cpp_behavior = subprocess.run(
+        (str(cpp_behavior_executable),),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert cpp_behavior.returncode == 0, cpp_behavior.stderr
+
+    rust_tests = generated / "rust" / "tests"
+    rust_tests.mkdir(exist_ok=True)
+    (rust_tests / "algorithm_conformance.rs").write_text(
+        rust_source,
+        encoding="utf-8",
+    )
+    tested = subprocess.run(
+        (
+            cargo,
+            "test",
+            "--quiet",
+            "--manifest-path",
+            str(generated / "rust" / "Cargo.toml"),
+            "--no-default-features",
+            "--test",
+            "algorithm_conformance",
+            "--target-dir",
+            str(tmp_path / "rust-conformance-target"),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert tested.returncode == 0, tested.stderr + tested.stdout
+
+    rust_behavior_crate = tmp_path / "rust-algorithm-behavior"
+    (rust_behavior_crate / "src").mkdir(parents=True)
+    (rust_behavior_crate / "Cargo.toml").write_text(
+        textwrap.dedent(
+            f"""
+            [package]
+            name = "tsl-algorithm-behavior"
+            version = "0.0.0"
+            edition = "2021"
+
+            [dependencies]
+            tsl = {{ path = "{(generated / 'rust').as_posix()}", default-features = false }}
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    (rust_behavior_crate / "src" / "main.rs").write_text(
+        render_rust_algorithm_behavior(behavior_case),
+        encoding="utf-8",
+    )
+    rust_behavior = subprocess.run(
+        (
+            cargo,
+            "run",
+            "--quiet",
+            "--manifest-path",
+            str(rust_behavior_crate / "Cargo.toml"),
+            "--target-dir",
+            str(tmp_path / "rust-conformance-target"),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert rust_behavior.returncode == 0, rust_behavior.stderr + rust_behavior.stdout
+    expected = behavior_case.expected_report
+    assert cpp_behavior.stdout == expected
+    assert rust_behavior.stdout == expected
 
 
 def test_rust_core_scalar_cast_matrix(
