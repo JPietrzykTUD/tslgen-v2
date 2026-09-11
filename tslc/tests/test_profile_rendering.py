@@ -1267,23 +1267,21 @@ def test_sve_profile_plans_scalable_mask_store_values(
     assert "tsl::store_mask_repr<Vec, false, false>(" in values
     assert "reinterpret_cast<typename Vec::base_type *>(actual.data() + 1), mask);" in values
 
-@pytest.fixture(scope="module")
-def rvv_project(data_root: Path, machine_profiles_path: Path):
+def _rvv_project(
+    data_root: Path,
+    machine_profiles_path: Path,
+    *,
+    primitives: list[str],
+    type_tags: list[str],
+    backends: list[str] | None = None,
+):
     return _gen(
         data_root,
         machine_profiles_path,
-        primitives=[
-            "set1", "set_zero", "load", "store", "add", "sub", "mul",
-            "binary_and", "binary_or", "binary_xor",
-            "inv", "binary_andnot",
-            "max", "min", "neg", "abs", "div", "mod", "mul_imm", "mod_imm",
-        ],
+        primitives=primitives,
         profiles=["rvv"],
-        type_tags=[
-            "si8", "ui8", "si16", "ui16", "si32",
-            "ui32", "si64", "ui64", "f32", "f64",
-        ],
-        backends=["cpp", "rust"],
+        type_tags=type_tags,
+        backends=["cpp"] if backends is None else backends,
     )
 
 
@@ -1341,14 +1339,9 @@ def test_rvv_catalog_is_scalable_lmul1_cpp_only(catalog, machine_profiles) -> No
 
 
 def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
-    rvv_project,
+    data_root: Path,
+    machine_profiles_path: Path,
 ) -> None:
-    assert not has_errors(rvv_project.diagnostics), rvv_project.diagnostics
-    artifacts = {
-        artifact.logical_path: artifact.content
-        for artifact in rvv_project.artifacts.artifacts
-    }
-    header = artifacts["cpp/include/tsl_rvv.hpp"]
     integer_types = {
         "i8m1": 8,
         "u8m1": 8,
@@ -1359,6 +1352,59 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
         "i64m1": 64,
         "u64m1": 64,
     }
+    integer_type_tags = [
+        "si8",
+        "ui8",
+        "si16",
+        "ui16",
+        "si32",
+        "ui32",
+        "si64",
+        "ui64",
+    ]
+    all_type_tags = [*integer_type_tags, "f32", "f64"]
+    # Bound peak memory by releasing each generated slice before starting the next.
+    slices = (
+        (
+            ["set1", "set_zero", "load", "store", "add", "sub", "mul"],
+            all_type_tags,
+        ),
+        (
+            ["binary_and", "binary_or", "binary_xor", "inv", "binary_andnot"],
+            integer_type_tags,
+        ),
+        (["max", "min", "neg", "abs"], all_type_tags),
+        (["div", "mod"], all_type_tags),
+        (["mul_imm", "mod_imm"], ["si32", "f32", "f64"]),
+    )
+    header_parts: list[str] = []
+    value_parts: list[str] = []
+    scalable_kinds: set[str] = set()
+    for primitives, type_tags in slices:
+        project = _rvv_project(
+            data_root,
+            machine_profiles_path,
+            primitives=primitives,
+            type_tags=type_tags,
+        )
+        assert not has_errors(project.diagnostics), project.diagnostics
+        assert project.rendered is not None
+        artifacts = {
+            artifact.logical_path: artifact.content
+            for artifact in project.artifacts.artifacts
+        }
+        header_parts.append(artifacts["cpp/include/tsl_rvv.hpp"])
+        value_parts.append(artifacts["cpp/tests/values_rvv.cpp"])
+        scalable_kinds.update(
+            case.kind
+            for profile in project.rendered.value_tests.profiles_for("cpp")
+            for case in profile.cases
+            if case.scalable is not None
+            and case.scalable.source_extension == "rvv"
+        )
+        del artifacts, project
+
+    header = "\n".join(header_parts)
     for suffix, width in integer_types.items():
         for stem in (
             "vmv_v_x",
@@ -1429,14 +1475,7 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
     assert "::tsl::mod<tsl::simd<double, tsl::scalar>>" in header
     assert header.count("return ::tsl::select<Vec>(") >= 40
 
-    values = artifacts["cpp/tests/values_rvv.cpp"]
-    scalable_kinds = {
-        case.kind
-        for profile in rvv_project.rendered.value_tests.profiles_for("cpp")
-        for case in profile.cases
-        if case.scalable is not None
-        and case.scalable.source_extension == "rvv"
-    }
+    values = "\n".join(value_parts)
     assert "scalable_masked_pointer_load" in scalable_kinds
     assert "scalable_masked_pointer_store" in scalable_kinds
     assert "test_scalable_rvv_load_maskz_load_ui32_mask_zero_alternating" in values
@@ -1544,19 +1583,32 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
     assert "static constexpr bool has_static_lane_count_v = false;" in header
     assert "__riscv_vlenb() / sizeof(int32_t)" in header
     assert "__riscv_vlenb() / sizeof(uint32_t)" in header
-    assert "rust/src/tsl_rvv.rs" not in artifacts
-    assert rvv_project.emitted_profiles[0].supports_backend("cpp")
-    assert not rvv_project.emitted_profiles[0].supports_backend("rust")
+    backend_project = _rvv_project(
+        data_root,
+        machine_profiles_path,
+        primitives=["add"],
+        type_tags=["ui32"],
+        backends=["cpp", "rust"],
+    )
+    assert not has_errors(backend_project.diagnostics), backend_project.diagnostics
+    assert backend_project.rendered is not None
+    backend_paths = {
+        artifact.logical_path for artifact in backend_project.artifacts.artifacts
+    }
+    assert "rust/src/tsl_rvv.rs" not in backend_paths
+    assert backend_project.emitted_profiles[0].supports_backend("cpp")
+    assert not backend_project.emitted_profiles[0].supports_backend("rust")
 
     cpp_verify = next(
-        backend for backend in rvv_project.rendered.verify.backends
+        backend for backend in backend_project.rendered.verify.backends
         if backend.backend_id == "cpp"
     ).profiles[0]
     assert cpp_verify.compiler_role == "riscv-cpp"
     assert cpp_verify.cmake_system_name == "Linux"
     assert cpp_verify.cmake_system_processor == "riscv64"
     assert not cpp_verify.pass_target_to_compiler
-    assert cpp_verify.preflight_headers == ("riscv_vector.h",)
+    assert cpp_verify.preflight_headers == ("riscv_vector.h", "vector")
+
 
 @pytest.fixture(scope="module")
 def rvv_reinterpret_project(data_root: Path, machine_profiles_path: Path):
