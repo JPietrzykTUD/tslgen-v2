@@ -7,6 +7,7 @@ from _select_lower_core_support import (
     create_backend_dialect,
     Lowerer,
     pytest,
+    replace,
     Selector,
 )
 from tslc.catalog.memory import MemoryAccess
@@ -646,6 +647,80 @@ def test_clang_runtime_permute_keeps_direct_lane_fallback_without_native_leaf(
     assert "result[i] = data[source]" in lowered.body_text
     assert "::tsl::permute_lanes<" not in lowered.body_text
     assert "fixed<" not in lowered.body_text
+
+
+@pytest.mark.parametrize(
+    ("primitive", "operation"),
+    (
+        ("to_mask", PrimitiveOperation.MASK_FROM_INTEGRAL),
+        ("to_integral", PrimitiveOperation.MASK_TO_INTEGRAL),
+    ),
+)
+def test_fixed_native_mask_bridges_use_semantic_operation_not_primitive_name(
+    catalog: Catalog,
+    machine_profiles,
+    primitive: str,
+    operation: PrimitiveOperation,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["avx2"],
+            primitive,
+            ("si32",),
+            backend_id="cpp",
+        )
+        .selected
+        if selected.extension.name == "clang_v256"
+        and not selected.required_compiler_capabilities
+    )
+    assert slot.primitive.operation is not None
+    assert slot.primitive.operation.kind is operation
+    assert slot.fixed_native_fallback_extension is not None
+    fixed_isa = slot.fixed_native_fallback_extension.isa_name
+    opted_in = replace(
+        slot,
+        implementation=replace(slot.implementation, prefer_fixed_native=True),
+    )
+
+    renamed = replace(
+        opted_in,
+        primitive=replace(
+            opted_in.primitive,
+            name=f"renamed_{primitive}",
+        ),
+    )
+    renamed_lowered = Lowerer().lower(
+        renamed,
+        catalog,
+        create_backend_dialect(catalog, "cpp"),
+    ).specialization
+    assert renamed_lowered is not None
+    assert (
+        f"renamed_{primitive}",
+        fixed_isa,
+    ) not in {
+        (origin.dependency.primitive, origin.dependency.source.extension_isa)
+        for origin in renamed_lowered.call_dependency_origins
+    }
+
+    name_only = replace(
+        opted_in,
+        primitive=replace(opted_in.primitive, operation=None),
+    )
+    name_only_lowered = Lowerer().lower(
+        name_only,
+        catalog,
+        create_backend_dialect(catalog, "cpp"),
+    ).specialization
+    assert name_only_lowered is not None
+    assert (primitive, fixed_isa) in {
+        (origin.dependency.primitive, origin.dependency.source.extension_isa)
+        for origin in name_only_lowered.call_dependency_origins
+    }
+
 
 @pytest.mark.parametrize("primitive", ["compress", "expand"])
 @pytest.mark.parametrize(

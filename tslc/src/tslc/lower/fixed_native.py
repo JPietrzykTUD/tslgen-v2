@@ -22,6 +22,7 @@ from tslc.catalog.preconditions import (
     PreconditionKind,
     precondition_applies_to_type,
 )
+from tslc.catalog.semantics import PrimitiveOperation
 from tslc.catalog.signatures import SignatureShape
 from tslc.lower.body_rendering import RenderedBodyResult
 from tslc.lower.context import LoweringSession
@@ -84,9 +85,13 @@ def lower_preferred_fixed_native(
     ):
         return None
 
-    # These primitives define the mask bridge used by every other delegated
+    # These operations define the mask bridge used by every other delegated
     # call. Delegating either through itself would introduce a dependency cycle.
-    if selected.primitive.name in {"to_integral", "to_mask"}:
+    operation = selected.primitive.operation
+    if operation is not None and operation.kind in {
+        PrimitiveOperation.MASK_FROM_INTEGRAL,
+        PrimitiveOperation.MASK_TO_INTEGRAL,
+    }:
         return None
 
     target_vectors = _target_vectors(selected, context, fixed.isa_name, target)
