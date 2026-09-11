@@ -14,7 +14,7 @@ TEST_ROOT = REPO_ROOT / "tslc" / "tests"
 # Approximate per-file cost from pytest --durations in the Python-only CI lane.
 # Unknown files use DEFAULT_WEIGHT and are still included automatically.
 FILE_WEIGHTS = {
-    "test_profile_rendering.py": 33.0,
+    "test_profile_rendering.py": 900.0,
     "test_specialization.py": 6.0,
     "test_generation_conditionals.py": 35.0,
     "test_explain.py": 30.0,
