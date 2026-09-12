@@ -271,8 +271,16 @@ def test_specialization_explorer_react_source_keeps_expected_views() -> None:
     assert "VITE_TSLC_GIT_BRANCH" in app_source
     assert "VITE_TSLC_GIT_HASH" in app_source
     assert "docMeta" in app_source
-    assert 'src="../_static/tsl_repo_logo_wide.png"' in app_source
+    assert 'src="./_static/tsl_logo_grey.svg"' in app_source
     assert 'className="brandLogo"' in app_source
+    assert 'className="siteBar"' in app_source
+    assert 'className="heroCopy"' in app_source
+    assert 'className="headerUtilities"' in app_source
+    assert 'className="siteNav"' in app_source
+    assert "VITE_TSLC_SITE_LINKS" in app_source
+    assert "SITE_LINKS.map" in app_source
+    assert 'href={link.href}' in app_source
+    assert 'link.href === "./" ? "active"' in app_source
     assert "signature: strings[signature]" in app_source
     assert "selectedBackend" in app_source
     assert "function LanguageSelector" in app_source
@@ -308,9 +316,9 @@ def test_specialization_explorer_react_source_keeps_expected_views() -> None:
     )
     assert 'get("dev") === "1"' in app_source
     assert 'url.searchParams.set("dev", "1")' in app_source
-    assert "TSL Primitive Specialization Reference" in app_source
+    assert "Primitive specializations" in app_source
     assert "Primitive support without misleading profile shortcuts" not in app_source
-    assert "Profile capabilities and compiler availability are shown separately" in app_source
+    assert "Explore which implementation each profile and backend selects" in app_source
     assert "function typeLabel" in app_source
     assert "function targetWidthForRecord" not in app_source
     assert "cellRecords.get(cellKey(targetClass.key, typeTag))" in app_source

@@ -709,7 +709,13 @@ root facade and selected `profile` API as the stable documented boundary; its
 public low-level substrate remains available for generated signatures but is
 hidden from the stable overview. Shared examples and the Sphinx contract page
 explain unchecked preconditions, checked errors, and residual language-level
-obligations. The repository maintenance projections
+obligations. When specialization data is present, its filterable explorer is
+the generated site's landing page and receives navigation links only for the
+API references built into that site; the former `specializations/` URL remains
+a compatibility redirect. The same compact navigation is added through
+Sphinx's layout template and rustdoc's supported HTML/CSS hooks, so every API
+landing page links back without post-processing either renderer's output. The
+repository maintenance projections
 [maintenance/public_api_baseline.py](src/tslc/maintenance/public_api_baseline.py)
 and [maintenance/checked_api_census.py](src/tslc/maintenance/checked_api_census.py)
 ratchet the typed v1 callable-family contract and exact checked coverage

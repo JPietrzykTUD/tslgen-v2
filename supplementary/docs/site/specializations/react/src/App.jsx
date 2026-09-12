@@ -4,6 +4,7 @@ const SAFETY_FILTERS = ["safe", "internal_unsafe", "caller_unsafe"];
 const NO_REQUIREMENT = "__no_requirement__";
 const BUILD_BRANCH = import.meta.env.VITE_TSLC_GIT_BRANCH ?? "";
 const BUILD_HASH = import.meta.env.VITE_TSLC_GIT_HASH ?? "";
+const SITE_LINKS = JSON.parse(import.meta.env.VITE_TSLC_SITE_LINKS ?? "[]");
 const EMPTY_RECORDS = [];
 const BITSET_WORD_BITS = 32;
 
@@ -218,12 +219,30 @@ function App() {
   return (
     <main className="page">
       <header className="pageHeader">
-        <div className="brandHeader">
-          <img
-            className="brandLogo"
-            src="../_static/tsl_repo_logo_wide.png"
-            alt="TSL"
-          />
+        <div className="siteBar">
+          <a className="brandLink" href="./" aria-label="TSL documentation home">
+            <img
+              className="brandLogo"
+              src="./_static/tsl_logo_grey.svg"
+              alt=""
+            />
+            <span className="brandText">
+              <strong>Template SIMD Library</strong>
+              <small>Generated reference</small>
+            </span>
+          </a>
+          <nav className="siteNav" aria-label="Documentation">
+            {SITE_LINKS.map((link) => (
+              <a
+                className={link.href === "./" ? "active" : undefined}
+                href={link.href}
+                key={link.href}
+                aria-current={link.href === "./" ? "page" : undefined}
+              >
+                {link.label}
+              </a>
+            ))}
+          </nav>
           <div className="docMeta">
             <span>Generated docs</span>
             {(BUILD_BRANCH || BUILD_HASH) && (
@@ -236,14 +255,18 @@ function App() {
               </span>
             )}
           </div>
-          <h1>TSL Primitive Specialization Reference</h1>
+        </div>
+
+        <div className="heroCopy">
+          <span className="eyebrow">Generated capability reference</span>
+          <h1>Primitive specializations</h1>
           <p>
-            Profile capabilities and compiler availability are shown separately
-            from selected implementation requirements, so each specialization
-            reports the condition that actually makes it available.
+            Explore which implementation each profile and backend selects, why it
+            is available, and where it falls back.
           </p>
         </div>
-        <div className="headerControls">
+
+        <div className="headerUtilities">
           <DeveloperModeToggle devMode={devMode} setDevMode={setDeveloperMode} />
           <Legend />
         </div>

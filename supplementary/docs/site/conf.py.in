@@ -7,8 +7,12 @@ templates_path = ["_templates"]
 exclude_patterns = []
 
 html_theme = "alabaster"
+html_theme_options = {
+    "page_width": "1240px",
+    "sidebar_width": "230px",
+}
 html_static_path = ["_static"]
-html_css_files = ["tslc.css"]
+html_css_files = ["site-header.css", "tslc.css"]
 html_title = "@PROJECT_NAME@"
 html_logo = "_static/tsl_repo_logo_wide.png"
 html_favicon = "_static/tsl_logo_small.png"

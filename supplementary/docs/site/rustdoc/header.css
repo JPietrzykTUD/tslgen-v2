@@ -1,0 +1,30 @@
+body.rustdoc {
+  padding-top: 128px;
+}
+
+.tslcSiteHeader {
+  position: absolute;
+  z-index: 1000;
+  top: 0;
+  right: 24px;
+  left: 24px;
+  width: auto;
+}
+
+@media (max-width: 980px) {
+  body.rustdoc {
+    padding-top: 180px;
+  }
+}
+
+@media (max-width: 620px) {
+  body.rustdoc {
+    padding-top: 204px;
+  }
+
+  .tslcSiteHeader {
+    right: 12px;
+    left: 12px;
+    width: auto;
+  }
+}

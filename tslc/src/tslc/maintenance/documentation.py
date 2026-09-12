@@ -17,6 +17,8 @@ Run from the repository with ``tslc/src`` on ``PYTHONPATH``:
 from __future__ import annotations
 
 import argparse
+import html
+import json
 import os
 import shutil
 import subprocess
@@ -96,6 +98,7 @@ class GeneratedDocumentationContext:
     commands: list[DocumentationCommand]
     outputs: list[Path]
     errors: list[str]
+    site_links: tuple[tuple[str, str], ...]
     repo_root: Path | None = None
 
 
@@ -149,6 +152,23 @@ def document_generated(
     if not requested:
         errors.append("no documentation backends requested")
 
+    site_links = _site_navigation_links(
+        include_cpp=any(
+            capability.generated_documentation is not None
+            and capability.generated_documentation.site_input
+            is DocumentationSiteInput.DOXYGEN_XML
+            for capability in capabilities
+        ),
+        include_rust=any(
+            capability.generated_documentation is not None
+            and capability.generated_documentation.site_input
+            is DocumentationSiteInput.RUSTDOC
+            for capability in capabilities
+        ),
+        include_specializations=(
+            root / "docs" / "specializations" / "specializations.json"
+        ).is_file(),
+    )
     site_inputs: dict[DocumentationSiteInput, Path] = {}
     for capability in capabilities:
         spec = capability.generated_documentation
@@ -177,6 +197,7 @@ def document_generated(
                     commands=commands,
                     outputs=outputs,
                     errors=errors,
+                    site_links=site_links,
                     repo_root=repo_root,
                 )
             )
@@ -453,11 +474,13 @@ def _document_rust(
     project_path: str,
     cargo: str,
     rustdoc_args: Sequence[str],
+    site_links: tuple[tuple[str, str], ...],
     dry_run: bool,
     runner: CommandRunner,
     commands: list[DocumentationCommand],
     outputs: list[Path],
     errors: list[str],
+    repo_root: Path | None,
 ) -> Path | None:
     rust_root = root / project_path
     manifest = rust_root / "Cargo.toml"
@@ -466,6 +489,11 @@ def _document_rust(
         errors.append(f"Rust Cargo.toml not found: {manifest}")
         return None
     docs_target.mkdir(parents=True, exist_ok=True)
+    rustdoc_header, rustdoc_css = _render_rustdoc_assets(
+        rust_root=rust_root,
+        site_links=site_links,
+        repo_root=repo_root,
+    )
     cargo_command = _command(
         backend_id,
         "rustdoc",
@@ -482,7 +510,22 @@ def _document_rust(
         commands=commands,
         errors=errors,
     )
-    if cargo_command is None or not _execute(cargo_command, runner, dry_run, errors):
+    if cargo_command is None or not _execute(
+        cargo_command,
+        runner,
+        dry_run,
+        errors,
+        extra_env={
+            "CARGO_ENCODED_RUSTDOCFLAGS": "\x1f".join(
+                (
+                    "--html-before-content",
+                    str(rustdoc_header),
+                    "--extend-css",
+                    str(rustdoc_css),
+                )
+            )
+        },
+    ):
         return None
     rust_doc = docs_target / "doc"
     error_count = len(errors)
@@ -518,11 +561,13 @@ def _build_rust_documentation(context: GeneratedDocumentationContext) -> Path | 
         project_path=context.spec.project_path,
         cargo=context.tools["cargo"],
         rustdoc_args=context.spec.args,
+        site_links=context.site_links,
         dry_run=context.dry_run,
         runner=context.runner,
         commands=context.commands,
         outputs=context.outputs,
         errors=context.errors,
+        repo_root=context.repo_root,
     )
 
 
@@ -561,6 +606,11 @@ def _document_site(
         specializations_dist = _document_specializations_app(
             root,
             repo_root=repo_root,
+            site_links=_site_navigation_links(
+                include_cpp=doxygen_xml is not None,
+                include_rust=rust_doc is not None,
+                include_specializations=True,
+            ),
             npm=npm,
             npm_ci=npm_ci,
             dry_run=dry_run,
@@ -598,9 +648,22 @@ def _document_site(
     if include_specializations and specializations_dist is not None:
         specializations_site = sphinx_html / "specializations"
         if not dry_run:
+            vite_assets = sphinx_html / "assets"
+            if vite_assets.exists():
+                shutil.rmtree(vite_assets)
             if specializations_site.exists():
                 shutil.rmtree(specializations_site)
-            shutil.copytree(specializations_dist, specializations_site)
+            shutil.copytree(specializations_dist, sphinx_html, dirs_exist_ok=True)
+            shutil.copyfile(
+                specializations_json,
+                sphinx_html / "specializations.json",
+            )
+            specializations_site.mkdir(parents=True)
+            _write_redirect_page(
+                specializations_site / "index.html",
+                target="../",
+                title="TSL Specialization Explorer",
+            )
             shutil.copyfile(
                 specializations_json,
                 specializations_site / "specializations.json",
@@ -624,6 +687,7 @@ def _document_specializations_app(
     root: Path,
     *,
     repo_root: Path | None,
+    site_links: tuple[tuple[str, str], ...],
     npm: str,
     npm_ci: bool,
     dry_run: bool,
@@ -685,10 +749,70 @@ def _document_specializations_app(
         runner,
         dry_run,
         errors,
-        extra_env=_specialization_build_env(checkout_root),
+        extra_env=_specialization_build_env(checkout_root, site_links=site_links),
     ):
         return None
     return dist
+
+
+def _site_navigation_links(
+    *, include_cpp: bool, include_rust: bool, include_specializations: bool
+) -> tuple[tuple[str, str], ...]:
+    links: list[tuple[str, str]] = [
+        ("Specializations" if include_specializations else "Overview", "./")
+    ]
+    if include_cpp:
+        links.append(("C++ API", "./cpp_api.html"))
+    if include_rust:
+        links.append(("Rust API", "./rust/"))
+    links.append(("Safety contract", "./checked_api_contract.html"))
+    return tuple(links)
+
+
+def _render_rustdoc_assets(
+    *,
+    rust_root: Path,
+    site_links: tuple[tuple[str, str], ...],
+    repo_root: Path | None,
+) -> tuple[Path, Path]:
+    asset_root = (
+        _required_repo_root(repo_root)
+        / "supplementary"
+        / "docs"
+        / "site"
+        / "rustdoc"
+    )
+    output_root = rust_root / "docs" / "rustdoc-site"
+    output_root.mkdir(parents=True, exist_ok=True)
+    header = output_root / "header.html"
+    css = output_root / "header.css"
+    header.write_text(
+        _template(
+            asset_root / "header.html.in",
+            {"SITE_NAV_LINKS": _rustdoc_navigation_html(site_links)},
+        ),
+        encoding="utf-8",
+    )
+    shared_css = asset_root.parent / "_static" / "site-header.css"
+    css.write_text(
+        shared_css.read_text(encoding="utf-8")
+        + "\n"
+        + (asset_root / "header.css").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    return header, css
+
+
+def _rustdoc_navigation_html(site_links: tuple[tuple[str, str], ...]) -> str:
+    anchors = []
+    for label, href in site_links:
+        target = href.removeprefix("./")
+        active = ' class="active" aria-current="page"' if href == "./rust/" else ""
+        anchors.append(
+            f'<a{active} data-tslc-site-path="{html.escape(target, quote=True)}">'
+            f"{html.escape(label)}</a>"
+        )
+    return "\n        ".join(anchors)
 
 
 def _optional_existing_output(path: Path, *, dry_run: bool) -> Path | None:
@@ -732,6 +856,7 @@ def _render_site_assets(
         include_rust=include_rust,
         include_specializations=include_specializations,
     )
+    (sphinx_source / "_templates").mkdir(parents=True, exist_ok=True)
     (sphinx_source / "conf.py").write_text(
         _template(asset_root / "conf.py.in", values),
         encoding="utf-8",
@@ -742,6 +867,10 @@ def _render_site_assets(
     )
     (sphinx_source / "checked_api_contract.rst").write_text(
         _template(asset_root / "checked_api_contract.rst.in", values),
+        encoding="utf-8",
+    )
+    (sphinx_source / "_templates" / "layout.html").write_text(
+        _template(asset_root / "_templates" / "layout.html.in", values),
         encoding="utf-8",
     )
     shutil.copyfile(
@@ -799,10 +928,11 @@ def _site_asset_values(
     entries: list[str] = ["   checked_api_contract"]
     if doxygen_xml is not None:
         entries.append("   cpp_api")
-    if include_rust:
-        entries.append("   rust_api")
-    if include_specializations:
-        entries.append("   specializations")
+    site_links = _site_navigation_links(
+        include_cpp=doxygen_xml is not None,
+        include_rust=include_rust,
+        include_specializations=include_specializations,
+    )
     return {
         "PROJECT_NAME": project_name,
         "TITLE_UNDERLINE": "=" * len(project_name),
@@ -811,7 +941,27 @@ def _site_asset_values(
             {"TSL": str(doxygen_xml.resolve())} if doxygen_xml is not None else {}
         ),
         "TOCTREE_ENTRIES": "\n".join(entries),
+        "SITE_NAV_LINKS": _sphinx_navigation_html(site_links),
     }
+
+
+def _sphinx_navigation_html(site_links: tuple[tuple[str, str], ...]) -> str:
+    active_pages = {
+        "./": "index",
+        "./cpp_api.html": "cpp_api",
+        "./rust/": "rust_api",
+        "./checked_api_contract.html": "checked_api_contract",
+    }
+    anchors = []
+    for label, href in site_links:
+        page = active_pages[href]
+        anchors.append(
+            f'<a href="{html.escape(href, quote=True)}"'
+            f' class="{{% if pagename == {page!r} %}}active{{% endif %}}"'
+            f'{{% if pagename == {page!r} %}} aria-current="page"{{% endif %}}>'
+            f"{html.escape(label)}</a>"
+        )
+    return "\n        ".join(anchors)
 
 
 def _ensure_rustdoc_landing(rust_site: Path) -> None:
@@ -824,6 +974,10 @@ def _ensure_rustdoc_landing(rust_site: Path) -> None:
         if path.is_dir() and (path / "index.html").is_file()
     )
     target = f"{crate_indexes[0].name}/index.html" if crate_indexes else "help.html"
+    _write_redirect_page(index, target=target, title="Rust API")
+
+
+def _write_redirect_page(index: Path, *, target: str, title: str) -> None:
     index.write_text(
         "\n".join(
             (
@@ -831,8 +985,8 @@ def _ensure_rustdoc_landing(rust_site: Path) -> None:
                 "<html>",
                 '<head><meta charset="utf-8">',
                 f'<meta http-equiv="refresh" content="0; url={target}">',
-                "<title>Rust API</title></head>",
-                f'<body><p><a href="{target}">Open Rust API reference</a></p></body>',
+                f"<title>{title}</title></head>",
+                f'<body><p><a href="{target}">Open {title}</a></p></body>',
                 "</html>",
             )
         )
@@ -930,7 +1084,9 @@ def _run_subprocess(
     )
 
 
-def _specialization_build_env(repo_root: Path) -> dict[str, str]:
+def _specialization_build_env(
+    repo_root: Path, *, site_links: tuple[tuple[str, str], ...]
+) -> dict[str, str]:
     branch = _git_output(repo_root, ("rev-parse", "--abbrev-ref", "HEAD"))
     if branch == "HEAD":
         branch = _git_output(repo_root, ("branch", "--show-current")) or "detached"
@@ -938,6 +1094,13 @@ def _specialization_build_env(repo_root: Path) -> dict[str, str]:
     return {
         "VITE_TSLC_GIT_BRANCH": branch or "unknown",
         "VITE_TSLC_GIT_HASH": short_hash or "unknown",
+        "VITE_TSLC_SITE_LINKS": json.dumps(
+            [
+                {"label": label, "href": href}
+                for label, href in site_links
+            ],
+            separators=(",", ":"),
+        ),
     }
 
 

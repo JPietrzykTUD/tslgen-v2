@@ -18,6 +18,7 @@
 }
 
 body {
+  margin: 0;
   background: var(--bg);
   color: var(--text);
   font-family:
@@ -25,12 +26,20 @@ body {
     sans-serif;
 }
 
+.tslcSiteHeader {
+  position: relative;
+  left: 50%;
+  width: calc(100vw - 48px);
+  transform: translateX(-50%);
+}
+
 div.document {
-  max-width: 1180px;
+  max-width: calc(100vw - 48px);
 }
 
 div.body {
   min-width: 0;
+  max-width: none;
   color: var(--text);
 }
 
@@ -48,9 +57,16 @@ div.sphinxsidebar {
   color: var(--text-muted);
 }
 
+div.sphinxsidebar a {
+  overflow-wrap: anywhere;
+}
+
 div.sphinxsidebar img.logo {
-  max-width: 230px;
-  margin: 0 0 1.1rem;
+  display: none;
+}
+
+div.sphinxsidebar h1.logo {
+  display: none;
 }
 
 div.sphinxsidebarwrapper {
@@ -98,4 +114,10 @@ div.admonition p.admonition-title,
 div.note p.admonition-title {
   background: var(--primary);
   color: var(--text-inverted);
+}
+
+@media (max-width: 620px) {
+  .tslcSiteHeader {
+    width: calc(100vw - 24px);
+  }
 }

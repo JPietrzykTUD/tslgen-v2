@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import stat
 import subprocess
@@ -87,25 +88,74 @@ def test_document_generated_writes_assets_and_runs_tools(
     assert 'html_favicon = "_static/tsl_logo_small.png"' in (
         site_source / "conf.py"
     ).read_text()
+    assert 'html_css_files = ["site-header.css", "tslc.css"]' in (
+        site_source / "conf.py"
+    ).read_text()
+    assert '"page_width": "1240px"' in (site_source / "conf.py").read_text()
+    assert '"sidebar_width": "230px"' in (site_source / "conf.py").read_text()
     assert str((output_root / "cpp/docs/doxygen/xml").resolve()) in (
         site_source / "conf.py"
     ).read_text()
     assert "Tiny API" in (site_source / "index.rst").read_text()
+    site_index = (site_source / "index.rst").read_text()
+    assert "   checked_api_contract" in site_index
+    assert "   cpp_api" in site_index
+    assert "   :maxdepth: 1" in site_index
+    assert "   rust_api" not in site_index
+    assert "   specializations" not in site_index
     assert (site_source / "cpp_api.rst").is_file()
     assert (site_source / "rust_api.rst").is_file()
+    assert (site_source / "rust_api.rst").read_text().startswith(":orphan:\n")
     assert (site_source / "specializations.rst").is_file()
+    assert (site_source / "specializations.rst").read_text().startswith(
+        ":orphan:\n"
+    )
     assert (site_source / "checked_api_contract.rst").is_file()
     assert (site_source / "checked_api_example.cpp").is_file()
+    site_layout = site_source / "_templates/layout.html"
+    assert site_layout.is_file()
+    assert 'class="tslcSiteHeader"' in site_layout.read_text()
+    assert 'href="./cpp_api.html"' in site_layout.read_text()
+    assert 'href="./rust/"' in site_layout.read_text()
+    assert 'href="./checked_api_contract.html"' in site_layout.read_text()
     assert (site_source / "_static/tslc.css").is_file()
+    shared_header_css = site_source / "_static/site-header.css"
+    assert shared_header_css.is_file()
+    assert "var(--main-background-color" in shared_header_css.read_text()
+    assert "@media (max-width: 1080px)" in shared_header_css.read_text()
+    assert "width: calc(100vw - 48px)" in (
+        site_source / "_static/tslc.css"
+    ).read_text()
     assert (site_source / "_static/tsl_logo_small.png").is_file()
     assert (site_source / "_static/tsl_repo_logo_wide.png").is_file()
 
     assert (output_root / "cpp/docs/doxygen/xml/index.xml").is_file()
     assert (output_root / "docs/site/index.html").is_file()
     assert (output_root / "docs/site/specializations/index.html").is_file()
-    assert (output_root / "docs/site/specializations/assets/app.js").is_file()
+    assert (output_root / "docs/site/assets/app.js").is_file()
+    assert (output_root / "docs/site/specializations.json").is_file()
     assert (output_root / "docs/site/specializations/specializations.json").is_file()
+    assert (output_root / "docs/site/index.html").read_text() == "react"
+    assert "url=../" in (
+        output_root / "docs/site/specializations/index.html"
+    ).read_text()
     assert (output_root / "rust/docs/target/doc/tsl_doc_fake/index.html").is_file()
+    rustdoc_header = output_root / "rust/docs/rustdoc-site/header.html"
+    rustdoc_css = output_root / "rust/docs/rustdoc-site/header.css"
+    assert rustdoc_header.is_file()
+    assert rustdoc_css.is_file()
+    assert 'class="tslcSiteHeader"' in rustdoc_header.read_text()
+    assert 'data-tslc-site-src="_static/tsl_logo_grey.svg"' in (
+        rustdoc_header.read_text()
+    )
+    assert 'data-tslc-site-path=""' in rustdoc_header.read_text()
+    assert 'data-tslc-site-path="cpp_api.html"' in rustdoc_header.read_text()
+    assert 'data-tslc-site-path="rust/"' in rustdoc_header.read_text()
+    assert 'data-tslc-site-path="checked_api_contract.html"' in (
+        rustdoc_header.read_text()
+    )
+    assert ".tslcSiteNav" in rustdoc_css.read_text()
+    assert "body.rustdoc" in rustdoc_css.read_text()
     assert (output_root / "docs/site/rust/index.html").is_file()
     assert "tsl_doc_fake/index.html" in (
         output_root / "docs/site/rust/index.html"
@@ -114,10 +164,19 @@ def test_document_generated_writes_assets_and_runs_tools(
     assert "doxygen" in log_text
     assert "sphinx-build" in log_text
     assert "cargo doc --no-deps --no-default-features" in log_text
+    assert "CARGO_ENCODED_RUSTDOCFLAGS=--html-before-content" in log_text
+    assert "--extend-css" in log_text
     assert "npm ci --no-audit --no-fund" in log_text
     assert "npm run build" in log_text
     assert "VITE_TSLC_GIT_BRANCH=" in log_text
     assert "VITE_TSLC_GIT_HASH=" in log_text
+    assert "VITE_TSLC_SITE_LINKS=" in log_text
+    assert '"label":"C++ API","href":"./cpp_api.html"' in log_text
+    assert '"label":"Rust API","href":"./rust/"' in log_text
+    assert (
+        '"label":"Safety contract","href":"./checked_api_contract.html"'
+        in log_text
+    )
 
 
 def test_runner_receives_command_environment_without_mutating_os_environ(
@@ -127,6 +186,7 @@ def test_runner_receives_command_environment_without_mutating_os_environ(
 
     monkeypatch.delenv("VITE_TSLC_GIT_BRANCH", raising=False)
     monkeypatch.delenv("VITE_TSLC_GIT_HASH", raising=False)
+    monkeypatch.delenv("VITE_TSLC_SITE_LINKS", raising=False)
     output_root = _generated_project(tmp_path / "generated")
     tools = tmp_path / "bin"
     tools.mkdir()
@@ -138,7 +198,7 @@ def test_runner_receives_command_environment_without_mutating_os_environ(
     def runner(argv, cwd, extra_env):
         tool = Path(argv[0]).name
         step = tool + ("-" + argv[1] if tool == "npm" else "")
-        leaked = any(key.startswith("VITE_TSLC_GIT_") for key in os.environ)
+        leaked = any(key.startswith("VITE_TSLC_") for key in os.environ)
         calls.append((step, dict(extra_env) if extra_env else None, leaked))
         if tool == "doxygen":
             (output_root / "cpp/docs/doxygen/xml").mkdir(parents=True, exist_ok=True)
@@ -164,9 +224,15 @@ def test_runner_receives_command_environment_without_mutating_os_environ(
     assert build_env is not None
     assert build_env["VITE_TSLC_GIT_BRANCH"]
     assert build_env["VITE_TSLC_GIT_HASH"]
+    assert json.loads(build_env["VITE_TSLC_SITE_LINKS"]) == [
+        {"label": "Specializations", "href": "./"},
+        {"label": "C++ API", "href": "./cpp_api.html"},
+        {"label": "Safety contract", "href": "./checked_api_contract.html"},
+    ]
     assert all(not leaked for _, _, leaked in calls)
     assert "VITE_TSLC_GIT_BRANCH" not in os.environ
     assert "VITE_TSLC_GIT_HASH" not in os.environ
+    assert "VITE_TSLC_SITE_LINKS" not in os.environ
 
 
 def test_document_generated_site_only_skips_backend_docs_and_npm_ci(tmp_path) -> None:
@@ -384,17 +450,23 @@ import sys
 from pathlib import Path
 
 log = Path(os.environ["TSLC_DOC_FAKE_LOG"])
+name = Path(sys.argv[0]).name
 env_note = ""
-if Path(sys.argv[0]).name == "npm" and sys.argv[1:3] == ["run", "build"]:
+if name == "npm" and sys.argv[1:3] == ["run", "build"]:
     env_note = (
         " VITE_TSLC_GIT_BRANCH="
         + os.environ.get("VITE_TSLC_GIT_BRANCH", "")
         + " VITE_TSLC_GIT_HASH="
         + os.environ.get("VITE_TSLC_GIT_HASH", "")
+        + " VITE_TSLC_SITE_LINKS="
+        + os.environ.get("VITE_TSLC_SITE_LINKS", "")
     )
+elif name == "cargo":
+    env_note = " CARGO_ENCODED_RUSTDOCFLAGS=" + os.environ.get(
+        "CARGO_ENCODED_RUSTDOCFLAGS", ""
+    ).replace(chr(31), " ")
 line = Path(sys.argv[0]).name + " " + " ".join(sys.argv[1:]) + env_note + "\\n"
 log.write_text(log.read_text() + line if log.exists() else line)
-name = Path(sys.argv[0]).name
 if name == "doxygen":
     doxyfile = Path(sys.argv[1])
     output = None
