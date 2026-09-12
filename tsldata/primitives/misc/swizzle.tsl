@@ -1272,10 +1272,9 @@ prim<v:=(v,sImm)> permute_lanes(data, control):
             var<infer>(result, lanes);
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
               var<const_infer>(group_start, (value(i) / 4) * 4);
-              var<infer>(group_length, value(vector::length) - group_start);
-              if (group_length > 4) { group_length = 4; }
+              var<const_infer>(remaining_lanes, value(vector::length) - group_start);
               var<const_infer>(selector, (cast<static>(scalar::size, control) >> (2 * (value(i) % 4))) & 3);
-              result[value(i)] = lanes[group_start + selector % group_length];
+              result[value(i)] = lanes[group_start + selector % remaining_lanes];
             }
             complete(call<primitive=from_array[Vec]>(result));
           """
@@ -1295,7 +1294,7 @@ prim<v:=(v,sImm)> permute_lanes(data, control):
             complete(intrin<__builtin_shufflevector>(
               data, data
               loop<generation>(i, 0, value(vector::length), 1) {
-                , ((value(i) / 4) * 4) + (((cast<static>(scalar::size, control) >> (2 * (value(i) % 4))) & 3) % ((value(vector::length) < 4) ? value(vector::length) : 4))
+                , ((value(i) / 4) * 4) + (((cast<static>(scalar::size, control) >> (2 * (value(i) % 4))) & 3) % (value(vector::length) - ((value(i) / 4) * 4)))
               }
             ));
           """
@@ -1308,10 +1307,9 @@ prim<v:=(v,sImm)> permute_lanes(data, control):
               var<init_register>(result);
               loop<generation, scoped>(i, 0, value(vector::length), 1) {
                 var<const_infer>(group_start, (value(i) / 4) * 4);
-                var<infer>(group_length, value(vector::length) - group_start);
-                if (group_length > 4) { group_length = 4; }
+                var<const_infer>(remaining_lanes, value(vector::length) - group_start);
                 var<const_infer>(selector, (cast<static>(scalar::size, control) >> (2 * (value(i) % 4))) & 3);
-                result[value(i)] = data[group_start + selector % group_length];
+                result[value(i)] = data[group_start + selector % remaining_lanes];
               }
               complete(result);
             """
@@ -1337,10 +1335,9 @@ prim<v:=(v,sImm)> permute_lanes(data, control):
             var<init_register>(result);
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               var<const_infer>(group_start, (i / 4) * 4);
-              var<infer>(group_length, value(vector::length) - group_start);
-              if (group_length > 4) { group_length = 4; }
+              var<const_infer>(remaining_lanes, value(vector::length) - group_start);
               var<const_infer>(selector, (cast<static>(scalar::size, control) >> (2 * (i % 4))) & 3);
-              result[i] = data[group_start + selector % group_length];
+              result[i] = data[group_start + selector % remaining_lanes];
             }
             complete(result);
           """
@@ -1360,10 +1357,9 @@ prim<v:=(v,sImm)> permute_lanes(data, control):
             call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(input, data);
             loop<backend>(i, 0, lanes, 1) {
               var<const_infer>(group_start, (i / 4) * 4);
-              var<infer>(group_length, lanes - group_start);
-              if (group_length > 4) { group_length = 4; }
+              var<const_infer>(remaining_lanes, lanes - group_start);
               var<const_infer>(selector, (cast<static>(scalar::size, control) >> (2 * (i % 4))) & 3);
-              result[i] = input[group_start + selector % group_length];
+              result[i] = input[group_start + selector % remaining_lanes];
             }
             complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
           """
@@ -1383,10 +1379,9 @@ prim<v:=(v,sImm)> permute_lanes(data, control):
             call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(input, data);
             loop<backend>(i, 0, lanes, 1) {
               var<const_infer>(group_start, (i / 4) * 4);
-              var<infer>(group_length, lanes - group_start);
-              if (group_length > 4) { group_length = 4; }
+              var<const_infer>(remaining_lanes, lanes - group_start);
               var<const_infer>(selector, (cast<static>(scalar::size, control) >> (2 * (i % 4))) & 3);
-              result[i] = input[group_start + selector % group_length];
+              result[i] = input[group_start + selector % remaining_lanes];
             }
             complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
           """

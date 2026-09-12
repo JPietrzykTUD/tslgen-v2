@@ -488,6 +488,12 @@ def test_runtime_permute_and_table_lookup_prefer_native_operations(
             "si32",
             "__builtin_shufflevector",
         ),
+        (
+            "avx2",
+            "clang_v128",
+            "f64",
+            "__builtin_shufflevector",
+        ),
     ),
 )
 def test_immediate_permute_lanes_prefers_native_operations(
@@ -528,13 +534,58 @@ def test_immediate_permute_lanes_prefers_native_operations(
         assert lowered is not None
         assert intrinsic in lowered.body_text
         assert "to_array" not in lowered.body_text
+        assert "< 4) ?" not in lowered.body_text
         assert [variant.name for variant in lowered.variant_bodies] == [
             "scalar_lanes_fallback"
         ]
         fallback_body = lowered.variant_bodies[0].body_text
         _assert_generation_expanded(fallback_body)
-        if not extension_name.startswith("clang_"):
-            assert "group_length > 4" not in fallback_body
+        assert "group_length > 4" not in fallback_body
+
+
+@pytest.mark.parametrize(
+    ("profile_name", "extension_name", "generation_expanded"),
+    (
+        ("neon", "neon", True),
+        ("wasm32-simd128", "wasm128", True),
+        ("scalar", "generic", False),
+    ),
+)
+@pytest.mark.parametrize("backend_id", ("cpp", "rust"))
+def test_portable_permute_lanes_has_no_runtime_group_clamp(
+    catalog: Catalog,
+    machine_profiles,
+    profile_name: str,
+    extension_name: str,
+    generation_expanded: bool,
+    backend_id: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles[profile_name],
+            "permute_lanes",
+            ("f64",),
+            backend_id=backend_id,
+        )
+        .selected
+        if selected.extension.name == extension_name
+        and not any(
+            param.name == "IndicesType" for param in selected.primitive.generic_params
+        )
+    )
+
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, backend_id)
+    ).specialization
+
+    assert lowered is not None
+    if generation_expanded:
+        _assert_generation_expanded(lowered.body_text)
+    assert "group_length > 4" not in lowered.body_text
+    assert "% remaining_lanes" in lowered.body_text
 
 
 def test_sse41_to_mask_fast_paths_win_over_portable_fallback(
