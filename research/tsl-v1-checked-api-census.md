@@ -124,21 +124,21 @@ It is not part of a generated runtime API contract.
 - `tslc/src/tslc/benchmark/render_cpp.py:226` — owner `_render_policy_read` — `throw` — `throw std::runtime_error("policy repeats a decision for " + std::string({stable_id}));`
 - `tslc/src/tslc/benchmark/render_cpp.py:224` — owner `_render_policy_read` — `throw` — `throw std::runtime_error("policy has no decision for " + std::string({stable_id}));`
 - `tslc/src/tslc/benchmark/render_cpp_scenarios.py:484` — owner `_render_measure_dispatch` — `throw` — `default: throw std::runtime_error("invalid candidate index");`
-- `tslc/src/tslc/render/rust_dispatch.py:579` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(ENTRY_CALLS.load(Ordering::SeqCst), 2);",`
-- `tslc/src/tslc/render/rust_dispatch.py:599` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(HARDWARE_ENTRY_CALLS.load(Ordering::SeqCst), 0);",`
-- `tslc/src/tslc/render/rust_dispatch.py:566` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(SELECTION_CALLS.load(Ordering::SeqCst), 1);",`
-- `tslc/src/tslc/render/rust_dispatch.py:578` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(SELECTION_CALLS.load(Ordering::SeqCst), 1);",`
-- `tslc/src/tslc/render/rust_dispatch.py:580` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(output, [9 as TestElement; 8]);",`
-- `tslc/src/tslc/render/rust_dispatch.py:598` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(output, [9 as TestElement; 8]);",`
-- `tslc/src/tslc/render/rust_dispatch.py:565` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(detector.detect_calls, 1);",`
-- `tslc/src/tslc/render/rust_dispatch.py:577` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(detector.detect_calls, 1);",`
-- `tslc/src/tslc/render/rust_dispatch.py:529` — owner `_unit_tests` — `assert_eq` — `f" assert_eq!(table.{field}, {entry.entry_index});",`
-- `tslc/src/tslc/render/rust_dispatch.py:521` — owner `_unit_tests` — `expect` — `' let _guard = TEST_LOCK.lock().expect("dispatch test lock");',`
-- `tslc/src/tslc/render/rust_dispatch.py:558` — owner `_unit_tests` — `expect` — `' let _guard = TEST_LOCK.lock().expect("dispatch test lock");',`
-- `tslc/src/tslc/render/rust_dispatch.py:585` — owner `_unit_tests` — `expect` — `' let _guard = TEST_LOCK.lock().expect("dispatch test lock");',`
-- `tslc/src/tslc/render/rust_dispatch.py:571` — owner `_unit_tests` — `unwrap` — `"ops::Add, &left, &right, &mut output).unwrap();"`
-- `tslc/src/tslc/render/rust_dispatch.py:575` — owner `_unit_tests` — `unwrap` — `"ops::Add, &left, &right, &mut output).unwrap();"`
-- `tslc/src/tslc/render/rust_dispatch.py:596` — owner `_unit_tests` — `unwrap` — `"ops::Add, &left, &right, &mut output).unwrap();"`
+- `tslc/src/tslc/render/rust_dispatch.py:578` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(ENTRY_CALLS.load(Ordering::SeqCst), 2);",`
+- `tslc/src/tslc/render/rust_dispatch.py:598` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(HARDWARE_ENTRY_CALLS.load(Ordering::SeqCst), 0);",`
+- `tslc/src/tslc/render/rust_dispatch.py:565` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(SELECTION_CALLS.load(Ordering::SeqCst), 1);",`
+- `tslc/src/tslc/render/rust_dispatch.py:577` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(SELECTION_CALLS.load(Ordering::SeqCst), 1);",`
+- `tslc/src/tslc/render/rust_dispatch.py:579` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(output, [9 as TestElement; 8]);",`
+- `tslc/src/tslc/render/rust_dispatch.py:597` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(output, [9 as TestElement; 8]);",`
+- `tslc/src/tslc/render/rust_dispatch.py:564` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(detector.detect_calls, 1);",`
+- `tslc/src/tslc/render/rust_dispatch.py:576` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(detector.detect_calls, 1);",`
+- `tslc/src/tslc/render/rust_dispatch.py:528` — owner `_unit_tests` — `assert_eq` — `f" assert_eq!(table.{field}, {entry.entry_index});",`
+- `tslc/src/tslc/render/rust_dispatch.py:520` — owner `_unit_tests` — `expect` — `' let _guard = TEST_LOCK.lock().expect("dispatch test lock");',`
+- `tslc/src/tslc/render/rust_dispatch.py:557` — owner `_unit_tests` — `expect` — `' let _guard = TEST_LOCK.lock().expect("dispatch test lock");',`
+- `tslc/src/tslc/render/rust_dispatch.py:584` — owner `_unit_tests` — `expect` — `' let _guard = TEST_LOCK.lock().expect("dispatch test lock");',`
+- `tslc/src/tslc/render/rust_dispatch.py:570` — owner `_unit_tests` — `unwrap` — `"ops::Add, &left, &right, &mut output).unwrap();"`
+- `tslc/src/tslc/render/rust_dispatch.py:574` — owner `_unit_tests` — `unwrap` — `"ops::Add, &left, &right, &mut output).unwrap();"`
+- `tslc/src/tslc/render/rust_dispatch.py:595` — owner `_unit_tests` — `unwrap` — `"ops::Add, &left, &right, &mut output).unwrap();"`
 - `tslc/src/tslc/value_tests/_render_rust_conversion.py:35` — owner `_convert` — `assert` — `f" for i in 0..{target_lanes} {{ assert!(result[i].lane_eq(expected[i]), "`
 - `tslc/src/tslc/value_tests/_render_rust_conversion.py:474` — owner `_differential` — `assert_eq` — `f" for i in 0..{case.lanes} {{ assert_eq!("`
 - `tslc/src/tslc/value_tests/_render_rust_conversion.py:482` — owner `_differential` — `assert` — `" assert!(hw.lane_eq(reference), "`
@@ -419,7 +419,7 @@ The maintained probe is `tslc/tests/fixtures/checked_api/abi_probe.cpp`. It comp
 
 ## Validation limits
 
-- All-profile Rust render: not a valid census input: the current all-profile Rust request reports TSL-BACKEND-RUST-AMBIGUOUS-TARGET-PROFILES before artifact rendering.
+- All-profile Rust render: not a valid census input: the current all-profile Rust request reports TSL-BACKEND-RUST-DUPLICATE-TARGET-PROFILES for equal normal/OneAPI target predicates before artifact rendering.
 - Census strategy: scan canonical source bodies, render assets, and emitters; obtain public caller-safety identities from the validated typed catalog.
 
 ## Maintenance

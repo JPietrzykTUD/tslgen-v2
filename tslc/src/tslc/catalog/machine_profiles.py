@@ -122,6 +122,9 @@ class MachineProfile:
     backend_flags: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     # Profile-specific compiler tool roles keyed by backend.
     backend_compiler_roles: Mapping[str, str] = field(default_factory=dict)
+    # Backend-specific preference used only when compile-target feature
+    # requirements are incomparable. Higher values are preferred.
+    backend_selection_priority: Mapping[str, int] = field(default_factory=dict)
     # Exactly one ungated profile may be the generated-build fallback.
     default_build_fallback: bool = False
     # Backends intentionally emitted for this profile. None on a manually
@@ -136,6 +139,17 @@ class MachineProfile:
     auto_detect_gate: str | None = None
 
     def __post_init__(self) -> None:
+        if any(
+            not backend_id
+            or isinstance(priority, bool)
+            or not isinstance(priority, int)
+            or priority < 0
+            for backend_id, priority in self.backend_selection_priority.items()
+        ):
+            raise ValueError(
+                "backend selection priorities require non-empty backend IDs and "
+                "non-negative integer values"
+            )
         object.__setattr__(self, "features", frozenset(self.features))
         object.__setattr__(self, "compile_modes", frozenset(self.compile_modes))
         if self.supported_backends is not None:
@@ -163,12 +177,20 @@ class MachineProfile:
             "backend_compiler_roles",
             MappingProxyType(dict(sorted(self.backend_compiler_roles.items()))),
         )
+        object.__setattr__(
+            self,
+            "backend_selection_priority",
+            MappingProxyType(dict(sorted(self.backend_selection_priority.items()))),
+        )
 
     def flags_for_backend(self, backend_id: str) -> tuple[str, ...]:
         return self.backend_flags.get(backend_id, ())
 
     def compiler_role_for_backend(self, backend_id: str) -> str | None:
         return self.backend_compiler_roles.get(backend_id)
+
+    def selection_priority_for_backend(self, backend_id: str) -> int | None:
+        return self.backend_selection_priority.get(backend_id)
 
     def supports_backend(self, backend_id: str) -> bool:
         return (
@@ -310,6 +332,7 @@ def load_machine_profiles_checked(
                     "alternatives",
                     "backend_flags",
                     "backend_compiler_roles",
+                    "backend_selection_priority",
                     "default_build_fallback",
                     "supported_backends",
                     "runner",
@@ -388,6 +411,13 @@ def load_machine_profiles_checked(
                 path,
                 diagnostics,
             )
+            backend_selection_priority = _backend_selection_priority(
+                name,
+                fields.get("backend_selection_priority", _JsonObject(())),
+                target_families,
+                path,
+                diagnostics,
+            )
             default_build_fallback_value = fields.get(
                 "default_build_fallback", False
             )
@@ -442,6 +472,7 @@ def load_machine_profiles_checked(
                 compile_modes=compile_modes,
                 backend_flags=backend_flags,
                 backend_compiler_roles=backend_compiler_roles,
+                backend_selection_priority=backend_selection_priority,
                 default_build_fallback=default_build_fallback,
                 supported_backends=supported_backends,
                 runner=runner,
@@ -735,6 +766,52 @@ def _backend_compiler_roles(
             )
             continue
         result[backend_id] = role
+    return result
+
+
+def _backend_selection_priority(
+    profile_name: str,
+    value: Any,
+    target_families: TargetFamilyCatalog | None,
+    path: Path,
+    diagnostics: list[Diagnostic],
+) -> dict[str, int]:
+    if not isinstance(value, _JsonObject):
+        diagnostics.append(
+            _diagnostic(
+                path,
+                "TSL-PROFILE-MALFORMED-FIELD",
+                f"machine profile {profile_name!r} backend_selection_priority "
+                "must be an object",
+            )
+        )
+        return {}
+    fields = _object_fields(value, path, diagnostics)
+    known_backends = (
+        target_families.backend_ids if target_families is not None else frozenset()
+    )
+    result: dict[str, int] = {}
+    for backend_id, priority in fields.items():
+        if known_backends and backend_id not in known_backends:
+            diagnostics.append(
+                _diagnostic(
+                    path,
+                    "TSL-PROFILE-UNKNOWN-BACKEND",
+                    f"machine profile {profile_name!r} backend_selection_priority "
+                    f"declares unknown backend {backend_id!r}",
+                )
+            )
+        if isinstance(priority, bool) or not isinstance(priority, int) or priority < 0:
+            diagnostics.append(
+                _diagnostic(
+                    path,
+                    "TSL-PROFILE-MALFORMED-FIELD",
+                    f"machine profile {profile_name!r} backend_selection_priority "
+                    f"{backend_id!r} must be a non-negative integer",
+                )
+            )
+            continue
+        result[backend_id] = priority
     return result
 
 

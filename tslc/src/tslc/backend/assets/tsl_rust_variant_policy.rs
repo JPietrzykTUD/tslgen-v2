@@ -124,7 +124,7 @@ fn active_profile_or_none(
                 profile.target_features,
                 &target_arch,
                 &target_features,
-            ) && !profile.stronger_requirements.iter().any(|requirement| {
+            ) && !profile.higher_priority_requirements.iter().any(|requirement| {
                 target_matches(
                     requirement.target_arch,
                     requirement.target_features,

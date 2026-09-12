@@ -311,7 +311,6 @@ def _logical_shapes(
     admitted_type_tags: set[str],
     bindings: tuple[RustFacadeOperationBinding, ...],
 ) -> tuple[RustFacadeShape, ...]:
-    profiles = {profile.profile_name: profile for profile in plan.profiles}
     shapes: list[RustFacadeShape] = []
     for fallback in plan.fallback_mappings:
         if fallback.type_tag not in admitted_type_tags:
@@ -319,7 +318,8 @@ def _logical_shapes(
         if fallback.lanes != 1 and fallback.total_bits not in _FACADE_FIXED_WIDTHS:
             continue
         representations: list[RustFacadeRepresentation] = []
-        for profile_name, profile in sorted(profiles.items()):
+        for profile in plan.profiles:
+            profile_name = profile.profile_name
             mapping = next(
                 (
                     item
@@ -332,7 +332,7 @@ def _logical_shapes(
                 representation = RustFacadeRepresentation(
                     profile_name,
                     profile.requirement,
-                    profile.stronger_requirements,
+                    profile.higher_priority_requirements,
                     mapping,
                 )
                 if all(
@@ -350,20 +350,12 @@ def _logical_shapes(
                 ):
                     representations.append(representation)
         fallback_exclusions = tuple(
-            sorted(
-                {
-                    RustFacadeTargetSelection(
-                        representation.requirement,
-                        representation.stronger_requirements,
-                    )
-                    for representation in representations
-                    if representation.requirement is not None
-                },
-                key=lambda item: (
-                    item.requirement.target_arch,
-                    item.requirement.target_features,
-                ),
+            RustFacadeTargetSelection(
+                representation.requirement,
+                representation.higher_priority_requirements,
             )
+            for representation in representations
+            if representation.requirement is not None
         )
         representations.insert(
             0,
@@ -462,21 +454,20 @@ def _native_aliases(
                 RustNativeAliasSelection(
                     profile.profile_name,
                     profile.requirement,
-                    profile.stronger_requirements,
+                    profile.higher_priority_requirements,
                     best.lanes if best is not None else fallback_lane_count,
                 )
             )
     for type_tag, selections in aliases.items():
         hardware_requirements = tuple(
-            sorted(
-                {
-                    selection.requirement
-                    for selection in selections
-                    if selection.requirement is not None
-                },
-                key=lambda item: (item.target_arch, item.target_features),
-            )
+            selection.requirement
+            for selection in selections
+            if selection.requirement is not None
         )
+        if len(set(hardware_requirements)) != len(hardware_requirements):
+            raise ValueError(
+                "Rust native alias target requirements must be unique"
+            )
         aliases[type_tag] = [
             (
                 RustNativeAliasSelection(
@@ -494,12 +485,7 @@ def _native_aliases(
         RustNativeAlias(
             type_tag,
             spellings[type_tag],
-            tuple(
-                sorted(
-                    selections,
-                    key=lambda item: (item.profile_name is not None, item.profile_name or ""),
-                )
-            ),
+            tuple(selections),
         )
         for type_tag, selections in sorted(aliases.items())
     )

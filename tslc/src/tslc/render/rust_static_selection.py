@@ -22,22 +22,22 @@ def rust_target_requirement_cfg(requirement: RustTargetRequirement) -> str:
 
 def rust_static_profile_cfg(selection: RustStaticProfileSelection) -> str:
     return rust_target_selection_cfg(
-        selection.requirement, selection.stronger_requirements
+        selection.requirement, selection.higher_priority_requirements
     )
 
 
 def rust_target_selection_cfg(
     requirement: RustTargetRequirement,
-    stronger_requirements: tuple[RustTargetRequirement, ...],
+    higher_priority_requirements: tuple[RustTargetRequirement, ...],
 ) -> str:
     rendered_requirement = rust_target_requirement_cfg(requirement)
-    if not stronger_requirements:
+    if not higher_priority_requirements:
         return rendered_requirement
-    stronger = ", ".join(
+    higher_priority = ", ".join(
         rust_target_requirement_cfg(item)
-        for item in stronger_requirements
+        for item in higher_priority_requirements
     )
-    return f"all({rendered_requirement}, not(any({stronger})))"
+    return f"all({rendered_requirement}, not(any({higher_priority})))"
 
 
 def rust_static_fallback_cfg(plan: RustStaticSelectionPlan) -> str:

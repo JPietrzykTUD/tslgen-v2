@@ -65,15 +65,17 @@ class RustFacadeTargetSelection:
     """One exact profile-selection predicate used by a facade representation."""
 
     requirement: RustTargetRequirement
-    stronger_requirements: tuple[RustTargetRequirement, ...]
+    higher_priority_requirements: tuple[RustTargetRequirement, ...]
 
     def __post_init__(self) -> None:
         if any(
-            not item.strictly_contains(self.requirement)
-            for item in self.stronger_requirements
+            item.target_arch != self.requirement.target_arch
+            or item == self.requirement
+            for item in self.higher_priority_requirements
         ):
             raise ValueError(
-                "Rust facade target-selection exclusions must be stronger targets"
+                "Rust facade target-selection exclusions must be distinct "
+                "same-architecture targets"
             )
 
 
@@ -83,7 +85,7 @@ class RustFacadeRepresentation:
 
     profile_name: str | None
     requirement: RustTargetRequirement | None
-    stronger_requirements: tuple[RustTargetRequirement, ...]
+    higher_priority_requirements: tuple[RustTargetRequirement, ...]
     mapping: RustStaticVectorMapping
     fallback_exclusions: tuple[RustFacadeTargetSelection, ...] = ()
     vector_descriptor: str = field(init=False)
@@ -95,7 +97,7 @@ class RustFacadeRepresentation:
             )
         if self.requirement is None and self.mapping.uses_hardware:
             raise ValueError("Rust facade fallback representations cannot use hardware")
-        if self.requirement is None and self.stronger_requirements:
+        if self.requirement is None and self.higher_priority_requirements:
             raise ValueError(
                 "Rust facade fallback exclusions must retain exact selection predicates"
             )
@@ -104,11 +106,13 @@ class RustFacadeRepresentation:
                 "Rust facade profile representations cannot have fallback exclusions"
             )
         if self.requirement is not None and any(
-            not item.strictly_contains(self.requirement)
-            for item in self.stronger_requirements
+            item.target_arch != self.requirement.target_arch
+            or item == self.requirement
+            for item in self.higher_priority_requirements
         ):
             raise ValueError(
-                "Rust facade profile exclusions must be stronger target requirements"
+                "Rust facade profile exclusions must be distinct same-architecture "
+                "target requirements"
             )
         object.__setattr__(
             self,
@@ -180,7 +184,7 @@ def _rust_facade_representation_is_active(
         return not any(
             _rust_facade_target_selection_is_active(
                 exclusion.requirement,
-                exclusion.stronger_requirements,
+                exclusion.higher_priority_requirements,
                 target_arch,
                 target_features,
             )
@@ -188,7 +192,7 @@ def _rust_facade_representation_is_active(
         )
     return _rust_facade_target_selection_is_active(
         representation.requirement,
-        representation.stronger_requirements,
+        representation.higher_priority_requirements,
         target_arch,
         target_features,
     )
@@ -196,7 +200,7 @@ def _rust_facade_representation_is_active(
 
 def _rust_facade_target_selection_is_active(
     requirement: RustTargetRequirement,
-    stronger_requirements: tuple[RustTargetRequirement, ...],
+    higher_priority_requirements: tuple[RustTargetRequirement, ...],
     target_arch: str,
     target_features: frozenset[str],
 ) -> bool:
@@ -205,9 +209,9 @@ def _rust_facade_target_selection_is_active(
     ) <= target_features:
         return False
     return not any(
-        stronger.target_arch == target_arch
-        and set(stronger.target_features) <= target_features
-        for stronger in stronger_requirements
+        higher_priority.target_arch == target_arch
+        and set(higher_priority.target_features) <= target_features
+        for higher_priority in higher_priority_requirements
     )
 
 
@@ -610,7 +614,7 @@ class RustCuratedTraitImplementation:
 class RustNativeAliasSelection:
     profile_name: str | None
     requirement: RustTargetRequirement | None
-    stronger_requirements: tuple[RustTargetRequirement, ...]
+    higher_priority_requirements: tuple[RustTargetRequirement, ...]
     lanes: int
 
     def __post_init__(self) -> None:
@@ -621,11 +625,13 @@ class RustNativeAliasSelection:
         if self.lanes <= 0:
             raise ValueError("Rust native alias selections require positive lane counts")
         if self.requirement is not None and any(
-            not item.strictly_contains(self.requirement)
-            for item in self.stronger_requirements
+            item.target_arch != self.requirement.target_arch
+            or item == self.requirement
+            for item in self.higher_priority_requirements
         ):
             raise ValueError(
-                "Rust native profile exclusions must be stronger target requirements"
+                "Rust native profile exclusions must be distinct same-architecture "
+                "target requirements"
             )
 
 

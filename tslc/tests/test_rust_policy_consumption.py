@@ -19,10 +19,17 @@ import pytest
 from tslc.api import generate_project, write_artifacts
 from tslc.backend.rust_benchmark_context import RUST_BENCHMARK_CODEGEN_CONTRACT
 from tslc.backend.rust_policy_consumption import (
+    RustPolicyConsumptionPlan,
     RustPolicyConsumptionProfile,
     join_rust_policy_consumption_profile,
     plan_rust_policy_coverage,
     plan_rust_policy_consumption,
+)
+from tslc.backend.rust_static_selection import (
+    RustStaticFallbackModule,
+    RustStaticProfileSelection,
+    RustStaticSelectionPlan,
+    RustTargetRequirement,
 )
 from tslc.backend.rust_policy_manifest import load_rust_policy_manifest
 from tslc.backend.rust_policy_selection import (
@@ -34,9 +41,59 @@ from tslc.backend.rust_policy_selection import (
 from tslc.benchmark.model import BenchmarkProfilePlan, BenchmarkProjectPlan
 from tslc.diagnostics import has_errors
 from tslc.pipeline import GenerationResult
+from tslc.render.rust_policy_consumption import (
+    plan_rust_policy_consumption_render,
+)
 
 
 RUST_POLICY_MANIFEST = load_rust_policy_manifest()
+
+
+def test_policy_render_profiles_reuse_static_selection_order() -> None:
+    high_requirement = RustTargetRequirement("x86_64", ("alpha", "sse2"))
+    low_requirement = RustTargetRequirement("x86_64", ("beta", "sse2"))
+    static = RustStaticSelectionPlan(
+        profiles=(
+            RustStaticProfileSelection(
+                "high",
+                high_requirement,
+                (),
+                (),
+                (),
+                20,
+            ),
+            RustStaticProfileSelection(
+                "low",
+                low_requirement,
+                (high_requirement,),
+                (),
+                (),
+                10,
+            ),
+        ),
+        fallback_mappings=(),
+        fallback_module=RustStaticFallbackModule((), ()),
+    )
+
+    def policy_profile(name: str) -> RustPolicyConsumptionProfile:
+        return RustPolicyConsumptionProfile(
+            backend_id="rust",
+            profile_name=name,
+            profile_family="x86",
+            manifest_hash=f"{name}-hash",
+            required_features=(),
+            decisions=(),
+        )
+
+    consumption = RustPolicyConsumptionPlan(
+        profiles=(policy_profile("low"), policy_profile("high"))
+    )
+
+    rendered = plan_rust_policy_consumption_render(consumption, static)
+
+    assert tuple(
+        profile.profile.profile_name for profile in rendered.profiles
+    ) == ("high", "low")
 
 
 @pytest.fixture(scope="module")

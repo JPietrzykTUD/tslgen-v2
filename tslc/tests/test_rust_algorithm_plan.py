@@ -224,11 +224,24 @@ def test_renamed_and_reordered_profiles_are_planned_by_exact_identity(
     base = _plan(*read, *write)
     alpha = _emitted_profile("alpha", read, write)
     beta = _emitted_profile("beta", read, write)
-    requirement = RustTargetRequirement("x86_64", ())
+    alpha_requirement = RustTargetRequirement("x86_64", ("alpha",))
+    beta_requirement = RustTargetRequirement("x86_64", ("beta",))
     alpha_selection = RustStaticProfileSelection(
-        "alpha", requirement, (), base.fallback_mappings, ()
+        "alpha",
+        alpha_requirement,
+        (beta_requirement,),
+        base.fallback_mappings,
+        (),
+        10,
     )
-    beta_selection = replace(alpha_selection, profile_name="beta")
+    beta_selection = RustStaticProfileSelection(
+        "beta",
+        beta_requirement,
+        (),
+        base.fallback_mappings,
+        (),
+        20,
+    )
     static = replace(base, profiles=(beta_selection, alpha_selection))
 
     plan = plan_rust_algorithm((beta, alpha), static)
@@ -243,7 +256,13 @@ def test_renamed_and_reordered_profiles_are_planned_by_exact_identity(
     renamed_emitted = _emitted_profile("renamed", read, write)
     renamed_static = replace(
         base,
-        profiles=(replace(alpha_selection, profile_name="renamed"),),
+        profiles=(
+            replace(
+                alpha_selection,
+                profile_name="renamed",
+                higher_priority_requirements=(),
+            ),
+        ),
     )
     renamed = plan_rust_algorithm((renamed_emitted,), renamed_static).profile(
         "renamed"

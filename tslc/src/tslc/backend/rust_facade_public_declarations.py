@@ -365,7 +365,7 @@ def rust_facade_selection_reachability(
             + excluded.target_arch
             + ":"
             + ",".join(excluded.target_features)
-            for excluded in representation.stronger_requirements
+            for excluded in representation.higher_priority_requirements
         )
     return tuple(facts)
 

@@ -289,6 +289,14 @@ prim<v:=(v,v)> add(left, right):
   to CMake modes, helper functions, and packaged assets before render-model
   construction; renderers never infer compiler selection from a compile-mode or
   profile-name literal.
+- **Rust compile-target priority**: a machine profile may declare a non-negative
+  `backend_selection_priority.rust` for deterministic selection between
+  incomparable feature sets. Strict feature supersets always precede subsets;
+  the reviewed priority is consulted only when neither feature set contains the
+  other. The Rust static-selection plan owns the resulting high-to-low order,
+  and every facade, manifest, dispatch, and benchmark-policy projection reuses
+  its mutually exclusive target predicates. Equal predicates remain an error
+  because ordering them would make one profile unreachable.
 - **Semantic overloads**: `overload_axes:` declares closed axes, values, and
   accepted operand signature kinds in source data. A primitive `overload`
   block selects one axis/value and may mark its source declaration primary.
@@ -735,7 +743,7 @@ the manifest consume the same records. A non-stable module/type may provide the
 default classification for otherwise-unrecorded descendants, while every
 stable exception remains an exact record. Rust reachability records include the
 typed target architecture,
-features, stronger-profile exclusions, and fallback selection. No compiler or
+features, higher-priority exclusions, and fallback selection. No compiler or
 maintenance path parses or hashes generated target text to reconstruct this
 contract. The schema-v3 release baseline ratchets the reviewed scalar/AVX2
 records in addition to the per-project scope-exact manifests.

@@ -21,7 +21,7 @@ pub struct GeneratedProfile {
     pub family: &'static str,
     pub target_arch: &'static str,
     pub target_features: &'static [&'static str],
-    pub stronger_requirements: &'static [GeneratedTargetRequirement],
+    pub higher_priority_requirements: &'static [GeneratedTargetRequirement],
     pub descriptor_relative_path: &'static str,
     pub descriptor: &'static str,
     pub mappings: &'static [GeneratedMapping],

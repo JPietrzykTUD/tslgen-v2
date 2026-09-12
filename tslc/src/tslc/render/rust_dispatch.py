@@ -89,15 +89,14 @@ def _builtin_slots(plan: RustDispatchPlan) -> tuple[RustDispatchSlot, ...]:
 def _requirement_names(
     slots: tuple[RustDispatchSlot, ...],
 ) -> dict[RustTargetRequirement, str]:
-    requirements = sorted(
-        {
-            entry.requirement
-            for slot in slots
-            for entry in slot.ordered_candidates
-            if entry.requirement is not None
-        },
-        key=lambda item: (item.target_arch, item.target_features),
-    )
+    requirements: list[RustTargetRequirement] = []
+    for slot in slots:
+        for entry in slot.ordered_candidates:
+            if (
+                entry.requirement is not None
+                and entry.requirement not in requirements
+            ):
+                requirements.append(entry.requirement)
     return {
         requirement: f"candidate_{index}"
         for index, requirement in enumerate(requirements)
