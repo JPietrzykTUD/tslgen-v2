@@ -40,6 +40,22 @@ inline int check_mask_bits(const char *name, typename Vec::mask_type mask,
     return detail::mask_bits_adapter<Vec>::check(name, mask, bits, authored_lanes, lanes);
 }
 
+// Verify one runtime-indexed predicate mutation against the original tiled
+// authored mask. Scalable predicate layouts provide the lane observer through
+// their existing mask adapter; generated tests do not assume a bitset ABI.
+template <class Vec>
+inline int check_mask_lane_mutation(const char *name,
+                                    typename Vec::mask_type mask,
+                                    std::uint64_t original_bits,
+                                    std::size_t authored_lanes,
+                                    std::size_t changed_lane,
+                                    bool changed_value,
+                                    std::size_t lanes) {
+    return detail::mask_bits_adapter<Vec>::check_lane_mutation(
+        name, mask, original_bits, authored_lanes, changed_lane,
+        changed_value, lanes);
+}
+
 // Lane-wise value equality. Floating-point values compare by representation except that any NaN
 // matches any NaN; operations whose source contract promises representation preservation use the
 // explicit bitwise helpers below.

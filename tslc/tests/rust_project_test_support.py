@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from tslc.backend.emitted_profile import EmittedProfile
+from tslc.backend.rust_algorithm_plan import plan_rust_algorithm
 from tslc.backend.rust_api_planner import plan_rust_facade
 from tslc.backend.rust_dispatch import plan_rust_dispatch
 from tslc.backend.rust_package import (
@@ -34,6 +35,7 @@ def render_rust_artifacts_for_test(
     package_config: RustPackageConfig = DEFAULT_RUST_PACKAGE_CONFIG,
 ) -> list[Artifact]:
     facade_plan = plan_rust_facade(profiles, static_selection_plan)
+    algorithm_plan = plan_rust_algorithm(profiles, static_selection_plan)
     dispatch_plan = plan_rust_dispatch(
         profiles,
         static_selection_plan,
@@ -48,6 +50,7 @@ def render_rust_artifacts_for_test(
         media_type=media_type,
         selection_plan=selection_plan,
         static_selection_plan=static_selection_plan,
+        algorithm_plan=algorithm_plan,
         facade_plan=facade_plan,
         dispatch_plan=dispatch_plan,
         consumption_plan=consumption_plan,

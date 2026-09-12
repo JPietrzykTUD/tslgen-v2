@@ -67,6 +67,8 @@ class GenerationRequest:
     load_policy_inputs: bool = False
     # Retain the lowered dependency graph for explicit analysis commands.
     collect_lowering_trace: bool = False
+    # Retain every selector-owned expected slot and its final generation stage.
+    collect_target_support: bool = False
     render_config: ProjectRenderConfig = DEFAULT_PROJECT_RENDER_CONFIG
 
 

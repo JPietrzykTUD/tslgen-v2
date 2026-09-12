@@ -1,7 +1,11 @@
 import type { ExplorerRange } from "./explorerModel";
 
 export type ImplementationState = "native" | "composed" | "fallback" | "unknown";
-export type ConcreteAnalysisNodeStatus = "resolved" | "unresolved" | "cycle";
+export type ConcreteAnalysisNodeStatus =
+  | "resolved"
+  | "unresolved"
+  | "cycle"
+  | "symbolic";
 
 export interface ConcreteAnalysisContext {
   readonly primitive: string;
@@ -10,6 +14,8 @@ export interface ConcreteAnalysisContext {
   readonly extension: string;
   readonly type: string;
   readonly toTarget: string | null;
+  readonly signature: string | null;
+  readonly attributes: Readonly<Record<string, string>>;
 }
 
 export interface ConcreteAnalysisLocation {
@@ -21,14 +27,20 @@ export interface ConcreteAnalysisNode {
   readonly status: ConcreteAnalysisNodeStatus;
   readonly primitive: string;
   readonly backend: string;
-  readonly extension: string;
-  readonly type: string;
+  readonly extension: string | null;
+  readonly type: string | null;
+  readonly vectorReference: string | null;
   readonly implementationState: ImplementationState;
   readonly origin: string | null;
   readonly reason: string | null;
+  readonly signature: string | null;
+  readonly attributes: Readonly<Record<string, string>>;
   readonly parameters: readonly string[];
   readonly parameterKinds: readonly string[];
-  readonly target: { readonly extension: string; readonly type: string } | null;
+  readonly target:
+    | { readonly extension: string; readonly type: string }
+    | { readonly vectorReference: string }
+    | null;
   readonly location: ConcreteAnalysisLocation | null;
   readonly dependencies: readonly ConcreteAnalysisNode[];
 }
@@ -122,6 +134,10 @@ export function analysisContextKey(context: ConcreteAnalysisContext): string {
     context.extension,
     context.type,
     context.toTarget ?? "",
+    context.signature ?? "",
+    ...Object.entries(context.attributes)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, value]) => `${key}=${value}`),
   ].join("\u0000");
 }
 
@@ -179,6 +195,8 @@ function isAnalysis(value: unknown): value is ConcreteAnalysis {
       (key) => typeof context[key] === "string",
     ) &&
     nullableString(context.toTarget) &&
+    nullableString(context.signature) &&
+    isStringRecord(context.attributes) &&
     Array.isArray(value.roots) &&
     value.roots.every(isNode)
   );
@@ -189,13 +207,18 @@ function isNode(value: unknown): value is ConcreteAnalysisNode {
     return false;
   }
   return (
-    ["resolved", "unresolved", "cycle"].includes(String(value.status)) &&
-    ["primitive", "backend", "extension", "type"].every(
+    ["resolved", "unresolved", "cycle", "symbolic"].includes(String(value.status)) &&
+    ["primitive", "backend"].every(
       (key) => typeof value[key] === "string",
     ) &&
+    nullableString(value.extension) &&
+    nullableString(value.type) &&
+    nullableString(value.vectorReference) &&
     isState(value.implementationState) &&
     nullableString(value.origin) &&
     nullableString(value.reason) &&
+    nullableString(value.signature) &&
+    isStringRecord(value.attributes) &&
     stringArray(value.parameters) &&
     stringArray(value.parameterKinds) &&
     isTarget(value.target) &&
@@ -220,8 +243,8 @@ function isTarget(value: unknown): boolean {
   return (
     value === null ||
     (isRecord(value) &&
-      typeof value.extension === "string" &&
-      typeof value.type === "string")
+      ((typeof value.extension === "string" && typeof value.type === "string") ||
+        typeof value.vectorReference === "string"))
   );
 }
 
@@ -245,6 +268,13 @@ function isPosition(value: unknown): boolean {
 
 function stringArray(value: unknown): boolean {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isStringRecord(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    Object.values(value).every((item) => typeof item === "string")
+  );
 }
 
 function nullableString(value: unknown): boolean {

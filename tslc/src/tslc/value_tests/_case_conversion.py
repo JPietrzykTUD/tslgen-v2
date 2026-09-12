@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from tslc.catalog.arithmetic import ArithmeticGuarantee, ArithmeticOperandRole
+from tslc.catalog.arithmetic import ArithmeticOperandRole
 from tslc.catalog.model import Catalog, Primitive, TestCase
-from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS
+from tslc.catalog.preconditions import (
+    PreconditionKind,
+    precondition_applies_to_type,
+)
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 from tslc.value_tests.case_helpers import (
@@ -17,6 +20,7 @@ from tslc.value_tests.case_helpers import (
     load_convert_match as _load_convert_match,
     lane_convert_match as _lane_convert_match,
     mask_inputs as _mask_inputs,
+    public_call_requires_unsafe,
     repr_cast_match as _repr_cast_match,
     sanitize as _sanitize,
     scalar_inputs as _scalar_inputs,
@@ -24,8 +28,10 @@ from tslc.value_tests.case_helpers import (
     vector_inputs as _vector_inputs,
 )
 from tslc.value_tests.lane_math import SEED_MIX_64, whole_lanes as _whole_lanes
+from tslc.value_tests.literals import mask_bits_value
 from tslc.value_tests.model import (
     HarnessPrimitiveNames,
+    ValueTestBackendSupport,
     ValueTestCasePlan,
     ValueTestDifferential,
     ValueTestExpectation,
@@ -34,6 +40,7 @@ from tslc.value_tests.model import (
     ValueTestInvocation,
     ValueTestRepresentation,
     ValueTestTarget,
+    ValueTestTargetImaskHarness,
 )
 
 
@@ -308,6 +315,11 @@ def lane_convert_case(
             values=case.expected,
             comparison=case.comparison,
         ),
+        invocation=ValueTestInvocation(
+            result_kind=match.result_kind,
+            param_kinds=match.param_kinds,
+            caller_unsafe=public_call_requires_unsafe(specs),
+        ),
         target=ValueTestTarget(
             type_tag=case.to_type,
             base_spelling=target_param.base_type_binding_spelling,
@@ -393,6 +405,7 @@ def target_imask_case(
     case: TestCase,
     specs: tuple[LoweredSpecialization, ...],
     catalog: Catalog,
+    backend: ValueTestBackendSupport,
 ) -> ValueTestCasePlan | None:
     """Plan a direct integral-mask operation whose result belongs to ToVec."""
 
@@ -441,6 +454,36 @@ def target_imask_case(
     scalar_inputs = _scalar_inputs(case)
     if source_lanes is None or target_lanes is None or len(scalar_inputs) != 1:
         return None
+    source_extension = catalog.extensions.get(match.extension_name)
+    target_extension = catalog.extensions.get(match.target.extension_isa)
+    if source_extension is None or target_extension is None:
+        return None
+    predicate_harness: ValueTestTargetImaskHarness | None = None
+    source_is_predicate = source_extension.imask_policy.kind == "same_as_mask_type"
+    target_is_predicate = target_extension.imask_policy.kind == "same_as_mask_type"
+    if source_is_predicate != target_is_predicate:
+        return None
+    if source_is_predicate:
+        source_template = source_extension.test_mask_from_bits.get(backend.backend_id)
+        target_template = target_extension.test_mask_from_bits.get(backend.backend_id)
+        check_template = target_extension.test_mask_check.get(backend.backend_id)
+        parsed_masks = tuple(mask_bits_value(value) for value in mask_inputs)
+        expected_bits = mask_bits_value(case.expected[0])
+        if (
+            source_template is None
+            or target_template is None
+            or check_template is None
+            or expected_bits is None
+            or any(value is None for value in parsed_masks)
+        ):
+            return None
+        predicate_harness = ValueTestTargetImaskHarness(
+            source_mask_from_bits_template=source_template,
+            target_mask_from_bits_template=target_template,
+            target_mask_check_template=check_template,
+            mask_bits=tuple(value for value in parsed_masks if value is not None),
+            expected_mask_bits=expected_bits,
+        )
     return ValueTestCasePlan(
         kind="target_imask",
         function_name=_function_name(name, index, case),
@@ -467,6 +510,7 @@ def target_imask_case(
             source_extension=match.extension_name,
             target_extension=match.target.extension_isa,
         ),
+        target_imask_harness=predicate_harness,
     )
 
 
@@ -588,14 +632,13 @@ def _fuzz_nonzero_argument_index(
 ) -> int | None:
     if primitive is None:
         return None
-    info = SCALAR_TYPE_INFOS.get(type_tag)
     contract = primitive.arithmetic
     if (
-        info is None
-        or info.floating
-        or contract is None
-        or not contract.has_guarantee(
-            ArithmeticGuarantee.INTEGER_ZERO_DIVISOR_FAILS
+        contract is None
+        or not any(
+            condition.kind is PreconditionKind.ACTIVE_DIVISOR_NONZERO
+            and precondition_applies_to_type(condition, type_tag)
+            for condition in primitive.preconditions
         )
     ):
         return None
@@ -672,6 +715,7 @@ def differential_cases(
                         for _name, _type, default in specs[0].generic_params
                     ),
                     immediate=immediate,
+                    caller_unsafe=public_call_requires_unsafe(specs),
                 ),
                 differential=ValueTestDifferential(
                     hardware_extension=spec.extension_name,

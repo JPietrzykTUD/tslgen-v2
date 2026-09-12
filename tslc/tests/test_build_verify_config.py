@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -30,7 +31,7 @@ from tslc.output._verify_cpp_config import effective_cpp_compiler
 from tslc.output._verify_runners import runner_prefix
 from tslc.output._verify_rust_config import effective_rust_compiler
 from tslc.output.verify_drivers import BackendPreparation, VerifyBackendDriver
-from tslc.output.verify_model import BackendToolchain
+from tslc.output.verify_model import BackendToolchain, VerifyRunnerVariant
 
 _ONEAPI_CPP_TOOL = "/opt/intel/oneapi/compiler/2025.0/bin/icpx"
 _WASI_CPP_TOOL = "/opt/wasi-sdk/bin/clang++"
@@ -126,6 +127,18 @@ def test_backend_capabilities_use_public_verify_driver_surface() -> None:
     assert not hasattr(verify_module, "rust_verify_driver")
 
 
+def test_attestation_requires_the_generated_artifact_manifest(tmp_path: Path) -> None:
+    report = verify_generated_project(
+        tmp_path,
+        VerifyProject(backends=(), input_digest="a" * 64),
+    )
+
+    assert report.attestation_path is None
+    assert [diagnostic.code for diagnostic in report.diagnostics] == [
+        "TSL-BUILD-VERIFY-ATTESTATION-IDENTITY"
+    ]
+
+
 def test_verifier_configuration_has_focused_module_ownership() -> None:
     assert effective_cpp_compiler.__module__ == "tslc.output._verify_cpp_config"
     assert effective_rust_compiler.__module__ == "tslc.output._verify_rust_config"
@@ -198,6 +211,44 @@ def test_cpp_verifier_accepts_explicit_compiler(tmp_path: Path) -> None:
     assert "-DCMAKE_LINKER=/usr/bin/ld" in seen[1].argv
     assert _env(seen[1])["CXX"] == "/usr/bin/c++"
     assert _env(seen[2])["CXX"] == "/usr/bin/c++"
+
+
+def test_cpp_quality_gate_builds_normal_include_consumer_with_strict_warnings(
+    tmp_path: Path,
+) -> None:
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="cpp",
+                root_path="cpp",
+                profiles=(VerifyProfile(profile_name="avx2", file_stem="avx2"),),
+            ),
+        )
+    )
+    seen: list[BuildCommand] = []
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        return BuildCommandResult(command=command, returncode=0)
+
+    report = verify_generated_project(
+        tmp_path,
+        project,
+        runner,
+        config=_config(cpp_compiler="/usr/bin/c++", run_quality_checks=True),
+    )
+
+    assert report.diagnostics == ()
+    assert [command.step for command in seen] == [
+        "preflight",
+        "configure",
+        "build",
+        "check-warnings",
+    ]
+    configure = seen[1]
+    quality = seen[3]
+    assert "-DTSL_STRICT_WARNINGS=ON" in configure.argv
+    assert quality.argv[-1] == "tsl_quality"
 
 
 def test_expected_compile_failure_requires_nonzero_status_and_exact_marker(
@@ -396,9 +447,11 @@ def test_rust_verifier_accepts_explicit_compiler(tmp_path: Path) -> None:
         "rustdoc",
         "clippy",
         "test",
+        "doctest",
+        "package-list",
     ]
     assert seen[0].argv[0] == sys.executable
-    warning_gate, rustdoc_gate, clippy_gate, test = seen[1:]
+    warning_gate, rustdoc_gate, clippy_gate, test, doctest, package_list = seen[1:]
     assert warning_gate.argv[:2] == ("cargo", "check")
     assert "--all-targets" in warning_gate.argv
     warning_flags = _env(warning_gate)["RUSTFLAGS"]
@@ -410,6 +463,7 @@ def test_rust_verifier_accepts_explicit_compiler(tmp_path: Path) -> None:
     assert "--no-deps" in rustdoc_gate.argv
     rustdoc_flags = _env(rustdoc_gate)["RUSTDOCFLAGS"]
     assert "-Dwarnings" in rustdoc_flags
+    assert "-Dmissing-docs" in rustdoc_flags
     assert "-Drustdoc::broken-intra-doc-links" in rustdoc_flags
     assert "-Drustdoc::bare-urls" in rustdoc_flags
     assert clippy_gate.argv[:2] == (sys.executable, "clippy")
@@ -422,6 +476,12 @@ def test_rust_verifier_accepts_explicit_compiler(tmp_path: Path) -> None:
     assert _env(test)["RUSTC"] == sys.executable
     assert "--target-dir" in test.argv
     assert str(tmp_path / "rust" / "target" / "scalar") in test.argv
+    assert doctest.argv[:2] == ("cargo", "test")
+    assert "--doc" in doctest.argv
+    assert "-Dmissing-docs" in _env(doctest)["RUSTDOCFLAGS"]
+    assert package_list.argv[:2] == ("cargo", "package")
+    assert "--list" in package_list.argv
+    assert "--no-verify" in package_list.argv
 
 
 def test_rust_verifier_reports_missing_optional_clippy_and_runs_other_gates(
@@ -462,6 +522,8 @@ def test_rust_verifier_reports_missing_optional_clippy_and_runs_other_gates(
         "check-warnings",
         "rustdoc",
         "test",
+        "doctest",
+        "package-list",
     ]
 
 
@@ -506,6 +568,8 @@ def test_rust_warning_gates_report_independent_failures(tmp_path: Path) -> None:
         "rustdoc",
         "clippy",
         "test",
+        "doctest",
+        "package-list",
     ]
     assert [diagnostic.code for diagnostic in report.diagnostics] == [
         "TSL-BUILD-VERIFY-COMMAND-FAILED",
@@ -617,6 +681,7 @@ def test_rust_build_verifier_cross_target_does_not_run_test_binary(
         "rustdoc",
         "clippy",
         "build-tests",
+        "package-list",
     ]
     assert "--target" in seen[1].argv
     assert "aarch64-unknown-linux-musl" in seen[1].argv
@@ -626,6 +691,7 @@ def test_rust_build_verifier_cross_target_does_not_run_test_binary(
     assert "aarch64-unknown-linux-musl" in build_tests.argv
     assert "--no-run" in build_tests.argv
     assert "--message-format=json" not in build_tests.argv
+    assert not any(command.step == "doctest" for command in seen)
     env = _env(build_tests)
     assert env["CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER"] == "rust-lld"
     assert (
@@ -641,6 +707,79 @@ def test_rust_build_verifier_cross_target_does_not_run_test_binary(
     ]
     assert warning_flags.startswith("-C target-feature=+neon ")
     assert "-Dwarnings" in warning_flags
+
+
+def test_rust_quality_uses_baseline_sde_profile_for_doctests(
+    tmp_path: Path,
+) -> None:
+    executable = str(tmp_path / "rust" / "target" / "debug" / "values")
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="rust",
+                root_path="rust",
+                profiles=(
+                    VerifyProfile(
+                        profile_name="avx2",
+                        file_stem="avx2",
+                        family="x86",
+                        target_features=("+avx", "+avx2", "+sse", "+sse2"),
+                        runner=VerifyRunner(kind="sde", profile="hsw"),
+                    ),
+                    VerifyProfile(
+                        profile_name="sse",
+                        file_stem="sse",
+                        family="x86",
+                        target_features=("+sse",),
+                        runner=VerifyRunner(kind="sde", profile="mrm"),
+                    ),
+                ),
+            ),
+        )
+    )
+    seen: list[BuildCommand] = []
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        if command.step == "host-target":
+            return BuildCommandResult(
+                command=command,
+                returncode=0,
+                stdout="host: x86_64-unknown-linux-gnu\n",
+            )
+        if command.step == "build-tests":
+            return BuildCommandResult(
+                command=command,
+                returncode=0,
+                stdout=json.dumps(
+                    {
+                        "reason": "compiler-artifact",
+                        "executable": executable,
+                    }
+                ),
+            )
+        return BuildCommandResult(command=command, returncode=0)
+
+    report = verify_generated_project(
+        tmp_path,
+        project,
+        runner,
+        config=_config(
+            rust_compiler=sys.executable,
+            rust_clippy_path=sys.executable,
+            sde_path=sys.executable,
+            run_quality_checks=True,
+        ),
+    )
+
+    assert report.diagnostics == ()
+    doctests = [command for command in seen if command.step == "doctest"]
+    assert len(doctests) == 1
+    assert doctests[0].profile_name == "sse"
+    assert "x86_64-unknown-linux-gnu" in doctests[0].argv
+    assert "-C target-feature=+sse" in _env(doctests[0])[
+        "RUSTDOCFLAGS"
+    ]
 
 
 def test_rust_target_preflight_failure_skips_only_that_profile(tmp_path: Path) -> None:
@@ -901,6 +1040,36 @@ def test_subprocess_runner_closes_command_stdin(tmp_path: Path) -> None:
 
     assert result.returncode == 0
     assert result.stdout.strip() == "empty"
+
+
+def test_subprocess_runner_reports_typed_command_timeout(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    command = BuildCommand(
+        backend_id="cpp",
+        profile_name="sve",
+        step="test",
+        argv=("qemu-aarch64", "tsl_values"),
+        cwd=tmp_path,
+        timeout_seconds=60,
+    )
+
+    def time_out(*args, **kwargs):
+        del args, kwargs
+        raise subprocess.TimeoutExpired(
+            command.argv,
+            command.timeout_seconds,
+            output="partial output",
+        )
+
+    monkeypatch.setattr(verify_module.subprocess, "run", time_out)
+
+    result = run_subprocess_build_command(command)
+
+    assert result.returncode == 124
+    assert result.stdout == "partial output"
+    assert "timed out after 60 seconds" in result.stderr
 
 
 def test_subprocess_runner_installs_rustc_stdin_guard_for_cargo(tmp_path: Path) -> None:
@@ -1243,6 +1412,118 @@ def test_cpp_qemu_value_tests_configure_cmake_cross_emulator(
     assert emulator.endswith(";-cpu;cortex-a76")
     assert seen[-1].argv[0] == "ctest"
     assert seen[-1].argv[-2:] == ("--timeout", "60")
+
+
+def test_cpp_runner_variants_execute_one_built_binary_for_every_vector_length(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    (tmp_path / ".tslc-manifest.json").write_text(
+        '{"version": 1, "artifacts": []}\n',
+        encoding="utf-8",
+    )
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="cpp",
+                root_path="cpp",
+                profiles=(
+                    VerifyProfile(
+                        profile_name="sve",
+                        file_stem="sve",
+                        family="aarch64",
+                        target="aarch64-linux-gnu",
+                        runner=VerifyRunner(
+                            kind="qemu-aarch64",
+                            name="vl128",
+                            profile="max,sve128=on,sve256=off",
+                            vector_bits=128,
+                            variants=(
+                                VerifyRunnerVariant(
+                                    "vl256",
+                                    "max,sve128=on,sve256=on,sve512=off",
+                                    vector_bits=256,
+                                ),
+                                VerifyRunnerVariant(
+                                    "vl512",
+                                    "max,sve512=on,sve768=off",
+                                    vector_bits=512,
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+        input_digest="a" * 64,
+    )
+    seen: list[BuildCommand] = []
+    real_which = shutil.which
+
+    def fake_which(executable: str) -> str | None:
+        if executable == "aarch64-linux-gnu-g++":
+            return executable
+        return real_which(executable)
+
+    monkeypatch.setattr(shutil, "which", fake_which)
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        return BuildCommandResult(command=command, returncode=0)
+
+    report = verify_generated_project(
+        tmp_path,
+        project,
+        runner,
+        config=_config(
+            run_value_tests=True,
+            qemu_aarch64_path=sys.executable,
+        ),
+    )
+
+    assert report.diagnostics == ()
+    assert [command.step for command in seen] == [
+        "target-preflight",
+        "clean",
+        "configure",
+        "build",
+        "build-values",
+        "test",
+        "test",
+        "test",
+    ]
+    tests = tuple(command for command in seen if command.step == "test")
+    assert tuple(
+        command.runner_variant.name
+        for command in tests
+        if command.runner_variant is not None
+    ) == ("vl128", "vl256", "vl512")
+    assert tuple(
+        command.runner_variant.vector_bits
+        for command in tests
+        if command.runner_variant is not None
+    ) == (128, 256, 512)
+    assert len({command.argv[-1] for command in tests}) == 1
+    assert tests[0].argv[0] == sys.executable
+    assert all(command.timeout_seconds == 60 for command in tests)
+    assert report.attestation_path == (
+        tmp_path / ".tslctmp/verification/attestation.json"
+    )
+    attestation = json.loads(report.attestation_path.read_text(encoding="utf-8"))
+    assert attestation["schema_version"] == 1
+    assert attestation["identity"]["input_digest"] == "a" * 64
+    assert attestation["run"]["outcome"] == "passed"
+    runner_records = [
+        command["runner"]
+        for command in attestation["run"]["commands"]
+        if command["step"] == "test"
+    ]
+    assert [record["kind"] for record in runner_records] == [
+        "qemu-aarch64",
+        "qemu-aarch64",
+        "qemu-aarch64",
+    ]
+    assert [record["vector_bits"] for record in runner_records] == [128, 256, 512]
 
 
 def test_cpp_qemu_value_tests_fall_back_to_clang_target_when_cross_gpp_missing(
@@ -1606,6 +1887,62 @@ def test_rust_qemu_value_tests_use_target_and_run_binaries(tmp_path: Path) -> No
     run_test = seen[-1]
     assert run_test.argv[0] == sys.executable
     assert run_test.argv[-3:] == ("-cpu", "cortex-a76", executable)
+
+
+def test_rust_multi_variant_runner_is_an_explicit_verification_gap(
+    tmp_path: Path,
+) -> None:
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="rust",
+                root_path="rust",
+                profiles=(
+                    VerifyProfile(
+                        profile_name="future_scalable",
+                        file_stem="future_scalable",
+                        target="aarch64-unknown-linux-musl",
+                        runner=VerifyRunner(
+                            kind="qemu-aarch64",
+                            name="vl128",
+                            profile="max,sve128=on,sve256=off",
+                            vector_bits=128,
+                            variants=(
+                                VerifyRunnerVariant(
+                                    "vl256",
+                                    "max,sve128=on,sve256=on,sve512=off",
+                                    vector_bits=256,
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
+    )
+    seen: list[BuildCommand] = []
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        return BuildCommandResult(command=command, returncode=0)
+
+    report = verify_generated_project(
+        tmp_path,
+        project,
+        runner,
+        config=_config(
+            rust_compiler=sys.executable,
+            run_value_tests=True,
+            qemu_aarch64_path=sys.executable,
+        ),
+    )
+
+    assert report.diagnostics == ()
+    assert [command.step for command in seen] == ["preflight"]
+    assert report.skipped == (
+        "rust: profile future_scalable declares 2 runner variants, but Rust "
+        "multi-variant value-test execution is not supported",
+    )
 
 
 def test_rust_wasm_value_tests_use_wasmtime_runner(tmp_path: Path) -> None:

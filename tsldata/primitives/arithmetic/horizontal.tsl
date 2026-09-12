@@ -59,9 +59,9 @@ prim<s:=v> hadd(vec):
         safety:
           internal_unsafe true
           caller_unsafe false
-          reasons [compiler_builtin]
+          reasons [compiler_builtin, intrinsic]
         implementation:
-          tsil "complete(__builtin_reduce_in_order_fadd(vec, cast<static>(base::in, 0)));"
+          tsil "complete(intrin<__builtin_reduce_in_order_fadd>(vec, cast<static>(base::in, 0)));"
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       ?i?:
         prefer_fixed_native true
@@ -181,7 +181,13 @@ prim<s:=v> hadd(vec):
           """
     [avx2_vl, sse_vl]:
       [si16, ui16]:
-        requires [avx512bw, avx512vl]
+        requires:
+          target_features [avx512bw, avx512vl]
+          compiler:
+            cpp:
+              capabilities [x86_narrow_reductions]
+            rust:
+              capabilities []
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -422,6 +428,39 @@ prim<s:=v> hadd(vec):
             }
             complete(result);
           """
+    rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(seed, call<primitive=set1[Vec]>(cast<static>(base::in, 0)));
+            var<const_infer>(reduced, intrin<vredsum, build[infix=base::in, infix_sep="_vs_"]>(
+              vec,
+              seed,
+              value(vector::runtime_length)
+            ));
+            complete(call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(reduced, 0));
+          """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(seed, call<primitive=set1[Vec]>(cast<static>(base::in, 0)));
+            var<const_infer>(reduced, intrin<vfredusum, build[infix=base::in, infix_sep="_vs_"]>(
+              vec,
+              seed,
+              value(vector::runtime_length)
+            ));
+            complete(call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(reduced, 0));
+          """
 
 prim<s:=v> hmax(vec):
   operation horizontal_max
@@ -589,7 +628,13 @@ prim<s:=v> hmax(vec):
           """
     [avx2_vl, sse_vl]:
       [si8, ui8, si16, ui16]:
-        requires [avx512bw, avx512vl]
+        requires:
+          target_features [avx512bw, avx512vl]
+          compiler:
+            cpp:
+              capabilities [x86_narrow_reductions]
+            rust:
+              capabilities []
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -781,6 +826,58 @@ prim<s:=v> hmax(vec):
             }
             complete(result);
           """
+    rvv:
+      [si8, si16, si32, si64]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(first, call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(vec, 0));
+            var<const_infer>(seed, call<primitive=set1[Vec]>(first));
+            var<const_infer>(reduced, intrin<vredmax, build[infix=base::in, infix_sep="_vs_"]>(
+              vec,
+              seed,
+              value(vector::runtime_length)
+            ));
+            complete(call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(reduced, 0));
+          """
+      [ui8, ui16, ui32, ui64]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(first, call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(vec, 0));
+            var<const_infer>(seed, call<primitive=set1[Vec]>(first));
+            var<const_infer>(reduced, intrin<vredmaxu, build[infix=base::in, infix_sep="_vs_"]>(
+              vec,
+              seed,
+              value(vector::runtime_length)
+            ));
+            complete(call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(reduced, 0));
+          """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(first, call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(vec, 0));
+            var<const_infer>(seed, call<primitive=set1[Vec]>(first));
+            var<const_infer>(reduced, intrin<vfredmax, build[infix=base::in, infix_sep="_vs_"]>(
+              vec,
+              seed,
+              value(vector::runtime_length)
+            ));
+            complete(call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(reduced, 0));
+          """
 
 prim<s:=v> hmin(vec):
   operation horizontal_min
@@ -948,7 +1045,13 @@ prim<s:=v> hmin(vec):
           """
     [avx2_vl, sse_vl]:
       [si8, ui8, si16, ui16]:
-        requires [avx512bw, avx512vl]
+        requires:
+          target_features [avx512bw, avx512vl]
+          compiler:
+            cpp:
+              capabilities [x86_narrow_reductions]
+            rust:
+              capabilities []
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -1140,6 +1243,58 @@ prim<s:=v> hmin(vec):
             }
             complete(result);
           """
+    rvv:
+      [si8, si16, si32, si64]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(first, call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(vec, 0));
+            var<const_infer>(seed, call<primitive=set1[Vec]>(first));
+            var<const_infer>(reduced, intrin<vredmin, build[infix=base::in, infix_sep="_vs_"]>(
+              vec,
+              seed,
+              value(vector::runtime_length)
+            ));
+            complete(call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(reduced, 0));
+          """
+      [ui8, ui16, ui32, ui64]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(first, call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(vec, 0));
+            var<const_infer>(seed, call<primitive=set1[Vec]>(first));
+            var<const_infer>(reduced, intrin<vredminu, build[infix=base::in, infix_sep="_vs_"]>(
+              vec,
+              seed,
+              value(vector::runtime_length)
+            ));
+            complete(call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(reduced, 0));
+          """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(first, call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(vec, 0));
+            var<const_infer>(seed, call<primitive=set1[Vec]>(first));
+            var<const_infer>(reduced, intrin<vfredmin, build[infix=base::in, infix_sep="_vs_"]>(
+              vec,
+              seed,
+              value(vector::runtime_length)
+            ));
+            complete(call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(reduced, 0));
+          """
 
 prim<s:=(m,v)> hadd(mask, vec):
   operation horizontal_add
@@ -1205,7 +1360,13 @@ prim<s:=(m,v)> hadd(mask, vec):
           tsil "complete(intrin<mask_reduce_add, build>(mask, vec));"
     [avx2_vl, sse_vl]:
       [si8, ui8, si16, ui16]:
-        requires [avx512bw, avx512vl]
+        requires:
+          target_features [avx512bw, avx512vl]
+          compiler:
+            cpp:
+              capabilities [x86_narrow_reductions]
+            rust:
+              capabilities []
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -1399,6 +1560,19 @@ prim<s:=(m,v)> hadd(mask, vec):
             }
             complete(result);
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(call<primitive=hadd[Vec]>(
+              call<primitive=mov[Vec], attrs[mask=zero]>(mask, vec)
+            ));
+          """
 
 prim<s:=(m,v)> hmax(mask, vec):
   operation horizontal_max
@@ -1553,7 +1727,13 @@ prim<s:=(m,v)> hmax(mask, vec):
           """
     [avx2_vl, sse_vl]:
       [si8, ui8, si16, ui16]:
-        requires [avx512bw, avx512vl]
+        requires:
+          target_features [avx512bw, avx512vl]
+          compiler:
+            cpp:
+              capabilities [x86_narrow_reductions]
+            rust:
+              capabilities []
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -1878,6 +2058,32 @@ prim<s:=(m,v)> hmax(mask, vec):
             }
             complete(result);
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<typed>(base::in, result, cast<static>(base::in, 0));
+            var<typed>(scalar::size, found, 0);
+            var<const_infer>(empty, call<primitive=mask_false[Vec]>());
+            loop<backend>(i, 0, value(vector::runtime_length), 1) {
+              var<const_infer>(lane_mask, call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(empty, i, 1));
+              if (call<primitive=mask_population_count[Vec]>(call<primitive=mask_binary_and[Vec]>(mask, lane_mask)) != 0) {
+                var<const_infer>(lane, call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(vec, i));
+                if (found == 0) {
+                  result = lane;
+                  found = 1;
+                } else if (lane > result) {
+                  result = lane;
+                }
+              }
+            }
+            complete(result);
+          """
 
 prim<s:=(m,v)> hmin(mask, vec):
   operation horizontal_min
@@ -2032,7 +2238,13 @@ prim<s:=(m,v)> hmin(mask, vec):
           """
     [avx2_vl, sse_vl]:
       [si8, ui8, si16, ui16]:
-        requires [avx512bw, avx512vl]
+        requires:
+          target_features [avx512bw, avx512vl]
+          compiler:
+            cpp:
+              capabilities [x86_narrow_reductions]
+            rust:
+              capabilities []
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -2352,6 +2564,32 @@ prim<s:=(m,v)> hmin(mask, vec):
                   found = 1;
                 } else if (vec[i] < result) {
                   result = vec[i];
+                }
+              }
+            }
+            complete(result);
+          """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<typed>(base::in, result, cast<static>(base::in, 0));
+            var<typed>(scalar::size, found, 0);
+            var<const_infer>(empty, call<primitive=mask_false[Vec]>());
+            loop<backend>(i, 0, value(vector::runtime_length), 1) {
+              var<const_infer>(lane_mask, call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(empty, i, 1));
+              if (call<primitive=mask_population_count[Vec]>(call<primitive=mask_binary_and[Vec]>(mask, lane_mask)) != 0) {
+                var<const_infer>(lane, call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(vec, i));
+                if (found == 0) {
+                  result = lane;
+                  found = 1;
+                } else if (lane < result) {
+                  result = lane;
                 }
               }
             }

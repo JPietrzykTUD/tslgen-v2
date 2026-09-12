@@ -9,6 +9,7 @@ from tslc.catalog.model import (
     GenericParamKind,
     PrimitiveCastMode,
     PrimitiveMaskMode,
+    PrimitivePortability,
     PrimitiveValueMode,
     RESULT_DIMENSIONS,
     RESULT_DIM_VECTOR,
@@ -56,7 +57,9 @@ KNOWN_IMMEDIATE_DISPATCH = frozenset({"literal_match"})
 KNOWN_GENERIC_PARAM_FIELDS = frozenset(
     {"kind", "default", "base_types", "specialize_base", "constraints"}
 )
-KNOWN_IMMEDIATE_PARAM_FIELDS = frozenset({"type", "value_range", "dispatch"})
+KNOWN_IMMEDIATE_PARAM_FIELDS = frozenset(
+    {"type", "value_range", "valid_range", "dispatch"}
+)
 KNOWN_RETURN_TYPE_FIELDS = RESULT_DIMENSIONS
 KNOWN_PRIMITIVE_OVERLOAD_FIELDS = frozenset({"axis", "value", "primary"})
 KNOWN_PRIMITIVE_FIELDS = frozenset(
@@ -73,6 +76,8 @@ KNOWN_PRIMITIVE_FIELDS = frozenset(
         "operation",
         "operand_roles",
         "overload",
+        "portability",
+        "preconditions",
         "param_types",
         "params",
         "return_type",
@@ -117,6 +122,16 @@ def validate_primitive(
                 cross_lane_field.field,
                 f"primitive {declaration.name!r} cross_lane value {value!r}",
                 sorted(KNOWN_BOOLEAN_VALUES),
+            )
+    for portability_field in declaration.fields_by_name("portability"):
+        value = field_text(portability_field.field)
+        allowed = tuple(item.value for item in PrimitivePortability)
+        if value not in allowed:
+            invalid_enum(
+                diagnostics,
+                portability_field.field,
+                f"primitive {declaration.name!r} portability value {value!r}",
+                allowed,
             )
     _validate_attributes(declaration.attributes, diagnostics)
     _validate_overload(declaration, diagnostics)

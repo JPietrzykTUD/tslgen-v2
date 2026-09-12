@@ -5,7 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from tslc.backend.rust_api_model import RustFacadeCoreOperationRequirement
-from tslc.catalog.memory import MemoryAccess, MemoryAddressing, MemoryAlignment
+from tslc.catalog.memory import (
+    MemoryAccess,
+    MemoryAddressing,
+    MemoryAlignment,
+    MemoryPayloadExtent,
+)
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
 
 
@@ -117,6 +122,7 @@ _CORE_OPERATION_REQUIREMENTS = (
         axis_names=("aligned",),
         memory_access=MemoryAccess.READ,
         memory_addressing=MemoryAddressing.CONTIGUOUS,
+        memory_payload_extent=MemoryPayloadExtent.VECTOR,
         memory_alignment_modes=(
             MemoryAlignment.ALIGNED,
             MemoryAlignment.UNALIGNED,
@@ -131,6 +137,7 @@ _CORE_OPERATION_REQUIREMENTS = (
         axis_names=("aligned",),
         memory_access=MemoryAccess.WRITE,
         memory_addressing=MemoryAddressing.CONTIGUOUS,
+        memory_payload_extent=MemoryPayloadExtent.VECTOR,
         memory_alignment_modes=(
             MemoryAlignment.ALIGNED,
             MemoryAlignment.UNALIGNED,

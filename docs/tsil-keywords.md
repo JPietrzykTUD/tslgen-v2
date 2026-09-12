@@ -95,7 +95,7 @@ The order matches the descriptor registry.
 | --- | --- | --- |
 | `intrin` | Call | Invoke a target intrinsic. |
 | `helper` | Call | Invoke a compiler-owned helper. |
-| `op` | Call | Render a backend-specific operator. |
+| `op` | Call | Render a typed direct operator. |
 | `var` | Call | Declare local storage. |
 | `let` | Call | Bind a lowering-time type alias. |
 | `mask` | Call | Construct or update a mask. |
@@ -222,12 +222,14 @@ op<name>(arg0, arg1, ...)
 Supported names:
 
 ```text
-add  sub  mul  bit_negate
+add  sub  mul  div  shift_right  bit_and  bit_or  bit_xor  bit_negate  negate
+equal  not_equal  less_than  greater_than  less_than_or_equal
+greater_than_or_equal
 ```
 
-Use `op` only when backend semantics or spelling differ.
-
-Portable operators can remain raw text.
+Use `op` when an operator is the direct implementation evidence for a primitive
+body or when its backend semantics or spelling differ. Ordinary target
+expressions inside an already typed composed body can remain raw text.
 
 Lowering looks up `op_<name>`.
 
@@ -387,6 +389,8 @@ mask<test, imask>(bits, lane)
 Accepted forms:
 
 ```tsil
+mem<load_scalar>(ptr)
+mem<store_scalar>(ptr, value)
 mem<copy>(dst, src, count)
 mem<set>(ptr, value, count)
 mem<alloc>(count)
@@ -394,7 +398,8 @@ mem<alloc_aligned>(count, align)
 mem<free>(ptr)
 ```
 
-Counts are byte counts.
+`load_scalar` and `store_scalar` preserve the pointer's scalar type. Counts in
+the other operations are byte counts.
 
 `alloc_aligned` keeps source order `(count, align)`.
 
@@ -593,6 +598,8 @@ Accepted forms:
 ```tsil
 call<primitive=name>(args)
 call<primitive=name[VecOrTypeArgs], attrs[key=value, ...]>(args)
+call<primitive=name[...], forward[precondition, ...]>(args)
+call<primitive=name[...], discharge[precondition, ...]>(args)
 call<primitive=@self[...], attrs[key=value, ...]>(args)
 ```
 
@@ -619,6 +626,25 @@ Lowering also forwards data-driven boolean axes.
 Rust borrows arguments when the callee expects references.
 
 Unsafe callees produce an unsafe render field.
+
+A call to a primitive with an applicable catastrophic precondition must account
+for that condition. Use `forward[...]` when the callee's bound operands are the
+exact matching caller parameters, the call preserves the vector identity and
+condition context, and the caller declares the same root precondition. The
+compiler validates parameter identities, including a mask-sensitive
+condition's control mask and memory addressing/payload facts; it does not
+interpret raw C++ or Rust expressions.
+
+Use `discharge[...]` when the implementation itself establishes the condition,
+for example by using compiler-sized local storage, sanitizing an inactive
+divisor, or relying on an already-validated compile-time immediate. A discharge
+is an explicit implementation-author assertion and remains visible in audit
+and editor tooling. It is not inferred from an `unsafe` block.
+
+When several selector bags are present, their canonical order is `attrs[...]`,
+then `forward[...]`, then `discharge[...]`. A condition may have exactly one
+disposition. Unknown, duplicate, missing, stale, ambiguous, and operand-mismatched
+dispositions are errors.
 
 <details>
 <summary>Example: current vector</summary>

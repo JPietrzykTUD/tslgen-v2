@@ -44,7 +44,7 @@ prim<s[]:=v> to_array(a):
         implementation:
           tsil """
                var<typed>(array_type<type(base::in), value(vector::length)>, tmp, value(uninit::array));
-              call<primitive=store>(tmp.data(), a);
+              call<primitive=store, discharge[contiguous_memory_extent]>(tmp.data(), a);
                complete(tmp) ;
             """
       f?:
@@ -56,7 +56,7 @@ prim<s[]:=v> to_array(a):
         implementation:
           tsil """
                var<typed>(array_type<type(base::in), value(vector::length)>, tmp, value(uninit::array));
-              call<primitive=store>(tmp.data(), a);
+              call<primitive=store, discharge[contiguous_memory_extent]>(tmp.data(), a);
                complete(tmp) ;
             """
     avx2:
@@ -69,7 +69,7 @@ prim<s[]:=v> to_array(a):
         implementation:
           tsil """
                var<typed>(array_type<type(base::in), value(vector::length)>, tmp, value(uninit::array));
-              call<primitive=store>(tmp.data(), a);
+              call<primitive=store, discharge[contiguous_memory_extent]>(tmp.data(), a);
                complete(tmp) ;
             """
       f?:
@@ -81,7 +81,7 @@ prim<s[]:=v> to_array(a):
         implementation:
           tsil """
                var<typed>(array_type<type(base::in), value(vector::length)>, tmp, value(uninit::array));
-              call<primitive=store>(tmp.data(), a);
+              call<primitive=store, discharge[contiguous_memory_extent]>(tmp.data(), a);
                complete(tmp) ;
             """
     sse:
@@ -110,7 +110,7 @@ prim<s[]:=v> to_array(a):
         implementation:
           tsil """
                var<typed>(array_type<type(base::in), value(vector::length)>, tmp, value(uninit::array));
-              call<primitive=store>(tmp.data(), a);
+              call<primitive=store, discharge[contiguous_memory_extent]>(tmp.data(), a);
                complete(tmp) ;
             """
     neon:
@@ -123,7 +123,7 @@ prim<s[]:=v> to_array(a):
         implementation:
           tsil """
                var<typed>(array_type<type(base::in), value(vector::length)>, tmp, value(uninit::array));
-              call<primitive=store>(tmp.data(), a);
+              call<primitive=store, discharge[contiguous_memory_extent]>(tmp.data(), a);
                complete(tmp) ;
             """
       f?:
@@ -135,7 +135,7 @@ prim<s[]:=v> to_array(a):
         implementation:
           tsil """
                var<typed>(array_type<type(base::in), value(vector::length)>, tmp, value(uninit::array));
-              call<primitive=store>(tmp.data(), a);
+              call<primitive=store, discharge[contiguous_memory_extent]>(tmp.data(), a);
                complete(tmp) ;
             """
     wasm128:
@@ -148,7 +148,7 @@ prim<s[]:=v> to_array(a):
         implementation:
           tsil """
                var<typed>(array_type<type(base::in), value(vector::length)>, tmp, value(uninit::array));
-              call<primitive=store>(tmp.data(), a);
+              call<primitive=store, discharge[contiguous_memory_extent]>(tmp.data(), a);
                complete(tmp) ;
             """
     sve:
@@ -161,7 +161,7 @@ prim<s[]:=v> to_array(a):
         implementation:
           tsil """
                var<typed>(array_type<type(base::in), value(vector::length)>, tmp, value(uninit::array));
-              call<primitive=store[Vec], attrs[aligned=false]>(tmp.data(), a);
+              call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(tmp.data(), a);
                complete(tmp) ;
             """
     [generic, oneapi_fpga]:
@@ -253,7 +253,7 @@ prim<v:=s[]> from_array(data):
           reasons []
         implementation:
           tsil """
-            complete(call<primitive=load[Vec], attrs[aligned=false]>(data.as_ptr()));
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(data.as_ptr()));
           """
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
@@ -278,7 +278,7 @@ prim<v:=s[]> from_array(data):
           reasons []
         implementation:
           tsil """
-            complete(call<primitive=load[Vec], attrs[aligned=false]>(data.as_ptr()));
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(data.as_ptr()));
           """
     sse:
       ?i?:
@@ -305,7 +305,7 @@ prim<v:=s[]> from_array(data):
           reasons []
         implementation:
           tsil """
-            complete(call<primitive=load[Vec], attrs[aligned=false]>(data.as_ptr()));
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(data.as_ptr()));
           """
     [avx2, avx512, neon, wasm128]:
       arith:
@@ -320,7 +320,7 @@ prim<v:=s[]> from_array(data):
           reasons []
         implementation:
           tsil """
-            complete(call<primitive=load[Vec], attrs[aligned=false]>(data.as_ptr()));
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(data.as_ptr()));
           """
 prim<s:=v[idx]> extract_value(a):
   operation extract_lane
@@ -379,13 +379,16 @@ prim<s:=v[idx]> extract_value(a):
             var<const_typed>(scalar::size, lanes_per_chunk, 64 / value(type::size_bits(base::in)));
             var<const_infer>(chunk_index, cast<static>(scalar::size, Index) / lanes_per_chunk);
             var<typed>(scalar::ui64, chunk, cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(q0)));
-            if (chunk_index == 1) { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(q0, 8))); }
-            if (chunk_index == 2) { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(q1)); }
-            if (chunk_index == 3) { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(q1, 8))); }
-            if (chunk_index == 4) { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(q2)); }
-            if (chunk_index == 5) { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(q2, 8))); }
-            if (chunk_index == 6) { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(q3)); }
-            if (chunk_index == 7) { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(q3, 8))); }
+            switch<compile>(chunk_index) {
+              1 => { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(q0, 8))); }
+              2 => { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(q1)); }
+              3 => { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(q1, 8))); }
+              4 => { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(q2)); }
+              5 => { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(q2, 8))); }
+              6 => { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(q3)); }
+              7 => { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(q3, 8))); }
+              _ => {}
+            }
             var<const_infer>(lane_shift,
               (cast<static>(scalar::size, Index) % lanes_per_chunk) * value(type::size_bits(base::in))
             );
@@ -421,9 +424,12 @@ prim<s:=v[idx]> extract_value(a):
             var<const_typed>(scalar::size, lanes_per_chunk, 64 / value(type::size_bits(base::in)));
             var<const_infer>(chunk_index, cast<static>(scalar::size, Index) / lanes_per_chunk);
             var<typed>(scalar::ui64, chunk, cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(low)));
-            if (chunk_index == 1) { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(low, 8))); }
-            if (chunk_index == 2) { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(high)); }
-            if (chunk_index == 3) { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(high, 8))); }
+            switch<compile>(chunk_index) {
+              1 => { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(low, 8))); }
+              2 => { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(high)); }
+              3 => { chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(high, 8))); }
+              _ => {}
+            }
             var<const_infer>(lane_shift,
               (cast<static>(scalar::size, Index) % lanes_per_chunk) * value(type::size_bits(base::in))
             );
@@ -455,8 +461,11 @@ prim<s:=v[idx]> extract_value(a):
             var<const_typed>(scalar::size, lanes_per_chunk, 64 / value(type::size_bits(base::in)));
             var<const_infer>(chunk_index, cast<static>(scalar::size, Index) / lanes_per_chunk);
             var<typed>(scalar::ui64, chunk, cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(a)));
-            if (chunk_index == 1) {
-              chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(a, 8)));
+            switch<compile>(chunk_index) {
+              1 => {
+                chunk = cast<static>(scalar::ui64, intrin<_mm_cvtsi128_si64>(intrin<_mm_srli_si128>(a, 8)));
+              }
+              _ => {}
             }
             var<const_infer>(lane_shift,
               (cast<static>(scalar::size, Index) % lanes_per_chunk) * value(type::size_bits(base::in))
@@ -658,6 +667,20 @@ prim<s:=v[idx]> extract_value(a):
             ));
             complete(intrin<svlastb, build>(index_lane, a));
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(
+              a,
+              cast<static>(scalar::size, Index)
+            ));
+          """
     [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga]:
       arith:
         requires:
@@ -739,6 +762,21 @@ prim<v:=(v,s)> insert_value(a, value):
               call<primitive=set1[Vec]>(value)
             ));
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(call<primitive=insert_value_at[Vec], discharge[lane_index_in_range]>(
+              a,
+              cast<static>(scalar::size, Index),
+              value
+            ));
+          """
     sse:
       f32:
         requires [sse]
@@ -793,6 +831,7 @@ prim<s:=(v,usize)> extract_value_at(data, index):
   operand_roles:
     primary data
     index index
+  preconditions [lane_index_in_range]
   brief_description "Returns the scalar lane value at a valid runtime index."
   detailed_description """
     Extracts one scalar lane from a vector register at a runtime index. The
@@ -824,6 +863,104 @@ prim<s:=(v,usize)> extract_value_at(data, index):
           reasons []
         implementation:
           tsil "complete(data);"
+    sve:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, unchecked_index]
+        implementation:
+          tsil """
+            let<type>(IndexBase, base::unsigned_of(base::in));
+            let<type>(IndexVec, vector::as_base(IndexBase));
+            var<const_infer>(index_lane, call<primitive=equal[IndexVec]>(
+              call<primitive=sequence[IndexVec]>(),
+              call<primitive=set1[IndexVec]>(cast<static>(IndexBase, index))
+            ));
+            complete(intrin<svlastb, build>(index_lane, data));
+          """
+    rvv:
+      si8:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, unchecked_index]
+        implementation:
+          tsil "complete(intrin<__riscv_vmv_x_s_i8m1_i8>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
+      ui8:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, unchecked_index]
+        implementation:
+          tsil "complete(intrin<__riscv_vmv_x_s_u8m1_u8>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
+      si16:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, unchecked_index]
+        implementation:
+          tsil "complete(intrin<__riscv_vmv_x_s_i16m1_i16>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
+      ui16:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, unchecked_index]
+        implementation:
+          tsil "complete(intrin<__riscv_vmv_x_s_u16m1_u16>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
+      si32:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, unchecked_index]
+        implementation:
+          tsil "complete(intrin<__riscv_vmv_x_s_i32m1_i32>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
+      ui32:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, unchecked_index]
+        implementation:
+          tsil "complete(intrin<__riscv_vmv_x_s_u32m1_u32>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
+      si64:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, unchecked_index]
+        implementation:
+          tsil "complete(intrin<__riscv_vmv_x_s_i64m1_i64>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
+      ui64:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, unchecked_index]
+        implementation:
+          tsil "complete(intrin<__riscv_vmv_x_s_u64m1_u64>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
+      f32:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, unchecked_index]
+        implementation:
+          tsil "complete(intrin<__riscv_vfmv_f_s_f32m1_f32>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
+      f64:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, unchecked_index]
+        implementation:
+          tsil "complete(intrin<__riscv_vfmv_f_s_f64m1_f64>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
     [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, avx2, sse_vl, sse, neon, sve, wasm128]:
       arith:
         prefer_fixed_native true
@@ -846,13 +983,13 @@ prim<s:=(v,usize)> extract_value_at(data, index):
           sve [sve]
           wasm128 [simd128]
         safety:
-          internal_unsafe false
+          internal_unsafe true
           caller_unsafe false
-          reasons []
+          reasons [unchecked_index]
         implementation:
           tsil """
             var<const_infer>(lanes, call<primitive=to_array[Vec]>(data));
-            complete(lanes[index]);
+            complete(helper<lane_get_unchecked>(lanes, index));
           """
 
 prim<v:=(v,usize,s)> insert_value_at(data, index, value):
@@ -861,6 +998,7 @@ prim<v:=(v,usize,s)> insert_value_at(data, index, value):
     primary data
     index index
     value value
+  preconditions [lane_index_in_range]
   brief_description "Returns the vector with one valid runtime-indexed lane replaced."
   detailed_description """
     Returns a vector equal to `data` except that the lane at the runtime index
@@ -895,6 +1033,48 @@ prim<v:=(v,usize,s)> insert_value_at(data, index, value):
           reasons []
         implementation:
           tsil "complete(value);"
+    sve:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(IndexBase, base::unsigned_of(base::in));
+            let<type>(IndexVec, vector::as_base(IndexBase));
+            var<const_infer>(index_lane, call<primitive=equal[IndexVec]>(
+              call<primitive=sequence[IndexVec]>(),
+              call<primitive=set1[IndexVec]>(cast<static>(IndexBase, index))
+            ));
+            complete(call<primitive=mov, attrs[mask=pass_through]>(
+              index_lane,
+              data,
+              call<primitive=set1[Vec]>(value)
+            ));
+          """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(IndexBase, base::unsigned_of(base::in));
+            let<type>(IndexVec, vector::as_base(IndexBase));
+            var<const_infer>(index_lane, call<primitive=equal[IndexVec]>(
+              call<primitive=sequence[IndexVec]>(),
+              call<primitive=set1[IndexVec]>(cast<static>(IndexBase, index))
+            ));
+            complete(call<primitive=select, attrs[mask=pass_through]>(
+              index_lane,
+              call<primitive=set1[Vec]>(value),
+              data
+            ));
+          """
     [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, avx2, sse_vl, sse, neon, sve, wasm128]:
       arith:
         prefer_fixed_native true
@@ -917,12 +1097,14 @@ prim<v:=(v,usize,s)> insert_value_at(data, index, value):
           sve [sve]
           wasm128 [simd128]
         safety:
-          internal_unsafe false
+          internal_unsafe true
           caller_unsafe false
-          reasons []
+          reasons [unchecked_index]
         implementation:
           tsil """
             var<infer>(lanes, call<primitive=to_array[Vec]>(data));
-            array<set>(lanes, index, value);
+            helper<lane_set_unchecked>(
+              address<borrow_mut>(lanes), index, value
+            );
             complete(call<primitive=from_array[Vec]>(lanes));
           """

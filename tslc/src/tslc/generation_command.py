@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 from tslc.diagnostics import format_diagnostic, has_errors
 from tslc.output.verify_model import BackendToolchain, BuildVerificationReport
-from tslc.output.writer import ArtifactWriteReport
+from tslc.output.writer import ArtifactManifestRefreshReport, ArtifactWriteReport
 from tslc.pipeline import GenerationResult
 from tslc.backend.rust_package import (
     DEFAULT_RUST_PACKAGE_CONFIG,
@@ -42,6 +42,7 @@ class GenerationCommandSettings:
     output_root: str | Path | None
     verify: bool
     run_value_tests: bool
+    run_quality_checks: bool
     fuzz: bool
     coverage: bool
     value_test_warnings: bool
@@ -55,10 +56,11 @@ class GenerationCommandSettings:
 
 @dataclass(frozen=True, slots=True)
 class GenerationPipeline:
-    """Pipeline seam: generation, artifact writing, and verification entry points."""
+    """Pipeline seam: generation, output identity, and verification entry points."""
 
     generate: Callable[..., GenerationResult]
     write: Callable[..., ArtifactWriteReport]
+    refresh_manifest: Callable[..., ArtifactManifestRefreshReport]
     verify: Callable[..., BuildVerificationReport]
 
 
@@ -71,6 +73,13 @@ def run_generation_command(
         print(
             "[error] --test requires --output-root so generated artifacts can "
             "be written before value-test verification",
+            file=sys.stderr,
+        )
+        return 1
+    if settings.run_quality_checks and settings.output_root is None:
+        print(
+            "[error] --quality requires --output-root so generated artifacts can "
+            "be written before quality verification",
             file=sys.stderr,
         )
         return 1
@@ -148,7 +157,22 @@ def run_generation_command(
             if format_report.formatted:
                 print(f"formatted {', '.join(format_report.formatted)}")
 
-        if (settings.verify or settings.run_value_tests) and result.rendered is not None:
+            if format_report.attempted:
+                # An invoked formatter may change some bytes even when it exits
+                # with an error. Reconcile exactly the manifest-owned paths before
+                # those bytes are verified or attested.
+                refresh_report = pipeline.refresh_manifest(settings.output_root)
+                for diagnostic in refresh_report.diagnostics:
+                    print(format_diagnostic(diagnostic), file=sys.stderr)
+                if has_errors(refresh_report.diagnostics):
+                    write_summary_once()
+                    return 1
+
+        if (
+            settings.verify
+            or settings.run_value_tests
+            or settings.run_quality_checks
+        ) and result.rendered is not None:
             if settings.run_value_tests:
                 runners = _configured_runner_labels(settings.runner_paths)
                 if runners:
@@ -165,11 +189,17 @@ def run_generation_command(
                 runner_paths=settings.runner_paths,
                 tool_paths=settings.tool_paths,
                 run_value_tests=settings.run_value_tests,
+                run_quality_checks=settings.run_quality_checks,
             )
             for note in verify_report.skipped:
                 print(f"[verify-skip] {note}", file=sys.stderr)
             for diagnostic in verify_report.diagnostics:
                 print(format_diagnostic(diagnostic), file=sys.stderr)
+            if verify_report.attestation_path is not None:
+                print(
+                    "wrote verification attestation to "
+                    f"{verify_report.attestation_path}"
+                )
             if settings.run_value_tests:
                 _print_test_output(verify_report)
             incomplete_value_tests = (
@@ -211,8 +241,13 @@ def _print_test_output(report: BuildVerificationReport) -> None:
         if result.command.step != "test":
             continue
         command = result.command
+        variant = (
+            ""
+            if command.runner_variant is None
+            else f" [{command.runner_variant.name}]"
+        )
         print(
-            f"[test-output] {command.backend_id} {command.profile_name}: "
+            f"[test-output] {command.backend_id} {command.profile_name}{variant}: "
             f"{shlex.join(command.argv)}"
         )
         _print_captured_stream("stdout", result.stdout)

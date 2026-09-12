@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from tslc.catalog.preconditions import PreconditionErrorKind
+from tslc.value_tests.case_components import ValueTestInvalidPreconditionValue
 from tslc.value_tests.lane_math import runtime_tile_index as _runtime_tile_index
-from tslc.value_tests.literals import cpp_literal, cpp_literal_list
+from tslc.value_tests.literals import cpp_literal, cpp_literal_list, token_truthy
 from tslc.value_tests.model import ValueTestCasePlan, ValueTestMemory
 from tslc.value_tests.render_cpp_helpers import (
     append_runtime_vector_input as _append_runtime_vector_input,
@@ -191,18 +193,26 @@ def _memory_copy(case: ValueTestCasePlan) -> str:
 def _pointer_lifetime(case: ValueTestCasePlan) -> str:
     args = ", ".join(f"static_cast<std::size_t>({value})" for value in case.inputs.scalars)
     alignment = case.inputs.scalars[1] if len(case.inputs.scalars) > 1 else None
+    expect_nonnull = token_truthy(case.expectation.values[0])
     lines = [
         f"int {case.function_name}() {{",
         f"  void* ptr = tsl::{case.call_name}({args});",
         "  int failures = 0;",
-        f'  if (ptr == nullptr) {{ std::fprintf(stderr, "FAIL {case.case_name}: null pointer\\n"); ++failures; }}',
     ]
-    if alignment is not None:
+    if expect_nonnull:
+        lines.append(
+            f'  if (ptr == nullptr) {{ std::fprintf(stderr, "FAIL {case.case_name}: null pointer\\n"); ++failures; }}'
+        )
+    else:
+        lines.append(
+            f'  if (ptr != nullptr) {{ std::fprintf(stderr, "FAIL {case.case_name}: expected null pointer\\n"); ++failures; }}'
+        )
+    if alignment is not None and expect_nonnull:
         lines.append(
             f"  if (ptr != nullptr && (reinterpret_cast<std::uintptr_t>(ptr) % "
             f"static_cast<std::size_t>({alignment})) != 0) {{ ++failures; }}"
         )
-    lines.append("  std::free(ptr);")
+    lines.append("  if (ptr != nullptr) ::tsl::detail::mem_free(ptr);")
     lines.append("  return failures;")
     lines.append("}")
     return "\n".join(lines)
@@ -212,9 +222,10 @@ def _pointer_free(case: ValueTestCasePlan) -> str:
     count = case.inputs.scalars[0]
     alignment = memory.alignment
     alloc = (
-        f"std::aligned_alloc(static_cast<std::size_t>({alignment}), static_cast<std::size_t>({count}))"
+        f"::tsl::detail::mem_alloc_aligned(static_cast<std::size_t>({alignment}), "
+        f"static_cast<std::size_t>({count}))"
         if alignment is not None
-        else f"std::malloc(static_cast<std::size_t>({count}))"
+        else f"::tsl::detail::mem_alloc(static_cast<std::size_t>({count}))"
     )
     lines = [
         f"int {case.function_name}() {{",
@@ -329,6 +340,255 @@ def _indexed_store(case: ValueTestCasePlan) -> str:
             "}",
         ]
     )
+    return "\n".join(lines)
+
+
+def _scalable_index_setup(
+    lines: list[str], case: ValueTestCasePlan
+) -> tuple[str, str]:
+    index = case.index
+    scalable = case.scalable
+    assert index is not None and index.base_spelling is not None
+    assert index.type_tag is not None and index.lanes is not None
+    assert scalable is not None and scalable.load_name is not None
+    authored = cpp_literal_list(case.inputs.vectors[1], index.type_tag)
+    lines.extend(
+        [
+            f"  using Indices = tsl::simd<{index.base_spelling}, "
+            f"tsl::{scalable.source_extension}>;",
+            "  const std::size_t index_lanes = "
+            + ("lanes;" if index.style == "pointer" else "Indices::lane_count();"),
+            f"  static const {index.base_spelling} authored_indices[{index.lanes}] = "
+            f"{{{authored}}};",
+            f"  std::vector<{index.base_spelling}> index_values(index_lanes);",
+            "  for (std::size_t i = 0; i < index_lanes; ++i) "
+            f"index_values[i] = authored_indices[{_runtime_tile_index('i', index.lanes)}];",
+        ]
+    )
+    if index.style == "pointer":
+        return "Indices", "index_values.data()"
+    lines.append(
+        f"  typename Indices::register_type indices = "
+        f"tsl::{scalable.load_name}<Indices, false>(index_values.data());"
+    )
+    return "Indices", "indices"
+
+
+def _scalable_indexed_load(case: ValueTestCasePlan) -> str:
+    scalable = case.scalable
+    memory = _memory(case)
+    index = case.index
+    assert scalable is not None and scalable.store_name is not None
+    assert index is not None and index.lanes is not None
+    assert case.invocation.immediate is not None
+    source_values = cpp_literal_list(case.inputs.vectors[0], case.type_tag)
+    expected_values = cpp_literal_list(case.expectation.values, case.type_tag)
+    lines = _scalable_header(case)
+    lines.extend(
+        [
+            f"  static const {case.base_spelling} authored_memory[{_buffer_length(case)}] = "
+            f"{{{source_values}}};",
+            f"  std::vector<{case.base_spelling}> memory(authored_memory, "
+            f"authored_memory + {_buffer_length(case)});",
+        ]
+    )
+    _indices_type, indices = _scalable_index_setup(lines, case)
+    args: list[str] = []
+    if case.inputs.masks:
+        lines.append(
+            f"  typename Vec::mask_type mask = {_scalable_mask_from_bits(case, 0)};"
+        )
+        args.append("mask")
+    args.extend(("memory.data()", indices))
+    if len(case.inputs.vectors) == 3:
+        args.append(_append_runtime_vector_input(lines, case, 2))
+    lines.extend(
+        [
+            f"  typename Vec::register_type result = "
+            f"tsl::{case.call_name}<Vec, Indices, {case.invocation.immediate}>("
+            f"{', '.join(args)});",
+            f"  static const {case.base_spelling} authored_expected[{case.lanes}] = "
+            f"{{{expected_values}}};",
+            f"  std::vector<{case.base_spelling}> expected(lanes);",
+        ]
+    )
+    if case.expectation.scalable_layout == "indexed_partial":
+        lines.extend(
+            [
+                "  for (std::size_t i = 0; i < lanes; ++i) expected[i] = 0;",
+                "  for (std::size_t i = 0; i < index_lanes && i < lanes; ++i) "
+                f"expected[i] = authored_expected["
+                f"{_runtime_tile_index('i', index.lanes)}];",
+            ]
+        )
+    else:
+        lines.append(
+            "  for (std::size_t i = 0; i < lanes; ++i) "
+            f"expected[i] = authored_expected[{_runtime_tile_index('i', case.lanes)}];"
+        )
+    lines.extend(
+        [
+            f"  std::vector<{case.base_spelling}> actual(lanes);",
+            f"  tsl::{scalable.store_name}<Vec, false>(actual.data(), result);",
+            f'  return tsl::test::check_lanes<{case.base_spelling}>('
+            f'"{case.case_name}", actual.data(), expected.data(), lanes);',
+            "}",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _scalable_indexed_store(case: ValueTestCasePlan) -> str:
+    scalable = case.scalable
+    assert scalable is not None
+    assert case.invocation.immediate is not None
+    values = _append_runtime_vector_input((lines := _scalable_header(case)), case, 0)
+    _indices_type, indices = _scalable_index_setup(lines, case)
+    lines.extend(
+        [
+            f"  std::vector<{case.base_spelling}> actual({_buffer_length(case)});",
+            f"  std::vector<{case.base_spelling}> expected({_buffer_length(case)});",
+        ]
+    )
+    args: list[str] = []
+    active = "true"
+    if case.inputs.masks:
+        lines.append(
+            f"  typename Vec::mask_type mask = {_scalable_mask_from_bits(case, 0)};"
+        )
+        args.append("mask")
+        assert scalable.mask_bits
+        active = (
+            f"(({scalable.mask_bits[0]}ull >> "
+            f"({_runtime_tile_index('i', case.lanes)})) & 1u) != 0"
+        )
+    lines.extend(
+        [
+            "  for (std::size_t i = 0; i < lanes; ++i) {",
+            f"    if ({active}) {{",
+            "      auto* destination = reinterpret_cast<"
+            f"{case.base_spelling}*>(reinterpret_cast<unsigned char*>(expected.data()) + "
+            f"static_cast<std::ptrdiff_t>(index_values[i]) * {case.invocation.immediate});",
+            "      *destination = in0[i];",
+            "    }",
+            "  }",
+        ]
+    )
+    args.extend(("actual.data()", indices, values))
+    lines.extend(
+        [
+            f"  tsl::{case.call_name}<Vec, Indices, {case.invocation.immediate}>("
+            f"{', '.join(args)});",
+            f'  return tsl::test::check_lanes<{case.base_spelling}>('
+            f'"{case.case_name}", actual.data(), expected.data(), {_buffer_length(case)});',
+            "}",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _scalable_indexed_checked(case: ValueTestCasePlan) -> str:
+    checked = case.checked_precondition
+    scalable = case.scalable
+    index = case.index
+    assert checked is not None and scalable is not None and index is not None
+    assert index.base_spelling is not None and index.type_tag is not None
+    assert index.lanes is not None and case.invocation.immediate is not None
+    lines = _scalable_header(case)
+    lines.extend(
+        [
+            f"  using Indices = tsl::simd<{index.base_spelling}, "
+            f"tsl::{scalable.source_extension}>;",
+            "  const std::size_t index_lanes = "
+            + ("lanes;" if index.style == "pointer" else "Indices::lane_count();"),
+            f"  std::vector<{index.base_spelling}> index_values(index_lanes);",
+        ]
+    )
+    if checked.invalid_value is ValueTestInvalidPreconditionValue.INDEXED_ADDRESS_OUT_OF_RANGE:
+        invalid_index = str(_buffer_length(case))
+    elif checked.invalid_value is ValueTestInvalidPreconditionValue.INDEXED_ADDRESS_MISALIGNED:
+        invalid_index = "1"
+    else:
+        raise ValueError("unsupported scalable indexed-memory checked value")
+    invalid_lane = checked.invalid_lane_index
+    assert invalid_lane is not None
+    lines.append(
+        f"  index_values[{invalid_lane}] = "
+        f"static_cast<{index.base_spelling}>({invalid_index});"
+    )
+    indices = "index_values.data()"
+    if index.style != "pointer":
+        assert scalable.load_name is not None
+        lines.append(
+            f"  typename Indices::register_type indices = "
+            f"tsl::{scalable.load_name}<Indices, false>(index_values.data());"
+        )
+        indices = "indices"
+    args: list[str] = []
+    if case.inputs.masks:
+        lines.append(
+            f"  typename Vec::mask_type mask = {_scalable_mask_from_bits(case, 0)};"
+        )
+        args.append("mask")
+    result_kind = case.invocation.result_kind
+    if result_kind == "v":
+        source = cpp_literal_list(case.inputs.vectors[0], case.type_tag)
+        lines.extend(
+            [
+                f"  static const {case.base_spelling} authored_memory[{_buffer_length(case)}] = "
+                f"{{{source}}};",
+                f"  std::vector<{case.base_spelling}> memory(authored_memory, "
+                f"authored_memory + {_buffer_length(case)});",
+            ]
+        )
+        args.extend((
+            f"tsl::span<{case.base_spelling} const>{{memory.data(), memory.size()}}",
+            indices,
+        ))
+        if len(case.inputs.vectors) == 3:
+            args.append(_append_runtime_vector_input(lines, case, 2))
+        lines.extend(
+            [
+                "  tsl::precondition_error error = tsl::precondition_error::none;",
+                f"  auto result = tsl::{case.call_name}_checked<"
+                f"Vec, Indices, {case.invocation.immediate}>("
+                f"{', '.join((*args, 'error'))});",
+                "  (void)result;",
+            ]
+        )
+        observed = "error"
+    else:
+        values = _append_runtime_vector_input(lines, case, 0)
+        lines.extend(
+            [
+                f"  std::vector<{case.base_spelling}> memory({_buffer_length(case)});",
+            ]
+        )
+        args.extend((
+            f"tsl::span<{case.base_spelling}>{{memory.data(), memory.size()}}",
+            indices,
+            values,
+        ))
+        lines.append(
+            f"  auto error = tsl::{case.call_name}_checked<"
+            f"Vec, Indices, {case.invocation.immediate}>("
+            f"{', '.join(args)});"
+        )
+        observed = "error"
+    expected_error = {
+        PreconditionErrorKind.INDEX_OUT_OF_BOUNDS: (
+            "tsl::precondition_error::index_out_of_bounds"
+        ),
+        PreconditionErrorKind.MISALIGNED: "tsl::precondition_error::misaligned",
+    }[checked.error]
+    lines.append(f"  if ({observed} != {expected_error}) return 1;")
+    if result_kind == "void":
+        lines.extend(
+            [
+                "  for (auto value : memory) if (value != 0) return 1;",
+            ]
+        )
+    lines.extend(("  return 0;", "}"))
     return "\n".join(lines)
 
 def _stream(case: ValueTestCasePlan) -> str:
@@ -521,6 +781,9 @@ __all__ = (
     "_pointer_free",
     "_indexed_load",
     "_indexed_store",
+    "_scalable_indexed_load",
+    "_scalable_indexed_store",
+    "_scalable_indexed_checked",
     "_stream",
     "_load",
     "_store",

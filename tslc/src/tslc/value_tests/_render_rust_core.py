@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 from tslc.catalog.model import TestComparison
+from tslc.catalog.preconditions import PreconditionErrorKind
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.value_tests._render_rust_helpers import (
     append_call_args,
     axis_args,
+    public_call,
     scalar_expected,
     scalar_result_type,
 )
 from tslc.value_tests.literals import rust_literal, rust_literal_list, token_truthy
 from tslc.value_tests.model import ValueTestCasePlan
+from tslc.value_tests.case_components import ValueTestInvalidPreconditionValue
 
 
 def _generic_golden(case: ValueTestCasePlan) -> str:
@@ -55,6 +58,7 @@ def _generic_golden(case: ValueTestCasePlan) -> str:
         f"{rust_raw_identifier(case.call_name)}"
         f"::<{', '.join(template_args)}>({', '.join(arg_names)})"
     )
+    call = public_call(case, call)
     if case.invocation.result_kind == "m":
         bits = ", ".join("true" if token_truthy(v) else "false" for v in case.expectation.values)
         lines.append(f"        let expected: [bool; {case.lanes}] = [{bits}];")
@@ -206,10 +210,12 @@ def _masked(case: ValueTestCasePlan) -> str:
     template_args = ["Vec"]
     if has_index_vector:
         template_args.append("Indices")
-    lines.append(
-        f"        let result = {rust_raw_identifier(case.call_name)}"
-        f"::<{', '.join(template_args)}>({', '.join(args)});"
+    call = (
+        f"{rust_raw_identifier(case.call_name)}"
+        f"::<{', '.join(template_args)}>({', '.join(args)})"
     )
+    call = public_call(case, call)
+    lines.append(f"        let result = {call};")
     lines.append(_lane_assert(case, case.lanes, "result"))
     lines.append("    }")
     return "\n".join(lines)
@@ -223,10 +229,11 @@ def _mask_result(case: ValueTestCasePlan) -> str:
         f"        type Vec = Simd<{case.base_spelling}, Generic<{case.lanes}>>;",
     ]
     args = append_call_args(lines, case)
-    lines.append(
-        f"        let result = {rust_raw_identifier(case.call_name)}"
-        f"::<Vec>({', '.join(args)});"
+    call = public_call(
+        case,
+        f"{rust_raw_identifier(case.call_name)}::<Vec>({', '.join(args)})",
     )
+    lines.append(f"        let result = {call};")
     for lane in range(case.lanes):
         bit = "true" if (expected >> lane) & 1 else "false"
         lines.append(
@@ -331,10 +338,12 @@ def _scalar_result(case: ValueTestCasePlan) -> str:
     if case.index is not None and case.index.value is not None:
         template_args.append(case.index.value)
     template_args.extend(case.invocation.generic_defaults)
-    lines.append(
-        f"        let result = {rust_raw_identifier(case.call_name)}"
-        f"::<{', '.join(template_args)}>({', '.join(args)});"
+    call = public_call(
+        case,
+        f"{rust_raw_identifier(case.call_name)}"
+        f"::<{', '.join(template_args)}>({', '.join(args)})",
     )
+    lines.append(f"        let result = {call};")
     lines.append(f"        let expected: {result_type} = {expected};")
     lines.append(
         f"        assert!(result.lane_eq(expected), "
@@ -358,10 +367,12 @@ def _scalar_vector(case: ValueTestCasePlan) -> str:
     template_args.extend(case.invocation.generic_defaults)
     template_args.extend("_" for _ in range(case.invocation.inferred_type_args))
     lines.append(f"        let expected: [{case.base_spelling}; {case.lanes}] = [{expected}];")
-    lines.append(
-        f"        let result = {rust_raw_identifier(case.call_name)}"
-        f"::<{', '.join(template_args)}>({', '.join(args)});"
+    call = public_call(
+        case,
+        f"{rust_raw_identifier(case.call_name)}"
+        f"::<{', '.join(template_args)}>({', '.join(args)})",
     )
+    lines.append(f"        let result = {call};")
     lines.append(_lane_assert(case, case.lanes, "result"))
     lines.append("    }")
     return "\n".join(lines)
@@ -401,6 +412,44 @@ def _compile_only(case: ValueTestCasePlan) -> str:
         lines.append(f"        let result = {call};")
         lines.append("        let _ = result;")
     lines.append("    }")
+    return "\n".join(lines)
+
+
+def _checked_precondition(case: ValueTestCasePlan) -> str:
+    checked = case.checked_precondition
+    assert checked is not None
+    lines = [
+        "    #[test]",
+        f"    fn {case.function_name}() {{",
+        f"        type Vec = Simd<{case.base_spelling}, Generic<{case.lanes}>>;",
+    ]
+    args = append_call_args(lines, case)
+    if checked.invalid_value is not ValueTestInvalidPreconditionValue.ACTIVE_DIVISOR_ZERO:
+        replaced_arg = args[checked.parameter_index]
+        args[checked.parameter_index] = {
+            ValueTestInvalidPreconditionValue.LANE_COUNT: "Vec::lane_count()",
+            ValueTestInvalidPreconditionValue.SIZE_MAX: "usize::MAX",
+        }[checked.invalid_value]
+        lines = [
+            line
+            for line in lines
+            if not line.startswith(f"        let {replaced_arg}:")
+        ]
+    error = {
+        PreconditionErrorKind.INDEX_OUT_OF_BOUNDS: (
+            "PreconditionError::IndexOutOfBounds"
+        ),
+        PreconditionErrorKind.ZERO_DIVISOR: "PreconditionError::ZeroDivisor",
+    }[checked.error]
+    lines.extend(
+        (
+            f"        let result = {rust_raw_identifier(case.call_name + '_checked')}"
+            f"::<Vec>({', '.join(args)});",
+            f"        assert!(matches!(result, Err({error})), "
+            f'"{case.case_name}: expected {checked.error.value}");',
+            "    }",
+        )
+    )
     return "\n".join(lines)
 
 
@@ -467,6 +516,7 @@ __all__ = [
     "_array_to_vector",
     "_broadcast",
     "_compile_only",
+    "_checked_precondition",
     "_generic_golden",
     "_immediate",
     "_lane_list",

@@ -50,6 +50,40 @@ as the style and shape reference.
   embed benchmark C++ or renderer policy in source data.
 - Unsupported combinations should remain explicit and diagnosable. Do not add
   placeholder bodies that merely make coverage appear complete.
+- Primitive families are portable by default. Use `portability target_specific`
+  only when the public operation itself is inherently target-specific and has
+  no target-independent implementation promise; never use it to excuse a
+  missing native, composed, or generic fallback.
+
+## Implementation Strategy Order
+
+Apply this order to every concrete primitive/extension/type/backend slot:
+
+1. Define the primitive's observable semantic contract and the value evidence
+   that will verify it.
+2. Prefer a native implementation when target support implements that complete
+   contract directly: an exact hardware intrinsic, a compiler-capability-gated
+   builtin or documented vector operator, or a short target-local intrinsic
+   sequence containing only irreducible representation, lane, mask, ABI, or
+   immediate mechanics. `native` means a direct target implementation; it does
+   not promise one instruction or a particular performance level.
+3. Otherwise compose the implementation from existing TSL primitives, using
+   typed TSIL calls rather than copying their intrinsic recipes.
+4. If composition needs an absent, stable, target-independent, independently
+   testable semantic operation, add and verify that prerequisite primitive
+   first. Search for aliases, keep the dependency graph acyclic, and do not add
+   a primitive merely to name target-local plumbing or an intrinsic sequence.
+5. If no honest native or composed implementation exists, use an explicit
+   generic-extension fallback when its required conversions, dispatch, backend,
+   and value semantics are available.
+6. Otherwise leave the slot explicitly unsupported with a deterministic,
+   actionable reason. Never use a placeholder or unverified target text to make
+   the slot appear implemented.
+
+Availability belongs to extension requirements, target features, compiler
+capabilities, type groups, and backend support—not profile-name branches.
+Target-local glue stays inside the native or composed implementation that owns
+it; it is not a separate fallback tier.
 
 ## Cross-Tree Workflows
 
@@ -85,6 +119,7 @@ PYTHONPATH=tslc/src python -m tslc check
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_catalog.py tslc/tests/test_catalog_validation.py
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_select_and_lower*.py tslc/tests/test_lower_*.py
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_value_test_planning.py
+./dev.sh implementation-ratchet
 git diff --check
 ```
 

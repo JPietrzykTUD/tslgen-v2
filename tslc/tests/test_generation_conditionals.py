@@ -756,7 +756,7 @@ def test_scalar_load_store_kinds(catalog: Catalog, machine_profiles) -> None:
     load = _spec(catalog, machine_profiles, "scalar", "load", "scalar", "si32")
     assert load is not None
     assert load.result_kind == "v" and load.param_kinds == ("cptr",)
-    assert "return *ptr;" in load.body_text
+    assert "return *(ptr);" in load.body_text
 
 
 def test_scalar_load_store_rust_is_unsafe(catalog: Catalog, machine_profiles) -> None:
@@ -844,14 +844,52 @@ def test_store_overload_dispatch(data_root, machine_profiles_path, tmp_path) -> 
     # C++: one impl with two `apply` overloads (vector + scalar) resolved by arg type;
     # a generic-arg wrapper.
     assert hpp.count("struct store_impl<tsl::simd<int32_t, tsl::avx2>, false>") == 1
-    assert "apply(typename Vec::base_type * ptr, typename tsl::reg_param<Vec>::type" in hpp
-    assert "apply(typename Vec::base_type * ptr, typename Vec::base_type" in hpp
+    assert (
+        "apply([[maybe_unused]] typename Vec::base_type * ptr, "
+        "[[maybe_unused]] typename tsl::reg_param<Vec>::type"
+    ) in hpp
+    assert (
+        "apply([[maybe_unused]] typename Vec::base_type * ptr, "
+        "[[maybe_unused]] typename Vec::base_type"
+    ) in hpp
     assert "class Arg1" in hpp
+    assert (
+        "store_impl<Vec, Aligned>::apply(ptr, "
+        "::tsl::detail::scalar_or_register_arg<Vec>(data, 0))"
+    ) in hpp
     rs = (tmp_path / "rust" / "src" / "tsl_avx2.rs").read_text()
     # Rust: an arg-dispatch trait implemented for each concrete argument type.
     assert "pub trait StoreImplArg" in rs
     assert "for core::arch::x86_64::__m256i {" in rs
     assert "for i32 {" in rs
+
+
+def test_scalar_vector_overload_dispatch_explicitly_normalizes_scalar_calls(
+    data_root, machine_profiles_path, tmp_path
+) -> None:
+    from tslc.api import write_artifacts  # noqa: PLC0415
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["shift_right"],
+        profiles=["sse2"],
+        backends=["cpp"],
+        type_tags=["ui16"],
+    )
+    write_artifacts(result.artifacts, tmp_path)
+    core = (
+        tmp_path / "cpp" / "include" / "tsl_core_detail_scalar.hpp"
+    ).read_text()
+    hpp = (tmp_path / "cpp" / "include" / "tsl_sse2.hpp").read_text()
+
+    assert "scalar_argument_conversion_probe(typename Vec::base_type)" in core
+    assert "scalar_or_register_arg(Arg& arg, int)" in core
+    assert "Arg& scalar_or_register_arg(Arg& arg, ...) noexcept" in core
+    assert (
+        "shift_right_impl<Vec, PreserveSign>::apply(data, "
+        "::tsl::detail::scalar_or_register_arg<Vec>(shift, 0))"
+    ) in hpp
 
 
 def test_store_scalar_dedup(data_root, machine_profiles_path, tmp_path) -> None:

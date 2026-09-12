@@ -5,6 +5,11 @@ from __future__ import annotations
 import re
 from collections import defaultdict
 
+from tslc.backend.checked_api import (
+    CheckedConditionPlan,
+    applicable_checked_api_plan,
+    public_call_requires_unsafe,
+)
 from tslc.backend.primitive_facade import (
     DataparallelPrimitiveFacadeKind,
     plan_dataparallel_primitive_facade,
@@ -34,11 +39,10 @@ from tslc.backend.rust_api_model import (
     RustFacadeTypeParameterRole,
 )
 from tslc.backend.rust_api_types import RUST_FACADE_SIGNATURE_TYPES
-from tslc.catalog.arithmetic import ArithmeticGuarantee, ArithmeticOperandRole
+from tslc.backend.rust_facade_checked import rust_facade_requires_unsafe
 from tslc.catalog.conversion import LaneCountRelation
 from tslc.catalog.memory import MemoryAccess
 from tslc.catalog.model import PrimitiveMaskMode
-from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
 from tslc.diagnostics import Diagnostic
 
@@ -221,6 +225,8 @@ def _comprehensive_method(
         if key.result_vector_param is not None
         else ()
     )
+    specializations = tuple(spec for _profile_name, spec in candidate.specs)
+    caller_unsafe = rust_facade_requires_unsafe(specializations)
     return (
         RustComprehensiveMethod(
             public_name=public_name,
@@ -234,10 +240,22 @@ def _comprehensive_method(
             result_kind=key.result_kind,
             type_tags=candidate.type_tags,
             shape_keys=(),
-            caller_unsafe=next(iter(safety_values)),
-            safety_requirements=_safety_requirements(candidate),
+            lower_call_unsafe=public_call_requires_unsafe(specializations),
+            caller_unsafe=caller_unsafe,
+            caller_unsafe_type_tags=tuple(
+                sorted(
+                    {
+                        spec.type_tag
+                        for _profile_name, spec in candidate.specs
+                        if rust_facade_requires_unsafe((spec,))
+                    }
+                )
+            ),
+            safety_requirements=(
+                _safety_requirements(candidate) if caller_unsafe else ()
+            ),
             panic_conditions=_panic_conditions(candidate),
-            bounds_checked_parameters=_bounds_checked_parameters(candidate),
+            checked_conditions=_checked_conditions(candidate),
             must_use=key.result_kind != "void",
             suppress_should_implement_trait_lint=(
                 public_name in _STANDARD_TRAIT_METHOD_NAMES
@@ -292,27 +310,26 @@ def _public_name(
     return name, None
 
 
-def _bounds_checked_parameters(candidate: _Candidate) -> tuple[str, ...]:
-    if candidate.key.operation not in {
-        PrimitiveOperation.EXTRACT_LANE,
-        PrimitiveOperation.INSERT_LANE,
-        PrimitiveOperation.INTEGRAL_MASK_TEST,
-        PrimitiveOperation.MASK_SET_LANE,
-    }:
-        return ()
-    return tuple(
-        candidate.key.param_names[index]
-        for role, index, _kind in candidate.key.operation_roles
-        if role is OperandRole.INDEX and 0 <= index < len(candidate.key.param_names)
+def _checked_conditions(candidate: _Candidate) -> tuple[CheckedConditionPlan, ...]:
+    plan = applicable_checked_api_plan(
+        tuple(spec for _profile_name, spec in candidate.specs)
     )
+    if plan is None:
+        return ()
+    return plan.conditions
 
 
 def _safety_requirements(candidate: _Candidate) -> tuple[str, ...]:
-    if not candidate.representative.safety.caller_unsafe:
+    unsafe_specs = tuple(
+        spec
+        for _profile_name, spec in candidate.specs
+        if spec.safety.caller_unsafe
+    )
+    if not unsafe_specs:
         return ()
     reasons = frozenset(
         reason
-        for _profile_name, spec in candidate.specs
+        for spec in unsafe_specs
         for reason in spec.safety.reasons
     )
     requirements: list[str] = []
@@ -328,40 +345,14 @@ def _safety_requirements(candidate: _Candidate) -> tuple[str, ...]:
             "initialization, aliasing, and extent requirements."
         )
     requirements.append(
-        "The caller must uphold every remaining source-declared safety precondition "
-        "for this primitive."
+        "The caller must uphold every remaining source-declared safety "
+        "precondition for this primitive."
     )
     return tuple(requirements)
 
 
 def _panic_conditions(candidate: _Candidate) -> tuple[str, ...]:
-    conditions = [
-        f"Panics when `{name}` is not less than `N`."
-        for name in _bounds_checked_parameters(candidate)
-    ]
-    arithmetic = candidate.representative.primitive_semantics.arithmetic
-    divisor = (
-        arithmetic.binding(ArithmeticOperandRole.DIVISOR)
-        if arithmetic is not None
-        else None
-    )
-    if (
-        arithmetic is not None
-        and arithmetic.has_guarantee(
-            ArithmeticGuarantee.INTEGER_ZERO_DIVISOR_FAILS
-        )
-        and divisor is not None
-        and divisor.parameter_kind != "sImm"
-        and any(
-            type_tag in SCALAR_TYPE_INFOS
-            and not SCALAR_TYPE_INFOS[type_tag].floating
-            for type_tag in candidate.type_tags
-        )
-    ):
-        conditions.append(
-            "For integer element types, panics when an active divisor lane is zero."
-        )
-    return tuple(conditions)
+    return ()
 
 
 def _method_for_candidate(
@@ -392,6 +383,13 @@ def _method_collision_diagnostics(
         grouped[(comprehensive_method.receiver_kind, comprehensive_method.public_name)].append(
             comprehensive_method.source_primitive_name
         )
+        if comprehensive_method.checked_conditions:
+            grouped[
+                (
+                    comprehensive_method.receiver_kind,
+                    comprehensive_method.public_name + "_checked",
+                )
+            ].append(comprehensive_method.source_primitive_name)
     for curated_method in curated:
         grouped[(curated_method.receiver_kind, curated_method.public_name)].append(
             curated_method.source_primitive_name

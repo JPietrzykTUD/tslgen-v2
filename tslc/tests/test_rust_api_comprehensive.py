@@ -12,6 +12,7 @@ from rust_api_test_support import (
     _plan,
     _spec,
 )
+from tslc.backend.checked_api import CheckedConditionPlan
 from tslc.backend.rust_api_model import (
     RustFacadeConstParameterSource,
     RustFacadeCoverageStatus,
@@ -26,13 +27,37 @@ from tslc.catalog.memory import (
     MemoryAccess,
     MemoryAddressing,
     MemoryAlignment,
+    MemoryPayloadExtent,
     PrimitiveMemoryContract,
 )
 from tslc.catalog.model import ImplementationSafety
 from tslc.catalog.overloads import ResolvedPrimitiveOverload
+from tslc.catalog.preconditions import PreconditionErrorKind, PreconditionKind
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.lower.primitive_semantics import LoweredMemoryAlignment
+from tslc.render.rust_facade_comprehensive import render_comprehensive_facade
+
+
+def test_checked_condition_rejects_memory_facts_on_non_memory_precondition() -> None:
+    with pytest.raises(
+        ValueError,
+        match="checked memory conditions require complete typed memory facts",
+    ):
+        CheckedConditionPlan(
+            kind=PreconditionKind.LANE_INDEX_IN_RANGE,
+            description="The runtime lane index is in range.",
+            unchecked_consequence="An invalid index may cause undefined behavior.",
+            parameter_name="index",
+            parameter_index=0,
+            error=PreconditionErrorKind.INDEX_OUT_OF_BOUNDS,
+            additional_errors=(),
+            applicable_type_tags=("si32",),
+            memory_access=MemoryAccess.READ,
+            memory_addressing=MemoryAddressing.CONTIGUOUS,
+            memory_payload_extents=(MemoryPayloadExtent.VECTOR,),
+            memory_alignment_axis_name="aligned",
+        )
 
 
 @pytest.mark.parametrize(
@@ -120,6 +145,155 @@ def test_public_name_components_are_composed_once(
     plan = plan_rust_facade((), _plan(spec))
 
     assert [method.public_name for method in plan.comprehensive_methods] == [expected]
+
+
+def test_declared_lane_precondition_produces_unsafe_and_checked_facade_methods() -> None:
+    spec = _spec(
+        "extract_value_at",
+        result_kind="s",
+        param_names=("data", "index"),
+        param_kinds=("v", "usize"),
+        operation=PrimitiveOperation.EXTRACT_LANE,
+        roles=(
+            (OperandRole.PRIMARY, 0, "v"),
+            (OperandRole.INDEX, 1, "usize"),
+        ),
+        preconditions=(PreconditionKind.LANE_INDEX_IN_RANGE,),
+    )
+
+    plan = plan_rust_facade((), _plan(spec))
+    method = plan.comprehensive_methods[0]
+    rendered = render_comprehensive_facade(plan).public_items
+
+    assert method.caller_unsafe
+    assert method.caller_unsafe_type_tags == ("si32",)
+    assert tuple(item.kind for item in method.checked_conditions) == (
+        PreconditionKind.LANE_INDEX_IN_RANGE,
+    )
+    assert "pub unsafe fn extract_value_at(self, index: usize)" in rendered
+    assert "pub fn extract_value_at_checked(self, index: usize)" in rendered
+    assert "if index >=" in rendered
+    assert "PreconditionError::IndexOutOfBounds" in rendered
+    assert "# Call form" in rendered
+    assert "```text" in rendered
+    assert "```ignore" not in rendered
+
+
+def test_compacted_checked_facade_checks_extent_and_conditional_alignment() -> None:
+    spec = _spec(
+        "compress_store",
+        result_kind="void",
+        param_names=("mask", "ptr", "data"),
+        param_kinds=("m", "ptr", "v"),
+        operation=PrimitiveOperation.STORE,
+        roles=(
+            (OperandRole.CONTROL_MASK, 0, "m"),
+            (OperandRole.MEMORY_DESTINATION, 1, "ptr"),
+            (OperandRole.VALUE, 2, "v"),
+        ),
+        safety=ImplementationSafety(
+            caller_unsafe=True,
+            reasons=frozenset({"raw_pointer"}),
+        ),
+        memory=PrimitiveMemoryContract(
+            MemoryAccess.WRITE,
+            MemoryAddressing.COMPACTED,
+            MemoryPayloadExtent.ACTIVE_LANES,
+        ),
+        memory_alignment=LoweredMemoryAlignment(
+            "aligned",
+            MemoryAlignment.ALIGNED,
+        ),
+        preconditions=(
+            PreconditionKind.COMPACTED_MEMORY_EXTENT,
+            PreconditionKind.SELECTED_MEMORY_ALIGNMENT,
+        ),
+    )
+    spec = replace(spec, axis=(("aligned", "true"),))
+
+    plan = plan_rust_facade((), _plan(spec))
+    rendered = render_comprehensive_facade(plan).public_items
+
+    assert "pub fn compress_store_masked_checked" in rendered
+    assert ".into_iter().filter(|active| *active).count()" in rendered
+    assert ".to_array().into_iter().any(|active| active)" in rendered
+    assert ".is_multiple_of(" in rendered
+    assert "PreconditionError::InsufficientExtent" in rendered
+    assert "PreconditionError::Misaligned" in rendered
+
+
+def test_checked_facade_is_omitted_when_a_caller_obligation_remains() -> None:
+    spec = _spec(
+        "extract_value_at",
+        result_kind="s",
+        param_names=("data", "index"),
+        param_kinds=("v", "usize"),
+        operation=PrimitiveOperation.EXTRACT_LANE,
+        roles=(
+            (OperandRole.PRIMARY, 0, "v"),
+            (OperandRole.INDEX, 1, "usize"),
+        ),
+        preconditions=(PreconditionKind.LANE_INDEX_IN_RANGE,),
+        safety=ImplementationSafety(
+            caller_unsafe=True,
+            reasons=("unmatched_test_obligation",),
+        ),
+    )
+
+    plan = plan_rust_facade((), _plan(spec))
+    method = plan.comprehensive_methods[0]
+    rendered = render_comprehensive_facade(plan).public_items
+
+    assert method.caller_unsafe
+    assert method.caller_unsafe_type_tags == ("si32",)
+    assert method.checked_conditions == ()
+    assert "extract_value_at_checked" not in rendered
+
+
+def test_total_integral_mask_test_does_not_infer_a_bounds_check() -> None:
+    spec = _spec(
+        "test_imask",
+        result_kind="im",
+        param_names=("mask", "index"),
+        param_kinds=("im", "usize"),
+        operation=PrimitiveOperation.INTEGRAL_MASK_TEST,
+        roles=(
+            (OperandRole.PRIMARY, 0, "im"),
+            (OperandRole.INDEX, 1, "usize"),
+        ),
+    )
+
+    plan = plan_rust_facade((), _plan(spec))
+    method = plan.comprehensive_methods[0]
+    rendered = render_comprehensive_facade(plan).public_items
+
+    assert not method.caller_unsafe
+    assert method.checked_conditions == ()
+    assert "test_imask_checked" not in rendered
+    assert "assert!(index" not in rendered
+
+
+def test_generated_checked_name_collision_is_diagnosed() -> None:
+    lane = _spec(
+        "lane_at",
+        result_kind="s",
+        param_names=("data", "index"),
+        param_kinds=("v", "usize"),
+        operation=PrimitiveOperation.EXTRACT_LANE,
+        roles=(
+            (OperandRole.PRIMARY, 0, "v"),
+            (OperandRole.INDEX, 1, "usize"),
+        ),
+        preconditions=(PreconditionKind.LANE_INDEX_IN_RANGE,),
+    )
+    authored_collision = _spec("lane_at_checked")
+
+    with pytest.raises(RustFacadePlanningError) as raised:
+        plan_rust_facade((), _plan(lane, authored_collision))
+
+    assert {
+        item.code for item in raised.value.diagnostics
+    } == {"TSL-BACKEND-RUST-FACADE-NAME-COLLISION"}
 
 
 def test_receiver_is_finalized_before_explicit_arguments() -> None:
@@ -237,6 +411,7 @@ def test_vector_value_role_is_a_coherent_receiver() -> None:
                 memory=PrimitiveMemoryContract(
                     MemoryAccess.WRITE,
                     MemoryAddressing.CONTIGUOUS,
+                    MemoryPayloadExtent.VECTOR,
                 ),
                 mask_policy="pass_through",
             )
@@ -262,6 +437,7 @@ def test_curated_unmasked_memory_shapes_are_not_duplicated() -> None:
         memory=PrimitiveMemoryContract(
             MemoryAccess.WRITE,
             MemoryAddressing.CONTIGUOUS,
+            MemoryPayloadExtent.VECTOR,
         ),
     )
     vector_store = replace(
@@ -300,6 +476,11 @@ def test_curated_unmasked_memory_shapes_are_not_duplicated() -> None:
                     (OperandRole.VALUE, 1, "s"),
                 ),
                 ("destination", "value"),
+            ),
+            memory=PrimitiveMemoryContract(
+                MemoryAccess.WRITE,
+                MemoryAddressing.CONTIGUOUS,
+                MemoryPayloadExtent.SCALAR,
             ),
             memory_alignment=LoweredMemoryAlignment(
                 "aligned", MemoryAlignment.UNALIGNED
@@ -377,11 +558,17 @@ def test_semantically_renamed_memory_primitives_feed_the_curated_core() -> None:
     assert memory_bindings[PrimitiveOperation.LOAD].memory_access is (
         MemoryAccess.READ
     )
+    assert memory_bindings[PrimitiveOperation.LOAD].memory_payload_extent is (
+        MemoryPayloadExtent.VECTOR
+    )
     assert memory_bindings[PrimitiveOperation.STORE].source_primitive_name == (
         "write_contiguous"
     )
     assert memory_bindings[PrimitiveOperation.STORE].memory_addressing is (
         MemoryAddressing.CONTIGUOUS
+    )
+    assert memory_bindings[PrimitiveOperation.STORE].memory_payload_extent is (
+        MemoryPayloadExtent.VECTOR
     )
     assert {
         (delegate.role, delegate.source_primitive_name)
@@ -424,6 +611,7 @@ def test_memory_access_must_agree_with_the_typed_operation() -> None:
         memory=PrimitiveMemoryContract(
             MemoryAccess.WRITE,
             MemoryAddressing.CONTIGUOUS,
+            MemoryPayloadExtent.VECTOR,
         ),
     )
 

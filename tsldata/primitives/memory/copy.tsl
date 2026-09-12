@@ -43,8 +43,7 @@ prim<void:=(ptr,cptr,s,s)> memory_cp(dst, src, count_bytes, copy_kind):
           reasons [raw_memory, raw_pointer]
         implementation:
           tsil """
-              var<const_infer>(_copy_kind, copy_kind);
-              mem<copy>(cast<reinterpret, type=ptr>(void, dst), cast<reinterpret, type=const_ptr>(void, src), count_bytes);
+              mem<copy>(cast<reinterpret, type=ptr>(void, dst), cast<reinterpret, type=const_ptr>(void, src), cast<static>(scalar::size, count_bytes));
             """
       arith:
         prefer_fixed_native true
@@ -72,6 +71,16 @@ prim<void:=(ptr,cptr,s,s)> memory_cp(dst, src, count_bytes, copy_kind):
           reasons [raw_memory, raw_pointer]
         implementation:
           tsil """
-              var<const_infer>(_copy_kind, copy_kind);
-              mem<copy>(cast<reinterpret, type=ptr>(void, dst), cast<reinterpret, type=const_ptr>(void, src), count_bytes);
+              mem<copy>(cast<reinterpret, type=ptr>(void, dst), cast<reinterpret, type=const_ptr>(void, src), cast<static>(scalar::size, count_bytes));
             """
+    rvv:
+      [ptr, arith]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_memory, raw_pointer]
+        implementation:
+          tsil """
+            mem<copy>(cast<reinterpret, type=ptr>(void, dst), cast<reinterpret, type=const_ptr>(void, src), cast<static>(scalar::size, count_bytes));
+          """

@@ -25,6 +25,13 @@ from tslc.backend.rust_api_model import (
     RustNativeAlias,
     RustNativeAliasSelection,
 )
+from tslc.backend.rust_facade_public_declarations import (
+    rust_bit_conversion_declaration,
+    rust_curated_method_declaration,
+    rust_facade_core_declaration_holes,
+    rust_facade_type_declaration_holes,
+    rust_numeric_cast_declaration,
+)
 from tslc.compiler_assets import RenderAssets
 from tslc.render.rust_facade_common import (
     arm_selection_cfg as _arm_selection_cfg,
@@ -42,6 +49,8 @@ def rust_facade_module(plan: RustFacadePlan, assets: RenderAssets) -> str:
     comprehensive = render_comprehensive_facade(plan)
     return assets.fill(
         "rust_facade.rs.tmpl",
+        **rust_facade_type_declaration_holes(),
+        **rust_facade_core_declaration_holes(),
         comprehensive_private_traits=comprehensive.private_traits,
         comprehensive_private_impls=comprehensive.private_impls,
         comprehensive_items=comprehensive.public_items,
@@ -148,16 +157,18 @@ def _facade_impl(
             "    }",
             "",
             "    #[inline]",
-            "    fn extract_lane(value: Self::Vector, index: usize) -> Self {",
-            f"        {invoke('extract_lane')}",
+            "    unsafe fn extract_lane(value: Self::Vector, index: usize) -> Self {",
+            "        // SAFETY: forwarded from the private facade boundary.",
+            f"        unsafe {{ {invoke('extract_lane')} }}",
             "    }",
             "",
             "    #[inline]",
             (
-                "    fn insert_lane(value: Self::Vector, index: usize, "
+                "    unsafe fn insert_lane(value: Self::Vector, index: usize, "
                 "lane: Self) -> Self::Vector {"
             ),
-            f"        {invoke('insert_lane')}",
+            "        // SAFETY: forwarded from the private facade boundary.",
+            f"        unsafe {{ {invoke('insert_lane')} }}",
             "    }",
             "",
             "    #[inline]",
@@ -206,8 +217,9 @@ def _facade_impl(
             "    }",
             "",
             "    #[inline]",
-            "    fn mask_set(value: Self::Mask, index: usize, active: bool) -> Self::Mask {",
-            f"        {invoke('mask_set_lane')}",
+            "    unsafe fn mask_set(value: Self::Mask, index: usize, active: bool) -> Self::Mask {",
+            "        // SAFETY: forwarded from the private facade boundary.",
+            f"        unsafe {{ {invoke('mask_set_lane')} }}",
             "    }",
             "",
             "    #[inline]",
@@ -245,17 +257,12 @@ def _conversion_methods(plan: RustFacadePlan) -> str:
         for method in plan.curated_methods
     ):
         return ""
+    declaration = rust_numeric_cast_declaration()
     return "\n".join(
         (
             "    /// Numerically converts each lane while preserving the lane count.",
-            "    #[inline]",
-            "    #[must_use]",
-            "    #[allow(private_bounds)]",
-            "    pub fn cast<U>(self) -> Simd<U, N>",
-            "    where",
-            "        U: SupportedSimd<N>,",
-            "        T: private::ConvertTo<U, N>,",
-            "    {",
+            *(_indent(attribute, 4) for attribute in declaration.attributes),
+            _indent(declaration.render_definition_head(), 4),
             "        Simd {",
             (
                 "            value: <T as private::ConvertTo<U, N>>::"
@@ -269,7 +276,7 @@ def _conversion_methods(plan: RustFacadePlan) -> str:
 
 def _conversion_pair_impls(plan: RustFacadePlan) -> str:
     return "\n\n".join(
-        _conversion_pair_impl(arm)
+        _conversion_pair_impl(method, arm)
         for method in plan.curated_methods
         if method.kind is RustCuratedMethodKind.NUMERIC_CAST
         for arm in method.conversion_implementation_arms
@@ -277,10 +284,14 @@ def _conversion_pair_impls(plan: RustFacadePlan) -> str:
 
 
 def _conversion_pair_impl(
+    method: RustCuratedMethod,
     arm: RustFacadeConversionImplementationArm,
 ) -> str:
     source = arm.source_shape
     target = arm.target_shape
+    call = _lower_call_expression(arm.call)
+    if method.lower_call_unsafe:
+        call = f"unsafe {{ {call} }}"
     return "\n".join(
         (
             _cfg_attribute(_arm_selection_cfg(arm.selection)),
@@ -294,7 +305,15 @@ def _conversion_pair_impl(
                 f"<{target.base_spelling} as "
                 f"private::Representation<{source.lanes}>>::Vector {{"
             ),
-            f"        {_lower_call_expression(arm.call)}",
+            *(
+                (
+                    "        // SAFETY: source and target facade shapes have the "
+                    "same logical lane count.",
+                )
+                if method.lower_call_unsafe
+                else ()
+            ),
+            f"        {call}",
             "    }",
             "}",
         )
@@ -323,18 +342,15 @@ def _curated_method_impl(
     vector = f"Simd<{shape.base_spelling}, {shape.lanes}>"
     mask = f"Mask<{shape.base_spelling}, {shape.lanes}>"
     call = _lower_call_expression(arm.call)
+    declaration = rust_curated_method_declaration(method, arm)
     if method.kind is RustCuratedMethodKind.SELECTION:
         return "\n".join(
             (
                 _cfg_attribute(_arm_selection_cfg(arm.selection)),
                 f"impl {mask} {{",
                 "    /// Selects `true_values` on active lanes.",
-                "    #[inline]",
-                "    #[must_use]",
-                (
-                    f"    pub fn {method.public_name}(self, true_values: {vector}, "
-                    f"false_values: {vector}) -> {vector} {{"
-                ),
+                *(_indent(attribute, 4) for attribute in declaration.attributes),
+                _indent(declaration.render_definition_head(), 4),
                 f"        Simd::<{shape.base_spelling}, {shape.lanes}> {{",
                 f"            value: {call},",
                 "        }",
@@ -347,11 +363,8 @@ def _curated_method_impl(
             _cfg_attribute(_arm_selection_cfg(arm.selection)),
             f"impl {vector} {{",
             "    /// Compares corresponding lanes.",
-            "    #[inline]",
-            "    #[must_use]",
-            (
-                f"    pub fn {method.public_name}(self, other: Self) -> {mask} {{"
-            ),
+            *(_indent(attribute, 4) for attribute in declaration.attributes),
+            _indent(declaration.render_definition_head(), 4),
             f"        Mask::<{shape.base_spelling}, {shape.lanes}> {{",
             f"            value: {call},",
             "        }",
@@ -725,18 +738,14 @@ def _bit_method_impl(
     float_vector = f"Simd<{float_shape.base_spelling}, {float_shape.lanes}>"
     bits_vector = f"Simd<{bits_shape.base_spelling}, {bits_shape.lanes}>"
     to_bits = arm.direction is RustFacadeBitConversionDirection.TO_BITS
-    if to_bits:
-        signature = f"    pub fn to_bits(self) -> {bits_vector} {{"
-    else:
-        signature = f"    pub fn from_bits(bits: {bits_vector}) -> Self {{"
+    declaration = rust_bit_conversion_declaration(arm)
     return "\n".join(
         (
             _cfg_attribute(_arm_selection_cfg(arm.conversion.selection)),
             f"impl {float_vector} {{",
             "    /// Reinterprets the same-width lane bit patterns.",
-            "    #[inline]",
-            "    #[must_use]",
-            signature,
+            *(_indent(attribute, 4) for attribute in declaration.attributes),
+            _indent(declaration.render_definition_head(), 4),
             (
                 f"        Simd::<{bits_shape.base_spelling}, {bits_shape.lanes}> {{"
                 if to_bits
@@ -782,6 +791,11 @@ def _array_from_impls(plan: RustFacadePlan) -> str:
             )
         )
     return "\n\n".join(blocks)
+
+
+def _indent(text: str, spaces: int) -> str:
+    prefix = " " * spaces
+    return "\n".join(f"{prefix}{line}" if line else "" for line in text.splitlines())
 
 
 __all__ = ("rust_facade_module",)

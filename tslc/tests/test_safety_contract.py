@@ -17,8 +17,13 @@ from tslc.backend.cpp import CppBackend
 from tslc.backend.rust import RustBackend
 from tslc.backend.registry import create_backend_dialect
 from tslc.catalog.builder import CatalogBuilder
+from tslc.catalog.call_preconditions import (
+    CallPreconditionObligation,
+    CallPreconditionObligationStatus,
+)
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog, ImplementationSafety
+from tslc.catalog.preconditions import PreconditionKind
 from tslc.catalog.signatures import parse_signature
 from tslc.catalog.validation import validate_catalog
 from tslc.compiler_assets import load_default_tsl_grammar
@@ -83,6 +88,50 @@ def test_malformed_implementation_safety_is_diagnosed() -> None:
     assert "TSL-CATALOG-UNKNOWN-FIELD" in codes
 
 
+def test_pointer_parameter_without_caller_obligation_remains_publicly_safe() -> None:
+    diagnostics, catalog = _catalog_from_source(
+        "target_families:\n"
+        "  known_extension_families [scalar]\n"
+        "  universal_extension_families [scalar]\n"
+        "  profile_families:\n"
+        "    generic:\n"
+        "      extension_families []\n"
+        + _base_source(
+            "    scalar:\n"
+            "      ints:\n"
+            "        safety:\n"
+            "          internal_unsafe false\n"
+            "          caller_unsafe false\n"
+            "          reasons []\n"
+            "        implementation:\n"
+            '          tsil "ptr;"\n'
+        ).replace("prim<v:=v> id(data):", "prim<void:=(ptr)> observe(ptr):")
+    )
+    assert diagnostics == ()
+    profile = MachineProfile(
+        name="fixture",
+        family="generic",
+        features=frozenset(),
+        alternatives={},
+    )
+    selected = Selector().select_profile(
+        catalog, profile, "observe", ("si32",)
+    ).selected
+    assert len(selected) == 1
+
+    lowering = Lowerer().lower(
+        selected[0], catalog, create_backend_dialect(catalog, "rust")
+    )
+    lowered = lowering.specialization
+
+    assert lowered is not None, lowering.diagnostics
+    assert lowered.safety == ImplementationSafety()
+    assert lowered.body.requires_unsafe is False
+    rendered = RustBackend().render_primitive("observe", (lowered,))
+    assert "pub fn observe(ptr: *mut i32)" in rendered
+    assert "pub unsafe fn observe" not in rendered
+
+
 def test_safety_inside_implementation_body_is_diagnosed() -> None:
     diagnostics, _ = _catalog_from_source(
         _base_source(
@@ -136,6 +185,43 @@ def test_caller_unsafe_callees_transitively_require_internal_unsafe() -> None:
     assert "raw_pointer" in caller.spec.safety.reasons
     assert caller.spec.body.requires_unsafe is False
     assert caller.spec.body_text == "return callee::<Self>(data);"
+
+
+def test_unresolved_call_preconditions_propagate_through_recursive_closure() -> None:
+    obligation = CallPreconditionObligation(
+        callee_condition=PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
+        disposition=None,
+        status=CallPreconditionObligationStatus.MISSING,
+        reason="fixture missing disposition",
+    )
+    leaf = _slot("leaf")
+    leaf.spec = replace(
+        leaf.spec,
+        unresolved_call_preconditions=(obligation,),
+    )
+    equivalent_leaf = _slot("leaf")
+    middle_dependency = CallDependency(
+        primitive="leaf",
+        mask_policy=None,
+        source=VectorIdentity("si32", "scalar"),
+    )
+    middle = _slot("middle", callees=frozenset({middle_dependency}))
+    root_dependency = CallDependency(
+        primitive="middle",
+        mask_policy=None,
+        source=VectorIdentity("si32", "scalar"),
+    )
+    root = _slot("root", callees=frozenset({root_dependency}))
+
+    _propagate_transitive_call_facts(
+        [root, middle, leaf, equivalent_leaf],
+        frozenset(),
+    )
+
+    assert leaf.spec.unresolved_call_preconditions == (obligation,)
+    assert equivalent_leaf.spec.unresolved_call_preconditions == (obligation,)
+    assert middle.spec.unresolved_call_preconditions == (obligation,)
+    assert root.spec.unresolved_call_preconditions == (obligation,)
 
 
 def test_transitive_safety_keeps_runtime_and_immediate_overloads_distinct() -> None:
@@ -963,13 +1049,15 @@ def test_primitive_corpus_implementation_bodies_have_local_safety(
     assert missing == []
 
 
-def test_primitive_corpus_safety_covers_direct_unsafe_facts(
+def test_current_primitive_corpus_safety_covers_reviewed_unsafe_facts(
     catalog: Catalog,
 ) -> None:
     violations: list[str] = []
     for primitive in catalog.primitives:
         shape = parse_signature(primitive.signature)
-        has_pointer_parameter = shape is not None and "ptr" in shape.param_kinds
+        has_pointer_parameter = shape is not None and any(
+            kind in {"cptr", "ptr"} for kind in shape.param_kinds
+        )
         for implementation in primitive.implementations:
             location = (
                 f"{implementation.source.path}:{implementation.source.line}"
@@ -992,6 +1080,10 @@ def test_primitive_corpus_safety_covers_direct_unsafe_facts(
                 token="mem<",
                 reason="raw_memory",
             )
+            # Every pointer-bearing primitive in the current corpus performs
+            # caller-sensitive memory access. Keep that reviewed source fact
+            # explicit without making pointer syntax a compiler inference; an
+            # opaque-pointer counterexample is covered above.
             if has_pointer_parameter:
                 if (
                     not implementation.safety.internal_unsafe

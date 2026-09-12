@@ -157,7 +157,6 @@ def create_server(
                 server,
                 state,
                 workspace.generation,
-                debounce=False,
             )
 
     @server.feature(types.TEXT_DOCUMENT_DID_OPEN)
@@ -692,6 +691,7 @@ def _primitive_explorer_payload(
             {
                 "name": primitive.name,
                 "signatures": list(primitive.signatures),
+                "preconditions": list(primitive.preconditions),
                 "definitions": [
                     _location_payload(span, workspace, texts)
                     for span in primitive.definitions
@@ -700,6 +700,15 @@ def _primitive_explorer_payload(
                 "totalSlots": primitive.total_slots,
                 "calls": list(primitive.calls),
                 "calledBy": list(primitive.called_by),
+                "callPreconditions": [
+                    {
+                        "callee": item.callee,
+                        "condition": item.condition,
+                        "disposition": item.disposition,
+                        "sites": item.sites,
+                    }
+                    for item in primitive.call_preconditions
+                ],
             }
             for primitive in explorer.primitives
         ],

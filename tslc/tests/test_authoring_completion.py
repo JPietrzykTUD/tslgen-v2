@@ -101,6 +101,19 @@ def test_empty_file_and_primitive_header_complete_declarations_and_shapes(
             {"kind", "requires"},
         ),
         (
+            "prim<v:=(v,sImm)> probe(value, index):\n"
+            "  params:\n"
+            "    index:\n"
+            "      type si32\n",
+            "prim<v:=(v,sImm)> probe(value, index):\n"
+            "  params:\n"
+            "    index:\n"
+            "      type si32\n"
+            "      ",
+            {"value_range", "valid_range", "dispatch"},
+            {"type", "requires"},
+        ),
+        (
             "extension sample:\n  active_when:\n    target_features [sse]\n",
             "extension sample:\n  active_when:\n    target_features [sse]\n    ",
             {"compile_modes"},
@@ -109,7 +122,12 @@ def test_empty_file_and_primitive_header_complete_declarations_and_shapes(
         (
             "extension sample:\n  cpp:\n    supported true\n",
             "extension sample:\n  cpp:\n    supported true\n    ",
-            {"headers", "compiler_capabilities", "dataparallel_inference"},
+            {
+                "headers",
+                "system_headers",
+                "compiler_capabilities",
+                "dataparallel_inference",
+            },
             {"supported", "active_when"},
         ),
         (
@@ -172,6 +190,43 @@ def test_requires_and_datatype_lists_use_distinct_vocabularies(
 
     assert {"si8", "si16", "si32", "si64"} <= datatypes
     assert "avx512_fp16" not in datatypes
+
+
+def test_register_multiplicity_completion_follows_the_extension_schema(
+    catalog: Catalog,
+) -> None:
+    baseline = (
+        "extension sample:\n"
+        "  register_multiplicity_types:\n"
+        "    x2:\n"
+        "      si16:\n"
+        '        cpp "pair"\n'
+    )
+
+    multiplicities = _labels(
+        catalog,
+        baseline,
+        "extension sample:\n  register_multiplicity_types:\n    x",
+    )
+    type_selectors = _labels(
+        catalog,
+        baseline,
+        "extension sample:\n  register_multiplicity_types:\n    x2:\n      si",
+    )
+    backends = _labels(
+        catalog,
+        baseline,
+        (
+            "extension sample:\n  register_multiplicity_types:\n"
+            "    x2:\n      si16:\n        "
+        ),
+    )
+
+    assert {"x2", "x4", "x8"} <= multiplicities
+    assert {"si8", "si16", "si32", "si64"} <= type_selectors
+    assert "rust" in backends
+    assert "cpp" not in backends
+
 
 def test_compiler_requires_completion_is_backend_and_capability_scoped(
     catalog: Catalog,
@@ -433,6 +488,44 @@ def test_operation_completion_projects_horizontal_add_from_typed_vocabulary(
     }
 
 
+def test_portability_completion_uses_the_typed_vocabulary(catalog: Catalog) -> None:
+    baseline = (
+        "prim<usize:=(ptr)> probe(out):\n"
+        "  portability target_specific\n"
+    )
+    edited = baseline.split("target_specific", 1)[0] + "target_"
+
+    assert _labels(catalog, baseline, edited) == {"target_specific"}
+
+
+def test_operation_completion_projects_remaining_memory_semantics(
+    catalog: Catalog,
+) -> None:
+    scalar_load = (
+        "prim<s:=cptr> probe(ptr):\n"
+        "  operation load_scalar\n"
+        "  operand_roles:\n"
+        "    memory_source ptr\n"
+    )
+    random_step = (
+        "prim<usize:=ptr> probe(out):\n"
+        "  operation random_step\n"
+        "  operand_roles:\n"
+        "    memory_destination out\n"
+    )
+
+    assert _labels(
+        catalog,
+        scalar_load,
+        scalar_load.split("load_scalar", 1)[0] + "load_s",
+    ) == {"load_scalar"}
+    assert _labels(
+        catalog,
+        random_step,
+        random_step.split("random_step", 1)[0] + "random_",
+    ) == {"random_step"}
+
+
 def test_representation_target_axis_and_where_are_contextual(
     catalog: Catalog,
 ) -> None:
@@ -534,7 +627,6 @@ def test_every_registered_region_completes_at_a_valid_tsil_boundary(
                 "arith_div",
                 "arith_mul",
                 "arith_rem",
-                "arith_zero_divisor_fail",
             },
         ),
         ("op<a", {"add"}),
@@ -555,6 +647,16 @@ def test_every_registered_region_completes_at_a_valid_tsil_boundary(
         ("call<primitive=add, attrs[m", {"mask"}),
         ("call<primitive=add, attrs[mask=p", {"pass_through"}),
         ("call<primitive=add, attrs[aligned=t", {"true"}),
+        ("call<primitive=div, f", {"forward"}),
+        ("call<primitive=div, d", {"discharge"}),
+        (
+            "call<primitive=div, forward[active_divisor_",
+            {"active_divisor_nonzero"},
+        ),
+        (
+            "call<primitive=div, discharge[contiguous_",
+            {"contiguous_memory_extent"},
+        ),
         ("if<g", {"generation"}),
         ("loop<b", {"backend"}),
         ("loop<backend, u", {"unroll"}),

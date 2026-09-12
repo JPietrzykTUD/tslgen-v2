@@ -12,10 +12,10 @@ running the rest. Where ``explain`` tells the *narrative* of one slot across all
                       "Did `loop<…>` get captured, or leak through as raw text?"
   --stage selection   the slots a profile selects (primitive × extension × type [× target]) and the
                       chosen body's source. "What does profile X actually emit for primitive Y?"
-  --stage lowered     the resolved ``LoweredSpecialization`` — register/type spellings, intrinsic
-                      names in the body, semantic contracts, mask policy, and required features —
-                      before the backend wraps it. "Did `base::signed_of(base::in)` resolve to the
-                      right suffix?"
+  --stage lowered     the direct, pre-closure ``LoweredSpecialization`` — register/type spellings,
+                      intrinsic names in the body, semantic contracts, mask policy, and declared
+                      requirements — before dependency propagation and backend wrapping. "Did
+                      `base::signed_of(base::in)` resolve to the right suffix?"
 
 Run from the repository with ``tslc/src`` on ``PYTHONPATH``:
 
@@ -206,6 +206,8 @@ def _dump_catalog(catalog: Catalog, primitive: str | None) -> tuple[str, object,
         )
         if prim.result_target is not None:
             lines.append(f"    result_target: {prim.result_target}")
+        if prim.portability.value != "portable":
+            lines.append(f"    portability: {prim.portability.value}")
         if prim.operation is not None:
             roles = ", ".join(
                 f"{binding.role.value}={binding.parameter_name}"
@@ -217,7 +219,14 @@ def _dump_catalog(catalog: Catalog, primitive: str | None) -> tuple[str, object,
         if prim.memory is not None:
             lines.append(
                 f"    memory: access={prim.memory.access.value}  "
-                f"addressing={prim.memory.addressing.value}"
+                f"addressing={prim.memory.addressing.value}  "
+                f"payload_extent={prim.memory.payload_extent.value}"
+                + (
+                    "  indexed_lane_extent="
+                    f"{prim.memory.indexed_lane_extent.value}"
+                    if prim.memory.indexed_lane_extent is not None
+                    else ""
+                )
             )
         if prim.conversion is not None:
             lines.append(
@@ -262,12 +271,19 @@ def _primitive_json(prim: Primitive) -> dict:
         "signature": prim.signature,
         "parameters": list(prim.parameters),
         "attributes": dict(prim.attributes),
+        "portability": prim.portability.value,
         "result_target": list(prim.result_target) if prim.result_target else None,
         "operation": _operation_json(prim),
         "memory": (
             {
                 "access": prim.memory.access.value,
                 "addressing": prim.memory.addressing.value,
+                "payload_extent": prim.memory.payload_extent.value,
+                **(
+                    {"indexed_lane_extent": prim.memory.indexed_lane_extent.value}
+                    if prim.memory.indexed_lane_extent is not None
+                    else {}
+                ),
             }
             if prim.memory is not None
             else None
@@ -512,6 +528,7 @@ def _dump_lowered(
         "\n".join(lines),
         {
             "stage": "lowered",
+            "fact_scope": "direct-lowering",
             "profile": machine_profile.name,
             "backend": backend,
             "specializations": specs_json,
@@ -530,6 +547,9 @@ def _lowered_text(header: str, spec: LoweredSpecialization) -> list[str]:
     lines = [f"  {header}:"]
     lines.append(f"      register={spec.register_spelling}  base={spec.base_type_spelling}")
     lines.append(f"      result={spec.result_kind}  params=({', '.join(spec.param_kinds)})")
+    lines.append(
+        f"      implementation_state={spec.implementation_state.value} (direct)"
+    )
     semantics = spec.primitive_semantics
     if semantics.overload is not None:
         lines.append(
@@ -547,7 +567,13 @@ def _lowered_text(header: str, spec: LoweredSpecialization) -> list[str]:
     if semantics.memory is not None:
         lines.append(
             f"      memory={semantics.memory.access.value}:"
-            f"{semantics.memory.addressing.value}"
+            f"{semantics.memory.addressing.value}:"
+            f"{semantics.memory.payload_extent.value}"
+            + (
+                f":{semantics.memory.indexed_lane_extent.value}"
+                if semantics.memory.indexed_lane_extent is not None
+                else ""
+            )
         )
     if semantics.conversion is not None:
         lines.append(
@@ -572,6 +598,21 @@ def _lowered_text(header: str, spec: LoweredSpecialization) -> list[str]:
             f"      safety=internal:{spec.safety.internal_unsafe} "
             f"caller:{spec.safety.caller_unsafe}"
         )
+    for origin in spec.call_dependency_origins:
+        for obligation in origin.precondition_obligations:
+            disposition = obligation.disposition
+            mode = "missing" if disposition is None else disposition.kind.value
+            lines.append(
+                "      call_precondition="
+                f"{origin.dependency.primitive}:{obligation.callee_condition.value}:"
+                f"{mode}:{obligation.status.value}  src={_src(obligation.source)}"
+            )
+    for obligation in spec.unresolved_call_preconditions:
+        lines.append(
+            "      unresolved_call_precondition="
+            f"{obligation.callee_condition.value}:{obligation.status.value} "
+            f"src={_src(obligation.source)}"
+        )
     body = spec.body_text.strip()
     lines.append("      body:")
     lines.extend(f"        {line}" for line in (body.splitlines() or [""]))
@@ -584,6 +625,8 @@ def _lowered_json(spec: LoweredSpecialization) -> dict:
         "base_type": spec.base_type_spelling,
         "result_kind": spec.result_kind,
         "param_kinds": list(spec.param_kinds),
+        "implementation_state": spec.implementation_state.value,
+        "implementation_state_scope": "direct",
         "primitive_semantics": _lowered_semantics_json(spec),
         "mask_policy": spec.mask_policy,
         "immediate": list(spec.immediate) if spec.immediate else None,
@@ -593,6 +636,44 @@ def _lowered_json(spec: LoweredSpecialization) -> dict:
             spec.required_compiler_capabilities
         ),
         "caller_unsafe": spec.safety.caller_unsafe,
+        "unresolved_call_preconditions": [
+            {
+                "condition": obligation.callee_condition.value,
+                "status": obligation.status.value,
+                "reason": obligation.reason,
+                "source": _src(obligation.source),
+            }
+            for obligation in spec.unresolved_call_preconditions
+        ],
+        "call_dependencies": [
+            {
+                "primitive": origin.dependency.primitive,
+                "origin": origin.origin,
+                "origin_kind": origin.kind.value,
+                "source": _src(origin.source),
+                "preconditions": [
+                    {
+                        "condition": obligation.callee_condition.value,
+                        "disposition": (
+                            None
+                            if obligation.disposition is None
+                            else obligation.disposition.kind.value
+                        ),
+                        "forwarded_root": (
+                            None
+                            if obligation.disposition is None
+                            or obligation.disposition.forwarded_root is None
+                            else obligation.disposition.forwarded_root.value
+                        ),
+                        "status": obligation.status.value,
+                        "reason": obligation.reason,
+                        "source": _src(obligation.source),
+                    }
+                    for obligation in origin.precondition_obligations
+                ],
+            }
+            for origin in spec.call_dependency_origins
+        ],
         "body": spec.body_text.strip(),
     }
 
@@ -655,6 +736,12 @@ def _lowered_semantics_json(spec: LoweredSpecialization) -> dict:
             {
                 "access": memory.access.value,
                 "addressing": memory.addressing.value,
+                "payload_extent": memory.payload_extent.value,
+                **(
+                    {"indexed_lane_extent": memory.indexed_lane_extent.value}
+                    if memory.indexed_lane_extent is not None
+                    else {}
+                ),
             }
             if memory is not None
             else None

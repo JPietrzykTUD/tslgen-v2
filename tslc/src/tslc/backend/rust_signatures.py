@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+from tslc.backend.checked_api import CheckedApiPlan, checked_memory_condition
 from tslc.backend.rust_type_params import (
     type_param_decls,
     type_param_names,
 )
 from tslc.backend.signature_types import RUST_SIGNATURE_TYPES, rust_free_type
 from tslc.backend.target_capability import rust_extension_tag
+from tslc.catalog.arithmetic import ArithmeticNumericDomain
+from tslc.catalog.memory import MemoryAccess
+from tslc.catalog.model import IMMEDIATE_CONVERSION_CHUNK_INDEX_MARKER
 from tslc.lower.lowerer import (
     LoweredArithmeticPrecondition,
     LoweredArithmeticPreconditionKind,
@@ -24,6 +28,32 @@ def unsafe_call(call: str, enabled: bool) -> str:
     return f"unsafe {{ {call} }}" if enabled else call
 
 
+def checked_type_where(plan: CheckedApiPlan, owner: str) -> str:
+    """Format the type-domain bound that makes a conditional check callable."""
+
+    predicates = checked_type_where_predicates(plan, owner)
+    if not predicates:
+        return ""
+    return "\nwhere\n" + "\n".join(f"    {item}," for item in predicates)
+
+
+def checked_type_where_predicates(
+    plan: CheckedApiPlan, owner: str
+) -> tuple[str, ...]:
+    """Return typed where predicates before Rust source formatting."""
+
+    domains = frozenset(
+        condition.numeric_domain
+        for condition in plan.conditions
+        if condition.numeric_domain is not None
+    )
+    if any(condition.numeric_domain is None for condition in plan.conditions):
+        return ()
+    if domains == {ArithmeticNumericDomain.INTEGER}:
+        return (f"{owner}::BaseType: CheckedIntegerLane",)
+    raise ValueError("Rust checked wrapper has an unsupported conditional type domain")
+
+
 def free_kind_type(kind: str, spec: LoweredSpecialization) -> str:
     """Map a free-function kind to its concrete Rust type."""
 
@@ -36,6 +66,8 @@ def free_kind_type(kind: str, spec: LoweredSpecialization) -> str:
 
 def impl_generic_parts(
     shape: LoweredSpecialization,
+    *,
+    inline_type_bounds: bool = True,
 ) -> tuple[list[str], list[str]]:
     """Return Rust impl generic declarations and matching turbofish names."""
 
@@ -56,7 +88,14 @@ def impl_generic_parts(
         const_decls.append(f"const {name}: {typ}")
         const_names.append(name)
     return (
-        [*type_param_decls(shape), *const_decls],
+        [
+            *(
+                type_param_decls(shape)
+                if inline_type_bounds
+                else type_param_names(shape)
+            ),
+            *const_decls,
+        ],
         [*type_param_names(shape), *const_names],
     )
 
@@ -110,6 +149,20 @@ def arithmetic_preconditions(spec: LoweredSpecialization) -> str:
     )
 
 
+def immediate_precondition(spec: LoweredSpecialization) -> str:
+    if spec.immediate is None or spec.immediate_valid_range is None:
+        return ""
+    name = spec.immediate[0]
+    lower, upper, inclusive = spec.immediate_valid_range
+    upper_operator = "<=" if inclusive else "<"
+    return (
+        "        const { assert!("
+        f"(({name} as i128) >= {lower}) && "
+        f"(({name} as i128) {upper_operator} {upper}), "
+        f'"{IMMEDIATE_CONVERSION_CHUNK_INDEX_MARKER}"); }};\n'
+    )
+
+
 def _arithmetic_precondition(
     precondition: LoweredArithmeticPrecondition,
 ) -> str:
@@ -140,7 +193,27 @@ def params(
     target_owner: str | None = None,
     vidx_type: str | None = None,
 ) -> str:
-    parts: list[str] = []
+    return ", ".join(
+        f"{name}: {typ}"
+        for _index, name, typ in parameter_types(
+            shape,
+            owner,
+            target_owner=target_owner,
+            vidx_type=vidx_type,
+        )
+    )
+
+
+def parameter_types(
+    shape: LoweredSpecialization,
+    owner: str,
+    *,
+    target_owner: str | None = None,
+    vidx_type: str | None = None,
+) -> tuple[tuple[int, str, str], ...]:
+    """Return exact runtime parameter types before textual formatting."""
+
+    parts: list[tuple[int, str, str]] = []
     for index, (name, kind) in enumerate(zip(shape.param_names, shape.param_kinds)):
         if kind == DEFAULT_SUPPORT_POLICY.immediate_kind:
             continue
@@ -155,14 +228,107 @@ def params(
             typ = vidx_type
         else:
             typ = param_kind_type(kind, owner)
-        parts.append(f"{name}: {typ}")
-    return ", ".join(parts)
+        parts.append((index, name, typ))
+    return tuple(parts)
+
+
+def checked_params(
+    shape: LoweredSpecialization,
+    owner: str,
+    plan: CheckedApiPlan,
+    *,
+    target_owner: str | None = None,
+    vidx_type: str | None = None,
+) -> str:
+    """Render a checked signature, replacing typed memory pointers with slices."""
+
+    return ", ".join(
+        f"{name}: {typ}"
+        for _index, name, typ in checked_parameter_types(
+            shape,
+            owner,
+            plan,
+            target_owner=target_owner,
+            vidx_type=vidx_type,
+        )
+    )
+
+
+def checked_parameter_types(
+    shape: LoweredSpecialization,
+    owner: str,
+    plan: CheckedApiPlan,
+    *,
+    target_owner: str | None = None,
+    vidx_type: str | None = None,
+) -> tuple[tuple[int, str, str], ...]:
+    """Return exact checked runtime parameter types before formatting."""
+
+    memory = checked_memory_condition(plan.conditions)
+    if memory is None:
+        return parameter_types(
+            shape,
+            owner,
+            target_owner=target_owner,
+            vidx_type=vidx_type,
+        )
+    memory_index = memory.parameter_index
+    memory_name = memory.parameter_name
+    memory_access = memory.memory_access
+    parts: list[tuple[int, str, str]] = []
+    for index, (name, kind) in enumerate(zip(shape.param_names, shape.param_kinds)):
+        if kind == DEFAULT_SUPPORT_POLICY.immediate_kind:
+            continue
+        if index == memory_index:
+            if name != memory_name:
+                raise ValueError("Rust checked memory binding has changed parameter name")
+            borrow = "&" if memory_access is MemoryAccess.READ else "&mut "
+            parts.append((index, name, f"{borrow}[{owner}::BaseType]"))
+        elif shape.effective_param_type_overrides[index] is not None:
+            override = shape.effective_param_type_overrides[index]
+            assert override is not None
+            parts.append((index, name, override))
+        elif DEFAULT_SUPPORT_POLICY.is_target_vector_parameter_kind(kind):
+            if target_owner is None:
+                raise ValueError("checked target-vector parameter has no owner")
+            parts.append((index, name, param_kind_type(kind, target_owner)))
+        elif kind == DEFAULT_SUPPORT_POLICY.index_vector_kind:
+            if vidx_type is None:
+                raise ValueError("checked index-vector parameter has no type")
+            parts.append((index, name, vidx_type))
+        else:
+            parts.append((index, name, param_kind_type(kind, owner)))
+    return tuple(parts)
 
 
 def runtime_names(shape: LoweredSpecialization) -> str:
     return ", ".join(
         name
         for name, kind in zip(shape.param_names, shape.param_kinds)
+        if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
+    )
+
+
+def checked_runtime_names(
+    shape: LoweredSpecialization,
+    plan: CheckedApiPlan,
+) -> str:
+    """Render arguments forwarded from a checked slice signature to raw kernels."""
+
+    memory = checked_memory_condition(plan.conditions)
+    if memory is None:
+        return runtime_names(shape)
+    memory_index = memory.parameter_index
+    memory_access = memory.memory_access
+    return ", ".join(
+        (
+            f"{name}.as_ptr()"
+            if index == memory_index and memory_access is MemoryAccess.READ
+            else f"{name}.as_mut_ptr()"
+            if index == memory_index
+            else name
+        )
+        for index, (name, kind) in enumerate(zip(shape.param_names, shape.param_kinds))
         if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
     )
 
@@ -198,6 +364,11 @@ def trait_args_by_value(spec: LoweredSpecialization) -> list[str]:
 __all__ = (
     "arithmetic_preconditions",
     "axis_name",
+    "checked_type_where",
+    "checked_type_where_predicates",
+    "checked_params",
+    "checked_parameter_types",
+    "checked_runtime_names",
     "concrete_array",
     "concrete_param_type",
     "concrete_result_type",
@@ -209,6 +380,7 @@ __all__ = (
     "kind_type",
     "param_kind_type",
     "params",
+    "parameter_types",
     "runtime_names",
     "trait_args_by_name",
     "trait_args_by_value",

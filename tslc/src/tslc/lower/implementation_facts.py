@@ -19,11 +19,37 @@ class ImplementationState(Enum):
     UNKNOWN = "unknown"
 
 
+_STATE_DESCRIPTIONS = {
+    ImplementationState.NATIVE: (
+        "the selected body is a direct target expression, operation, intrinsic, "
+        "or intrinsic sequence"
+    ),
+    ImplementationState.COMPOSED: (
+        "the selected body composes typed primitive calls, control flow, or "
+        "shared semantic regions"
+    ),
+    ImplementationState.FALLBACK: (
+        "the selected extension family or lowered body explicitly uses a portable "
+        "fallback"
+    ),
+    ImplementationState.UNKNOWN: (
+        "opaque target text or incomplete typed evidence prevents a stronger claim"
+    ),
+}
+
+
+def implementation_state_description(state: ImplementationState) -> str:
+    """Return the stable public meaning of one coarse implementation state."""
+
+    return _STATE_DESCRIPTIONS[state]
+
+
 class RegionImplementationEffect(Enum):
     """How a registered TSIL region contributes implementation-state facts."""
 
     DIRECT_RETURN = "direct_return"
     INTRINSIC = "intrinsic"
+    DIRECT_OPERATION = "direct_operation"
     CALL = "call"
     LOOP = "loop"
     COMPOSITION = "composition"
@@ -55,6 +81,7 @@ class ImplementationStateFacts:
 
     direct: int = 0
     intrinsics: int = 0
+    direct_operations: int = 0
     calls: int = 0
     composition_markers: int = 0
     fallback: bool = False
@@ -73,14 +100,16 @@ class ImplementationStateFacts:
             self.calls == 0
             and self.composition_markers == 0
             and (
-                (self.intrinsics == 1 and self.direct == 0)
-                or (self.intrinsics == 0 and self.direct > 0)
+                self.direct > 0
+                or self.intrinsics > 0
+                or self.direct_operations > 0
             )
         ):
             return ImplementationState.NATIVE
         if (
             self.direct > 0
             or self.intrinsics > 0
+            or self.direct_operations > 0
             or self.calls > 0
             or self.composition_markers > 0
         ):
@@ -92,6 +121,9 @@ class ImplementationStateFacts:
 
     def mark_intrinsic(self) -> None:
         self.intrinsics += 1
+
+    def mark_direct_operation(self) -> None:
+        self.direct_operations += 1
 
     def mark_call(self) -> None:
         self.calls += 1
@@ -111,4 +143,5 @@ __all__ = (
     "ImplementationStateFacts",
     "RegionImplementationEffect",
     "combine_implementation_states",
+    "implementation_state_description",
 )

@@ -298,21 +298,21 @@ prim<v:=v> popcnt(data):
             bits = call<primitive=sub[WordVec]>(
               bits,
               call<primitive=binary_and[WordVec]>(
-                call<primitive=shift_right[WordVec, false]>(bits, 1),
+                call<primitive=shift_right[WordVec, false]>(bits, cast<static>(ui16, 1)),
                 m1
               )
             );
             bits = call<primitive=add[WordVec]>(
               call<primitive=binary_and[WordVec]>(bits, m2),
               call<primitive=binary_and[WordVec]>(
-                call<primitive=shift_right[WordVec, false]>(bits, 2),
+                call<primitive=shift_right[WordVec, false]>(bits, cast<static>(ui16, 2)),
                 m2
               )
             );
             bits = call<primitive=binary_and[WordVec]>(
               call<primitive=add[WordVec]>(
                 bits,
-                call<primitive=shift_right[WordVec, false]>(bits, 4)
+                call<primitive=shift_right[WordVec, false]>(bits, cast<static>(ui16, 4))
               ),
               m4
             );
@@ -533,6 +533,27 @@ prim<v:=v> popcnt(data):
           reasons []
         implementation:
           tsil "complete(cast<static>(base::in, helper<popcount>(data)));"
+    rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<backend>(i, 0, value(vector::runtime_length), 1) {
+              var<const_infer>(lane, call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(data, i));
+              result = call<primitive=insert_value_at[Vec], discharge[lane_index_in_range]>(
+                result,
+                i,
+                cast<static>(base::in, helper<popcount>(lane))
+              );
+            }
+            complete(result);
+          """
+
 prim<usize:=s> lzc_scalar(data):
   brief_description "Counts leading zero bits in a scalar value."
   detailed_description """
@@ -550,7 +571,7 @@ prim<usize:=s> lzc_scalar(data):
     - {tags [basic], type "ui32", lane_count 8, case {inputs [16], expected 27}}
     - {tags [edge], type "ui32", lane_count 8, case {inputs [0], expected 32}}
   impls:
-    [scalar, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, wasm128]:
+    [scalar, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx512, avx2, sse, neon, sve, wasm128]:
       ?i?:
         prefer_fixed_native true
         requires:
@@ -562,6 +583,11 @@ prim<usize:=s> lzc_scalar(data):
           clang_v128_bool []
           clang_v256_bool []
           clang_v512_bool []
+          avx512 []
+          avx2 []
+          sse []
+          neon []
+          sve [sve]
           wasm128 [simd128]
         safety:
           internal_unsafe false
@@ -580,6 +606,11 @@ prim<usize:=s> lzc_scalar(data):
           clang_v128_bool []
           clang_v256_bool []
           clang_v512_bool []
+          avx512 []
+          avx2 []
+          sse []
+          neon []
+          sve [sve]
           wasm128 [simd128]
         safety:
           internal_unsafe true
@@ -610,6 +641,27 @@ prim<usize:=s> lzc_scalar(data):
           reasons []
         implementation:
           tsil "complete(cast<static>(scalar::size, helper<clz>(data)));"
+    rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(cast<static>(scalar::size, helper<clz>(data)));"
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(UnsignedT, base::unsigned_of(base::in));
+            complete(cast<static>(scalar::size, helper<clz>(cast<bitcast>(UnsignedT, data))));
+          """
+
 prim<v:=v> lzc(data):
   brief_description "Counts leading zero bits independently in each vector lane."
   detailed_description """
@@ -1320,6 +1372,47 @@ prim<v:=v> lzc(data):
               }
                complete(result);
             """
+    rvv:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<backend>(i, 0, value(vector::runtime_length), 1) {
+              var<const_infer>(lane, call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(data, i));
+              result = call<primitive=insert_value_at[Vec], discharge[lane_index_in_range]>(
+                result,
+                i,
+                cast<static>(base::in, helper<clz>(lane))
+              );
+            }
+            complete(result);
+          """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(UnsignedT, base::unsigned_of(base::in));
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<backend>(i, 0, value(vector::runtime_length), 1) {
+              var<const_infer>(lane, call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(data, i));
+              result = call<primitive=insert_value_at[Vec], discharge[lane_index_in_range]>(
+                result,
+                i,
+                cast<static>(base::in, helper<clz>(cast<bitcast>(UnsignedT, lane)))
+              );
+            }
+            complete(result);
+          """
+
 prim<usize:=m> lzc_imask(value):
   brief_description "Counts leading zero bits in an integral mask value."
   detailed_description """
@@ -1359,6 +1452,30 @@ prim<usize:=m> lzc_imask(value):
           reasons []
         implementation:
           tsil "complete(cast<static>(scalar::size, helper<clz>(call<primitive=to_integral[Vec]>(value))));"
+    sve:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(CountT, scalar::size);
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<typed>(CountT, count, lanes);
+            var<const_infer>(empty, call<primitive=mask_false[Vec]>());
+            loop<backend>(i, 0, lanes, 1) {
+              var<const_infer>(lane, lanes - 1 - i);
+              var<const_infer>(lane_mask, call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(empty, lane, 1));
+              if ((count == lanes) && (call<primitive=mask_population_count[Vec]>(
+                call<primitive=mask_binary_and[Vec]>(value, lane_mask)
+              ) != 0)) {
+                count = i;
+              }
+            }
+            complete(count);
+          """
     [oneapi_fpga, oneapi_fpga_rtl]:
       arith:
         requires:
@@ -1370,6 +1487,31 @@ prim<usize:=m> lzc_imask(value):
           reasons []
         implementation:
           tsil "complete(cast<static>(scalar::size, helper<clz>(call<primitive=to_integral[Vec]>(value))));"
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(CountT, scalar::size);
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<typed>(CountT, count, lanes);
+            var<const_infer>(empty, call<primitive=mask_false[Vec]>());
+            loop<backend>(i, 0, lanes, 1) {
+              var<const_infer>(lane, lanes - 1 - i);
+              var<const_infer>(lane_mask, call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(empty, lane, 1));
+              if ((count == lanes) && (call<primitive=mask_population_count[Vec]>(
+                call<primitive=mask_binary_and[Vec]>(value, lane_mask)
+              ) != 0)) {
+                count = i;
+              }
+            }
+            complete(count);
+          """
+
 prim<usize:=m> tzc(value):
   brief_description "Counts trailing zero bits in an integral mask value."
   detailed_description """
@@ -1409,3 +1551,49 @@ prim<usize:=m> tzc(value):
           reasons []
         implementation:
           tsil "complete(cast<static>(scalar::size, helper<ctz>(call<primitive=to_integral[Vec]>(value))));"
+    sve:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(CountT, scalar::size);
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<typed>(CountT, count, lanes);
+            var<const_infer>(empty, call<primitive=mask_false[Vec]>());
+            loop<backend>(i, 0, lanes, 1) {
+              var<const_infer>(lane_mask, call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(empty, i, 1));
+              if ((count == lanes) && (call<primitive=mask_population_count[Vec]>(
+                call<primitive=mask_binary_and[Vec]>(value, lane_mask)
+              ) != 0)) {
+                count = i;
+              }
+            }
+            complete(count);
+          """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(CountT, scalar::size);
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<typed>(CountT, count, lanes);
+            var<const_infer>(empty, call<primitive=mask_false[Vec]>());
+            loop<backend>(i, 0, lanes, 1) {
+              var<const_infer>(lane_mask, call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(empty, i, 1));
+              if ((count == lanes) && (call<primitive=mask_population_count[Vec]>(
+                call<primitive=mask_binary_and[Vec]>(value, lane_mask)
+              ) != 0)) {
+                count = i;
+              }
+            }
+            complete(count);
+          """

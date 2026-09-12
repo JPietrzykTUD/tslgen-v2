@@ -13,6 +13,7 @@ from tslc.backend.cpp_detection import (
     CPP_PROFILE_AUTO_GATES,
     CPP_PROFILE_DETECTION_KINDS,
 )
+from tslc.backend.checked_api import applicable_checked_api_plan
 from tslc.backend.target_capability import (
     cpp_width_indexed_register_helper,
     width_indexed_register_bits,
@@ -27,6 +28,28 @@ if TYPE_CHECKING:
 def validate_cpp_profiles(profiles: tuple[EmittedProfile, ...]) -> tuple[Diagnostic, ...]:
     diagnostics: list[Diagnostic] = []
     for profile in profiles:
+        primitive_specializations = profile.specializations("cpp")
+        emitted_names = frozenset(primitive_specializations)
+        for primitive_name, specializations in sorted(
+            primitive_specializations.items()
+        ):
+            if (
+                applicable_checked_api_plan(specializations) is not None
+                and f"{primitive_name}_checked" in emitted_names
+            ):
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-BACKEND-CPP-CHECKED-NAME-COLLISION",
+                        message=(
+                            f"C++ checked API {primitive_name + '_checked'!r} "
+                            "collides with an emitted primitive"
+                        ),
+                        source=specializations[0].primitive_semantics.preconditions[
+                            0
+                        ].source,
+                    )
+                )
         auto_gate = profile.profile.auto_detect_gate
         if (
             auto_gate is not None

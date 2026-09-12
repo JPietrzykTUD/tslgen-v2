@@ -5,6 +5,7 @@ import {
   groupSlots,
   implementationLabel,
   originDescription,
+  preconditionDescription,
   slotCallableLabel,
   slotStatusDescription,
   slotTypeLabel,
@@ -113,6 +114,14 @@ describe("primitive explorer presentation", () => {
     assert.equal(
       slotStatusDescription(slots[3]!),
       "authored source • authored here + inherited",
+    );
+  });
+
+  it("presents compiler-owned precondition names generically", () => {
+    assert.equal(preconditionDescription([]), "none");
+    assert.equal(
+      preconditionDescription(["lane_index_in_range", "future_condition"]),
+      "`lane_index_in_range`, `future_condition`",
     );
   });
 

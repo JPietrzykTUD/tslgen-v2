@@ -4,29 +4,46 @@ from __future__ import annotations
 
 import json
 
+from tslc.backend.algorithm_surface import (
+    ALGORITHM_CALLABLE_FORMS,
+    AlgorithmSemanticFamily,
+)
 from tslc.backend.cpp import CppBackend
+from tslc.backend.cpp_algorithm import cpp_unavailable_algorithm_helper_declaration
+from tslc.backend.cpp_algorithm_contracts import cpp_algorithm_contract_holes
+from tslc.backend.cpp_algorithm_public_declarations import (
+    cpp_algorithm_declaration_holes,
+)
 from tslc.backend.cpp_profile_model import (
+    CppConsumerKind,
     CppProfileHeader,
     CppProjectRenderModel,
     CppSmokeInstantiation,
     cpp_project_render_model,
 )
+from tslc.backend.cpp_public_api import cpp_public_api_manifest
+from tslc.backend.cpp_static_public_declarations import (
+    cpp_static_declaration_holes,
+)
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.compiler_assets import RenderAssets
+from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact
-from tslc.render._common import slug, text
+from tslc.render._common import text
 from tslc.render.cpp_build import _cpp_cmakelists
 from tslc.value_tests.model import ValueTestProjectPlan
 
-_CPP_STATIC_HEADERS = (
+_CPP_BASE_STATIC_HEADERS = (
+    "tsl_core_detail_types.hpp",
+    "tsl_core_detail_memory.hpp",
+    "tsl_core_detail_scalar.hpp",
+    "tsl_core_detail_mask.hpp",
+    "tsl_core_detail_io.hpp",
     "tsl_core.hpp",
     "tsl_dataparallel.hpp",
     "tsl_algorithm_tags.hpp",
     "tsl_algorithm_detail_core.hpp",
     "tsl_algorithm_detail_mask.hpp",
-    "tsl_algorithm_detail_loops.hpp",
-    "tsl_algorithm.hpp",
-    "tsl_x86_traits.hpp",
 )
 
 
@@ -40,8 +57,24 @@ def cpp_artifacts(
     backend = CppBackend()
     model = cpp_project_render_model(profiles)
     artifacts = [
-        text(f"cpp/include/{header}", assets.text(header), media_type=media_type)
-        for header in _CPP_STATIC_HEADERS
+        text(
+            f"cpp/include/{header}",
+            _cpp_static_header(header, assets, model),
+            media_type=media_type,
+        )
+        for header in _cpp_static_headers(model)
+    ] + [
+        text(
+            f"cpp/include/{group.header_name}",
+            assets.fill(
+                "cpp_system_headers.hpp.tmpl",
+                includes="\n".join(
+                    f"#include <{header}>" for header in group.headers
+                ),
+            ),
+            media_type=media_type,
+        )
+        for group in model.system_header_groups
     ] + [
         text(
             "cpp/include/tsl_primitives.hpp",
@@ -59,10 +92,24 @@ def cpp_artifacts(
         # Ship the formatter config at the C++ project root so `clang-format` (ascending from
         # include/ and tests/) finds it and the generated project is self-contained.
         text("cpp/.clang-format", assets.text(".clang-format"), media_type=media_type),
+        text(
+            "cpp/public-api.json",
+            cpp_public_api_manifest(profiles, model=model).serialize(),
+            media_type="application/json",
+        ),
+        text(
+            "cpp/tests/consumer.cpp",
+            assets.text(
+                "cpp_consumer.cpp.tmpl"
+                if model.consumer_kind is CppConsumerKind.CHECKED_ARITHMETIC
+                else "cpp_consumer_header_only.cpp.tmpl"
+            ),
+            media_type=media_type,
+        ),
     ]
     for profile_model in model.profiles:
         base = profile_model.base_header
-        profile_slug = slug(profile_model.profile_name)
+        profile_slug = profile_model.profile_namespace
         profile_metadata = assets.fill(
             "cpp_profile_metadata.hpp.tmpl",
             profile_namespace=profile_slug,
@@ -91,7 +138,10 @@ def cpp_artifacts(
                         backend,
                         header,
                         assets,
-                        includes=f'#include "tsl_{profile_slug}.hpp"\n',
+                        includes=(
+                            f'#include "tsl_{profile_slug}.hpp"\n'
+                            f"{header.includes or ''}"
+                        ),
                         profile_metadata="",
                     ),
                     media_type=media_type,
@@ -140,6 +190,67 @@ def cpp_artifacts(
     return artifacts
 
 
+def _cpp_static_headers(model: CppProjectRenderModel) -> tuple[str, ...]:
+    family_detail_headers = tuple(
+        header.detail_header
+        for header in model.algorithm.family_headers
+        if header.detail_header is not None
+    )
+    return (
+        *_CPP_BASE_STATIC_HEADERS,
+        *family_detail_headers,
+        *(header.public_header for header in model.algorithm.family_headers),
+        "tsl_algorithm.hpp",
+        "tsl_algorithm_checked.hpp",
+        "tsl_x86_traits.hpp",
+    )
+
+
+def _cpp_static_header(
+    header: str,
+    assets: RenderAssets,
+    model: CppProjectRenderModel,
+) -> str:
+    if header == "tsl_algorithm_checked.hpp":
+        return assets.fill(header, **cpp_algorithm_contract_holes())
+    if header == "tsl_algorithm.hpp":
+        public_headers = tuple(
+            family_header.public_header
+            for family_header in model.algorithm.family_headers
+        )
+        return assets.fill(
+            header,
+            algorithm_family_includes="\n".join(
+                f'#include "{family_header}"'
+                for family_header in public_headers
+            ),
+        )
+    for family_header in model.algorithm.family_headers:
+        if header == family_header.public_header:
+            return assets.fill(
+                header,
+                **cpp_algorithm_declaration_holes(
+                    _cpp_algorithm_form_names((family_header.semantic_family,)),
+                    include_aliases=(
+                        family_header.semantic_family
+                        is AlgorithmSemanticFamily.UTILITY
+                    ),
+                ),
+            )
+    holes = cpp_static_declaration_holes(header)
+    return assets.fill(header, **holes) if holes else assets.text(header)
+
+
+def _cpp_algorithm_form_names(
+    semantic_families: tuple[AlgorithmSemanticFamily, ...],
+) -> frozenset[str]:
+    return frozenset(
+        form.name
+        for form in ALGORITHM_CALLABLE_FORMS
+        if form.family.semantic_family in semantic_families
+    )
+
+
 def _cpp_profile_header(
     backend: CppBackend,
     header: CppProfileHeader,
@@ -165,18 +276,34 @@ def _cpp_profile_header(
         )
         for declared in header.declarations
     )
-    wrappers = "\n\n".join(
+    ordinary_wrappers = "\n\n".join(
         rendered
         for declared in header.declarations
         if (
-            rendered := backend.render_wrappers(
+            rendered := backend.render_ordinary_wrappers(
+                declared.name, declared.specializations
+            )
+        )
+    )
+    checked_wrappers = "\n\n".join(
+        rendered
+        for declared in header.declarations
+        if (
+            rendered := backend.render_checked_wrappers(
                 declared.name, declared.specializations
             )
         )
     )
     definitions = _cpp_conditioned_definitions(backend, header)
     bodies = "\n\n".join(
-        part for part in (implementation_declarations, wrappers, definitions) if part
+        part
+        for part in (
+            implementation_declarations,
+            ordinary_wrappers,
+            checked_wrappers,
+            definitions,
+        )
+        if part
     )
     content = assets.fill(
         "cpp_profile_header.hpp.tmpl",
@@ -207,7 +334,7 @@ def _cpp_conditioned_definitions(backend: CppBackend, header: CppProfileHeader) 
 def _cpp_dispatch(model: CppProjectRenderModel, assets: RenderAssets) -> str:
     profile_cases: list[str] = []
     for index, profile_model in enumerate(model.profiles):
-        profile_slug = slug(profile_model.profile_name)
+        profile_slug = profile_model.profile_namespace
         profile_cases.append(
             assets.fill(
                 "cpp_dispatch_case.hpp.tmpl",
@@ -220,7 +347,7 @@ def _cpp_dispatch(model: CppProjectRenderModel, assets: RenderAssets) -> str:
     for group in model.dispatch_header_groups:
         group_profile_cases: list[str] = []
         for index, profile_model in enumerate(model.profiles):
-            profile_slug = slug(profile_model.profile_name)
+            profile_slug = profile_model.profile_namespace
             group_profile_cases.append(
                 assets.fill(
                     "cpp_dispatch_case.hpp.tmpl",
@@ -242,11 +369,32 @@ def _cpp_dispatch(model: CppProjectRenderModel, assets: RenderAssets) -> str:
         profile_cases="\n".join(profile_cases),
         overlay_cases=(f"\n{rendered_overlay_cases}" if overlay_cases else ""),
         algorithm_include=(
-            f'\n{assets.text("cpp_dispatch_algorithm_include.hpp").rstrip()}'
-            if model.supports_algorithm
+            "\n"
+            + _cpp_unavailable_algorithm_helpers(model)
+            + assets.text("cpp_dispatch_algorithm_include.hpp").rstrip()
+            if model.algorithm.supported
             else ""
         ),
     )
+
+
+def _cpp_unavailable_algorithm_helpers(model: CppProjectRenderModel) -> str:
+    """Keep admitted templates parsable when an unrelated helper is absent."""
+
+    blocks: list[str] = []
+    for group in model.algorithm.unavailable_helpers:
+        declarations = "\n".join(
+            cpp_unavailable_algorithm_helper_declaration(requirement)
+            for requirement in group.requirements
+        )
+        blocks.append(
+            f"#if defined({group.profile_macro})\n"
+            "namespace tsl {\n"
+            f"{declarations}\n"
+            "}  // namespace tsl\n"
+            "#endif\n"
+        )
+    return "".join(blocks)
 
 
 def _cpp_documentation_facade(
@@ -255,16 +403,16 @@ def _cpp_documentation_facade(
 ) -> str:
     backend = CppBackend()
     api_declarations: list[str] = []
-    seen_api: set[str] = set()
+    by_primitive: dict[str, list[LoweredSpecialization]] = {}
     for emitted_profile in profiles:
-        by_primitive = emitted_profile.specializations("cpp")
-        for name in sorted(by_primitive):
-            declaration = backend.render_documentation_api_declaration(
-                name, by_primitive[name]
+        for name, specializations in emitted_profile.specializations("cpp").items():
+            by_primitive.setdefault(name, []).extend(specializations)
+    for name in sorted(by_primitive):
+        api_declarations.append(
+            backend.render_documentation_api_declaration(
+                name, tuple(by_primitive[name])
             )
-            if declaration not in seen_api:
-                api_declarations.append(declaration)
-                seen_api.add(declaration)
+        )
     declarations = "\n\n".join(api_declarations)
     return assets.fill(
         "cpp_documentation.hpp.tmpl",

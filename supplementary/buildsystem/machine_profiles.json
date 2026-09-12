@@ -138,29 +138,65 @@
     {
       "name": "sve",
       "target_features": "sve",
-      "backend_flags": {"cpp": ["-mcpu=a64fx"]},
-      "runner": {"kind": "qemu-aarch64", "profile": "a64fx"}
+      "backend_flags": {"cpp": ["-march=armv8.2-a+sve", "-msve-vector-bits=scalable"]},
+      "supported_backends": ["cpp"],
+      "runner": {
+        "kind": "qemu-aarch64",
+        "name": "vl128",
+        "profile": "max,sve=on,sve128=on,sve256=off,sve512=off",
+        "vector_bits": 128,
+        "variants": [
+          {
+            "name": "vl256",
+            "profile": "max,sve=on,sve128=on,sve256=on,sve512=off",
+            "vector_bits": 256
+          },
+          {
+            "name": "vl512",
+            "profile": "max,sve=on,sve128=on,sve256=on,sve512=on,sve768=off",
+            "vector_bits": 512
+          }
+        ]
+      }
     },
     {
       "name": "sve128",
-      "target_features": "sve",
+      "target_features": "neon sve",
       "compile_modes": "sve_vector_bits_128",
-      "backend_flags": {"cpp": ["-mcpu=a64fx", "-msve-vector-bits=128"]},
-      "runner": {"kind": "qemu-aarch64", "profile": "max,sve=on,sve128=on,sve256=off,sve512=off"}
+      "backend_flags": {"cpp": ["-march=armv8.2-a+sve", "-msve-vector-bits=128"]},
+      "supported_backends": ["cpp"],
+      "runner": {
+        "kind": "qemu-aarch64",
+        "name": "vl128",
+        "profile": "max,sve=on,sve128=on,sve256=off,sve512=off",
+        "vector_bits": 128
+      }
     },
     {
       "name": "sve256",
-      "target_features": "sve",
+      "target_features": "neon sve",
       "compile_modes": "sve_vector_bits_256",
-      "backend_flags": {"cpp": ["-mcpu=a64fx", "-msve-vector-bits=256"]},
-      "runner": {"kind": "qemu-aarch64", "profile": "max,sve=on,sve128=on,sve256=on,sve512=off"}
+      "backend_flags": {"cpp": ["-march=armv8.2-a+sve", "-msve-vector-bits=256"]},
+      "supported_backends": ["cpp"],
+      "runner": {
+        "kind": "qemu-aarch64",
+        "name": "vl256",
+        "profile": "max,sve=on,sve128=on,sve256=on,sve512=off",
+        "vector_bits": 256
+      }
     },
     {
       "name": "sve512",
-      "target_features": "sve",
+      "target_features": "neon sve",
       "compile_modes": "sve_vector_bits_512",
-      "backend_flags": {"cpp": ["-mcpu=a64fx", "-msve-vector-bits=512"]},
-      "runner": {"kind": "qemu-aarch64", "profile": "a64fx"}
+      "backend_flags": {"cpp": ["-march=armv8.2-a+sve", "-msve-vector-bits=512"]},
+      "supported_backends": ["cpp"],
+      "runner": {
+        "kind": "qemu-aarch64",
+        "name": "vl512",
+        "profile": "a64fx",
+        "vector_bits": 512
+      }
     }
   ],
   "riscv": [
@@ -177,7 +213,21 @@
       "supported_backends": ["cpp"],
       "runner": {
         "kind": "qemu-riscv64",
-        "profile": "max,v=true,vext_spec=v1.0,vlen=128,elen=64"
+        "name": "vlen128",
+        "profile": "max,v=true,vext_spec=v1.0,vlen=128,elen=64",
+        "vector_bits": 128,
+        "variants": [
+          {
+            "name": "vlen256",
+            "profile": "max,v=true,vext_spec=v1.0,vlen=256,elen=64",
+            "vector_bits": 256
+          },
+          {
+            "name": "vlen512",
+            "profile": "max,v=true,vext_spec=v1.0,vlen=512,elen=64",
+            "vector_bits": 512
+          }
+        ]
       }
     }
   ],

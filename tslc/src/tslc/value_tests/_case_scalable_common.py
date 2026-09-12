@@ -6,6 +6,7 @@ from tslc.catalog.model import Catalog
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.value_tests.case_helpers import sanitize as _sanitize
 from tslc.value_tests.lane_math import tiling_preserves_lane_semantics
+from tslc.value_tests.literals import mask_bits_value
 from tslc.value_tests.model import ValueTestBackendSupport, ValueTestScalable
 
 
@@ -60,16 +61,6 @@ def scalable_case_facts(
     )
 
 
-def mask_bits_value(token: str) -> int | None:
-    """The non-negative integer value of one authored mask-bits token, or None."""
-
-    try:
-        value = int(token.strip().strip('"'), 0)
-    except ValueError:
-        return None
-    return value if value >= 0 else None
-
-
 def scalable_function_name(
     extension_name: str,
     case_name: str,
@@ -99,7 +90,6 @@ def tiling_is_safe(
 
 
 __all__ = (
-    "mask_bits_value",
     "scalable_case_facts",
     "scalable_function_name",
     "tiling_is_safe",

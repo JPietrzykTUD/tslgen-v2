@@ -59,6 +59,10 @@ def _validate_surface_identity(plan: RustFacadePlan) -> _ShapeIndex:
         (item.receiver_kind, item.public_name)
         for item in plan.comprehensive_methods
     ) + tuple(
+        (item.receiver_kind, item.public_name + "_checked")
+        for item in plan.comprehensive_methods
+        if item.checked_conditions
+    ) + tuple(
         (item.receiver_kind, item.public_name) for item in plan.curated_methods
     )
     if len(set(method_keys)) != len(method_keys):
@@ -75,6 +79,15 @@ def _validate_comprehensive_methods(
     shapes_by_key: _ShapeIndex,
 ) -> None:
     for method in methods:
+        if any(
+            not condition.applicable_type_tags
+            or not set(condition.applicable_type_tags).issubset(method.type_tags)
+            for condition in method.checked_conditions
+        ):
+            raise ValueError(
+                "Final Rust checked conditions require a nonempty method-local "
+                "type domain"
+            )
         expected_public_shapes = (
             ()
             if method.receiver_kind is RustFacadeReceiverKind.FREE
@@ -507,6 +520,7 @@ def _validate_remaining_inventories(
             item.axis_names,
             item.memory_access,
             item.memory_addressing,
+            item.memory_payload_extent,
             item.memory_alignment_axis_name,
             item.memory_alignment_modes,
             item.mask_policy,

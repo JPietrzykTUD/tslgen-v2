@@ -148,6 +148,34 @@ def test_slot_check_strict_mode_is_explicit(
     assert extensions == [["scalar"], ["scalar"]]
 
 
+def test_check_settings_resolve_omitted_backends_from_live_registry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend_ids = [("future",), ("next",)]
+    monkeypatch.setattr(
+        check_cli,
+        "registered_backend_ids",
+        lambda: backend_ids.pop(0),
+    )
+    args = SimpleNamespace(
+        sources=("tsldata",),
+        backend=[],
+        compiler_capabilities=[],
+        machine_profiles=None,
+        primitive=[],
+        profile=[],
+        extension=[],
+        type_tags=[],
+    )
+
+    assert check_cli._settings(args, None).backends == ("future",)
+    assert check_cli._settings(args, None).backends == ("next",)
+
+    args.backend = ["chosen"]
+    args.machine_profiles = "profiles.json"
+    assert check_cli._settings(args, None).backends == ("chosen",)
+
+
 def test_catalog_list_and_show_have_stable_json(
     data_root: Path,
     machine_profiles_path: Path,
@@ -210,6 +238,7 @@ def test_project_config_paths_are_relative_to_config(tmp_path: Path) -> None:
                 "[tslc.rust_package]",
                 'name = "custom-tsl"',
                 'version = "1.2.3"',
+                'description = "Custom generated SIMD package"',
                 'edition = "2024"',
                 'rust_version = "1.85"',
                 'license = "Apache-2.0"',
@@ -286,11 +315,15 @@ def test_generate_uses_discovered_backend_defaults_for_formatting(
 
     def fake_format(output_root: object, backends: object) -> object:
         calls["format"] = (output_root, backends)
-        return SimpleNamespace(notes=(), formatted=())
+        return SimpleNamespace(notes=(), formatted=(), attempted=())
+
+    def fail_registry_default() -> tuple[str, ...]:
+        raise AssertionError("configured backends must take precedence")
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(cli, "generate_project", fake_generate)
     monkeypatch.setattr(cli, "write_artifacts", fake_write)
+    monkeypatch.setattr(cli, "registered_backend_ids", fail_registry_default)
     monkeypatch.setattr("tslc.output.format.format_generated", fake_format)
 
     status = cli.main(
@@ -485,10 +518,39 @@ def test_project_config_tools_flow_into_doctor_settings(tmp_path: Path) -> None:
 
     settings = doctor_module._settings(args, config)
 
+    assert settings.backends == ("cpp",)
     assert settings.tool_paths == {
         "oneapi-cpp": "/opt/oneapi/icpx",
         "wasi-cpp": "/opt/wasi/clang++",
     }
+
+
+def test_doctor_settings_resolve_omitted_backends_from_live_registry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend_ids = [("future",), ("next",)]
+    monkeypatch.setattr(
+        doctor_module,
+        "registered_backend_ids",
+        lambda: backend_ids.pop(0),
+    )
+    args = SimpleNamespace(
+        sources=("tsldata",),
+        machine_profiles="profiles.json",
+        backend=[],
+        backends=None,
+        compiler=[],
+        target=[],
+        linker=[],
+        runner=[],
+        work_root=None,
+    )
+
+    assert doctor_module._settings(args, None).backends == ("future",)
+    assert doctor_module._settings(args, None).backends == ("next",)
+
+    args.backend = ["chosen"]
+    assert doctor_module._settings(args, None).backends == ("chosen",)
 
 
 def test_coverage_inventory_help_does_not_write(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from tslc.catalog.preconditions import PreconditionKind
 from tslc.value_tests.lane_model import (
     render_mask_case,
     render_mask_conversion,
@@ -14,14 +15,17 @@ from tslc.value_tests._render_cpp_core import (
     _array_to_vector,
     _broadcast,
     _compile_only,
+    _checked_precondition as _core_checked_precondition,
     _immediate,
     _lane_list,
     _mask_to_vector,
     _reduction,
     _runtime_failure,
     _scalable_mask_count,
+    _scalable_mask_lane,
     _scalable_runtime_failure,
     _scalar_result,
+    _scalable_scalar_result,
     _scalar_vector,
     _status_pointer,
     _vector_to_array,
@@ -51,6 +55,9 @@ from tslc.value_tests._render_cpp_memory import (
     _pointer_free,
     _pointer_lifetime,
     _scalable_mask_store,
+    _scalable_indexed_load,
+    _scalable_indexed_checked,
+    _scalable_indexed_store,
     _scalable_masked_pointer_load,
     _scalable_masked_pointer_store,
     _scalar_pointer_load,
@@ -58,6 +65,17 @@ from tslc.value_tests._render_cpp_memory import (
     _stream,
 )
 from tslc.value_tests.renderer_capability import ValueTestRendererCapability
+
+
+def _checked_precondition(case: ValueTestCasePlan) -> str:
+    checked = case.checked_precondition
+    if (
+        checked is not None
+        and case.scalable is not None
+        and checked.kind is PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID
+    ):
+        return _scalable_indexed_checked(case)
+    return _core_checked_precondition(case)
 
 # Every value-result case (golden/masked) and every mask-result case (comparison, mask logic,
 # masked comparison, mask constant) — fixed or scalable — shares the lane-model renderers; the
@@ -74,6 +92,7 @@ CPP_VALUE_TEST_RENDERER = ValueTestRendererCapability(
         "array_to_vector": _array_to_vector,
         "broadcast": _broadcast,
         "compile_only": _compile_only,
+        "checked_precondition": _checked_precondition,
         "convert": _convert,
         "differential": _differential,
         "differential_fuzz": _differential_fuzz,
@@ -107,12 +126,16 @@ CPP_VALUE_TEST_RENDERER = ValueTestRendererCapability(
         "scalar_vector": _scalar_vector,
         "scalable_golden": render_value_case,
         "scalable_immediate": render_value_case,
+        "scalable_indexed_load": _scalable_indexed_load,
+        "scalable_indexed_store": _scalable_indexed_store,
         "scalable_repr_cast": _scalable_repr_cast,
         "scalable_scalar_vector": render_value_case,
+        "scalable_scalar_result": _scalable_scalar_result,
         "scalable_mask_constant": render_mask_case,
         "scalable_mask_conversion": render_mask_conversion,
         "scalable_mask_count": _scalable_mask_count,
         "scalable_mask_logic": render_mask_case,
+        "scalable_mask_lane": _scalable_mask_lane,
         "scalable_mask_result": render_mask_case,
         "scalable_runtime_failure": _scalable_runtime_failure,
         "scalable_mask_store": _scalable_mask_store,

@@ -61,38 +61,46 @@ fn main() {
             let mut masks = vec![$init; mask_count];
 
             let mut less_than_for_mask = LessThan;
-            let masks_produced = profile::algo::predicate_binary_mask_layout::<_, $layout, _, i32>(
-                policy,
-                &mut less_than_for_mask,
-                &left,
-                &right,
-                &mut masks,
-            );
-            assert_eq!(masks_produced, masks.len());
-
-            let mut indices = vec![usize::MAX; left.len()];
-            let mut masked_negative = Negative;
-            let produced = profile::algo::select_masked_indices_unary_mask_layout::<
+            let masks_produced = profile::algo::predicate_binary_mask_layout_checked::<
                 _,
                 $layout,
                 _,
                 i32,
-            >(policy, &mut masked_negative, &left, &masks, &mut indices);
+            >(
+                policy, &mut less_than_for_mask, &left, &right, &mut masks
+            )
+            .expect("checked algorithm preconditions");
+            assert_eq!(masks_produced, masks.len());
+
+            let mut indices = vec![usize::MAX; left.len()];
+            let mut masked_negative = Negative;
+            let produced = profile::algo::select_masked_indices_unary_mask_layout_checked::<
+                _,
+                $layout,
+                _,
+                i32,
+            >(policy, &mut masked_negative, &left, &masks, &mut indices)
+            .expect("checked algorithm preconditions");
             verify_indices(&indices, produced, left.len(), |i| {
                 left[i] < right[i] && left[i] < 0
             });
 
             indices.fill(usize::MAX);
             let mut masked_less_than = LessThan;
-            let produced =
-                profile::algo::select_masked_indices_binary_mask_layout::<_, $layout, _, i32>(
-                    policy,
-                    &mut masked_less_than,
-                    &left,
-                    &right,
-                    &masks,
-                    &mut indices,
-                );
+            let produced = profile::algo::select_masked_indices_binary_mask_layout_checked::<
+                _,
+                $layout,
+                _,
+                i32,
+            >(
+                policy,
+                &mut masked_less_than,
+                &left,
+                &right,
+                &masks,
+                &mut indices,
+            )
+            .expect("checked algorithm preconditions");
             verify_indices(&indices, produced, left.len(), |i| left[i] < right[i]);
         }};
     }
@@ -103,19 +111,25 @@ fn main() {
 
             let mut indices = vec![usize::MAX; left.len()];
             let mut negative = Negative;
-            let produced =
-                profile::algo::select_indices_unary(policy, &mut negative, &left, &mut indices);
+            let produced = profile::algo::select_indices_unary_checked(
+                policy,
+                &mut negative,
+                &left,
+                &mut indices,
+            )
+            .expect("checked algorithm preconditions");
             verify_indices(&indices, produced, left.len(), |i| left[i] < 0);
 
             indices.fill(usize::MAX);
             let mut less_than = LessThan;
-            let produced = profile::algo::select_indices_binary(
+            let produced = profile::algo::select_indices_binary_checked(
                 policy,
                 &mut less_than,
                 &left,
                 &right,
                 &mut indices,
-            );
+            )
+            .expect("checked algorithm preconditions");
             verify_indices(&indices, produced, left.len(), |i| left[i] < right[i]);
 
             run_mask_layout!(

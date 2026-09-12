@@ -19,7 +19,12 @@ from tslc.output.verify import (
     verify_generated_project,
 )
 from tslc.output.verify_model import BackendToolchain
-from tslc.output.writer import ArtifactWriteMode, ArtifactWriteReport, ArtifactWriter
+from tslc.output.writer import (
+    ArtifactManifestRefreshReport,
+    ArtifactWriteMode,
+    ArtifactWriteReport,
+    ArtifactWriter,
+)
 from tslc.pipeline import (
     BackendCompilerCapabilitySet,
     BackendProfileScope,
@@ -50,6 +55,7 @@ def generate_project(
     value_test_warnings: bool = False,
     value_test_fuzz: bool = False,
     render_artifacts: bool = True,
+    collect_target_support: bool = False,
     rust_package: RustPackageConfig = DEFAULT_RUST_PACKAGE_CONFIG,
 ) -> GenerationResult:
     """Run the full compiler pipeline and return in-memory artifacts.
@@ -102,6 +108,7 @@ def generate_project(
         value_test_warnings=value_test_warnings,
         value_test_fuzz=value_test_fuzz,
         render_artifacts=render_artifacts,
+        collect_target_support=collect_target_support,
         render_config=ProjectRenderConfig(rust_package=rust_package),
     )
     return generate(request)
@@ -119,6 +126,14 @@ def write_artifacts(
     mode: ArtifactWriteMode = "manifest-clean",
 ) -> ArtifactWriteReport:
     return ArtifactWriter().write(artifacts, output_root, mode)
+
+
+def refresh_artifact_manifest(
+    output_root: Path | str,
+) -> ArtifactManifestRefreshReport:
+    """Reconcile the generator manifest after formatting written artifacts."""
+
+    return ArtifactWriter().refresh_manifest(output_root)
 
 
 def verify_project(

@@ -33,7 +33,7 @@ prim<o:=(o,v,s)> to_ostream(out, data, ostream_modifier):
     - {tags [basic], type "f64", case {inputs [[1.0, 2.0], 0], expected "0000000000000000000000000000000000000000000000000000000000000010|0000000000000000000000000000000000000000000000000000000000000001|\n"}}
     - {tags [edge], type "f64", case {inputs [[0.0, 255.0], 0], expected "0000000000000000000000000000000000000000000000000000000011111111|0000000000000000000000000000000000000000000000000000000000000000|\n"}}
   impls:
-    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx512, avx2, sse, wasm128]:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx512, avx2, sse, neon, scalar, wasm128]:
       arith:
         prefer_fixed_native true
         requires:
@@ -46,6 +46,8 @@ prim<o:=(o,v,s)> to_ostream(out, data, ostream_modifier):
           avx512 [avx512f]
           avx2 [avx]
           sse [sse2]
+          neon [neon]
+          scalar []
           wasm128 [simd128]
         safety:
           internal_unsafe false
@@ -84,7 +86,7 @@ prim<o:=(o,v,s)> to_ostream(out, data, ostream_modifier):
                let<type>(DataVec, vector::as_base(Base));
                var<const_infer>(lanes, value(generic::runtime_length(DataVec)));
                var<runtime_array>(Base, values, lanes);
-               call<primitive=store[Vec], attrs[aligned=false]>(values, data);
+               call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(values, data);
                var<const_infer>(modifier, cast<static>(si32, ostream_modifier));
                var<const_infer>(bits, sizeof(type(Base)) * 8);
                var<const_infer>(fmt_base, (modifier == 16) ? 16u : (modifier == 8) ? 8u : (modifier == 0) ? 2u : 10u);
@@ -118,6 +120,53 @@ prim<o:=(o,v,s)> to_ostream(out, data, ostream_modifier):
                out += '\n';
                complete(out) ;
             """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [raw_memory]
+        implementation:
+          tsil """
+            let<type>(Base, base::in);
+            let<type>(DataVec, vector::as_base(Base));
+            var<const_infer>(lanes, value(generic::runtime_length(DataVec)));
+            var<runtime_array>(Base, values, lanes);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(values, data);
+            var<const_infer>(modifier, cast<static>(si32, ostream_modifier));
+            var<const_infer>(bits, sizeof(type(Base)) * 8);
+            var<const_infer>(fmt_base, (modifier == 16) ? 16u : (modifier == 8) ? 8u : (modifier == 0) ? 2u : 10u);
+            loop<backend>(lane, 0, lanes, 1) {
+              var<infer>(value, static_cast<std::uint64_t>(values[lanes - 1 - lane]));
+              var<infer>(masked, (bits >= 64) ? value : (value & ((static_cast<std::uint64_t>(1) << bits) - 1)));
+              if (fmt_base == 2u) {
+                loop<backend>(bit, 0, bits, 1) {
+                  out += ((masked >> (bits - 1 - bit)) & 1u) ? '1' : '0';
+                }
+              } else {
+                char buf[88];
+                var<infer>(p, 0);
+                if (masked == 0) {
+                  buf[p] = '0';
+                  p = p + 1;
+                }
+                while (masked) {
+                  var<const_infer>(digit, static_cast<unsigned>(masked % fmt_base));
+                  buf[p] = (digit < 10) ? char('0' + digit) : char('a' + digit - 10);
+                  p = p + 1;
+                  masked = masked / fmt_base;
+                }
+                while (p) {
+                  p = p - 1;
+                  out += buf[p];
+                }
+              }
+              out += '|';
+            }
+            out += '\n';
+            complete(out);
+          """
     neon:
       si64:
         requires [neon]

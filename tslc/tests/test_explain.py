@@ -51,6 +51,8 @@ def test_compiling_slot_shows_intrinsic_and_verdict(
         extension="avx2",
     )
     assert "VERDICT: COMPILES" in report
+    assert "direct state: native" in report
+    assert "FINAL IMPLEMENTATION STATE: native" in report
     assert "_mm256_add_epi32" in report  # the resolved intrinsic name
     assert "avx2:?i?" in report  # the winning body's extension:type-group
     # the float body is a rejected on-chain candidate, with the reason
@@ -113,10 +115,12 @@ def test_segment_tree_names_the_regions(
     assert "region intrin<add, build[suffix=base::signed_of(base::in)]>(...)" in report
 
 
-def test_not_selected_reports_the_missing_flag(
+def test_not_selected_reports_inactive_extension(
     data_root: Path, machine_profiles_path: Path
 ) -> None:
-    # avx512 is a candidate extension on an avx2 profile, but its body needs avx512f.
+    # A real AVX2 profile does not activate AVX-512. Explain must report that
+    # selection fact instead of pretending the AVX-512 body was a candidate
+    # rejected only because one of its feature requirements was absent.
     report = _explain(
         data_root,
         machine_profiles_path,
@@ -127,7 +131,8 @@ def test_not_selected_reports_the_missing_flag(
         extension="avx512",
     )
     assert "NOT selected" in report
-    assert "missing: avx512f" in report
+    assert "not emitted for this profile" in report
+    assert "missing: avx512f" not in report
 
 
 def test_dependency_closure_marks_emitted_callee(
@@ -146,6 +151,27 @@ def test_dependency_closure_marks_emitted_callee(
     assert "call<…> callees" in report
     assert "add <scalar, si32>" in report
     assert "✓" in report  # the callee is emitted in the closure
+
+
+def test_checked_guard_dependencies_are_emitted_without_pruning_slot(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    report = _explain(
+        data_root,
+        machine_profiles_path,
+        primitive="scatter",
+        profile="sve",
+        type_tag="si32",
+        backend="cpp",
+        extension="sve",
+    )
+
+    assert "checked-companion guard callees" in report
+    assert "extract_value_at <sve, si32>" in report
+    assert "checked companion is not emitted" not in report
+    assert "✓ set_mask_lane <sve, si32>" in report
+    assert "VERDICT: COMPILES" in report
 
 
 def test_lzc_explain_defaults_to_automatic_compiler_capability_frontier(

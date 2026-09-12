@@ -114,7 +114,7 @@ class ParsedDocumentCache:
 def check_catalog(
     source_paths: Iterable[Path | str],
     *,
-    backends: Iterable[str] = registered_backend_ids(),
+    backends: Iterable[str] | None = None,
     overlays: Iterable[SourceOverlay] = (),
     cache: ParsedDocumentCache | None = None,
 ) -> CheckResult:
@@ -139,7 +139,9 @@ def check_catalog(
         )
     result = check_documents(
         documents,
-        required_backends=tuple(backends),
+        required_backends=(
+            tuple(backends) if backends is not None else registered_backend_ids()
+        ),
         cache=cache,
     )
     return CheckResult(
@@ -189,7 +191,7 @@ def apply_overlays(
 def check_documents(
     documents: tuple[SourceDocument, ...],
     *,
-    required_backends: tuple[str, ...] = registered_backend_ids(),
+    required_backends: tuple[str, ...] | None = None,
     cache: ParsedDocumentCache | None = None,
 ) -> CheckResult:
     """Parse and validate already-loaded source documents without filesystem I/O."""
@@ -202,7 +204,11 @@ def check_documents(
     )
     result = check_parsed_documents(
         parsed,
-        required_backends=required_backends,
+        required_backends=(
+            required_backends
+            if required_backends is not None
+            else registered_backend_ids()
+        ),
         index_cache=cache.index_cache if cache is not None else None,
     )
     return CheckResult(
@@ -218,7 +224,7 @@ def check_documents(
 def check_parsed_documents(
     parsed: OuterTslParseResult,
     *,
-    required_backends: tuple[str, ...] = registered_backend_ids(),
+    required_backends: tuple[str, ...] | None = None,
     index_cache: CatalogIndexCache | None = None,
 ) -> CheckResult:
     """Promote and validate one deterministic complete parsed corpus."""
@@ -234,7 +240,11 @@ def check_parsed_documents(
         validate_catalog(
             built.catalog,
             parsed,
-            required_backends=required_backends,
+            required_backends=(
+                required_backends
+                if required_backends is not None
+                else registered_backend_ids()
+            ),
             supported_backends=registered_backend_ids(),
             compiler_capabilities=registered_compiler_capabilities(),
         )

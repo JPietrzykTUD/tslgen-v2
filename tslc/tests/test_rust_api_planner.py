@@ -177,11 +177,19 @@ def test_current_lowered_families_plan_without_reopening_the_catalog(
         RustFacadeTraitRhsKind.SAME_TYPE,
         RustFacadeTraitRhsKind.SCALAR,
     }
-    assert any(
+    assert not any(
         trait.trait_path == "core::ops::Div"
         and ("si32", 4) in trait.shape_keys
         for trait in plan.trait_implementations
     )
+    division = next(
+        method
+        for method in plan.comprehensive_methods
+        if method.source_primitive_name == "div"
+        and method.mask_policy is None
+    )
+    assert division.caller_unsafe
+    assert division.checked_conditions
     assert all(
         method.implementation_arms
         for method in plan.comprehensive_methods
@@ -308,9 +316,36 @@ def test_current_lowered_families_plan_without_reopening_the_catalog(
     assert "pub fn add(self, right: Simd<i32, 4>)" in facade
     assert "pub fn add_masked(" in facade
     assert "pub fn add_masked_zero(" in facade
+    assert "pub fn div(self, divisor: Simd<f32, 1>)" in facade
+    assert "pub unsafe fn div(self, divisor: Simd<i32, 1>)" in facade
+    div_method = next(
+        method
+        for method in plan.comprehensive_methods
+        if method.public_name == "div" and method.mask_policy is None
+    )
+    assert "si32" in div_method.caller_unsafe_type_tags
+    assert "f32" not in div_method.caller_unsafe_type_tags
+    float_div_offset = facade.index("pub fn div(self, divisor: Simd<f32, 1>)")
+    float_div_block = facade[
+        facade.rfind("impl Simd<f32, 1> {", 0, float_div_offset) :
+        facade.index("\n}", float_div_offset)
+    ]
+    assert "div_checked" not in float_div_block
     assert "pub fn convert_lanes<U>(self)" in facade
+    convert_lanes = next(
+        method
+        for method in plan.comprehensive_methods
+        if method.public_name == "convert_lanes"
+    )
+    assert not convert_lanes.caller_unsafe
+    assert convert_lanes.lower_call_unsafe
+    assert (
+        "// SAFETY: source and target facade shapes have the same logical lane count."
+        in facade
+    )
     assert "pub unsafe fn store<T, const N: usize, const ALIGNED: bool>" in facade
-    assert "load_masked, load_masked_zero" in library
+    assert "pub use tsl_facade::load_masked;" in library
+    assert "pub use tsl_facade::load_masked_zero;" in library
     assert "macro_rules! impl_mask_binary_operator" not in facade
 
 
@@ -401,9 +436,23 @@ def test_facade_owner_equivalence_and_wrapper_audit(
     assert rendered.public_items.count("pub fn ") + rendered.public_items.count(
         "pub unsafe fn "
     ) == sum(
-        1
-        if method.receiver_kind is RustFacadeReceiverKind.FREE
-        else len(method.public_shapes)
+        (
+            1
+            if method.receiver_kind is RustFacadeReceiverKind.FREE
+            else len(method.public_shapes)
+        )
+        + (
+            1
+            if method.receiver_kind is RustFacadeReceiverKind.FREE
+            and method.checked_conditions
+            else sum(
+                any(
+                    shape.type_tag in condition.applicable_type_tags
+                    for condition in method.checked_conditions
+                )
+                for shape in method.public_shapes
+            )
+        )
         for method in plan.comprehensive_methods
     )
     delegate_lines = tuple(

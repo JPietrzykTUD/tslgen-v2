@@ -11,6 +11,20 @@ from _select_lower_extension_support import (
 )
 
 
+_NARROW_REDUCTION_CASES = [
+    ("hadd", "s:=v", "ui16", "reduce_add_epi16"),
+    ("hadd", "s:=(m,v)", "ui16", "mask_reduce_add_epi16"),
+    ("hmax", "s:=v", "ui8", "reduce_max_epu8"),
+    ("hmax", "s:=(m,v)", "ui8", "mask_reduce_max_epu8"),
+    ("hmin", "s:=v", "ui8", "reduce_min_epu8"),
+    ("hmin", "s:=(m,v)", "ui8", "mask_reduce_min_epu8"),
+    ("hand", "s:=v", "ui8", "reduce_and_epi8"),
+    ("hand", "s:=(m,v)", "ui8", "mask_reduce_and_epi8"),
+    ("hor", "s:=v", "ui8", "reduce_or_epi8"),
+    ("hor", "s:=(m,v)", "ui8", "mask_reduce_or_epi8"),
+]
+
+
 @pytest.mark.parametrize("primitive", ["hand", "hor"])
 @pytest.mark.parametrize(
     ("profile", "extension", "type_tag"),
@@ -175,6 +189,104 @@ def test_avx2_hadd_composes_from_half_vector_primitives(
     assert "::tsl::add<tsl::simd<" in cpp.body_text
     assert "::tsl::hadd<tsl::simd<" in cpp.body_text
     assert "_mm256_" not in cpp.body_text
+
+
+@pytest.mark.parametrize(
+    ("primitive", "signature", "type_tag", "intrinsic_stem"),
+    _NARROW_REDUCTION_CASES,
+)
+@pytest.mark.parametrize(
+    ("extension", "intrinsic_prefix"),
+    [("avx2_vl", "_mm256_"), ("sse_vl", "_mm_")],
+)
+def test_vl_narrow_reductions_gate_nonportable_intrinsics(
+    catalog: Catalog,
+    machine_profiles,
+    primitive: str,
+    signature: str,
+    type_tag: str,
+    intrinsic_stem: str,
+    extension: str,
+    intrinsic_prefix: str,
+) -> None:
+    def lowered_with(capabilities: frozenset[str]):
+        slot = next(
+            selected
+            for selected in Selector()
+            .select_profile(
+                catalog,
+                machine_profiles["skylake"],
+                primitive,
+                (type_tag,),
+                backend_id="cpp",
+                compiler_capabilities=capabilities,
+            )
+            .selected
+            if selected.extension.name == extension
+            and selected.primitive.signature == signature
+        )
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, "cpp")
+        ).specialization
+        assert lowered is not None
+        return slot, lowered
+
+    direct_slot, direct = lowered_with(
+        frozenset({"x86_narrow_reductions"})
+    )
+    fallback_slot, fallback = lowered_with(frozenset())
+    intrinsic = f"{intrinsic_prefix}{intrinsic_stem}"
+
+    assert direct_slot.required_compiler_capabilities == frozenset(
+        {"x86_narrow_reductions"}
+    )
+    assert intrinsic in direct.body_text
+    assert fallback_slot.required_compiler_capabilities == frozenset()
+    assert intrinsic not in fallback.body_text
+    assert "::tsl::" in fallback.body_text
+    assert "to_array" not in fallback.body_text
+
+
+@pytest.mark.parametrize(
+    ("primitive", "signature", "type_tag", "intrinsic_stem"),
+    _NARROW_REDUCTION_CASES,
+)
+@pytest.mark.parametrize(
+    ("extension", "intrinsic_prefix"),
+    [("avx2_vl", "_mm256_"), ("sse_vl", "_mm_")],
+)
+def test_vl_narrow_reductions_remain_available_to_rust(
+    catalog: Catalog,
+    machine_profiles,
+    primitive: str,
+    signature: str,
+    type_tag: str,
+    intrinsic_stem: str,
+    extension: str,
+    intrinsic_prefix: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["skylake"],
+            primitive,
+            (type_tag,),
+            backend_id="rust",
+            compiler_capabilities=frozenset(),
+        )
+        .selected
+        if selected.extension.name == extension
+        and selected.primitive.signature == signature
+    )
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "rust")
+    ).specialization
+
+    assert slot.required_compiler_capabilities == frozenset()
+    assert lowered is not None
+    assert f"{intrinsic_prefix}{intrinsic_stem}" in lowered.body_text
 
 
 def test_knl_small_integer_hadd_composes_from_sse_quarters(

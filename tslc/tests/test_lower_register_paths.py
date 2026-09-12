@@ -7,8 +7,11 @@ from _select_lower_core_support import (
     create_backend_dialect,
     Lowerer,
     pytest,
+    replace,
     Selector,
 )
+from tslc.catalog.memory import MemoryAccess
+from tslc.catalog.semantics import PrimitiveOperation
 
 
 @pytest.mark.parametrize("profile", ("scalar", "skylake"))
@@ -50,7 +53,7 @@ def test_clang_select_prefers_exact_compiler_vector_operation(
     ).specialization
 
     assert lowered is not None
-    assert lowered.body_text == "return mask ? true_values : false_values;"
+    assert lowered.body_text == "return ((mask) ? (true_values) : (false_values));"
 
 
 @pytest.mark.parametrize("primitive", ["hadd", "hand", "hor"])
@@ -304,7 +307,7 @@ def test_sve_runtime_lane_counts_use_typed_query(catalog: Catalog) -> None:
     assert typed_query_bodies > 0
     assert offenders == []
 
-def test_sve_plain_load_store_intrinsics_stay_in_owning_primitives(
+def test_sve_plain_load_store_intrinsics_stay_in_typed_memory_owners(
     catalog: Catalog,
 ) -> None:
     offenders: list[str] = []
@@ -319,8 +322,20 @@ def test_sve_plain_load_store_intrinsics_stay_in_owning_primitives(
                 has_plain_store = any(
                     token in body for token in ("intrin<svst1>", "intrin<svst1,")
                 )
-                if (has_plain_load and primitive.name != "load") or (
-                    has_plain_store and primitive.name != "store"
+                owns_load = (
+                    primitive.operation is not None
+                    and primitive.operation.kind is PrimitiveOperation.LOAD
+                    and primitive.memory is not None
+                    and primitive.memory.access is MemoryAccess.READ
+                )
+                owns_store = (
+                    primitive.operation is not None
+                    and primitive.operation.kind is PrimitiveOperation.STORE
+                    and primitive.memory is not None
+                    and primitive.memory.access is MemoryAccess.WRITE
+                )
+                if (has_plain_load and not owns_load) or (
+                    has_plain_store and not owns_store
                 ):
                     offenders.append(
                         f"{primitive.name}:{'/'.join(implementation.selector_path)}"
@@ -632,6 +647,80 @@ def test_clang_runtime_permute_keeps_direct_lane_fallback_without_native_leaf(
     assert "result[i] = data[source]" in lowered.body_text
     assert "::tsl::permute_lanes<" not in lowered.body_text
     assert "fixed<" not in lowered.body_text
+
+
+@pytest.mark.parametrize(
+    ("primitive", "operation"),
+    (
+        ("to_mask", PrimitiveOperation.MASK_FROM_INTEGRAL),
+        ("to_integral", PrimitiveOperation.MASK_TO_INTEGRAL),
+    ),
+)
+def test_fixed_native_mask_bridges_use_semantic_operation_not_primitive_name(
+    catalog: Catalog,
+    machine_profiles,
+    primitive: str,
+    operation: PrimitiveOperation,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["avx2"],
+            primitive,
+            ("si32",),
+            backend_id="cpp",
+        )
+        .selected
+        if selected.extension.name == "clang_v256"
+        and not selected.required_compiler_capabilities
+    )
+    assert slot.primitive.operation is not None
+    assert slot.primitive.operation.kind is operation
+    assert slot.fixed_native_fallback_extension is not None
+    fixed_isa = slot.fixed_native_fallback_extension.isa_name
+    opted_in = replace(
+        slot,
+        implementation=replace(slot.implementation, prefer_fixed_native=True),
+    )
+
+    renamed = replace(
+        opted_in,
+        primitive=replace(
+            opted_in.primitive,
+            name=f"renamed_{primitive}",
+        ),
+    )
+    renamed_lowered = Lowerer().lower(
+        renamed,
+        catalog,
+        create_backend_dialect(catalog, "cpp"),
+    ).specialization
+    assert renamed_lowered is not None
+    assert (
+        f"renamed_{primitive}",
+        fixed_isa,
+    ) not in {
+        (origin.dependency.primitive, origin.dependency.source.extension_isa)
+        for origin in renamed_lowered.call_dependency_origins
+    }
+
+    name_only = replace(
+        opted_in,
+        primitive=replace(opted_in.primitive, operation=None),
+    )
+    name_only_lowered = Lowerer().lower(
+        name_only,
+        catalog,
+        create_backend_dialect(catalog, "cpp"),
+    ).specialization
+    assert name_only_lowered is not None
+    assert (primitive, fixed_isa) in {
+        (origin.dependency.primitive, origin.dependency.source.extension_isa)
+        for origin in name_only_lowered.call_dependency_origins
+    }
+
 
 @pytest.mark.parametrize("primitive", ["compress", "expand"])
 @pytest.mark.parametrize(
@@ -1102,7 +1191,14 @@ def test_clang_generic_index_memory_ops_delegate_to_fixed_native_leaf(
     assert f"::tsl::{primitive}<" in lowered.body_text
     assert ", scale, N>" in lowered.body_text
     assert "[0]" not in lowered.body_text
-    assert {
+    dependencies = {
         (origin.dependency.primitive, origin.dependency.source.extension_isa)
         for origin in lowered.call_dependency_origins
-    } == {(primitive, fixed_isa)}
+    }
+    expected_dependencies = {
+        (primitive, fixed_isa),
+        ("extract_value_at", extension),
+    }
+    if primitive == "gather":
+        expected_dependencies.add(("set_zero", extension))
+    assert dependencies == expected_dependencies

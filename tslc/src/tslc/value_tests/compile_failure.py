@@ -24,6 +24,12 @@ def render_cpp_compile_failure(case: ValueTestCasePlan) -> str:
         "int main() {",
         f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",
     ]
+    if case.target is not None:
+        lines.append(
+            "  using ToVec = "
+            f"tsl::simd<{case.target.base_spelling}, "
+            f"tsl::generic<{case.target.lanes}>>;"
+        )
     args = _cpp_immediate_args(lines, case)
     template_args = _template_args(case)
     lines.extend(
@@ -46,6 +52,11 @@ def render_rust_compile_failure(case: ValueTestCasePlan) -> str:
         "fn main() {",
         f"    type Vec = Simd<{case.base_spelling}, Generic<{case.lanes}>>;",
     ]
+    if case.target is not None:
+        lines.append(
+            f"    type ToVec = Simd<{case.target.base_spelling}, "
+            f"Generic<{case.target.lanes}>>;"
+        )
     args = _rust_immediate_args(lines, case)
     template_args = _template_args(case)
     lines.extend(
@@ -61,6 +72,8 @@ def render_rust_compile_failure(case: ValueTestCasePlan) -> str:
 
 def _template_args(case: ValueTestCasePlan) -> list[str]:
     args = ["Vec"]
+    if case.target is not None:
+        args.append("ToVec")
     if case.invocation.immediate is not None:
         args.append(case.invocation.immediate)
     args.extend(case.invocation.generic_defaults)

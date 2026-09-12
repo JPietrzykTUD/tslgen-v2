@@ -38,7 +38,13 @@ from tslc.catalog.scalar_types import (
     SCALAR_TYPE_ORDER,
 )
 from tslc.catalog.signatures import parse_signature
-from tslc.diagnostics import Diagnostic, SourceSpan, has_errors, sort_diagnostics
+from tslc.diagnostics import (
+    Diagnostic,
+    SourceSpan,
+    diagnostic_at,
+    has_errors,
+    sort_diagnostics,
+)
 from tslc.ir.scan import scan
 from tslc.lower.dependencies import (
     CallDependency,
@@ -46,6 +52,7 @@ from tslc.lower.dependencies import (
     dependency_sort_key,
     is_concrete_call_dependency,
 )
+from tslc.lower.implementation_facts import ImplementationState
 from tslc.lower.lowerer import (
     POLICY_DEFERRED_SIGNATURE_CODE,
     LoweredSpecialization,
@@ -63,8 +70,19 @@ from tslc.pipeline_request import (
 )
 from tslc.render.project import RenderedProject, render_project
 from tslc.select.selector import (
+    SelectionSlotDisposition,
+    SelectionSlotResult,
     SelectedImplementation,
     Selector,
+)
+from tslc.target_support import (
+    TargetSupportEntry,
+    TargetSupportKey,
+    TargetSupportRealizationKey,
+    TargetSupportStatus,
+    TargetSupportTrace,
+    realization_key,
+    target_support_key,
 )
 from tslc.value_tests import (
     ValueTestBackendProfileInput,
@@ -120,6 +138,7 @@ class GenerationResult:
     skipped: tuple[SkippedEntry, ...] = ()
     emitted_profiles: tuple[EmittedProfile, ...] = ()
     lowering_trace: LoweringTrace | None = None
+    target_support: TargetSupportTrace | None = None
 
 
 def generate(request: GenerationRequest) -> GenerationResult:
@@ -186,6 +205,13 @@ class _GenerationSession:
             for item in request.backend_compiler_capabilities
         }
         self.lowering_trace_slots: list[LoweringTraceSlot] = []
+        self.target_support_entries: dict[
+            tuple[TargetSupportKey, TargetSupportRealizationKey | None],
+            TargetSupportEntry,
+        ] = {}
+        self.lowered_target_support: dict[
+            int, tuple[TargetSupportKey, TargetSupportRealizationKey]
+        ] = {}
 
     def run(self) -> GenerationResult:
         request_diagnostics = (
@@ -227,6 +253,7 @@ class _GenerationSession:
             if self.request.collect_lowering_trace
             else None
         )
+        target_support = self._target_support_trace()
         backend_diagnostics: list[Diagnostic] = []
         for capability in self.backends:
             profiles_for_backend = self._profiles_for_backend(
@@ -255,6 +282,7 @@ class _GenerationSession:
                 self.skipped,
                 emitted_profiles,
                 lowering_trace,
+                target_support,
             )
 
         if self.request.mode == "strict" and (
@@ -266,6 +294,7 @@ class _GenerationSession:
                 self.skipped,
                 emitted_profiles,
                 lowering_trace,
+                target_support,
             )
 
         if not self.request.render_artifacts:
@@ -275,6 +304,7 @@ class _GenerationSession:
                 self.skipped,
                 emitted_profiles,
                 lowering_trace,
+                target_support,
             )
 
         value_tests = (
@@ -311,6 +341,7 @@ class _GenerationSession:
                 self.skipped,
                 emitted_profiles,
                 lowering_trace,
+                target_support,
             )
         if self.inputs.render_assets is None:
             raise AssertionError("render assets were not loaded for generation")
@@ -323,6 +354,7 @@ class _GenerationSession:
                 assets=self.inputs.render_assets,
                 config=self.request.render_config,
                 policy_inputs=self.inputs.policy_inputs,
+                input_digest=self.inputs.input_digest,
             )
             if self.emitted_profiles
             else None
@@ -336,6 +368,19 @@ class _GenerationSession:
             self.skipped,
             emitted_profiles,
             lowering_trace,
+            target_support,
+        )
+
+    def _target_support_trace(self) -> TargetSupportTrace | None:
+        if not self.request.collect_target_support:
+            return None
+        return TargetSupportTrace(
+            entries=tuple(
+                sorted(
+                    self.target_support_entries.values(),
+                    key=TargetSupportEntry.sort_key,
+                )
+            )
         )
 
     def _plan_value_tests(
@@ -475,21 +520,26 @@ class _GenerationSession:
                     processed.setdefault((primitive, type_tag, scope), set()).add(backend)
                 lowered_specs.extend(primitive_slots)
                 for slot in primitive_slots:
-                    target = slot.spec.target
-                    if target is None:
-                        continue
-                    for harness_primitive in harness_primitives:
-                        if slot.backend not in processed.get(
-                            (harness_primitive, target.base_tag, None), set()
-                        ):
-                            worklist.append(
-                                (
-                                    harness_primitive,
-                                    (target.base_tag,),
-                                    frozenset({slot.backend}),
-                                    None,
+                    harness_type_tags = {
+                        param.base_type_binding
+                        for param in slot.spec.type_params
+                        if param.base_type_binding is not None
+                    }
+                    if slot.spec.target is not None:
+                        harness_type_tags.add(slot.spec.target.base_tag)
+                    for harness_type_tag in sorted(harness_type_tags):
+                        for harness_primitive in harness_primitives:
+                            if slot.backend not in processed.get(
+                                (harness_primitive, harness_type_tag, None), set()
+                            ):
+                                worklist.append(
+                                    (
+                                        harness_primitive,
+                                        (harness_type_tag,),
+                                        frozenset({slot.backend}),
+                                        None,
+                                    )
                                 )
-                            )
                 for (
                     dependency_primitive,
                     dependency_type,
@@ -588,8 +638,21 @@ class _GenerationSession:
                 type_tags,
                 backend_id=backend,
                 compiler_capabilities=self.compiler_capabilities.get(backend),
+                collect_slots=self.request.collect_target_support,
             )
             self.diagnostics.extend(selection.diagnostics)
+            self._record_selection_deferrals(
+                profile_name,
+                backend,
+                selection.slots,
+                extensions,
+            )
+            self._record_target_selection(
+                profile_name,
+                backend,
+                selection.slots,
+                extensions,
+            )
             for slot in selection.selected:
                 if (
                     extensions is not None
@@ -607,32 +670,52 @@ class _GenerationSession:
                     backend,
                     body_segments=body_segments,
                 )
+                support_identity = self._target_support_identity(
+                    profile_name, backend, slot
+                )
                 self._record_lowering_diagnostics(
-                    profile_name, backend, primitive, slot, lowered
+                    profile_name,
+                    backend,
+                    primitive,
+                    slot,
+                    lowered,
+                    support_identity,
                 )
                 if lowered.specialization is None:
                     continue
-                callee_origins = lowered.specialization.call_dependency_origins
+                self._advance_target_support(
+                    support_identity,
+                    TargetSupportStatus.LOWERED,
+                )
+                all_callee_origins = (
+                    lowered.specialization.call_dependency_origins
+                )
+                callee_origins = (
+                    lowered.specialization.implementation_call_dependency_origins
+                )
                 callees = frozenset(
                     origin.dependency for origin in callee_origins
                 )
-                lowered_slots.append(
-                    _LoweredSlot(
-                        backend=backend,
-                        spec=lowered.specialization,
-                        callees=callees,
-                        callee_origins=callee_origins,
-                        selection_required_features=slot.required_features,
-                        selection_required_compiler_capabilities=(
-                            slot.required_compiler_capabilities
-                        ),
-                        compiler_alternative_rank=slot.compiler_alternative_rank,
-                        selector_source=slot.implementation.selector_source,
-                    )
+                lowered_slot = _LoweredSlot(
+                    backend=backend,
+                    spec=lowered.specialization,
+                    callees=callees,
+                    callee_origins=callee_origins,
+                    selection_required_features=slot.required_features,
+                    selection_required_compiler_capabilities=(
+                        slot.required_compiler_capabilities
+                    ),
+                    compiler_alternative_rank=slot.compiler_alternative_rank,
+                    selector_source=slot.implementation.selector_source,
                 )
+                lowered_slots.append(lowered_slot)
+                if support_identity is not None:
+                    self.lowered_target_support[id(lowered_slot)] = support_identity
                 discovered_dependencies.update(
                     _dependency_discovery_requests(
-                        callees,
+                        frozenset(
+                            origin.dependency for origin in all_callee_origins
+                        ),
                         backend=backend,
                         catalog=catalog,
                         fallback_types=self.type_tags,
@@ -653,6 +736,9 @@ class _GenerationSession:
         primitive: str,
         slot: SelectedImplementation,
         lowered: LoweringResult,
+        support_identity: tuple[
+            TargetSupportKey, TargetSupportRealizationKey
+        ] | None,
     ) -> None:
         # In partial mode, lowerer "info" diagnostics are coverage gaps. Strict mode promotes
         # them below, scoped to the selected profile/backend slot.
@@ -661,6 +747,18 @@ class _GenerationSession:
             return
         entry = _lowering_skipped_entry(profile_name, backend, primitive, slot, lowered)
         self.skipped.append(entry)
+        self._advance_target_support(
+            support_identity,
+            (
+                TargetSupportStatus.POLICY_DEFERRED
+                if entry.status == "policy_deferred"
+                else TargetSupportStatus.SELECTED
+            ),
+            reason_id=next(
+                (diagnostic.code for diagnostic in lowered.diagnostics),
+                "TSL-LOWER-UNSUPPORTED-BODY",
+            ),
+        )
         if self.request.mode == "strict" and entry.status == "coverage_gap":
             self.diagnostics.extend(_strict_lowering_diagnostics(entry))
 
@@ -688,6 +786,11 @@ class _GenerationSession:
             variant_names=slot.spec.variant_names,
         )
         self.skipped.append(entry)
+        self._advance_target_support(
+            self.lowered_target_support.get(id(slot)),
+            TargetSupportStatus.PRUNED,
+            reason_id="TSL-PIPELINE-PRUNED-SPECIALIZATION",
+        )
         if self.request.mode == "strict":
             self.diagnostics.append(_strict_pruned_diagnostic(entry))
 
@@ -702,6 +805,11 @@ class _GenerationSession:
         for slot in lowered_specs:
             if id(slot) in pruned_ids:
                 continue
+            self._advance_target_support(
+                self.lowered_target_support.get(id(slot)),
+                TargetSupportStatus.EMITTED,
+                implementation_state=slot.spec.implementation_state,
+            )
             if slot.compiler_alternative_rank is not None:
                 target = slot.spec.target
                 key = (
@@ -734,6 +842,157 @@ class _GenerationSession:
                     variant_names=slot.spec.variant_names,
                 )
             )
+
+    def _record_target_selection(
+        self,
+        profile: str,
+        backend: str,
+        slots: tuple[SelectionSlotResult, ...],
+        extensions: tuple[str, ...] | None,
+    ) -> None:
+        if not self.request.collect_target_support:
+            return
+        for slot in slots:
+            if (
+                extensions is not None
+                and slot.extension.name not in extensions
+                and slot.extension.isa_name not in extensions
+            ):
+                continue
+            key = target_support_key(
+                profile,
+                backend,
+                slot.primitive,
+                slot.extension.name,
+                slot.type_tag,
+                slot.to_target,
+            )
+            if slot.disposition is SelectionSlotDisposition.FIXED_SHAPE_ONLY:
+                self.target_support_entries[(key, None)] = TargetSupportEntry(
+                    key=key,
+                    realization=None,
+                    status=TargetSupportStatus.POLICY_DEFERRED,
+                    reason_id="TSL-SELECT-FIXED-SHAPE-ONLY",
+                )
+                continue
+            if slot.disposition is SelectionSlotDisposition.NOT_APPLICABLE:
+                assert slot.inapplicability_reason is not None
+                self.target_support_entries[(key, None)] = TargetSupportEntry(
+                    key=key,
+                    realization=None,
+                    status=TargetSupportStatus.NOT_APPLICABLE,
+                    reason_id=slot.inapplicability_reason.value,
+                )
+                continue
+            if not slot.selected:
+                self.target_support_entries[(key, None)] = TargetSupportEntry(
+                    key=key,
+                    realization=None,
+                    status=TargetSupportStatus.ABSENT,
+                    reason_id="TSL-SELECT-NO-CANDIDATE",
+                )
+                continue
+            self.target_support_entries.pop((key, None), None)
+            for selected in slot.selected:
+                realization = realization_key(selected)
+                identity = (key, realization)
+                self.target_support_entries[identity] = TargetSupportEntry(
+                    key=key,
+                    realization=realization,
+                    status=TargetSupportStatus.SELECTED,
+                )
+
+    def _record_selection_deferrals(
+        self,
+        profile: str,
+        backend: str,
+        slots: tuple[SelectionSlotResult, ...],
+        extensions: tuple[str, ...] | None,
+    ) -> None:
+        for slot in slots:
+            if slot.disposition is not SelectionSlotDisposition.FIXED_SHAPE_ONLY:
+                continue
+            if (
+                extensions is not None
+                and slot.extension.name not in extensions
+                and slot.extension.isa_name not in extensions
+            ):
+                continue
+            shape = parse_signature(slot.primitive.signature)
+            diagnostic = diagnostic_at(
+                severity="info",
+                code="TSL-SELECT-FIXED-SHAPE-ONLY",
+                message=(
+                    f"signature {slot.primitive.signature!r} requires a static lane "
+                    f"count and is unavailable for runtime-length extension "
+                    f"{slot.extension.name!r} (fixed-shape kinds: "
+                    f"{', '.join(sorted(slot.fixed_shape_kinds))})"
+                ),
+                source=slot.primitive.signature_source,
+            )
+            self.skipped.append(
+                SkippedEntry(
+                    profile=profile,
+                    backend=backend,
+                    primitive=slot.primitive.name,
+                    extension=slot.extension.name,
+                    type_tag=slot.type_tag,
+                    reason=diagnostic.message,
+                    diagnostics=(diagnostic,),
+                    status="policy_deferred",
+                    source_primitive_name=slot.primitive.name,
+                    result_kind="" if shape is None else shape.result_kind,
+                    param_kinds=() if shape is None else shape.param_kinds,
+                    mask_policy=slot.primitive.mask_mode,
+                    axis=tuple(
+                        (key, slot.primitive.attributes[key])
+                        for key in sorted(slot.primitive.attributes)
+                        if key in BOOLEAN_WILDCARD_ATTRIBUTES
+                    ),
+                    variant_names=(),
+                )
+            )
+
+    def _target_support_identity(
+        self,
+        profile: str,
+        backend: str,
+        selected: SelectedImplementation,
+    ) -> tuple[TargetSupportKey, TargetSupportRealizationKey] | None:
+        if not self.request.collect_target_support:
+            return None
+        return (
+            target_support_key(
+                profile,
+                backend,
+                selected.primitive,
+                selected.extension.name,
+                selected.type_tag,
+                selected.to_target,
+            ),
+            realization_key(selected),
+        )
+
+    def _advance_target_support(
+        self,
+        identity: tuple[
+            TargetSupportKey, TargetSupportRealizationKey
+        ] | None,
+        status: TargetSupportStatus,
+        *,
+        reason_id: str | None = None,
+        implementation_state: ImplementationState | None = None,
+    ) -> None:
+        if identity is None:
+            return
+        key, realization = identity
+        self.target_support_entries[identity] = TargetSupportEntry(
+            key=key,
+            realization=realization,
+            status=status,
+            reason_id=reason_id,
+            implementation_state=implementation_state,
+        )
 
 
 def _dependency_discovery_requests(
@@ -1025,6 +1284,7 @@ def _result_without_artifacts(
     skipped: list[SkippedEntry],
     emitted_profiles: tuple[EmittedProfile, ...] = (),
     lowering_trace: LoweringTrace | None = None,
+    target_support: TargetSupportTrace | None = None,
 ) -> GenerationResult:
     return _result(
         ArtifactSet.create(()),
@@ -1034,6 +1294,7 @@ def _result_without_artifacts(
         skipped,
         emitted_profiles,
         lowering_trace,
+        target_support,
     )
 
 
@@ -1045,6 +1306,7 @@ def _result(
     skipped: list[SkippedEntry],
     emitted_profiles: tuple[EmittedProfile, ...] = (),
     lowering_trace: LoweringTrace | None = None,
+    target_support: TargetSupportTrace | None = None,
 ) -> GenerationResult:
     return GenerationResult(
         artifacts=artifacts,
@@ -1054,6 +1316,7 @@ def _result(
         skipped=tuple(sorted(skipped, key=_slot_result_key)),
         emitted_profiles=emitted_profiles,
         lowering_trace=lowering_trace,
+        target_support=target_support,
     )
 
 

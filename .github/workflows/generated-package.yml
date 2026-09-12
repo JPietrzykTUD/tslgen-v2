@@ -4,9 +4,8 @@ on:
   push:
     branches:
       - main
-    tags:
-      - "v*"
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -63,12 +62,13 @@ jobs:
       - ci-image
     if: needs.scope.outputs.package == 'true' || needs.scope.outputs.docs == 'true'
     permissions:
-      contents: write
+      contents: read
       packages: read
 
     env:
       TSLC_CI_IMAGE: ${{ needs.scope.outputs.ci_image }}
-      TSLC_CI_OUTPUT: ./tslctmp/ci-generated
+      TSLC_CI_OUTPUT: ./tslctmp/ci-release-bundles
+      TSLC_CI_REFERENCE: ./tslctmp/ci-generated-reference
 
     steps:
       - name: Check out repository
@@ -87,24 +87,37 @@ jobs:
             "tslctmp/ci-logs/generated-package/docker-pull.log" \
             docker pull "${TSLC_CI_IMAGE}"
 
-      - name: Generate package output
+      - name: Generate full documentation and validation reference
         run: |
           bash .github/scripts/run_with_log.sh \
-            "tslctmp/ci-logs/generated-package/generate.log" \
+            "tslctmp/ci-logs/generated-package/generate-reference.log" \
             bash supplementary/ci/run_tslc_ci_container.sh \
-              -e TSLC_CI_OUTPUT="${TSLC_CI_OUTPUT}" \
+              -e TSLC_CI_REFERENCE="${TSLC_CI_REFERENCE}" \
               -- \
               bash -lc \
-                'bash .github/scripts/generate_distributable_project.sh "${TSLC_CI_OUTPUT}"'
+                'bash .github/scripts/generate_release_reference_project.sh \
+                  "${TSLC_CI_REFERENCE}"'
 
       - name: Verify generated consumers and examples
         run: |
           bash .github/scripts/run_with_log.sh \
             "tslctmp/ci-logs/generated-package/verify-consumers.log" \
             bash supplementary/ci/run_tslc_ci_container.sh \
+              -e TSLC_CI_REFERENCE="${TSLC_CI_REFERENCE}" \
+              -- \
+              bash -lc 'bash supplementary/ci/verify_generated_consumers.sh \
+                "${TSLC_CI_REFERENCE}"'
+
+      - name: Generate deployment-oriented release bundles
+        run: |
+          bash .github/scripts/run_with_log.sh \
+            "tslctmp/ci-logs/generated-package/generate-bundles.log" \
+            bash supplementary/ci/run_tslc_ci_container.sh \
               -e TSLC_CI_OUTPUT="${TSLC_CI_OUTPUT}" \
               -- \
-              bash -lc 'bash supplementary/ci/verify_generated_consumers.sh "${TSLC_CI_OUTPUT}"'
+              bash -lc \
+                'python .github/scripts/build_release_bundles.py \
+                  "${TSLC_CI_OUTPUT}"'
 
       - name: Package generated output
         run: |
@@ -113,8 +126,48 @@ jobs:
             bash -lc '
               set -e
               mkdir -p tslctmp/artifacts
-              tar -C "${TSLC_CI_OUTPUT}" -czf "tslctmp/artifacts/tsl-generated-${GITHUB_SHA}.tar.gz" .
+              source_epoch="$(git show -s --format=%ct "${GITHUB_SHA}")"
+              python .github/scripts/release_production.py archive \
+                --kind generated \
+                --source "${TSLC_CI_OUTPUT}" \
+                --output "tslctmp/artifacts/tsl-generated-${GITHUB_SHA}.tar.gz" \
+                --epoch "${source_epoch}"
+              python .github/scripts/release_production.py archive \
+                --kind generated \
+                --source "${TSLC_CI_OUTPUT}" \
+                --output "tslctmp/artifacts/tsl-generated-${GITHUB_SHA}-repro.tar.gz" \
+                --epoch "${source_epoch}"
+              cmp \
+                "tslctmp/artifacts/tsl-generated-${GITHUB_SHA}.tar.gz" \
+                "tslctmp/artifacts/tsl-generated-${GITHUB_SHA}-repro.tar.gz"
+              python .github/scripts/release_production.py archive \
+                --kind generated \
+                --source "${TSLC_CI_REFERENCE}" \
+                --output "tslctmp/artifacts/tsl-generated-reference-${GITHUB_SHA}.tar.gz" \
+                --epoch "${source_epoch}"
             '
+
+      - name: Consume the packaged archive from clean projects
+        run: |
+          bash .github/scripts/run_with_log.sh \
+            "tslctmp/ci-logs/generated-package/archive-consumers.log" \
+            bash supplementary/ci/run_tslc_ci_container.sh \
+              -e TSLC_RELEASE_ARCHIVE="tslctmp/artifacts/tsl-generated-${GITHUB_SHA}.tar.gz" \
+              -- \
+              bash -lc \
+                'bash supplementary/ci/verify_release_archive_consumers.sh \
+                  "${TSLC_RELEASE_ARCHIVE}"'
+
+      - name: Run the scalable showcase from packaged target bundles
+        run: |
+          bash .github/scripts/run_with_log.sh \
+            "tslctmp/ci-logs/generated-package/archive-scalable-showcase.log" \
+            bash supplementary/ci/run_tslc_ci_container.sh \
+              -e TSLC_RELEASE_ARCHIVE="tslctmp/artifacts/tsl-generated-${GITHUB_SHA}.tar.gz" \
+              -- \
+              bash -lc \
+                'PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds \
+                  tslc/tests/test_scalable_release_showcase.py'
 
       - name: Upload generated artifact package
         uses: actions/upload-artifact@v7
@@ -123,37 +176,12 @@ jobs:
           path: tslctmp/artifacts/tsl-generated-${{ github.sha }}.tar.gz
           if-no-files-found: error
 
-      - name: Publish generated release
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ github.ref_name }}
-          ASSET_PATH: tslctmp/artifacts/tsl-generated-${{ github.sha }}.tar.gz
-        run: |
-          bash .github/scripts/run_with_log.sh \
-            "tslctmp/ci-logs/generated-package/release.log" \
-            bash -lc '
-              set -e
-              release_title="TSL generated ${RELEASE_TAG}"
-              release_notes="Generated TSL package for ${RELEASE_TAG} (${GITHUB_SHA})."
-              asset_name="tsl-generated-${RELEASE_TAG}.tar.gz"
-              release_asset_path="tslctmp/artifacts/${asset_name}"
-              cp "${ASSET_PATH}" "${release_asset_path}"
-
-              if ! gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
-                if ! gh release create "${RELEASE_TAG}" \
-                  --title "${release_title}" \
-                  --notes "${release_notes}" \
-                  --verify-tag; then
-                  gh release view "${RELEASE_TAG}" >/dev/null
-                fi
-              fi
-
-              gh release upload \
-                "${RELEASE_TAG}" \
-                "${release_asset_path}" \
-                --clobber
-            '
+      - name: Upload internal documentation reference
+        uses: actions/upload-artifact@v7
+        with:
+          name: tsl-generated-reference-${{ github.sha }}
+          path: tslctmp/artifacts/tsl-generated-reference-${{ github.sha }}.tar.gz
+          if-no-files-found: error
 
       - name: Upload package logs
         if: always()
@@ -189,13 +217,13 @@ jobs:
       - name: Download generated package
         uses: actions/download-artifact@v8
         with:
-          name: tsl-generated-${{ github.sha }}
+          name: tsl-generated-reference-${{ github.sha }}
           path: tslctmp/docs-input
 
       - name: Extract generated package
         run: |
           mkdir -p "${TSLC_CI_OUTPUT}"
-          tar -xzf "tslctmp/docs-input/tsl-generated-${GITHUB_SHA}.tar.gz" \
+          tar -xzf "tslctmp/docs-input/tsl-generated-reference-${GITHUB_SHA}.tar.gz" \
             -C "${TSLC_CI_OUTPUT}"
 
       - name: Log in to GHCR
@@ -233,7 +261,20 @@ jobs:
             bash -lc '
               set -e
               mkdir -p tslctmp/artifacts
-              tar -C "${TSLC_CI_OUTPUT}/docs/site" -czf "tslctmp/artifacts/tsl-docs-${GITHUB_SHA}.tar.gz" .
+              source_epoch="$(git show -s --format=%ct "${GITHUB_SHA}")"
+              python .github/scripts/release_production.py archive \
+                --kind docs \
+                --source "${TSLC_CI_OUTPUT}/docs/site" \
+                --output "tslctmp/artifacts/tsl-docs-${GITHUB_SHA}.tar.gz" \
+                --epoch "${source_epoch}"
+              python .github/scripts/release_production.py archive \
+                --kind docs \
+                --source "${TSLC_CI_OUTPUT}/docs/site" \
+                --output "tslctmp/artifacts/tsl-docs-${GITHUB_SHA}-repro.tar.gz" \
+                --epoch "${source_epoch}"
+              cmp \
+                "tslctmp/artifacts/tsl-docs-${GITHUB_SHA}.tar.gz" \
+                "tslctmp/artifacts/tsl-docs-${GITHUB_SHA}-repro.tar.gz"
             '
 
       - name: Upload docs artifact

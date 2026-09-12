@@ -10,7 +10,6 @@ from tslc.backend.cpp_compiler_capabilities import (
     cpp_extension_header_group,
 )
 from tslc.backend.emitted_profile import EmittedProfile, used_vector_type_specs
-from tslc.backend.helper_requirements import CPP_HELPER_MANIFEST
 from tslc.backend.target_capability import (
     cpp_width_indexed_register_helper,
     is_width_indexed_register_extension,
@@ -18,6 +17,7 @@ from tslc.backend.target_capability import (
 from tslc.catalog.model import Extension
 from tslc.catalog.scalar_types import scalar_bit_width_or_default
 from tslc.lower.lowerer import LoweredSpecialization
+from tslc.names import identifier_slug
 from tslc.target_text import TemplateApplication
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
@@ -26,6 +26,63 @@ _CPP_COMPILER_BUILTIN_MASK_POLICY_NAMES = {
     "comparison_lane_vector": "comparison_vector",
     "boolean_lane_vector": "boolean_vector",
 }
+
+
+def _cpp_used_vector_type_specs(
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
+) -> tuple[tuple[str, str, str], ...]:
+    """Return every concrete C++ SIMD type needed by definitions and bindings."""
+
+    facts = set(used_vector_type_specs(by_primitive))
+    facts.update(
+        (
+            spec.extension_name,
+            param.base_type_binding,
+            param.base_type_binding_spelling,
+        )
+        for specializations in by_primitive.values()
+        for spec in specializations
+        for param in spec.type_params
+        if param.base_type_binding is not None
+        and param.base_type_binding_spelling is not None
+    )
+    return tuple(sorted(facts))
+
+
+def _cpp_inference_vector_type_specs(
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
+) -> tuple[tuple[str, str, str], ...]:
+    """Return source vectors that public dataparallel policies may select.
+
+    Target-only vector types still need concrete ``simd`` declarations (for
+    example, ``insert_imask`` can describe a wider result mask), but they are
+    not available implementations of the selected machine profile. Letting
+    those bookkeeping targets participate here can otherwise make an AVX2
+    profile advertise AVX-512 as ``native``.
+    """
+
+    facts = {
+        (spec.extension_name, spec.type_tag, spec.base_type_spelling)
+        for specializations in by_primitive.values()
+        for spec in specializations
+        if not DEFAULT_SUPPORT_POLICY.is_free_function_signature(
+            spec.result_kind,
+            spec.param_kinds,
+        )
+    }
+    facts.update(
+        (
+            spec.extension_name,
+            param.base_type_binding,
+            param.base_type_binding_spelling,
+        )
+        for specializations in by_primitive.values()
+        for spec in specializations
+        for param in spec.type_params
+        if param.base_type_binding is not None
+        and param.base_type_binding_spelling is not None
+    )
+    return tuple(sorted(facts))
 
 
 def cpp_extension_availability_condition(extension: Extension | None) -> str | None:
@@ -50,11 +107,14 @@ def _cpp_includes(
     emitted_exts: Sequence[str],
     extensions: Mapping[str, Extension],
 ) -> str:
-    lines = [
-        '#include "tsl_core.hpp"',
-        '#include "tsl_primitives.hpp"',
-        '#include "tsl_dataparallel.hpp"',
-    ]
+    lines = list(_cpp_system_header_includes(emitted_exts, extensions))
+    lines.extend(
+        (
+            '#include "tsl_core.hpp"',
+            '#include "tsl_primitives.hpp"',
+            '#include "tsl_dataparallel.hpp"',
+        )
+    )
     if any(
         is_width_indexed_register_extension(extensions.get(ext))
         for ext in emitted_exts
@@ -72,14 +132,21 @@ def _cpp_includes(
     return "\n".join(lines) + "\n"
 
 
-def cpp_profiles_support_algorithm(profiles: tuple[EmittedProfile, ...]) -> bool:
-    """Whether every emitted C++ profile can expose the static algorithm facade."""
+def cpp_system_header_name(extension_name: str) -> str:
+    """Generated proxy that confines one extension's external headers."""
 
-    return bool(profiles) and all(
-        CPP_HELPER_MANIFEST.supports(
-            "algorithm", emitted_profile.specializations("cpp")
-        )
-        for emitted_profile in profiles
+    return f"tsl_system_headers_{identifier_slug(extension_name)}.hpp"
+
+
+def _cpp_system_header_includes(
+    emitted_exts: Sequence[str],
+    extensions: Mapping[str, Extension],
+) -> tuple[str, ...]:
+    return tuple(
+        f"#include <{cpp_system_header_name(ext)}>"
+        for ext in sorted(emitted_exts)
+        if ext in extensions
+        and extensions[ext].system_headers_for_backend("cpp")
     )
 
 
@@ -121,6 +188,8 @@ def _cpp_registration(ext: str, extension: Extension | None) -> str:
         f"    using extension_type = {ext};\n"
         f"    using register_type = typename detail::{helper}<T>::type;\n"
         f"    using mask_type = {mask};\n"
+        f"    static constexpr bool mask_is_bitset = "
+        f"{str(_cpp_mask_is_bitset(extension)).lower()};\n"
         f"    using imask_type = {imask};\n"
         f"    template <class ToBase>\n"
         f"    using with_base_type = simd<ToBase, {ext}>;\n"
@@ -140,23 +209,19 @@ def _cpp_native_registration(
     """Register non-x86 native extensions from typed register spellings."""
 
     lines: list[str] = []
-    emitted = {
-        ext
-        for ext, type_tag, _base in used_vector_type_specs(by_primitive)
-        if (extension := extensions.get(ext)) is not None
-        and not is_width_indexed_register_extension(extension)
-        and extension.direct_vector_register_type("cpp", type_tag) is not None
-    }
-    for ext in sorted(emitted):
+    emitted = cpp_native_registration_extensions(by_primitive, extensions)
+    for ext in emitted:
         lines.append(
             _guard_cpp_extension(
                 f"struct {ext} {{}};\n",
                 extensions.get(ext),
             )
         )
-    for ext, type_tag, base in used_vector_type_specs(by_primitive):
+    for ext, type_tag, base in _cpp_used_vector_type_specs(by_primitive):
+        if ext not in emitted:
+            continue
         extension = extensions.get(ext)
-        if extension is None or is_width_indexed_register_extension(extension):
+        if extension is None:
             continue
         register = extension.direct_vector_register_type("cpp", type_tag)
         if register is None:
@@ -180,6 +245,8 @@ def _cpp_native_registration(
                 f"    using extension_type = {ext};\n"
                 f"    using register_type = {register};\n"
                 f"    using mask_type = {mask};\n"
+                f"    static constexpr bool mask_is_bitset = "
+                f"{str(_cpp_mask_is_bitset(extension)).lower()};\n"
                 f"    using imask_type = {imask};\n"
                 f"    template <class ToBase>\n"
                 f"    using with_base_type = simd<ToBase, {ext}>;\n"
@@ -195,6 +262,22 @@ def _cpp_native_registration(
     return "".join(lines)
 
 
+def cpp_native_registration_extensions(
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
+    extensions: Mapping[str, Extension],
+) -> tuple[str, ...]:
+    """Return exact non-width-indexed extension tags rendered for a header."""
+
+    emitted = {
+        ext
+        for ext, type_tag, _base in _cpp_used_vector_type_specs(by_primitive)
+        if (extension := extensions.get(ext)) is not None
+        and not is_width_indexed_register_extension(extension)
+        and extension.direct_vector_register_type("cpp", type_tag) is not None
+    }
+    return tuple(sorted(emitted))
+
+
 def _cpp_sized_registration(
     emitted_exts: Sequence[str],
     extensions: Mapping[str, Extension],
@@ -202,17 +285,8 @@ def _cpp_sized_registration(
     """Register profile-local sized vector tags that are not the static generic tag."""
 
     lines: list[str] = []
-    for ext in emitted_exts:
-        extension = extensions.get(ext)
-        if (
-            extension is None
-            or (
-                extension.is_unconditional_implementation_fallback
-                and DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension)
-            )
-            or not DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension)
-        ):
-            continue
+    for ext in cpp_sized_registration_extensions(emitted_exts, extensions):
+        extension = extensions[ext]
         mask = _cpp_sized_mask_type(extension)
         imask = _cpp_sized_imask_type(extension, mask)
         lines.append(
@@ -227,6 +301,8 @@ def _cpp_sized_registration(
             f"    using extension_type = {ext}<LANES>;\n"
             "    using register_type = array_type<T, LANES>;\n"
             f"    using mask_type = {mask};\n"
+            f"    static constexpr bool mask_is_bitset = "
+            f"{str(_cpp_mask_is_bitset(extension)).lower()};\n"
             f"    using imask_type = {imask};\n"
             "    template <class ToBase>\n"
             f"    using with_base_type = simd<ToBase, {ext}<LANES>>;\n"
@@ -247,6 +323,21 @@ def _cpp_sized_registration(
             "};\n\n"
         )
     return "".join(lines)
+
+
+def cpp_sized_registration_extensions(
+    emitted_exts: Sequence[str],
+    extensions: Mapping[str, Extension],
+) -> tuple[str, ...]:
+    """Return exact sized extension tags rendered for one base profile header."""
+
+    return tuple(
+        ext
+        for ext in emitted_exts
+        if (extension := extensions.get(ext)) is not None
+        and not extension.is_unconditional_implementation_fallback
+        and DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension)
+    )
 
 
 def _cpp_sized_mask_type(extension: Extension) -> str:
@@ -308,7 +399,7 @@ def _cpp_inferred_simd_registrations(
 
     candidates: dict[tuple[str, int], tuple[tuple[int, int, str], str]] = {}
     native_candidates: dict[str, tuple[tuple[int, int, str], str]] = {}
-    for ext, type_tag, base in used_vector_type_specs(by_primitive):
+    for ext, type_tag, base in _cpp_inference_vector_type_specs(by_primitive):
         extension = extensions.get(ext)
         if extension is None or not cpp_participates_in_dataparallel_inference(
             extension, type_tag
@@ -362,7 +453,7 @@ def _cpp_overlay_fixed_registrations(
     """Expose an explicit fixed-lane policy for one opt-in header overlay."""
 
     candidates: dict[tuple[str, str, int], tuple[tuple[int, str], str]] = {}
-    for ext, type_tag, base in used_vector_type_specs(by_primitive):
+    for ext, type_tag, base in _cpp_inference_vector_type_specs(by_primitive):
         extension = extensions.get(ext)
         metadata = (
             None
@@ -483,6 +574,13 @@ def _cpp_mask_type(
         lanes = vector_bits // scalar_bit_width_or_default(type_tag)
         return f"bool __attribute__((ext_vector_type({lanes})))"
     return register
+
+
+def _cpp_mask_is_bitset(extension: Extension | None) -> bool:
+    return extension is not None and extension.mask_policy.kind in {
+        "exact_lane_bitmask",
+        "native_predicate_by_lanes",
+    }
 
 
 def _cpp_imask_type(

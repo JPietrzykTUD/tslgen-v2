@@ -6,6 +6,7 @@ prim<void:=(ptr,v)>[aligned=*] store(ptr, data):
   memory:
     access write
     addressing contiguous
+  preconditions [contiguous_memory_extent, selected_memory_alignment]
   overload:
     axis payload_extent
     value vector
@@ -414,7 +415,7 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask_repr(ptr, mask):
             } else<generation> {
               let<type>(MaskBase, base::unsigned_of(base::in));
               let<type>(MaskVec, vector::as_base(MaskBase));
-              call<primitive=store[MaskVec], attrs[aligned=value(primitive::attribute(aligned))]>(
+              call<primitive=store[MaskVec], attrs[aligned=value(primitive::attribute(aligned))], discharge[contiguous_memory_extent, selected_memory_alignment]>(
                 cast<reinterpret, type=ptr>(MaskBase, ptr),
                 call<primitive=mov[MaskVec], attrs[mask=zero]>(
                   mask,
@@ -441,7 +442,7 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask_repr(ptr, mask):
             } else<generation> {
               let<type>(MaskBase, base::unsigned_of(base::in));
               let<type>(MaskVec, vector::as_base(MaskBase));
-              call<primitive=store[MaskVec], attrs[aligned=value(primitive::attribute(aligned))]>(
+              call<primitive=store[MaskVec], attrs[aligned=value(primitive::attribute(aligned))], discharge[contiguous_memory_extent, selected_memory_alignment]>(
                 cast<reinterpret, type=ptr>(MaskBase, ptr),
                 call<primitive=mov[MaskVec], attrs[mask=zero]>(
                   mask,
@@ -492,7 +493,7 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask_repr(ptr, mask):
             } else<generation> {
               let<type>(MaskVec, vector::as_base(base::unsigned_of(base::in)));
               var<const_infer>(mask_vec, call<primitive=reinterpret[Vec, MaskVec]>(mask));
-              call<primitive=store[MaskVec], attrs[aligned=value(primitive::attribute(aligned))]>(
+              call<primitive=store[MaskVec], attrs[aligned=value(primitive::attribute(aligned))], discharge[contiguous_memory_extent, selected_memory_alignment]>(
                 cast<reinterpret, type=ptr>(base::unsigned_of(base::in), ptr),
                 mask_vec
               );
@@ -535,7 +536,50 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask_repr(ptr, mask):
             } else<generation> {
               let<type>(MaskWord, base::unsigned_of(base::in));
               let<type>(MaskVec, vector::as_base(MaskWord));
-              call<primitive=store[MaskVec], attrs[aligned=value(primitive::attribute(aligned))]>(
+              call<primitive=store[MaskVec], attrs[aligned=value(primitive::attribute(aligned))], discharge[contiguous_memory_extent, selected_memory_alignment]>(
+                cast<reinterpret, type=ptr>(MaskWord, ptr),
+                call<primitive=to_vector[MaskVec]>(mask)
+              );
+            }
+          """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            if<generation>(value(primitive::attribute(packed))) {
+              let<type>(UBase, base::unsigned_of(base::in));
+              let<type>(UVec, vector::as_base(UBase));
+              var<const_infer>(idx, call<primitive=sequence[UVec]>());
+              var<const_infer>(lanes, value(generic::runtime_length(UVec)));
+              var<const_infer>(nbytes, ((lanes + 7) >> 3));
+              var<const_infer>(bytes, cast<reinterpret, type=ptr>(scalar::ui8, ptr));
+
+              loop<backend>(i, 0, nbytes, 1) {
+                *ptr_add_mut(bytes, i) = cast<static>(scalar::ui8, 0);
+              }
+
+              loop<backend>(lane, 0, lanes, 1) {
+                var<const_infer>(one, call<primitive=equal[UVec]>(
+                  idx,
+                  call<primitive=set1[UVec]>(cast<static>(UBase, lane))
+                ));
+                if (call<primitive=mask_population_count[UVec]>(
+                  call<primitive=mask_binary_and[UVec]>(one, mask)
+                ) != 0) {
+                  *ptr_add_mut(bytes, lane >> 3) =
+                    *ptr_add(bytes, lane >> 3) |
+                    cast<static>(scalar::ui8, (1 << (lane & 7)));
+                }
+              }
+            } else<generation> {
+              let<type>(MaskWord, base::unsigned_of(base::in));
+              let<type>(MaskVec, vector::as_base(MaskWord));
+              call<primitive=store[MaskVec], attrs[aligned=value(primitive::attribute(aligned))], discharge[contiguous_memory_extent, selected_memory_alignment]>(
                 cast<reinterpret, type=ptr>(MaskWord, ptr),
                 call<primitive=to_vector[MaskVec]>(mask)
               );
@@ -549,6 +593,7 @@ prim<void:=(ptr,s)>[aligned=*] store(ptr, scalar):
   memory:
     access write
     addressing contiguous
+  preconditions [contiguous_memory_extent, selected_memory_alignment]
   overload:
     axis payload_extent
     value scalar
@@ -603,9 +648,8 @@ prim<void:=(ptr,s)>[aligned=*] store(ptr, scalar):
     - {tags [scalar, edge], attrs [aligned=false], type "si64", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
     - {tags [scalar, basic], attrs [aligned=false], type "f64", offset 1, case {inputs [5], expected [0, 5, 0]}}
     - {tags [scalar, edge], attrs [aligned=false], type "f64", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
-  # avx512 omits this to avoid duplicates when scalar equals mask.
   impls:
-    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool,avx2,sse,neon,scalar,generic,oneapi_fpga,wasm128]:
+    [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool,avx512,avx2,sse,neon,scalar,generic,oneapi_fpga,wasm128,rvv]:
       arith:
         prefer_fixed_native true
         requires:
@@ -615,6 +659,7 @@ prim<void:=(ptr,s)>[aligned=*] store(ptr, scalar):
           clang_v128_bool []
           clang_v256_bool []
           clang_v512_bool []
+          avx512 []
           avx2 []
           sse []
           neon []
@@ -622,21 +667,22 @@ prim<void:=(ptr,s)>[aligned=*] store(ptr, scalar):
           generic []
           oneapi_fpga []
           wasm128 [simd128]
+          rvv [v]
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [raw_pointer]
+          reasons [raw_memory, raw_pointer]
         implementation:
-          tsil "*ptr = scalar;"
+          tsil "mem<store_scalar>(ptr, scalar);"
     sve:
       arith:
         requires [sve]
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [raw_pointer]
+          reasons [raw_memory, raw_pointer]
         implementation:
-          tsil "*ptr = scalar;"
+          tsil "mem<store_scalar>(ptr, scalar);"
 
 prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
   operation store
@@ -647,6 +693,7 @@ prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
   memory:
     access write
     addressing contiguous
+  preconditions [contiguous_memory_extent, selected_memory_alignment]
   overload:
     axis payload_extent
     value vector
@@ -778,7 +825,7 @@ prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
         implementation:
           tsil """
             intrin<maskstore, build[suffix=base::signed_of(base::in)]>(
-              reinterpret_cast<long long *>(ptr),
+              cast<reinterpret, type=ptr>(x86::intrinsic_i64, ptr),
               mask,
               data
             );
@@ -788,7 +835,7 @@ prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [intrinsic, raw_pointer]
+          reasons [intrinsic, raw_pointer, value_reinterpretation]
         implementation:
           tsil """
             intrin<maskstore, build>(
@@ -807,12 +854,12 @@ prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [compiler_builtin, raw_pointer]
+          reasons [compiler_builtin, intrinsic, raw_pointer]
         implementation:
           tsil """
             using BoolMaskT = bool __attribute__((ext_vector_type(Vec::vector_element_count)));
-            __builtin_masked_store(
-              __builtin_convertvector(mask, type(BoolMaskT)),
+            intrin<__builtin_masked_store>(
+              intrin<__builtin_convertvector>(mask, type(BoolMaskT)),
               data,
               ptr
             );
@@ -827,10 +874,10 @@ prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [compiler_builtin, raw_pointer]
+          reasons [compiler_builtin, intrinsic, raw_pointer]
         implementation:
           tsil """
-            __builtin_masked_store(
+            intrin<__builtin_masked_store>(
               mask,
               data,
               ptr
@@ -856,9 +903,9 @@ prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
           reasons [raw_pointer]
         implementation:
           tsil """
-              var<const_infer>(mem_vec, call<primitive=load[Vec], attrs[aligned=value(primitive::attribute(aligned))]>(ptr));
+              var<const_infer>(mem_vec, call<primitive=load[Vec], attrs[aligned=value(primitive::attribute(aligned))], forward[contiguous_memory_extent, selected_memory_alignment]>(ptr));
               var<const_infer>(selected_vec, call<primitive=select>(mask, data, mem_vec));
-              call<primitive=store, attrs[aligned=primitive::attribute(aligned)]>(
+              call<primitive=store, attrs[aligned=primitive::attribute(aligned)], discharge[contiguous_memory_extent, selected_memory_alignment]>(
                 ptr,
                 selected_vec
               );

@@ -7,6 +7,7 @@ import json
 
 from tslc.benchmark.model import (
     BenchmarkCandidateSet,
+    BenchmarkCrossLaneScenario,
     BenchmarkImmediateCorrectnessCase,
     BenchmarkImmediateScenario,
     BenchmarkIndexedLoadCorrectnessCase,
@@ -43,6 +44,7 @@ def render_scenario(
     candidate_set: BenchmarkCandidateSet,
     scenario: (
         BenchmarkRegisterScenario
+        | BenchmarkCrossLaneScenario
         | BenchmarkMaskDensityScenario
         | BenchmarkMaskResultScenario
         | BenchmarkReductionScenario
@@ -51,7 +53,14 @@ def render_scenario(
         | BenchmarkIndexedLoadScenario
     ),
 ) -> str:
-    if isinstance(scenario, (BenchmarkRegisterScenario, BenchmarkMaskResultScenario)):
+    if isinstance(
+        scenario,
+        (
+            BenchmarkRegisterScenario,
+            BenchmarkCrossLaneScenario,
+            BenchmarkMaskResultScenario,
+        ),
+    ):
         return _render_vector_operand_scenario(
             index, scenario_index, candidate_set, scenario
         )
@@ -76,7 +85,11 @@ def _render_vector_operand_scenario(
     index: int,
     scenario_index: int,
     candidate_set: BenchmarkCandidateSet,
-    scenario: BenchmarkRegisterScenario | BenchmarkMaskResultScenario,
+    scenario: (
+        BenchmarkRegisterScenario
+        | BenchmarkCrossLaneScenario
+        | BenchmarkMaskResultScenario
+    ),
 ) -> str:
     if any(
         generator not in {
@@ -109,7 +122,9 @@ def _render_vector_operand_scenario(
     arguments = [
         f"inputs.vectors[{parameter}][position]" for parameter in range(inputs)
     ]
-    if isinstance(scenario, BenchmarkRegisterScenario) and scenario.kind == "latency":
+    if isinstance(
+        scenario, (BenchmarkRegisterScenario, BenchmarkCrossLaneScenario)
+    ) and scenario.kind == "latency":
         assert scenario.dependency_parameter is not None
         arguments[scenario.dependency_parameter] = "current"
         initial = f"inputs.vectors[{scenario.dependency_parameter}][0]"

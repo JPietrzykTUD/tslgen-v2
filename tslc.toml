@@ -7,7 +7,8 @@ output_root = "tslctmp/generated"
 
 [tslc.rust_package]
 name = "tsl"
-version = "0.1.0"
+version = "1.0.0"
+description = "Generated cross-platform SIMD primitives and data-parallel algorithms"
 edition = "2021"
 rust_version = "1.89"
 license = "Apache-2.0"

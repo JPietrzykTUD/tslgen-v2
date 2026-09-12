@@ -2,7 +2,18 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from tslc.backend.cpp_profile import (
+    _cpp_inference_vector_type_specs,
+    _cpp_native_registration,
+    _cpp_registration,
+    _cpp_used_vector_type_specs,
+)
 from tslc.backend.emitted_profile import used_vector_type_specs
+from tslc.backend.registry import create_backend_dialect
+from tslc.backend.rust_vectors import (
+    rust_extension_tag_registrations,
+    rust_registrations,
+)
 from tslc.backend.target_capability import (
     cpp_width_indexed_register_helper,
     is_width_indexed_register_extension,
@@ -10,16 +21,19 @@ from tslc.backend.target_capability import (
     rust_extension_tag,
     width_indexed_register_bits,
 )
-from tslc.backend.registry import create_backend_dialect
+from tslc.catalog.conversion import (
+    ConversionKind,
+    LaneCountRelation,
+    PrimitiveConversionContract,
+    conversion_register_shape,
+)
 from tslc.catalog.model import Catalog
+from tslc.catalog.register_shapes import RegisterMultiplicity
 from tslc.lane_count import LaneCount
 from tslc.lower.lowerer import LoweredSpecialization
-from tslc.backend.cpp_profile import (
-    _cpp_native_registration,
-    _cpp_registration,
-)
+from tslc.lower.model import LoweredTypeParam
+from tslc.lower.target_vectors import TargetVector
 from tslc.target_text import LoweredBody
-from tslc.backend.rust_vectors import rust_registrations
 
 
 def test_backend_specific_feature_spellings_are_source_capabilities(
@@ -91,6 +105,10 @@ def test_width_indexed_register_capabilities_derive_from_family_role(
     assert "static constexpr std::size_t lane_count() noexcept" in rendered
     assert "static constexpr std::size_t vector_alignment = 32;" in rendered
     assert "static constexpr std::size_t simd_register_alignment_v = vector_alignment;" in rendered
+    assert "static constexpr bool mask_is_bitset = false;" in rendered
+
+    avx512_rendered = _cpp_registration("avx512", catalog.extensions["avx512"])
+    assert "static constexpr bool mask_is_bitset = true;" in avx512_rendered
 
 
 def test_cpp_native_registration_exposes_vector_metadata(catalog: Catalog) -> None:
@@ -118,6 +136,76 @@ def test_cpp_native_registration_exposes_vector_metadata(catalog: Catalog) -> No
     assert "static constexpr std::size_t lane_count() noexcept" in rendered
     assert "static constexpr std::size_t vector_alignment = 16;" in rendered
     assert "static constexpr std::size_t simd_register_alignment_v = vector_alignment;" in rendered
+
+
+def test_native_registration_includes_concrete_simd_type_parameter_bindings(
+    catalog: Catalog,
+) -> None:
+    spec = LoweredSpecialization(
+        backend_id="cpp",
+        primitive_name="gather_narrow",
+        source_primitive_name="gather_narrow",
+        extension_name="sve",
+        type_tag="si32",
+        base_type_spelling="int32_t",
+        register_spelling="svint32_t",
+        result_kind="v",
+        param_names=("base_ptr", "index_ptr", "scale"),
+        param_kinds=("cptr", "cptr", "sImm"),
+        body=LoweredBody.from_text("return svdup_s32(0);"),
+        vector_spelling="tsl::simd<int32_t, tsl::sve>",
+        type_params=(
+            LoweredTypeParam(
+                name="IndicesType",
+                specialize_base=True,
+                base_type_binding="si64",
+                base_type_binding_spelling="int64_t",
+            ),
+        ),
+    )
+
+    assert used_vector_type_specs({"gather_narrow": (spec,)}) == (
+        ("sve", "si32", "int32_t"),
+    )
+    rendered = _cpp_native_registration(
+        {"gather_narrow": (spec,)}, catalog.extensions
+    )
+    assert "struct simd<int32_t, sve>" in rendered
+    assert "struct simd<int64_t, sve>" in rendered
+
+
+def test_cpp_dataparallel_inference_excludes_target_only_vectors() -> None:
+    target = TargetVector(
+        vector_spelling="tsl::simd<int32_t, tsl::avx512>",
+        register_spelling="__m512i",
+        extension_isa="avx512",
+        base_tag="si32",
+        base_spelling="int32_t",
+    )
+    spec = LoweredSpecialization(
+        backend_id="cpp",
+        primitive_name="insert_imask",
+        source_primitive_name="insert_imask",
+        extension_name="avx2",
+        type_tag="si32",
+        base_type_spelling="int32_t",
+        register_spelling="__m256i",
+        result_kind="im",
+        param_names=("orig", "data", "position"),
+        param_kinds=("imt", "im", "usize"),
+        body=LoweredBody.from_text("return orig;"),
+        vector_spelling="tsl::simd<int32_t, tsl::avx2>",
+        target=target,
+    )
+    by_primitive = {"insert_imask": (spec,)}
+
+    assert _cpp_used_vector_type_specs(by_primitive) == (
+        ("avx2", "si32", "int32_t"),
+        ("avx512", "si32", "int32_t"),
+    )
+    assert _cpp_inference_vector_type_specs(by_primitive) == (
+        ("avx2", "si32", "int32_t"),
+    )
 
 
 def test_rust_target_presentation_capabilities_derive_from_metadata(
@@ -183,6 +271,47 @@ def test_lane_count_arithmetic_is_rendered_by_backend_dialects(
     assert rust.types.render_lane_count(scaled) is None
 
 
+def test_scalable_conversion_multiplicity_is_typed_and_backend_translated(
+    catalog: Catalog,
+) -> None:
+    contract = PrimitiveConversionContract(
+        kind=ConversionKind.NUMERIC,
+        lane_count=LaneCountRelation.PRESERVE_LANE_COUNT,
+    )
+    shape = conversion_register_shape(contract, "si8", "si16")
+
+    assert shape is not None
+    assert shape.target_multiplicity == RegisterMultiplicity(2, 1)
+
+    cpp = create_backend_dialect(catalog, "cpp")
+    assert cpp.types.register_multiplicity_spelling(
+        "si16", "sve", shape.target_multiplicity
+    ) == "svint16x2_t"
+    assert cpp.types.register_multiplicity_spelling(
+        "si16", "rvv", shape.target_multiplicity
+    ) == "vint16m2_t"
+
+
+def test_unavailable_scalable_conversion_shape_stays_explicit(
+    catalog: Catalog,
+) -> None:
+    contract = PrimitiveConversionContract(
+        kind=ConversionKind.NUMERIC,
+        lane_count=LaneCountRelation.PRESERVE_LANE_COUNT,
+    )
+    shape = conversion_register_shape(contract, "si8", "si64")
+
+    assert shape is not None
+    assert shape.target_multiplicity == RegisterMultiplicity(8, 1)
+    cpp = create_backend_dialect(catalog, "cpp")
+    assert cpp.types.register_multiplicity_spelling(
+        "si64", "sve", shape.target_multiplicity
+    ) is None
+    assert cpp.types.register_multiplicity_spelling(
+        "si64", "rvv", shape.target_multiplicity
+    ) is None
+
+
 def test_wasm_intrinsic_composition_is_lane_shape_first(catalog: Catalog) -> None:
     wasm128 = catalog.extensions["wasm128"]
     cpp = create_backend_dialect(catalog, "cpp")
@@ -220,7 +349,13 @@ def test_rust_registration_uses_source_tag_and_lowered_register(
     )
 
     rendered = rust_registrations({"add": (spec,)}, {"x86_demo": extension})
+    tag_registrations = rust_extension_tag_registrations(
+        {"add": (spec,)}, {"x86_demo": extension}
+    )
 
+    assert tuple(item.render_declaration() for item in tag_registrations) == (
+        "pub struct X86Demo;",
+    )
     assert "pub struct X86Demo;" in rendered
     assert "impl SimdVector for Simd<i32, X86Demo>" in rendered
     assert "impl StaticSimdVector for Simd<i32, X86Demo>" in rendered
@@ -228,6 +363,31 @@ def test_rust_registration_uses_source_tag_and_lowered_register(
     assert "const ELEMENT_COUNT: usize = 8;" in rendered
     assert "fn lane_count() -> usize { 8 }" in rendered
     assert "const ALIGN: usize = 32;" in rendered
+    assert "const MASK_IS_BITSET: bool = false;" in rendered
+
+
+def test_rust_native_predicate_registration_marks_compact_mask_storage(
+    catalog: Catalog,
+) -> None:
+    extension = catalog.extensions["avx512"]
+    spec = LoweredSpecialization(
+        backend_id="rust",
+        primitive_name="add",
+        source_primitive_name="add",
+        extension_name="avx512",
+        type_tag="si32",
+        base_type_spelling="i32",
+        register_spelling="core::arch::x86_64::__m512i",
+        result_kind="v",
+        param_names=("left", "right"),
+        param_kinds=("v", "v"),
+        body=LoweredBody.from_text("return left;"),
+        vector_spelling="Simd<i32, Avx512>",
+    )
+
+    rendered = rust_registrations({"add": (spec,)}, {"avx512": extension})
+
+    assert "const MASK_IS_BITSET: bool = true;" in rendered
 
 
 def test_rust_registration_ignores_free_function_scalar_register(

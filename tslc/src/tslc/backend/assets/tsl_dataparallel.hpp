@@ -6,22 +6,23 @@
 
 namespace tsl::dataparallel {
 
-struct native {};
+/** Select the generated native vector width for an element type. */
+@{dataparallel_declaration_native} {};
 
-template <std::size_t N>
-struct fixed {
+/** Select exactly `N` logical lanes using a supported fixed-width vector. */
+@{dataparallel_declaration_fixed} {
     static_assert(N > 0, "tsl::dataparallel::fixed<N> requires N > 0");
-    static constexpr std::size_t lanes = N;
+@{dataparallel_fixed_constant_lanes};
 };
 
-template <std::size_t N>
-struct generic {
+/** Select exactly `N` logical lanes using the portable generic representation. */
+@{dataparallel_declaration_generic} {
     static_assert(N > 0, "tsl::dataparallel::generic<N> requires N > 0");
-    static constexpr std::size_t lanes = N;
+@{dataparallel_generic_constant_lanes};
 };
 
-template <class Policy, class T>
-struct simd_for;
+/** Resolve a lane-width policy and element type to a generated `tsl::simd`. */
+@{dataparallel_declaration_simd_for};
 
 template <class T>
 struct simd_for<native, T> {
@@ -38,16 +39,14 @@ struct simd_for<generic<N>, T> {
     using type = ::tsl::simd<T, ::tsl::generic<N>>;
 };
 
-template <class Policy, class T>
-using simd_for_t = typename simd_for<Policy, T>::type;
+/** Vector type selected by `Policy` for element type `T`. */
+@{dataparallel_alias_simd_for_t};
 
-template <class Policy, class T>
-using register_t = typename simd_for_t<Policy, T>::register_type;
+/** Register type selected by `Policy` for element type `T`. */
+@{dataparallel_alias_register_t};
 
-template <class Vec, class ToT>
-using rebind_base_t = typename Vec::template with_base_type<ToT>;
+@{dataparallel_alias_rebind_base_t};
 
-template <class Policy, class FromT, class ToT>
-using rebind_simd_for_t = rebind_base_t<simd_for_t<Policy, FromT>, ToT>;
+@{dataparallel_alias_rebind_simd_for_t};
 
 }  // namespace tsl::dataparallel

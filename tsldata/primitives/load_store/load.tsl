@@ -6,6 +6,7 @@ prim<v:=cptr>[aligned=*] load(ptr):
   memory:
     access read
     addressing contiguous
+  preconditions [contiguous_memory_extent, selected_memory_alignment]
   brief_description "Loads a vector register from contiguous memory."
   detailed_description """
     Loads one full vector register from contiguous memory. The `aligned`
@@ -46,9 +47,9 @@ prim<v:=cptr>[aligned=*] load(ptr):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [raw_pointer]
+          reasons [raw_memory, raw_pointer]
         implementation:
-          tsil "complete(*ptr);"
+          tsil "complete(mem<load_scalar>(ptr));"
     [generic, oneapi_fpga]:
       arith:
         requires:
@@ -303,6 +304,7 @@ prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
   memory:
     access read
     addressing contiguous
+  preconditions [contiguous_memory_extent, selected_memory_alignment]
   brief_description "Loads active mask lanes from contiguous memory and writes zero to inactive lanes."
   detailed_description """
     Loads mask-selected lanes from contiguous memory and writes zero to inactive
@@ -440,7 +442,7 @@ prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
           tsil """
             complete(
               intrin<maskload, build[suffix=base::signed_of(base::in)]>(
-                reinterpret_cast<long long const *>(ptr),
+                cast<reinterpret, type=const_ptr>(x86::intrinsic_i64, ptr),
                 mask
               )
             );
@@ -450,7 +452,7 @@ prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [intrinsic, raw_pointer]
+          reasons [intrinsic, raw_pointer, value_reinterpretation]
         implementation:
           tsil """
             complete(
@@ -470,13 +472,13 @@ prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [compiler_builtin, raw_pointer]
+          reasons [compiler_builtin, intrinsic, raw_pointer]
         implementation:
           tsil """
             using BoolMaskT = bool __attribute__((ext_vector_type(Vec::vector_element_count)));
             complete(
-              __builtin_masked_load(
-                __builtin_convertvector(mask, type(BoolMaskT)),
+              intrin<__builtin_masked_load>(
+                intrin<__builtin_convertvector>(mask, type(BoolMaskT)),
                 ptr,
                 call<primitive=set_zero[Vec]>()
               )
@@ -492,11 +494,11 @@ prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [compiler_builtin, raw_pointer]
+          reasons [compiler_builtin, intrinsic, raw_pointer]
         implementation:
           tsil """
             complete(
-              __builtin_masked_load(
+              intrin<__builtin_masked_load>(
                 mask,
                 ptr,
                 call<primitive=set_zero[Vec]>()
@@ -526,7 +528,7 @@ prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
             complete(
               call<primitive=mov, attrs[mask=zero]>(
                 mask,
-                call<primitive=load, attrs[aligned=primitive::attribute(aligned)]>(
+                call<primitive=load, attrs[aligned=primitive::attribute(aligned)], forward[contiguous_memory_extent, selected_memory_alignment]>(
                   ptr
                 )
               )
@@ -679,6 +681,7 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
   memory:
     access read
     addressing contiguous
+  preconditions [contiguous_memory_extent, selected_memory_alignment]
   brief_description "Loads active mask lanes from contiguous memory and keeps the pass-through lane where the mask is inactive."
   detailed_description """
     Loads mask-selected lanes from contiguous memory and preserves inactive
@@ -713,11 +716,11 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [raw_pointer]
+          reasons [raw_memory, raw_pointer]
         implementation:
           tsil """
             if (mask) {
-              complete(*ptr);
+              complete(mem<load_scalar>(ptr));
             } else {
               complete(data);
             }
@@ -811,7 +814,7 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
             complete(
               call<primitive=select, attrs[mask=pass_through]>(
                 mask,
-                call<primitive=load, attrs[mask=zero]>(mask, ptr),
+                call<primitive=load, attrs[mask=zero], forward[contiguous_memory_extent]>(mask, ptr),
                 data
               )
             );
@@ -827,7 +830,7 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
             complete(
               call<primitive=select, attrs[mask=pass_through]>(
                 mask,
-                call<primitive=load, attrs[mask=zero]>(mask, ptr),
+                call<primitive=load, attrs[mask=zero], forward[contiguous_memory_extent]>(mask, ptr),
                 data
               )
             );
@@ -842,13 +845,13 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [compiler_builtin, raw_pointer]
+          reasons [compiler_builtin, intrinsic, raw_pointer]
         implementation:
           tsil """
             using BoolMaskT = bool __attribute__((ext_vector_type(Vec::vector_element_count)));
             complete(
-              __builtin_masked_load(
-                __builtin_convertvector(mask, type(BoolMaskT)),
+              intrin<__builtin_masked_load>(
+                intrin<__builtin_convertvector>(mask, type(BoolMaskT)),
                 ptr,
                 data
               )
@@ -864,11 +867,11 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [compiler_builtin, raw_pointer]
+          reasons [compiler_builtin, intrinsic, raw_pointer]
         implementation:
           tsil """
             complete(
-              __builtin_masked_load(
+              intrin<__builtin_masked_load>(
                 mask,
                 ptr,
                 data
@@ -898,7 +901,7 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
             complete(
               call<primitive=select, attrs[mask=pass_through]>(
                 mask,
-                call<primitive=load, attrs[aligned=primitive::attribute(aligned)]>(
+                call<primitive=load, attrs[aligned=primitive::attribute(aligned)], forward[contiguous_memory_extent, selected_memory_alignment]>(
                   ptr
                 ),
                 data
@@ -917,7 +920,7 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
             complete(
               call<primitive=select, attrs[mask=pass_through]>(
                 mask,
-                call<primitive=load, attrs[aligned=primitive::attribute(aligned)]>(
+                call<primitive=load, attrs[aligned=primitive::attribute(aligned)], forward[contiguous_memory_extent, selected_memory_alignment]>(
                   ptr
                 ),
                 data
@@ -1098,7 +1101,7 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
             } else<generation> {
               let<type>(MaskWord, base::unsigned_of(base::in));
               let<type>(MaskVec, vector::as_base(MaskWord));
-              var<const_infer>(words, call<primitive=load[MaskVec], attrs[aligned=value(primitive::attribute(aligned))]>(
+              var<const_infer>(words, call<primitive=load[MaskVec], attrs[aligned=value(primitive::attribute(aligned))], discharge[contiguous_memory_extent, selected_memory_alignment]>(
                 cast<reinterpret, type=const_ptr>(MaskWord, ptr)
               ));
               complete(call<primitive=nequal[MaskVec]>(
@@ -1152,7 +1155,7 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
               let<type>(MaskVec, vector::as_base(MaskBase));
               complete(
                 call<primitive=nequal[MaskVec]>(
-                  call<primitive=load[MaskVec], attrs[aligned=value(primitive::attribute(aligned))]>(
+                  call<primitive=load[MaskVec], attrs[aligned=value(primitive::attribute(aligned))], discharge[contiguous_memory_extent, selected_memory_alignment]>(
                     cast<reinterpret, type=const_ptr>(MaskBase, ptr)
                   ),
                   call<primitive=set_zero[MaskVec]>()
@@ -1183,7 +1186,7 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
               var<const_infer>(
                 loaded_mask,
                 call<primitive=nequal[MaskVec]>(
-                  call<primitive=load[MaskVec], attrs[aligned=value(primitive::attribute(aligned))]>(
+                  call<primitive=load[MaskVec], attrs[aligned=value(primitive::attribute(aligned))], discharge[contiguous_memory_extent, selected_memory_alignment]>(
                     cast<reinterpret, type=const_ptr>(MaskBase, ptr)
                   ),
                   call<primitive=set_zero[MaskVec]>()
@@ -1232,9 +1235,57 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
               let<type>(UVec, vector::as_base(base::unsigned_of(base::in)));
               var<infer>(vec, call<primitive=set_zero[UVec]>());
               if<generation>(value(primitive::attribute(aligned))) {
-                vec = call<primitive=load[UVec], attrs[aligned=true]>(cast<reinterpret, type=const_ptr>(UnsignedT, ptr));
+                vec = call<primitive=load[UVec], attrs[aligned=true], discharge[contiguous_memory_extent, selected_memory_alignment]>(cast<reinterpret, type=const_ptr>(UnsignedT, ptr));
               } else<generation> {
-                vec = call<primitive=load[UVec], attrs[aligned=false]>(cast<reinterpret, type=const_ptr>(UnsignedT, ptr));
+                vec = call<primitive=load[UVec], attrs[aligned=false], discharge[contiguous_memory_extent]>(cast<reinterpret, type=const_ptr>(UnsignedT, ptr));
+              }
+              complete(call<primitive=nequal[UVec]>(
+                vec,
+                call<primitive=set_zero[UVec]>()
+              ));
+            }
+          """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            if<generation>(value(primitive::attribute(packed))) {
+              let<type>(MaskT, vector::mask);
+              let<type>(UVec, vector::as_base(base::unsigned_of(base::in)));
+              var<typed>(MaskT, out, call<primitive=mask_false[Vec]>());
+              var<const_infer>(idx, call<primitive=sequence[UVec]>());
+              var<const_infer>(
+                lanes,
+                value(generic::runtime_length(UVec))
+              );
+              var<const_infer>(bytes, cast<reinterpret, type=const_ptr>(scalar::ui8, ptr));
+
+              loop<backend>(lane, 0, lanes, 1) {
+                var<const_infer>(set, (((*ptr_add(bytes, lane >> 3)) >> (lane & 7)) & 1));
+                if (set) {
+                  var<const_infer>(one, call<primitive=equal[UVec]>(
+                    idx,
+                    call<primitive=set1[UVec]>(
+                      cast<static>(base::unsigned_of(base::in), lane)
+                    )
+                  ));
+                  out = call<primitive=mask_binary_or[Vec]>(out, one);
+                }
+              }
+              complete(out);
+            } else<generation> {
+              let<type>(UnsignedT, base::unsigned_of(base::in));
+              let<type>(UVec, vector::as_base(base::unsigned_of(base::in)));
+              var<infer>(vec, call<primitive=set_zero[UVec]>());
+              if<generation>(value(primitive::attribute(aligned))) {
+                vec = call<primitive=load[UVec], attrs[aligned=true], discharge[contiguous_memory_extent, selected_memory_alignment]>(cast<reinterpret, type=const_ptr>(UnsignedT, ptr));
+              } else<generation> {
+                vec = call<primitive=load[UVec], attrs[aligned=false], discharge[contiguous_memory_extent]>(cast<reinterpret, type=const_ptr>(UnsignedT, ptr));
               }
               complete(call<primitive=nequal[UVec]>(
                 vec,
@@ -1244,6 +1295,13 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
           """
 
 prim<s:=cptr>[aligned=false] load_scalar(ptr):
+  operation load_scalar
+  operand_roles:
+    memory_source ptr
+  memory:
+    access read
+    addressing contiguous
+  preconditions [contiguous_memory_extent]
   brief_description "Loads one scalar value from memory."
   detailed_description """
     Loads one scalar value from memory. This primitive always uses the unaligned
@@ -1297,6 +1355,15 @@ prim<s:=cptr>[aligned=false] load_scalar(ptr):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [raw_pointer]
+          reasons [raw_memory, raw_pointer]
         implementation:
-          tsil "complete(*ptr);"
+          tsil "complete(mem<load_scalar>(ptr));"
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_memory, raw_pointer]
+        implementation:
+          tsil "complete(mem<load_scalar>(ptr));"

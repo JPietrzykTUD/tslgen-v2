@@ -1,0 +1,19 @@
+template<class Vec>
+[[nodiscard]] TSL_FORCE_INLINE auto extract_value_at_checked(
+    typename Vec::register_type value,
+    std::size_t index,
+    tsl::precondition_error& error
+) noexcept -> typename Vec::base_type;
+
+template<class Vec>
+[[nodiscard]] TSL_FORCE_INLINE auto div_checked(
+    reg_param_t<Vec> dividend,
+    reg_param_t<Vec> divisor,
+    tsl::precondition_error& error
+) noexcept -> typename Vec::register_type;
+
+template<class Vec>
+[[nodiscard]] TSL_FORCE_INLINE auto load_checked(
+    tsl::span<const typename Vec::base_type> source,
+    tsl::precondition_error& error
+) noexcept -> typename Vec::register_type;

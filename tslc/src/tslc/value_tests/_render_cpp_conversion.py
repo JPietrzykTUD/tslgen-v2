@@ -8,6 +8,7 @@ from tslc.value_tests.literals import cpp_literal, cpp_literal_list
 from tslc.value_tests.model import ValueTestCasePlan
 from tslc.value_tests.render_cpp_helpers import (
     append_runtime_vector_input,
+    cpp_string_literal,
     render_extension_test_template,
     scalable_header,
 )
@@ -155,6 +156,8 @@ def _lane_convert(case: ValueTestCasePlan) -> str:
 
 
 def _target_imask(case: ValueTestCasePlan) -> str:
+    if case.target_imask_harness is not None:
+        return _target_predicate_imask(case)
     target = case.target
     representation = case.representation
     assert target is not None and representation is not None
@@ -195,6 +198,70 @@ def _target_imask(case: ValueTestCasePlan) -> str:
             "}",
         ]
     )
+    return "\n".join(lines)
+
+
+def _target_predicate_imask(case: ValueTestCasePlan) -> str:
+    target = case.target
+    representation = case.representation
+    harness = case.target_imask_harness
+    assert target is not None and representation is not None and harness is not None
+    assert target.base_spelling is not None and target.lanes is not None
+    assert representation.target_extension is not None
+    lines = [
+        f"int {case.function_name}() {{",
+        f"  using Vec = tsl::simd<{case.base_spelling}, tsl::{representation.source_extension}>;",
+        f"  using ToVec = tsl::simd<{target.base_spelling}, tsl::{representation.target_extension}>;",
+        "  using Result = typename ToVec::imask_type;",
+    ]
+    args: list[str] = []
+    mask_index = 0
+    scalar_index = 0
+    for position, kind in enumerate(case.invocation.param_kinds):
+        if kind in {"im", "imt"}:
+            target_owned = kind == "imt"
+            owner = "ToVec" if target_owned else "Vec"
+            lanes = target.lanes if target_owned else case.lanes
+            base_spelling = target.base_spelling if target_owned else case.base_spelling
+            template = (
+                harness.target_mask_from_bits_template
+                if target_owned
+                else harness.source_mask_from_bits_template
+            )
+            expression = render_extension_test_template(
+                template,
+                vec=owner,
+                mask_bits=f"{harness.mask_bits[mask_index]}ull",
+                authored_lanes=str(lanes),
+                lanes=str(lanes),
+                base_type=base_spelling,
+                base=base_spelling,
+            )
+            lines.append(f"  typename {owner}::imask_type a{position} = {expression};")
+            mask_index += 1
+        else:
+            assert kind == "usize"
+            value = case.inputs.scalars[scalar_index]
+            lines.append(
+                f"  std::size_t a{position} = static_cast<std::size_t>({value});"
+            )
+            scalar_index += 1
+        args.append(f"a{position}")
+    lines.append(
+        f"  Result result = tsl::{case.call_name}<Vec, ToVec>({', '.join(args)});"
+    )
+    check = render_extension_test_template(
+        harness.target_mask_check_template,
+        vec="ToVec",
+        case_name=cpp_string_literal(case.case_name),
+        mask="result",
+        expected_bits=f"{harness.expected_mask_bits}ull",
+        authored_lanes=str(target.lanes),
+        lanes=str(target.lanes),
+        base_type=target.base_spelling,
+        base=target.base_spelling,
+    )
+    lines.extend((f"  return {check};", "}"))
     return "\n".join(lines)
 
 

@@ -4,6 +4,8 @@ extension avx512:
   vector_bits 512
   native_sort_order 500
   default_test_target true
+  active_when:
+    target_features ["avx512f"]
   cpp:
     supported true
     headers ["immintrin.h"]
@@ -59,6 +61,10 @@ extension avx2:
   vector_bits 256
   native_sort_order 300
   default_test_target true
+  # The tag is also the repository's 256-bit AVX floating-point substrate, so
+  # AVX—not AVX2—is the minimum capability that makes the register family real.
+  active_when:
+    target_features ["avx"]
   cpp:
     supported true
     headers ["immintrin.h"]
@@ -200,6 +206,8 @@ extension sse:
   vector_bits 128
   native_sort_order 100
   default_test_target true
+  active_when:
+    target_features ["sse"]
   cpp:
     supported true
     headers ["immintrin.h"]
@@ -292,7 +300,7 @@ extension oneapi_fpga:
     kind "same_as_mask_type"
   cpp:
     supported true
-    headers ["sycl/ext/intel/ac_types/ac_int.hpp"]
+    system_headers ["sycl/ext/intel/ac_types/ac_int.hpp"]
   rust:
     supported true
     type_name "OneapiFpga"
@@ -389,7 +397,7 @@ extension sve:
     cpp ["tsl_test_sve.hpp"]
   cpp:
     supported true
-    headers ["arm_sve.h"]
+    headers ["arm_sve.h", "vector"]
   rust:
     supported false
   vector_register_types:
@@ -413,6 +421,14 @@ extension sve:
       cpp "svfloat32_t"
     f64:
       cpp "svfloat64_t"
+  # Lane-preserving si8 -> si16 conversion needs two natural si16 SVE
+  # registers. Keep this table sparse: add a shape only for a concrete required
+  # case. Physical group spellings are not inherited by fixed-SVE
+  # facades because those use distinct attributed register representations.
+  register_multiplicity_types:
+    x2:
+      si16:
+        cpp "svint16x2_t"
   intrinsic_compose:
     prefix:
       cpp ""
@@ -454,7 +470,7 @@ extension rvv:
     cpp ["tsl_test_rvv.hpp"]
   cpp:
     supported true
-    headers ["riscv_vector.h"]
+    headers ["riscv_vector.h", "vector"]
     compiler_capabilities [riscv_vector]
   rust:
     supported false
@@ -479,6 +495,12 @@ extension rvv:
       cpp "vfloat32m1_t"
     f64:
       cpp "vfloat64m1_t"
+  # RVV expresses the same concrete lane-preserving si8 -> si16 requirement as
+  # LMUL=2.
+  register_multiplicity_types:
+    x2:
+      si16:
+        cpp "vint16m2_t"
   intrinsic_compose:
     prefix:
       cpp "__riscv_"

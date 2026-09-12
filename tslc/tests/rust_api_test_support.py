@@ -22,10 +22,12 @@ from tslc.catalog.memory import (
     MemoryAccess,
     MemoryAddressing,
     MemoryAlignment,
+    MemoryPayloadExtent,
     PrimitiveMemoryContract,
 )
 from tslc.catalog.model import Extension, ImplementationSafety
 from tslc.catalog.overloads import ResolvedPrimitiveOverload
+from tslc.catalog.preconditions import PreconditionKind, PrimitivePrecondition
 from tslc.catalog.semantics import (
     OperandBinding,
     OperandRole,
@@ -75,7 +77,9 @@ def _spec(
     memory: PrimitiveMemoryContract | None = None,
     memory_alignment: LoweredMemoryAlignment | None = None,
     emitted_name: str | None = None,
+    preconditions: tuple[PreconditionKind, ...] = (),
 ) -> LoweredSpecialization:
+    operation_contract = _operation(operation, roles, param_names)
     return LoweredSpecialization(
         backend_id="rust",
         primitive_name=emitted_name or name,
@@ -91,7 +95,11 @@ def _spec(
         primitive_semantics=LoweredPrimitiveSemantics(
             overload=overload,
             arithmetic=arithmetic,
-            operation=_operation(operation, roles, param_names),
+            operation=operation_contract,
+            preconditions=tuple(
+                PrimitivePrecondition(kind, operation_contract.operand_bindings)
+                for kind in preconditions
+            ),
             memory=memory,
             memory_alignment=memory_alignment,
             conversion=conversion,
@@ -127,6 +135,14 @@ def _aligned_memory_specs(
         memory=PrimitiveMemoryContract(
             access,
             MemoryAddressing.CONTIGUOUS,
+            (
+                MemoryPayloadExtent.SCALAR
+                if result_kind == "s" or any(
+                    role is OperandRole.VALUE and kind == "s"
+                    for role, _index, kind in roles
+                )
+                else MemoryPayloadExtent.VECTOR
+            ),
         ),
         memory_alignment=LoweredMemoryAlignment(
             "aligned",
@@ -172,7 +188,6 @@ def _arithmetic_spec(
         ArithmeticOperation.DIVISION: frozenset(
             {
                 ArithmeticGuarantee.INTEGER_QUOTIENT_TOWARD_ZERO,
-                ArithmeticGuarantee.INTEGER_ZERO_DIVISOR_FAILS,
                 ArithmeticGuarantee.SIGNED_MIN_DIV_NEG_ONE_RETURNS_MIN,
                 ArithmeticGuarantee.FLOATING_DIVISION_IEEE754_VALUES,
             }

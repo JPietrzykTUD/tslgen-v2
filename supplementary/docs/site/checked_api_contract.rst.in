@@ -1,0 +1,57 @@
+Checked and unchecked API contract
+==================================
+
+TSL follows the zero-overhead C++ convention: the unsuffixed operation performs
+the requested operation without hidden input sanitization. Its documented
+preconditions are part of the call contract. In Rust, violating a precondition
+that can cause undefined behavior requires an ``unsafe`` call; C++ expresses
+the same obligation in documentation.
+
+A ``*_checked`` companion exists only when the compiler has a typed plan that
+can validate every catastrophic runtime precondition before side effects. The
+suffix is deliberately absent when a bare pointer cannot establish provenance,
+capacity, overlap, or another required fact. The checked-API census records
+those omissions rather than emitting a misleading partial check.
+
+C++ checked values
+------------------
+
+A value-returning C++ checked function returns the ordinary value type and
+takes a final ``tsl::precondition_error&``. On success it writes ``none``. On
+failure it writes the specific error, does not invoke the ordinary operation,
+and returns a fully initialized placeholder whose bits have no TSL-defined
+meaning. C++ cannot force inspection of the error; callers must inspect it
+before using the value. Void checked functions return the error directly.
+
+.. literalinclude:: checked_api_example.cpp
+   :language: cpp
+   :caption: Both C++ paths; the checked value is consumed only after inspection.
+
+Rust checked values
+-------------------
+
+Rust checked functions return ``Result<T, PreconditionError>`` or
+``Result<(), PreconditionError>``. The language enforces handling only to the
+extent chosen by the caller; a program may still explicitly discard a
+``Result``. The representation-neutral root facade retains its normal safe
+slice and owned-value conveniences.
+
+Residual obligations
+--------------------
+
+Checks validate values expressible in the checked signature. They cannot prove
+that a forged C++ span or Rust reference denotes a live object, that a raw
+deallocation pointer has matching provenance, or that concurrent mutation
+cannot invalidate a view. Constructing and retaining valid language-level
+objects remains the caller's responsibility. The documentation of each checked
+identity lists its specific errors and any remaining range obligation.
+
+Distribution policy
+-------------------
+
+TSL 1.0 is distributed as a compiler-selected generated product. Consumers
+should request the primitive and machine-profile slice they deploy. A
+monolithic all-profile generation is a stress/reference ceiling, not the
+recommended registry or application artifact. Checked wrappers are emitted
+once per public callable family and delegate to the selected ordinary
+specialization.

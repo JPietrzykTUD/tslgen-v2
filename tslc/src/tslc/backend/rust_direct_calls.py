@@ -4,11 +4,27 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from tslc.backend.checked_api import (
+    applicable_checked_api_plan,
+    public_call_requires_unsafe,
+)
+from tslc.backend.precondition_error_rendering import rust_precondition_error
 from tslc.backend.primitive_rendering import body_for
 from tslc.backend.rust_documentation import rust_doc
 from tslc.backend.rust_names import rust_primitive_trait_name
+from tslc.backend.public_declarations import (
+    PublicDeclarationKind,
+    PublicDeclarationStability,
+)
+from tslc.backend.rust_public_declarations import (
+    RustPublicDeclaration,
+    RustPublicParameter,
+    rust_parameter_role,
+)
 from tslc.backend.rust_signatures import free_kind_type, runtime_names, unsafe_prefix
 from tslc.backend.rust_translation import rust_raw_identifier
+from tslc.catalog.memory import MemoryAccess, MemoryPayloadExtent
+from tslc.catalog.preconditions import PreconditionKind
 from tslc.lower.implementation_state import ImplementationState
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.target_text import LoweredBody
@@ -31,17 +47,17 @@ def free_function(
     *,
     backend: TargetFeatureBodyRenderer,
 ) -> str:
+    declaration = free_function_declaration(
+        spec, reachability=("profile",)
+    )
     rendered_params = ", ".join(
-        f"{name}: {free_kind_type(kind, spec)}"
-        for name, kind in zip(spec.param_names, spec.param_kinds)
+        parameter.render() for parameter in declaration.parameters
     )
     result_type = (
         "()"
         if spec.result_kind == "void"
         else free_kind_type(spec.result_kind, spec)
     )
-    result_clause = "" if result_type == "()" else f" -> {result_type}"
-    function_name = rust_raw_identifier(spec.primitive_name)
     rendered_body = backend._target_feature_body(
         spec,
         spec.body,
@@ -52,10 +68,172 @@ def free_function(
     doc = rust_doc(spec, context="Rust free function")
     return (
         (f"{doc}\n" if doc else "")
-        + f"pub {unsafe_prefix(spec.safety.caller_unsafe)}fn "
-        f"{function_name}({rendered_params}){result_clause} {{\n"
+        + declaration.render_definition_head()
+        + "\n"
         f"{indent(rendered_body, 4)}\n"
         "}"
+    )
+
+
+def checked_free_function(spec: LoweredSpecialization) -> str:
+    """Render a checked companion for a concrete non-vector free function."""
+
+    plan = applicable_checked_api_plan((spec,))
+    if plan is None:
+        return ""
+    if len(plan.conditions) != 1:
+        raise ValueError("checked free functions require one complete condition")
+    condition = plan.conditions[0]
+    if (
+        condition.kind is not PreconditionKind.CONTIGUOUS_MEMORY_EXTENT
+        or condition.memory_access is None
+        or condition.memory_payload_extents != (MemoryPayloadExtent.SCALAR,)
+    ):
+        raise ValueError(
+            "checked free functions currently require one scalar memory extent"
+        )
+    declaration = checked_free_function_declaration(
+        spec, reachability=("profile",)
+    )
+    if declaration is None:
+        return ""
+    arguments: list[str] = []
+    for index, (name, kind) in enumerate(
+        zip(spec.param_names, spec.param_kinds)
+    ):
+        if index == condition.parameter_index:
+            pointer = (
+                "as_ptr"
+                if condition.memory_access is MemoryAccess.READ
+                else "as_mut_ptr"
+            )
+            arguments.append(f"{name}.{pointer}()")
+        else:
+            arguments.append(name)
+    result_type = (
+        "()"
+        if spec.result_kind == "void"
+        else free_kind_type(spec.result_kind, spec)
+    )
+    call = (
+        f"{rust_raw_identifier(spec.primitive_name)}({', '.join(arguments)})"
+    )
+    if public_call_requires_unsafe((spec,)):
+        call = f"unsafe {{ {call} }}"
+    success = (
+        f"{call};\n    Ok(())" if result_type == "()" else f"Ok({call})"
+    )
+    doc = rust_doc(
+        spec,
+        context="Rust checked free function",
+        concrete=False,
+        checked_conditions=plan.conditions,
+    )
+    return (
+        (f"{doc}\n" if doc else "")
+        + declaration.render_attributes()
+        + "\n"
+        + declaration.render_definition_head()
+        + "\n"
+        + f"    if {condition.parameter_name}.is_empty() {{\n"
+        + "        return Err("
+        + rust_precondition_error(condition.error)
+        + ");\n"
+        + "    }\n"
+        + f"    {success}\n"
+        + "}"
+    )
+
+
+def free_function_declaration(
+    spec: LoweredSpecialization,
+    *,
+    reachability: tuple[str, ...],
+) -> RustPublicDeclaration:
+    result_type = (
+        None
+        if spec.result_kind == "void"
+        else free_kind_type(spec.result_kind, spec)
+    )
+    return RustPublicDeclaration(
+        identity=f"crate::profile::{spec.primitive_name}#free",
+        name=rust_raw_identifier(spec.primitive_name),
+        owner="crate::profile",
+        reachability=reachability,
+        stability=PublicDeclarationStability.STABLE,
+        kind=PublicDeclarationKind.FUNCTION,
+        overload=f"free:{spec.result_kind}=({','.join(spec.param_kinds)})",
+        visibility="pub",
+        parameters=tuple(
+            RustPublicParameter(
+                name,
+                free_kind_type(kind, spec),
+                rust_parameter_role(spec, index, kind),
+            )
+            for index, (name, kind) in enumerate(
+                zip(spec.param_names, spec.param_kinds)
+            )
+        ),
+        result_type=result_type,
+        result_form="implicit-unit" if result_type is None else "direct",
+        unsafe=spec.safety.caller_unsafe,
+    )
+
+
+def checked_free_function_declaration(
+    spec: LoweredSpecialization,
+    *,
+    reachability: tuple[str, ...],
+) -> RustPublicDeclaration | None:
+    plan = applicable_checked_api_plan((spec,))
+    if plan is None:
+        return None
+    if len(plan.conditions) != 1:
+        raise ValueError("checked free functions require one complete condition")
+    condition = plan.conditions[0]
+    if (
+        condition.kind is not PreconditionKind.CONTIGUOUS_MEMORY_EXTENT
+        or condition.memory_access is None
+        or condition.memory_payload_extents != (MemoryPayloadExtent.SCALAR,)
+    ):
+        raise ValueError(
+            "checked free functions currently require one scalar memory extent"
+        )
+    parameters: list[RustPublicParameter] = []
+    for index, (name, kind) in enumerate(zip(spec.param_names, spec.param_kinds)):
+        if index == condition.parameter_index:
+            borrow = "&" if condition.memory_access is MemoryAccess.READ else "&mut "
+            typ = f"{borrow}[{spec.base_type_spelling}]"
+        else:
+            typ = free_kind_type(kind, spec)
+        parameters.append(
+            RustPublicParameter(
+                name,
+                typ,
+                rust_parameter_role(spec, index, kind),
+            )
+        )
+    result = (
+        "()"
+        if spec.result_kind == "void"
+        else free_kind_type(spec.result_kind, spec)
+    )
+    ordinary_identity = f"crate::profile::{spec.primitive_name}#free"
+    return RustPublicDeclaration(
+        identity=f"crate::profile::{spec.primitive_name}_checked#free",
+        name=rust_raw_identifier(f"{spec.primitive_name}_checked"),
+        owner="crate::profile",
+        reachability=reachability,
+        stability=PublicDeclarationStability.STABLE,
+        kind=PublicDeclarationKind.FUNCTION,
+        overload=f"checked-free:{spec.result_kind}=({','.join(spec.param_kinds)})",
+        visibility="pub",
+        parameters=tuple(parameters),
+        result_type=f"Result<{result}, PreconditionError>",
+        result_form="result",
+        attributes=("#[inline]",),
+        checked_of=ordinary_identity,
+        error_form="result",
     )
 
 
@@ -198,7 +376,10 @@ def implementation_lint_allowance(spec: LoweredSpecialization) -> str:
 
 __all__ = (
     "any_caller_unsafe",
+    "checked_free_function",
+    "checked_free_function_declaration",
     "free_function",
+    "free_function_declaration",
     "free_variant_functions",
     "implementation_lint_allowance",
     "implementation_trait_name",

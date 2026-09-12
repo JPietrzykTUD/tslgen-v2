@@ -70,7 +70,9 @@ fn main() {
             fill_input(&mut input);
             let mut output = vec![i32::MAX; input.len()];
             let mut negative = Negative;
-            let produced = profile::algo::select_unary(policy, &mut negative, &input, &mut output);
+            let produced =
+                profile::algo::select_unary_checked(policy, &mut negative, &input, &mut output)
+                    .expect("checked algorithm preconditions");
             verify_selected(
                 &output,
                 produced,
@@ -85,8 +87,14 @@ fn main() {
             output.resize(left.len(), i32::MAX);
             output.fill(i32::MAX);
             let mut less_than = LessThan;
-            let produced =
-                profile::algo::select_binary(policy, &mut less_than, &left, &right, &mut output);
+            let produced = profile::algo::select_binary_checked(
+                policy,
+                &mut less_than,
+                &left,
+                &right,
+                &mut output,
+            )
+            .expect("checked algorithm preconditions");
             verify_selected(
                 &output,
                 produced,

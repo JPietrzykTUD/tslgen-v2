@@ -32,6 +32,7 @@ class PrimitiveOperation(StrEnum):
     INTEGRAL_MASK_TEST = "integral_mask_test"
     INSERT_LANE = "insert_lane"
     LOAD = "load"
+    LOAD_SCALAR = "load_scalar"
     MASK_ALL_FALSE = "mask_all_false"
     MASK_ALL_TRUE = "mask_all_true"
     MASK_AND = "mask_and"
@@ -42,6 +43,7 @@ class PrimitiveOperation(StrEnum):
     MASK_SET_LANE = "mask_set_lane"
     MASK_TO_INTEGRAL = "mask_to_integral"
     MASK_XOR = "mask_xor"
+    RANDOM_STEP = "random_step"
     REINTERPRET = "reinterpret"
     SELECT = "select"
     SHIFT_LEFT = "shift_left"
@@ -63,6 +65,7 @@ class OperandRole(StrEnum):
     MEMORY_SOURCE = "memory_source"
     PASS_THROUGH = "pass_through"
     PRIMARY = "primary"
+    SCALE = "scale"
     SECONDARY = "secondary"
     VALUE = "value"
 
@@ -133,6 +136,7 @@ PRIMITIVE_OPERATION_DESCRIPTIONS: Mapping[PrimitiveOperation, str] = MappingProx
         ),
         PrimitiveOperation.INSERT_LANE: "Returns a vector with one lane value replaced.",
         PrimitiveOperation.LOAD: "Loads a vector payload from memory.",
+        PrimitiveOperation.LOAD_SCALAR: "Loads one scalar payload from memory.",
         PrimitiveOperation.MASK_ALL_FALSE: "Constructs an all-inactive lane mask.",
         PrimitiveOperation.MASK_ALL_TRUE: "Constructs an all-active lane mask.",
         PrimitiveOperation.MASK_AND: "Computes logical AND of corresponding mask lanes.",
@@ -149,6 +153,9 @@ PRIMITIVE_OPERATION_DESCRIPTIONS: Mapping[PrimitiveOperation, str] = MappingProx
             "Converts a lane mask to its integral mask representation."
         ),
         PrimitiveOperation.MASK_XOR: "Computes logical XOR of corresponding mask lanes.",
+        PrimitiveOperation.RANDOM_STEP: (
+            "Attempts one hardware-random step into a scalar memory destination."
+        ),
         PrimitiveOperation.REINTERPRET: (
             "Reinterprets a vector's bit pattern as another declared vector type."
         ),
@@ -182,6 +189,7 @@ OPERAND_ROLE_DESCRIPTIONS: Mapping[OperandRole, str] = MappingProxyType(
         OperandRole.MEMORY_SOURCE: "The memory source read by the operation.",
         OperandRole.PASS_THROUGH: "The value preserved where a control mask is inactive.",
         OperandRole.PRIMARY: "The primary logical value and natural method receiver.",
+        OperandRole.SCALE: "The compile-time byte scale applied to indexed addresses.",
         OperandRole.SECONDARY: "The second logical value operand.",
         OperandRole.VALUE: "A scalar or vector value inserted or stored by the operation.",
     }

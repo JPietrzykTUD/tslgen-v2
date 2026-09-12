@@ -187,16 +187,37 @@ else()
   set(_TSL_BUILD_TESTS_DEFAULT OFF)
 endif()
 option(TSL_BUILD_TESTS "Build generated TSL smoke/value test targets" ${_TSL_BUILD_TESTS_DEFAULT})
+option(TSL_STRICT_WARNINGS "Treat generated-header consumer warnings as errors" OFF)
 set(TSL_TEST_LAUNCHER "" CACHE STRING "Optional command prefix used by CTest to run generated test executables")
+
+function(_tsl_enable_strict_warnings target)
+  if(MSVC)
+    target_compile_options(${target} PRIVATE /W4 /WX)
+  elseif(CMAKE_CXX_COMPILER_ID MATCHES "^(GNU|Clang|AppleClang|IntelLLVM)$")
+    target_compile_options(${target} PRIVATE -Wall -Wextra -Werror)
+  endif()
+endfunction()
 
 # The smoke binary forces every wrapper specialization to compile; the values binary
 # runs the generated value-correctness checks (returns non-zero on a lane mismatch).
 if(TSL_BUILD_TESTS)
   enable_testing()
   add_executable(tsl_smoke tests/smoke_${TSL_SELECTED_PROFILE}.cpp)
+  add_executable(tsl_consumer tests/consumer.cpp)
   add_executable(tsl_values tests/values_${TSL_SELECTED_PROFILE}.cpp)
   target_link_libraries(tsl_smoke PRIVATE tsl_generated)
+  target_link_libraries(tsl_consumer PRIVATE tsl_generated)
   target_link_libraries(tsl_values PRIVATE tsl_generated)
+  # The exhaustive smoke/value translation units instantiate the complete
+  # generated profile and can exceed MSVC's default COFF section count.  This
+  # affects these generated verification artifacts, not ordinary consumers.
+  target_compile_options(tsl_smoke PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/bigobj>)
+  target_compile_options(tsl_values PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/bigobj>)
+  if(TSL_STRICT_WARNINGS)
+    _tsl_enable_strict_warnings(tsl_smoke)
+    _tsl_enable_strict_warnings(tsl_consumer)
+  endif()
+  add_custom_target(tsl_quality DEPENDS tsl_smoke tsl_consumer)
   # The values binary runs the differential fuzzer: signed integer overflow must wrap (two's
   # complement) so the scalar `generic` reference agrees with wrapping SIMD on full-width random
   # inputs. Harmless for the in-range authored tests. GCC/Clang only (the supported toolchains).

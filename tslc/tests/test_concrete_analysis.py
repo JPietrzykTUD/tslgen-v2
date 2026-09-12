@@ -130,6 +130,43 @@ def test_real_corpus_analysis_reuses_pipeline_lowering_without_rendering(
     assert analysis.roots[0].source is not None
 
 
+def test_real_corpus_analysis_can_select_one_authored_callable(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    aggregate, diagnostics = analyze_concrete_specialization(
+        sources=data_root,
+        machine_profiles=machine_profiles_path,
+        primitive="add",
+        profile="avx2",
+        backend="cpp",
+        extension="avx2",
+        type_tag="si32",
+    )
+    exact, exact_diagnostics = analyze_concrete_specialization(
+        sources=data_root,
+        machine_profiles=machine_profiles_path,
+        primitive="add",
+        profile="avx2",
+        backend="cpp",
+        extension="avx2",
+        type_tag="si32",
+        signature="v:=(v,v)",
+    )
+
+    assert diagnostics == exact_diagnostics == ()
+    assert aggregate is not None and exact is not None
+    assert aggregate.implementation_state is ImplementationState.COMPOSED
+    assert len(aggregate.roots) == 3
+    assert exact.implementation_state is ImplementationState.NATIVE
+    assert len(exact.roots) == 1
+    assert exact.roots[0].source_signature == "v:=(v,v)"
+    assert exact.roots[0].source_attributes == ()
+    assert "callable: signature=v:=(v,v) attributes=[]" in format_analysis_text(
+        exact
+    )
+
+
 def test_real_corpus_analysis_selects_one_representation_target(
     data_root: Path,
     machine_profiles_path: Path,

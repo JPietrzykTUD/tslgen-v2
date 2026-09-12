@@ -33,6 +33,7 @@ description: Add a target extension or machine-profile family through TSL source
 5. Prove one small primitive/type slice through selection, lowering, rendering,
    generated build, and value tests before broadening coverage. Use the
    primitive or primitive-implementation skill for that slice when applicable.
+   Follow the canonical implementation order in `tsldata/AGENTS.md`.
 6. If the target needs a new compiler, cross-target path, runner, emulator, or
    preflight behavior, also use `extend-tslc-verification`. Keep tool paths
    injectable and unavailable hardware/toolchains skip-safe.
@@ -62,6 +63,7 @@ PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_catalog.py tslc/tests/te
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_backend_target_capability.py tslc/tests/test_profile_rendering.py
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_select_and_lower*.py tslc/tests/test_build_verify_config.py
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_generation_conditionals.py tslc/tests/test_query_authoring.py
+./dev.sh implementation-ratchet
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests
 PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds tslc/tests/test_build_verify.py tslc/tests/test_value_tests.py
 ./dev.sh build --primitives add --profiles PROFILE --backends cpp,rust

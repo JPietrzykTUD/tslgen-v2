@@ -37,7 +37,7 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(mask_a & mask_b);"
+          tsil "complete(op<bit_and>(mask_a, mask_b));"
     sve:
       arith:
         requires [sve]
@@ -120,7 +120,7 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(mask_a & mask_b);"
+          tsil "complete(op<bit_and>(mask_a, mask_b));"
     sse_vl:
       arith:
         requires [sse2, avx512f, avx512vl]
@@ -129,7 +129,7 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(mask_a & mask_b);"
+          tsil "complete(op<bit_and>(mask_a, mask_b));"
     avx2:
       arith:
         requires {si8 [avx, avx2], ui8 [avx, avx2], si16 [avx, avx2], ui16 [avx, avx2], si32 [avx, avx2], ui32 [avx, avx2], si64 [avx, avx2], ui64 [avx, avx2], f32 [avx], f64 [avx]}
@@ -139,6 +139,24 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
           reasons []
         implementation:
           tsil "complete(call<primitive=binary_and[Vec]>(mask_a, mask_b));"
+      ?i?:
+        requires [avx, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(FloatVec, vector::as_base(f32));
+            complete(
+              call<primitive=reinterpret[FloatVec, Vec]>(
+                call<primitive=binary_and[FloatVec]>(
+                  call<primitive=reinterpret[Vec, FloatVec]>(mask_a),
+                  call<primitive=reinterpret[Vec, FloatVec]>(mask_b)
+                )
+              )
+            );
+          """
     sse:
       arith:
         requires {si8 [sse, sse2], ui8 [sse, sse2], si16 [sse, sse2], ui16 [sse, sse2], si32 [sse, sse2], ui32 [sse, sse2], si64 [sse, sse2], ui64 [sse, sse2], f32 [sse], f64 [sse, sse2]}
@@ -174,7 +192,7 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(mask_a & mask_b);"
+          tsil "complete(op<bit_and>(mask_a, mask_b));"
     [generic, oneapi_fpga]:
       arith:
         requires:
@@ -187,7 +205,7 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
         implementation:
           tsil """
               var<const_infer>(valid_lanes, mask<all>());
-              complete((mask_a & mask_b) & valid_lanes);
+              complete(op<bit_and>(op<bit_and>(mask_a, mask_b), valid_lanes));
             """
 prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
   operation mask_or
@@ -228,7 +246,7 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(mask_a | mask_b);"
+          tsil "complete(op<bit_or>(mask_a, mask_b));"
     sve:
       arith:
         requires [sve]
@@ -311,7 +329,7 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(mask_a | mask_b);"
+          tsil "complete(op<bit_or>(mask_a, mask_b));"
     sse_vl:
       arith:
         requires [sse2, avx512f, avx512vl]
@@ -320,7 +338,7 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(mask_a | mask_b);"
+          tsil "complete(op<bit_or>(mask_a, mask_b));"
     avx2:
       arith:
         requires {si8 [avx, avx2], ui8 [avx, avx2], si16 [avx, avx2], ui16 [avx, avx2], si32 [avx, avx2], ui32 [avx, avx2], si64 [avx, avx2], ui64 [avx, avx2], f32 [avx], f64 [avx]}
@@ -365,7 +383,7 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(mask_a | mask_b);"
+          tsil "complete(op<bit_or>(mask_a, mask_b));"
     [generic, oneapi_fpga]:
       arith:
         requires:
@@ -378,7 +396,7 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
         implementation:
           tsil """
               var<const_infer>(valid_lanes, mask<all>());
-              complete((mask_a | mask_b) & valid_lanes);
+              complete(op<bit_and>(op<bit_or>(mask_a, mask_b), valid_lanes));
             """
 prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
   operation mask_xor
@@ -419,7 +437,7 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(mask_a ^ mask_b);"
+          tsil "complete(op<bit_xor>(mask_a, mask_b));"
     sve:
       arith:
         requires [sve]
@@ -502,7 +520,7 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(mask_a ^ mask_b);"
+          tsil "complete(op<bit_xor>(mask_a, mask_b));"
     sse_vl:
       arith:
         requires [sse2, avx512f, avx512vl]
@@ -511,7 +529,7 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(mask_a ^ mask_b);"
+          tsil "complete(op<bit_xor>(mask_a, mask_b));"
     avx2:
       arith:
         requires {si8 [avx, avx2], ui8 [avx, avx2], si16 [avx, avx2], ui16 [avx, avx2], si32 [avx, avx2], ui32 [avx, avx2], si64 [avx, avx2], ui64 [avx, avx2], f32 [avx], f64 [avx]}
@@ -556,7 +574,7 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(mask_a ^ mask_b);"
+          tsil "complete(op<bit_xor>(mask_a, mask_b));"
     [generic, oneapi_fpga]:
       arith:
         requires:
@@ -569,7 +587,7 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
         implementation:
           tsil """
               var<const_infer>(valid_lanes, mask<all>());
-              complete((mask_a ^ mask_b) & valid_lanes);
+              complete(op<bit_and>(op<bit_xor>(mask_a, mask_b), valid_lanes));
             """
 prim<m:=m> mask_binary_not(mask):
   operation mask_not
@@ -760,7 +778,7 @@ prim<m:=m> mask_binary_not(mask):
         implementation:
           tsil """
               var<const_infer>(valid_lanes, mask<all>());
-              complete(op<bit_negate>(mask) & valid_lanes);
+              complete(op<bit_and>(op<bit_negate>(mask), valid_lanes));
             """
 prim<usize:=m> mask_population_count(mask):
   operation mask_population_count
@@ -810,7 +828,7 @@ prim<usize:=m> mask_population_count(mask):
           avx512 [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl [sse2, avx512f, avx512vl]
-          avx2 [avx2]
+          avx2 [avx]
           sse [sse2]
           neon [neon]
           wasm128 [simd128]
@@ -1067,6 +1085,55 @@ prim<im:=(im,usize)> shift_right_imask(data, shift):
              )
            );
             """
+    sve:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(empty, call<primitive=mask_false[Vec]>());
+            if (shift >= value(vector::runtime_length)) {
+              complete(empty);
+            }
+            var<infer>(result, empty);
+            loop<backend>(i, 0, value(vector::runtime_length) - shift, 1) {
+              var<const_infer>(source_lane, call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(empty, i + shift, 1));
+              if (call<primitive=mask_population_count[Vec]>(
+                call<primitive=mask_binary_and[Vec]>(data, source_lane)
+              ) != 0) {
+                result = call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(result, i, 1);
+              }
+            }
+            complete(result);
+          """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(empty, call<primitive=mask_false[Vec]>());
+            if (shift >= value(vector::runtime_length)) {
+              complete(empty);
+            }
+            var<infer>(result, empty);
+            loop<backend>(i, 0, value(vector::runtime_length) - shift, 1) {
+              var<const_infer>(source_lane, call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(empty, i + shift, 1));
+              if (call<primitive=mask_population_count[Vec]>(
+                call<primitive=mask_binary_and[Vec]>(data, source_lane)
+              ) != 0) {
+                result = call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(result, i, 1);
+              }
+            }
+            complete(result);
+          """
+
 prim<im:=(im,usize)> shift_left_imask(data, shift):
   brief_description "Shifts an integral mask value left by a scalar shift count."
   detailed_description """
@@ -1118,4 +1185,52 @@ prim<im:=(im,usize)> shift_left_imask(data, shift):
                 cast<static>(vector::imask, data << shift)
               )
             );
+          """
+    sve:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(empty, call<primitive=mask_false[Vec]>());
+            if (shift >= value(vector::runtime_length)) {
+              complete(empty);
+            }
+            var<infer>(result, empty);
+            loop<backend>(i, 0, value(vector::runtime_length) - shift, 1) {
+              var<const_infer>(source_lane, call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(empty, i, 1));
+              if (call<primitive=mask_population_count[Vec]>(
+                call<primitive=mask_binary_and[Vec]>(data, source_lane)
+              ) != 0) {
+                result = call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(result, i + shift, 1);
+              }
+            }
+            complete(result);
+          """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(empty, call<primitive=mask_false[Vec]>());
+            if (shift >= value(vector::runtime_length)) {
+              complete(empty);
+            }
+            var<infer>(result, empty);
+            loop<backend>(i, 0, value(vector::runtime_length) - shift, 1) {
+              var<const_infer>(source_lane, call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(empty, i, 1));
+              if (call<primitive=mask_population_count[Vec]>(
+                call<primitive=mask_binary_and[Vec]>(data, source_lane)
+              ) != 0) {
+                result = call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(result, i + shift, 1);
+              }
+            }
+            complete(result);
           """

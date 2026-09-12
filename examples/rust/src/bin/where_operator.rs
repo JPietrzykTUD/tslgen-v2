@@ -58,20 +58,27 @@ fn main() {
             let mask_count = profile::algo::integral_mask_chunk_count::<_, i32>(policy, left.len());
             let mut masks = vec![0u64; mask_count];
             let mut less_than = LessThan;
-            let produced =
-                profile::algo::predicate_binary(policy, &mut less_than, &left, &right, &mut masks);
+            let produced = profile::algo::predicate_binary_checked(
+                policy,
+                &mut less_than,
+                &left,
+                &right,
+                &mut masks,
+            )
+            .expect("checked algorithm preconditions");
             assert_eq!(produced, masks.len());
 
             let unary_preserved = -123456;
             let mut unary_output = vec![unary_preserved; left.len()];
             let mut square = SquareWhere;
-            profile::algo::transform_where_unary(
+            profile::algo::transform_where_unary_checked(
                 policy,
                 &mut square,
                 &left,
                 &masks,
                 &mut unary_output,
-            );
+            )
+            .expect("checked algorithm preconditions");
 
             for (i, actual) in unary_output.iter().enumerate() {
                 let expected = if left[i] < right[i] {
@@ -85,14 +92,15 @@ fn main() {
             let binary_preserved = -654321;
             let mut binary_output = vec![binary_preserved; left.len()];
             let mut add = AddWhere;
-            profile::algo::transform_where_binary(
+            profile::algo::transform_where_binary_checked(
                 policy,
                 &mut add,
                 &left,
                 &right,
                 &masks,
                 &mut binary_output,
-            );
+            )
+            .expect("checked algorithm preconditions");
 
             for (i, actual) in binary_output.iter().enumerate() {
                 let expected = if left[i] < right[i] {

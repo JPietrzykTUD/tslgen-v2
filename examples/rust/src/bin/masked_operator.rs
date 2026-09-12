@@ -65,20 +65,27 @@ fn main() {
             let mask_count = profile::algo::integral_mask_chunk_count::<_, i32>(policy, left.len());
             let mut masks = vec![0u64; mask_count];
             let mut less_than = LessThan;
-            let produced =
-                profile::algo::predicate_binary(policy, &mut less_than, &left, &right, &mut masks);
+            let produced = profile::algo::predicate_binary_checked(
+                policy,
+                &mut less_than,
+                &left,
+                &right,
+                &mut masks,
+            )
+            .expect("checked algorithm preconditions");
             assert_eq!(produced, masks.len());
 
             let unary_sentinel = -777777;
             let mut unary_output = vec![unary_sentinel; left.len()];
             let mut square = SquareOrOriginal;
-            profile::algo::transform_masked_unary(
+            profile::algo::transform_masked_unary_checked(
                 policy,
                 &mut square,
                 &left,
                 &masks,
                 &mut unary_output,
-            );
+            )
+            .expect("checked algorithm preconditions");
 
             for (i, actual) in unary_output.iter().enumerate() {
                 let expected = if left[i] < right[i] {
@@ -93,14 +100,15 @@ fn main() {
             let binary_sentinel = -888888;
             let mut binary_output = vec![binary_sentinel; left.len()];
             let mut add = AddOrLeft;
-            profile::algo::transform_masked_binary(
+            profile::algo::transform_masked_binary_checked(
                 policy,
                 &mut add,
                 &left,
                 &right,
                 &masks,
                 &mut binary_output,
-            );
+            )
+            .expect("checked algorithm preconditions");
 
             for (i, actual) in binary_output.iter().enumerate() {
                 let expected = if left[i] < right[i] {

@@ -26,6 +26,7 @@ description: Add, complete, or refactor a specialization of an existing TSL prim
    abstraction requires it. Keep every other unsupported combination explicit
    rather than pretending it works.
 4. Choose the implementation strategy in this priority order:
+   This specializes the canonical order in `tsldata/AGENTS.md`.
    - A direct exact leaf when one operation implements the complete primitive
      contract for the concrete extension/type/backend: a hardware intrinsic for
      a hardware extension, or a compiler-capability-gated builtin or documented
@@ -110,6 +111,7 @@ PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_catalog_validation.py
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_select_and_lower*.py tslc/tests/test_lower_text.py
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_masks_and_calls.py tslc/tests/test_coverage.py
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_value_test_planning.py
+./dev.sh implementation-ratchet
 PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds tslc/tests/test_build_verify.py tslc/tests/test_value_tests.py
 ./dev.sh build --primitives NAME --profiles PROFILE --backends cpp,rust
 ./dev.sh test --primitives NAME --profiles PROFILE --backends cpp,rust

@@ -2,10 +2,24 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from textwrap import dedent
+from typing import Protocol
 
 from tslc.catalog.model import ImplementationSafety
+from tslc.catalog.preconditions import PreconditionKind
+
+
+class DocumentedPrecondition(Protocol):
+    @property
+    def kind(self) -> PreconditionKind: ...
+
+    @property
+    def description(self) -> str: ...
+
+    @property
+    def unchecked_consequence(self) -> str: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,6 +104,25 @@ def safety_fact(safety: ImplementationSafety) -> str:
     if safety.reasons:
         parts.append("reasons: " + ", ".join(sorted(safety.reasons)))
     return "; ".join(parts)
+
+
+def precondition_fact(
+    preconditions: Iterable[DocumentedPrecondition],
+    *,
+    include_unchecked_consequence: bool = True,
+) -> str:
+    facts = tuple(
+        (
+            f"{item.kind.value}: {item.description}"
+            + (
+                f" {item.unchecked_consequence}"
+                if include_unchecked_consequence
+                else ""
+            )
+        ).removesuffix(".")
+        for item in preconditions
+    )
+    return "; ".join(facts) + "." if facts else ""
 
 
 def render_cpp_doc(block: DocumentationBlock, *, indent: str = "") -> str:
@@ -193,6 +226,7 @@ __all__ = [
     "kind_description",
     "parameter_summary",
     "primitive_documentation",
+    "precondition_fact",
     "render_cpp_doc",
     "render_rust_doc",
     "result_summary",

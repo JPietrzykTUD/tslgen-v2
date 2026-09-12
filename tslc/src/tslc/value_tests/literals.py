@@ -64,6 +64,11 @@ def rust_literal_list(values: tuple[str, ...], type_tag: str) -> str:
 
 
 def token_truthy(token: str) -> bool:
+    normalized = token.strip().lower()
+    if normalized == "true":
+        return True
+    if normalized == "false":
+        return False
     try:
         return int(token) != 0
     except ValueError:
@@ -71,6 +76,16 @@ def token_truthy(token: str) -> bool:
             return float(token) != 0.0
         except ValueError:
             return True
+
+
+def mask_bits_value(token: str) -> int | None:
+    """The non-negative integer value of one authored mask-bits token, or None."""
+
+    try:
+        value = int(token.strip().strip('"'), 0)
+    except ValueError:
+        return None
+    return value if value >= 0 else None
 
 
 def _wrapped_int(token: str, type_tag: str) -> str | None:
@@ -102,6 +117,7 @@ def _type_bits(type_tag: str) -> int | None:
 __all__ = (
     "cpp_literal",
     "cpp_literal_list",
+    "mask_bits_value",
     "rust_literal",
     "rust_literal_list",
     "token_truthy",

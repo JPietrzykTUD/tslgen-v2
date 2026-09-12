@@ -35,13 +35,19 @@ def test_generated_workflows_reuse_content_addressed_images() -> None:
 
 def test_generated_values_subsume_the_profile_build_matrix() -> None:
     values = _workflow("generated-values.yml")
+    value_test_job = values.split("\n  generated-value-tests:\n", 1)[1].split(
+        "\n  generated-", 1
+    )[0]
 
     assert "Generated build and values" in values
-    assert "./dev.sh test" in values
-    assert "./dev.sh build" not in values
+    assert "./dev.sh test" in value_test_job
+    assert "./dev.sh build" not in value_test_job
     assert "Generated Clang overlay build and values" in values
     assert "Generated benchmarks (x86 policy and ARM smoke)" in values
     assert not Path(".github/workflows/generated-build.yml").exists()
+    readme = Path("README.md").read_text(encoding="utf-8")
+    assert "actions/workflows/generated-build.yml" not in readme
+    assert "actions/workflows/docs.yml" not in readme
 
 
 def test_python_shard_paths_are_not_interpolated_as_shell_code() -> None:
@@ -61,6 +67,21 @@ def test_required_jobs_check_out_the_shared_result_checker() -> None:
             "bash .github/scripts/require_ci_results.sh"
         )
         assert checkout < checker
+
+
+def test_atomic_release_workflow_is_the_only_publication_owner() -> None:
+    release = _workflow("release.yml")
+    assert "gh release create" in release
+    assert "gh release upload" in release
+    assert "contents: write" in release
+    assert "environment: release" in release
+    for path in sorted(Path(".github/workflows").glob("*.yml")):
+        if path.name == "release.yml":
+            continue
+        workflow = path.read_text(encoding="utf-8")
+        assert "gh release create" not in workflow
+        assert "gh release upload" not in workflow
+        assert "contents: write" not in workflow
 
 
 def test_required_result_checker_enforces_selected_jobs() -> None:

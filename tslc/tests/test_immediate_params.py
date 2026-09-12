@@ -6,7 +6,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from tslc.catalog.builder import CatalogBuilder
-from tslc.catalog.model import Catalog
+from tslc.catalog.model import (
+    Catalog,
+    ImmediateRangeUpperKind,
+    ImmediateValueRange,
+)
 from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.sources import SourceDocument
 from tslc.syntax.parser import TslParser
@@ -26,7 +30,11 @@ def test_shift_right_immediate_params(catalog: Catalog) -> None:
     param = shift_right.immediate_param("shift")
     assert param is not None
     assert param.type_tag == "ui32"
-    assert param.value_range == (0, "base_bit_width(data)", False)
+    assert param.value_range is not None
+    assert param.value_range.lower == 0
+    assert param.value_range.upper.kind is ImmediateRangeUpperKind.SOURCE_BASE_BIT_WIDTH
+    assert param.value_range.upper.literal is None
+    assert param.value_range.inclusive is False
     assert param.dispatch_for("rust") == "literal_match"
     assert param.dispatch_for("cpp") is None  # C++ stays positional
 
@@ -81,3 +89,53 @@ def test_params_unknown_param_diagnoses() -> None:
     )
     codes = {d.code for d in result.diagnostics}
     assert "TSL-PARAMS-UNKNOWN-PARAM" in codes, result.diagnostics
+
+
+def test_conversion_chunk_count_range_is_typed() -> None:
+    result = _build(
+        "prim<v:=(v,sImm)> convert_up(data, index):\n"
+        '  brief_description "x"\n'
+        "  return_type:\n"
+        "    base: ToBase\n"
+        "  params:\n"
+        "    index:\n"
+        "      type si32\n"
+        '      valid_range "0..conversion_chunk_count(data, ToBase)"\n'
+        "  impls:\n"
+        "    scalar:\n"
+        "      arith:\n"
+        "        ToBase:\n"
+        "          arith:\n"
+        "            implementation:\n"
+        '              tsil "complete(data);"\n'
+    )
+    assert result.diagnostics == (), result.diagnostics
+    primitive = result.catalog.primitive("convert_up")
+    assert primitive is not None
+    param = primitive.immediate_param("index")
+    assert param is not None
+    assert isinstance(param.valid_range, ImmediateValueRange)
+    assert param.valid_range.upper.kind is ImmediateRangeUpperKind.CONVERSION_CHUNK_COUNT
+    assert param.valid_range.upper.source_text == "conversion_chunk_count(data, ToBase)"
+
+
+def test_conversion_chunk_count_range_requires_base_target() -> None:
+    result = _build(
+        "prim<v:=(v,sImm)> foo(data, index):\n"
+        '  brief_description "x"\n'
+        "  params:\n"
+        "    index:\n"
+        '      valid_range "0..conversion_chunk_count(data, ToBase)"\n'
+        "  impls:\n"
+        "    scalar:\n"
+        "      arith:\n"
+        "        implementation:\n"
+        '          tsil "complete(data);"\n'
+    )
+    diagnostics = [
+        diagnostic
+        for diagnostic in result.diagnostics
+        if diagnostic.code == "TSL-PARAMS-BAD-RANGE"
+    ]
+    assert len(diagnostics) == 1
+    assert "return_type: base: ToBase" in diagnostics[0].message

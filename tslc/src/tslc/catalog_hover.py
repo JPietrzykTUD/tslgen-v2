@@ -14,8 +14,13 @@ from tslc.catalog.conversion import (
     LANE_COUNT_RELATION_DESCRIPTIONS,
     NUMERIC_CONVERSION_MODE_DESCRIPTIONS,
 )
-from tslc.catalog.memory import MEMORY_ACCESS_DESCRIPTIONS, MEMORY_ADDRESSING_DESCRIPTIONS
+from tslc.catalog.memory import (
+    MEMORY_ACCESS_DESCRIPTIONS,
+    MEMORY_ADDRESSING_DESCRIPTIONS,
+    MEMORY_INDEXED_LANE_EXTENT_DESCRIPTIONS,
+)
 from tslc.catalog.model import Catalog, Primitive
+from tslc.catalog.preconditions import PRECONDITION_DESCRIPTORS
 from tslc.catalog.semantics import OPERAND_ROLE_DESCRIPTIONS, PRIMITIVE_OPERATION_DESCRIPTIONS
 from tslc.catalog.shift import SHIFT_COUNT_RULE_DESCRIPTIONS, SHIFT_LANE_RULE_DESCRIPTIONS
 from tslc.catalog_index_model import SymbolKind, sorted_spans
@@ -136,6 +141,88 @@ def hover_text(
         if spec.numeric_domain is not None:
             facts.append(f"**Numeric domain:** `{spec.numeric_domain.value}`")
         hover[("arithmetic-guarantee", guarantee.value)] = "\n\n".join(facts)
+    for kind, precondition_descriptor in PRECONDITION_DESCRIPTORS.items():
+        facts = [
+            f"**Primitive precondition** `{kind.value}`",
+            precondition_descriptor.description,
+            f"**Hazard:** `{precondition_descriptor.hazard.value}`",
+        ]
+        if precondition_descriptor.required_roles:
+            facts.append(
+                "**Required operand roles:** "
+                + _inline_code(
+                    sorted(
+                        role.value
+                        for role in precondition_descriptor.required_roles
+                    )
+                )
+            )
+        if precondition_descriptor.required_arithmetic_roles:
+            facts.append(
+                "**Required arithmetic operand roles:** "
+                + _inline_code(
+                    sorted(
+                        role.value
+                        for role in precondition_descriptor.required_arithmetic_roles
+                    )
+                )
+            )
+        if precondition_descriptor.compatible_operations:
+            facts.append(
+                "**Compatible operations:** "
+                + _inline_code(
+                    sorted(
+                        operation.value
+                        for operation in precondition_descriptor.compatible_operations
+                    )
+                )
+            )
+        if precondition_descriptor.compatible_arithmetic_operations:
+            facts.append(
+                "**Compatible arithmetic operations:** "
+                + _inline_code(
+                    sorted(
+                        operation.value
+                        for operation in precondition_descriptor.compatible_arithmetic_operations
+                    )
+                )
+            )
+        if precondition_descriptor.compatible_memory_accesses:
+            facts.append(
+                "**Compatible memory accesses:** "
+                + _inline_code(
+                    sorted(
+                        access.value
+                        for access in precondition_descriptor.compatible_memory_accesses
+                    )
+                )
+            )
+        if precondition_descriptor.compatible_memory_addressings:
+            facts.append(
+                "**Compatible memory addressing:** "
+                + _inline_code(
+                    sorted(
+                        addressing.value
+                        for addressing in precondition_descriptor.compatible_memory_addressings
+                    )
+                )
+            )
+        if precondition_descriptor.numeric_domain is not None:
+            facts.append(
+                "**Numeric domain:** "
+                f"`{precondition_descriptor.numeric_domain.value}`"
+            )
+        facts.extend(
+            (
+                "**Checked errors:** "
+                + _inline_code(
+                    error.value for error in precondition_descriptor.errors
+                ),
+                "**Unchecked consequence:** "
+                f"{precondition_descriptor.unchecked_consequence}",
+            )
+        )
+        hover[("precondition", kind.value)] = "\n\n".join(facts)
     semantic_descriptions: tuple[
         tuple[SymbolKind, str, Iterable[tuple[object, str]]], ...
     ] = (
@@ -143,6 +230,11 @@ def hover_text(
         ("operand-role", "Operand role", OPERAND_ROLE_DESCRIPTIONS.items()),
         ("memory-access", "Memory access", MEMORY_ACCESS_DESCRIPTIONS.items()),
         ("memory-addressing", "Memory addressing", MEMORY_ADDRESSING_DESCRIPTIONS.items()),
+        (
+            "memory-indexed-lane-extent",
+            "Indexed memory lane extent",
+            MEMORY_INDEXED_LANE_EXTENT_DESCRIPTIONS.items(),
+        ),
         ("conversion-kind", "Conversion kind", CONVERSION_KIND_DESCRIPTIONS.items()),
         ("lane-count-relation", "Lane-count relation", LANE_COUNT_RELATION_DESCRIPTIONS.items()),
         ("numeric-conversion-mode", "Numeric conversion mode", NUMERIC_CONVERSION_MODE_DESCRIPTIONS.items()),

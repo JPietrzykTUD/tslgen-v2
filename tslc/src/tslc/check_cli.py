@@ -12,6 +12,7 @@ from typing import Any
 from tslc._cli_options import parse_assignments, split_csv
 from tslc.api import _expand_sources, generate_project
 from tslc.authoring import check_catalog
+from tslc.backend.registry import registered_backend_ids
 from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS
 from tslc.diagnostics import (
     Diagnostic,
@@ -110,7 +111,7 @@ def _settings(args: argparse.Namespace, config: ProjectConfig | None) -> _Settin
     else:
         raise ValueError("no corpus configured; pass --sources or create tslc.toml")
     backends = tuple(args.backend) or (
-        config.backends if config is not None else ("cpp", "rust")
+        config.backends if config is not None else registered_backend_ids()
     )
     compiler_capabilities = {
         backend_id: toolchain.compiler_capabilities

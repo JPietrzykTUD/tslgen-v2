@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from tslc.backend.checked_api import applicable_checked_api_plan
 from tslc.backend.rust_benchmark_detection import (
     RUST_BENCHMARK_DETECTION_KINDS,
 )
@@ -23,7 +24,13 @@ if TYPE_CHECKING:
 def validate_rust_profiles(profiles: tuple[EmittedProfile, ...]) -> tuple[Diagnostic, ...]:
     static_diagnostics = validate_rust_static_selection(profiles)
     diagnostics: list[Diagnostic] = list(static_diagnostics)
-    if not static_diagnostics and _has_complete_lowered_inventory(profiles):
+    checked_name_diagnostics = _validate_checked_names(profiles)
+    diagnostics.extend(checked_name_diagnostics)
+    if (
+        not static_diagnostics
+        and not checked_name_diagnostics
+        and _has_complete_lowered_inventory(profiles)
+    ):
         diagnostics.extend(
             validate_rust_facade(profiles, plan_rust_static_selection(profiles))
         )
@@ -116,6 +123,36 @@ def validate_rust_profiles(profiles: tuple[EmittedProfile, ...]) -> tuple[Diagno
                             source=specialization.source,
                         )
                     )
+    return tuple(diagnostics)
+
+
+def _validate_checked_names(
+    profiles: tuple[EmittedProfile, ...],
+) -> tuple[Diagnostic, ...]:
+    diagnostics: list[Diagnostic] = []
+    for profile in profiles:
+        primitive_specializations = profile.specializations("rust")
+        emitted_names = frozenset(primitive_specializations)
+        for primitive_name, specializations in sorted(
+            primitive_specializations.items()
+        ):
+            if (
+                applicable_checked_api_plan(specializations) is not None
+                and f"{primitive_name}_checked" in emitted_names
+            ):
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-BACKEND-RUST-CHECKED-NAME-COLLISION",
+                        message=(
+                            f"Rust checked API {primitive_name + '_checked'!r} "
+                            "collides with an emitted primitive"
+                        ),
+                        source=specializations[0]
+                        .primitive_semantics.preconditions[0]
+                        .source,
+                    )
+                )
     return tuple(diagnostics)
 
 

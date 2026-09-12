@@ -7,11 +7,20 @@ from enum import Enum, auto
 from typing import Literal
 
 from tslc.catalog.arithmetic import ARITHMETIC_INTEGER_IMMEDIATE_ZERO_MARKER
-from tslc.catalog.model import TestComparison, TestFailureReason
+from tslc.catalog.model import (
+    IMMEDIATE_CONVERSION_CHUNK_INDEX_MARKER,
+    TestComparison,
+    TestFailureReason,
+)
+from tslc.catalog.preconditions import (
+    PRECONDITION_DESCRIPTORS,
+    PreconditionErrorKind,
+    PreconditionKind,
+)
 
 ExpectedArity = Literal["optional", "non_empty", "one", "lanes", "target_lanes"]
 InputArity = Literal["optional", "non_empty", "one"]
-ScalableExpectedLayout = Literal["tiled", "indexed_lane"]
+ScalableExpectedLayout = Literal["tiled", "indexed_lane", "indexed_partial"]
 MemoryStorage = Literal["packed", "unpacked"]
 IndexStyle = Literal["register", "pointer"]
 ValueTestFailurePhase = Literal["runtime", "compile"]
@@ -40,6 +49,18 @@ class ValueTestFact(Enum):
     SCALABLE_LOAD = auto()
     DIFFERENTIAL = auto()
     FAILURE = auto()
+    CHECKED_PRECONDITION = auto()
+
+
+class ValueTestInvalidPreconditionValue(Enum):
+    """Boundary values synthesized without target-language literal spellings."""
+
+    LANE_COUNT = auto()
+    SIZE_MAX = auto()
+    ACTIVE_DIVISOR_ZERO = auto()
+    LANE_COUNT_MISMATCH = auto()
+    INDEXED_ADDRESS_OUT_OF_RANGE = auto()
+    INDEXED_ADDRESS_MISALIGNED = auto()
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,9 +109,10 @@ class ValueTestExpectation:
     scalable_layout: ScalableExpectedLayout = "tiled"
 
     def __post_init__(self) -> None:
-        if self.scalable_layout not in {"tiled", "indexed_lane"}:
+        if self.scalable_layout not in {"tiled", "indexed_lane", "indexed_partial"}:
             raise ValueError(
-                "value-test scalable expected layout must be 'tiled' or 'indexed_lane'"
+                "value-test scalable expected layout must be 'tiled', "
+                "'indexed_lane', or 'indexed_partial'"
             )
 
 
@@ -115,7 +137,34 @@ class ValueTestFailure:
                 if self.phase == "compile"
                 else "TSL_ARITH_INTEGER_ZERO_DIVISOR"
             )
+        if self.reason is TestFailureReason.CONVERSION_CHUNK_INDEX_OUT_OF_RANGE:
+            return IMMEDIATE_CONVERSION_CHUNK_INDEX_MARKER
         raise AssertionError(f"unhandled value-test failure reason {self.reason!r}")
+
+
+@dataclass(frozen=True, slots=True)
+class ValueTestCheckedPrecondition:
+    """One invalid checked call and its expected typed error."""
+
+    kind: PreconditionKind
+    error: PreconditionErrorKind
+    parameter_index: int
+    invalid_value: ValueTestInvalidPreconditionValue
+    invalid_lane_index: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.parameter_index < 0:
+            raise ValueError("checked precondition parameter index must be non-negative")
+        if self.error not in PRECONDITION_DESCRIPTORS[self.kind].errors:
+            raise ValueError("checked precondition error must match its descriptor")
+        if self.invalid_lane_index is not None and self.invalid_lane_index < 0:
+            raise ValueError("checked precondition invalid lane must be non-negative")
+        if (
+            self.kind is PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID
+        ) != (self.invalid_lane_index is not None):
+            raise ValueError(
+                "only indexed-memory checked preconditions carry an invalid lane"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,6 +177,7 @@ class ValueTestInvocation:
     immediate: str | None = None
     generic_defaults: tuple[str, ...] = ()
     inferred_type_args: int = 0
+    caller_unsafe: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -226,6 +276,31 @@ class ValueTestRepresentation:
     @property
     def has_layout(self) -> bool:
         return self.target_extension is not None
+
+
+@dataclass(frozen=True, slots=True)
+class ValueTestTargetImaskHarness:
+    """Backend templates for a target-imask case whose ``im`` is a predicate."""
+
+    source_mask_from_bits_template: str
+    target_mask_from_bits_template: str
+    target_mask_check_template: str
+    mask_bits: tuple[int, ...]
+    expected_mask_bits: int
+
+    def __post_init__(self) -> None:
+        if not all(
+            (
+                self.source_mask_from_bits_template,
+                self.target_mask_from_bits_template,
+                self.target_mask_check_template,
+            )
+        ):
+            raise ValueError("target-imask predicate harness requires complete templates")
+        if not self.mask_bits or any(bits < 0 for bits in self.mask_bits):
+            raise ValueError("target-imask predicate harness requires mask bits")
+        if self.expected_mask_bits < 0:
+            raise ValueError("target-imask predicate harness requires expected mask bits")
 
 
 @dataclass(frozen=True, slots=True)

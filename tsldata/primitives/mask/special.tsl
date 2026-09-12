@@ -55,6 +55,48 @@ prim<im:=(im,usize)> test_imask(mask, position):
               }
               complete(cast<static>(vector::imask, mask<test, imask>(mask, position)));
             """
+    sve:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(empty, call<primitive=mask_false[Vec]>());
+            if (position >= value(vector::runtime_length)) {
+              complete(empty);
+            }
+            var<const_infer>(lane_mask, call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(empty, position, 1));
+            if (call<primitive=mask_population_count[Vec]>(
+              call<primitive=mask_binary_and[Vec]>(mask, lane_mask)
+            ) != 0) {
+              complete(call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(empty, 0, 1));
+            }
+            complete(empty);
+          """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(empty, call<primitive=mask_false[Vec]>());
+            if (position >= value(vector::runtime_length)) {
+              complete(empty);
+            }
+            var<const_infer>(lane_mask, call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(empty, position, 1));
+            if (call<primitive=mask_population_count[Vec]>(
+              call<primitive=mask_binary_and[Vec]>(mask, lane_mask)
+            ) != 0) {
+              complete(call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(empty, 0, 1));
+            }
+            complete(empty);
+          """
 
 prim<m:=(m,usize,usize)> set_mask_lane(mask, index, value):
   operation mask_set_lane
@@ -62,6 +104,7 @@ prim<m:=(m,usize,usize)> set_mask_lane(mask, index, value):
     primary mask
     index index
     value value
+  preconditions [lane_index_in_range]
   brief_description "Returns the mask with one valid runtime-indexed lane replaced."
   detailed_description """
     Returns a mask equal to `mask` except that the lane at the runtime index is
@@ -84,6 +127,7 @@ prim<m:=(m,usize,usize)> set_mask_lane(mask, index, value):
     - {tags [middle, clear], extension "avx512", type "ui64", lane_count 8, case {inputs [255, 4, 0], expected 239}}
     - {tags [false], extension "generic", type "ui8", lane_count 16, case {inputs [65535, 15, 0], expected 32767}}
     - {tags [true], extension "generic", type "f64", lane_count 2, case {inputs [0, 1, 1], expected 2}}
+    - {tags [runtime, sve], extension "sve", type "ui32", lane_count 4, case {inputs [0, 3, 1], expected 8}}
     - {tags [sse2, set], extension "sse", type "ui64", lane_count 2, case {inputs [0, 1, 1], expected 2}}
     - {tags [sse2, set], extension "sse", type "f64", lane_count 2, case {inputs [0, 1, 1], expected 2}}
   impls:
@@ -126,6 +170,27 @@ prim<m:=(m,usize,usize)> set_mask_lane(mask, index, value):
               call<primitive=mask_binary_not[Vec]>(lane_mask)
             ));
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<const_infer>(lane_mask, call<primitive=equal[Vec]>(
+              call<primitive=sequence[Vec]>(),
+              call<primitive=set1[Vec]>(cast<static>(base::in, index))
+            ));
+            if (value != 0) {
+              complete(call<primitive=mask_binary_or[Vec]>(mask, lane_mask));
+            }
+            complete(call<primitive=mask_binary_and[Vec]>(
+              mask,
+              call<primitive=mask_binary_not[Vec]>(lane_mask)
+            ));
+          """
     sse:
       arith:
         requires:
@@ -143,10 +208,12 @@ prim<m:=(m,usize,usize)> set_mask_lane(mask, index, value):
             );
             var<infer>(bits, call<primitive=to_integral[Vec]>(mask));
             if (value != 0) {
-              complete(call<primitive=to_mask[Vec]>(bits | lane_bit));
+              complete(call<primitive=to_mask[Vec]>(
+                cast<static>(vector::imask, bits | lane_bit)
+              ));
             }
             complete(call<primitive=to_mask[Vec]>(
-              bits & op<bit_negate>(lane_bit)
+              cast<static>(vector::imask, bits & op<bit_negate>(lane_bit))
             ));
           """
 
@@ -204,6 +271,54 @@ prim<im:=(im,im,usize)> overlay_imask(mask_a, mask_b, position):
               }
               complete(cast<static>(vector::imask, mask_a | (mask_b << position)));
             """
+    sve:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            if (position >= value(vector::runtime_length)) {
+              complete(mask_a);
+            }
+            var<infer>(result, mask_a);
+            var<const_infer>(empty, call<primitive=mask_false[Vec]>());
+            loop<backend>(i, 0, value(vector::runtime_length) - position, 1) {
+              var<const_infer>(source_lane, call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(empty, i, 1));
+              if (call<primitive=mask_population_count[Vec]>(
+                call<primitive=mask_binary_and[Vec]>(mask_b, source_lane)
+              ) != 0) {
+                result = call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(result, position + i, 1);
+              }
+            }
+            complete(result);
+          """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            if (position >= value(vector::runtime_length)) {
+              complete(mask_a);
+            }
+            var<infer>(result, mask_a);
+            var<const_infer>(empty, call<primitive=mask_false[Vec]>());
+            loop<backend>(i, 0, value(vector::runtime_length) - position, 1) {
+              var<const_infer>(source_lane, call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(empty, i, 1));
+              if (call<primitive=mask_population_count[Vec]>(
+                call<primitive=mask_binary_and[Vec]>(mask_b, source_lane)
+              ) != 0) {
+                result = call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(result, position + i, 1);
+              }
+            }
+            complete(result);
+          """
 
 prim<im:=(imt,im,usize)> insert_imask(orig, data, position):
   brief_description "Replaces a target-mask window with the bits from a smaller source mask."
@@ -227,6 +342,9 @@ prim<im:=(imt,im,usize)> insert_imask(orig, data, position):
     - {tags [extension_insert], extension "sse", type "ui32", to_extension "avx2", case {inputs [0, 11, 4], expected 176}}
     - {tags [extension_clipped], extension "sse", type "ui32", to_extension "avx2", case {inputs [0, 15, 6], expected 192}}
     - {tags [clang], extension "clang_v128", type "ui32", to_extension "clang_v256", case {inputs [255, 0, 2], expected 195}}
+    - {tags [sve_fixed, base_replace], extension "sve128", type "ui64", to_type "ui32", case {inputs [15, 0, 1], expected 9}}
+    - {tags [sve_fixed, base_replace], extension "sve256", type "ui64", to_type "ui32", case {inputs [255, 0, 2], expected 195}}
+    - {tags [sve_fixed, base_replace], extension "sve512", type "ui64", to_type "ui32", case {inputs [65535, 0, 4], expected 61455}}
   impls:
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx512, avx2_vl, sse_vl, avx2, sse, neon, wasm128]:
       qword:
@@ -333,6 +451,45 @@ prim<im:=(imt,im,usize)> insert_imask(orig, data, position):
                     value(vector::length), value(generic::length(OutVec))
                   ));
                 """
+    [sve128, sve256, sve512]:
+      arith:
+        requires:
+          sve128 [sve]
+          sve256 [sve]
+          sve512 [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsl """
+            let<type>(OutVec, vector::as_base(ToBase));
+            var<infer>(result, orig);
+            var<const_infer>(source_empty, call<primitive=mask_false[Vec]>());
+            var<const_infer>(target_lanes, value(generic::runtime_length(OutVec)));
+            if (position >= target_lanes) {
+              complete(result);
+            }
+            loop<backend>(i, 0, value(vector::runtime_length), 1) {
+              if (position + i >= target_lanes) {
+                complete(result);
+              }
+              result = call<primitive=set_mask_lane[OutVec], discharge[lane_index_in_range]>(
+                result, position + i, 0
+              );
+              var<const_infer>(source_lane, call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(
+                source_empty, i, 1
+              ));
+              if (call<primitive=mask_population_count[Vec]>(
+                call<primitive=mask_binary_and[Vec]>(data, source_lane)
+              ) != 0) {
+                result = call<primitive=set_mask_lane[OutVec], discharge[lane_index_in_range]>(
+                  result, position + i, 1
+                );
+              }
+            }
+            complete(result);
+          """
 
 prim<im:=(imt,im,usize)> insert_imask(orig, data, position):
   brief_description "Replaces a target-mask window with the bits from a smaller source mask."
@@ -399,6 +556,9 @@ prim<im:=(im,usize)> extract_imask(data, position):
     - {tags [extension_low], extension "avx2", type "ui32", to_extension "sse", case {inputs [171, 0], expected 11}}
     - {tags [extension_clipped], extension "avx2", type "ui32", to_extension "sse", case {inputs [192, 6], expected 3}}
     - {tags [clang], extension "clang_v256", type "ui32", to_extension "clang_v128", case {inputs [176, 4], expected 11}}
+    - {tags [sve_fixed, base], extension "sve128", type "ui32", to_type "ui64", case {inputs [12, 2], expected 3}}
+    - {tags [sve_fixed, base], extension "sve256", type "ui32", to_type "ui64", case {inputs [176, 4], expected 11}}
+    - {tags [sve_fixed, base], extension "sve512", type "ui32", to_type "ui64", case {inputs [2816, 8], expected 11}}
   impls:
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, avx512, avx2_vl, sse_vl, avx2, sse, neon, wasm128]:
       ?i8:
@@ -505,6 +665,42 @@ prim<im:=(im,usize)> extract_imask(data, position):
                     value(vector::length), value(generic::length(OutVec))
                   ));
                 """
+    [sve128, sve256, sve512]:
+      arith:
+        requires:
+          sve128 [sve]
+          sve256 [sve]
+          sve512 [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsl """
+            let<type>(OutVec, vector::as_base(ToBase));
+            var<infer>(result, call<primitive=mask_false[OutVec]>());
+            var<const_infer>(source_empty, call<primitive=mask_false[Vec]>());
+            var<const_infer>(source_lanes, value(vector::runtime_length));
+            if (position >= source_lanes) {
+              complete(result);
+            }
+            loop<backend>(i, 0, value(generic::runtime_length(OutVec)), 1) {
+              if (position + i >= source_lanes) {
+                complete(result);
+              }
+              var<const_infer>(source_lane, call<primitive=set_mask_lane[Vec], discharge[lane_index_in_range]>(
+                source_empty, position + i, 1
+              ));
+              if (call<primitive=mask_population_count[Vec]>(
+                call<primitive=mask_binary_and[Vec]>(data, source_lane)
+              ) != 0) {
+                result = call<primitive=set_mask_lane[OutVec], discharge[lane_index_in_range]>(
+                  result, i, 1
+                );
+              }
+            }
+            complete(result);
+          """
 
 prim<im:=(im,usize)> extract_imask(data, position):
   brief_description "Extracts a smaller target mask from a larger source mask."
@@ -567,6 +763,7 @@ prim<m:=(m,m)> mask_interleave_lo(mask_a, mask_b):
       result[2 * i + 1] = mask_b[i]
     return result
     """
+  cross_lane true
   tests:
     - {tags [interleave, both], extension "generic", type "ui32", lane_count 8, case {inputs [15, 15], expected 255}}
     - {tags [interleave, a_only], extension "generic", type "ui32", lane_count 8, case {inputs [15, 0], expected 85}}
@@ -576,7 +773,7 @@ prim<m:=(m,m)> mask_interleave_lo(mask_a, mask_b):
     - {tags [interleave, wide, a_only], extension "generic", type "ui32", lane_count 16, case {inputs [255, 0], expected 21845}}
     - {tags [interleave, wide, b_only], extension "generic", type "ui32", lane_count 16, case {inputs [0, 255], expected 43690}}
   impls:
-    [scalar, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, avx512, avx2, sse, neon, sve]:
+    [scalar, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, avx512, avx2, sse, neon, sve, wasm128]:
       arith:
         requires:
           scalar []
@@ -593,6 +790,23 @@ prim<m:=(m,m)> mask_interleave_lo(mask_a, mask_b):
           sse [sse2]
           neon [neon]
           sve [sve]
+          wasm128 [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(call<primitive=unequal_zero[Vec]>(
+              call<primitive=interleave_lo[Vec]>(
+                call<primitive=to_vector[Vec]>(mask_a),
+                call<primitive=to_vector[Vec]>(mask_b)
+              )
+            ));
+          """
+    rvv:
+      arith:
+        requires [v]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -625,6 +839,7 @@ prim<m:=(m,m)> mask_deinterleave_odd(mask_a, mask_b):
       result[half + j] = mask_b[2 * j + 1]
     return result
     """
+  cross_lane true
   tests:
     - {tags [deinterleave, a_odds], extension "generic", type "ui32", lane_count 8, case {inputs [170, 0], expected 15}}
     - {tags [deinterleave, b_odds], extension "generic", type "ui32", lane_count 8, case {inputs [0, 170], expected 240}}
@@ -643,7 +858,7 @@ prim<m:=(m,m)> mask_deinterleave_odd(mask_a, mask_b):
           reasons []
         implementation:
           tsil "complete(call<primitive=mask_false[Vec]>());"
-    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, avx512, avx2, sse, neon]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, avx512, avx2, sse, neon, wasm128]:
       arith:
         requires:
           generic []
@@ -658,6 +873,7 @@ prim<m:=(m,m)> mask_deinterleave_odd(mask_a, mask_b):
           avx2 [avx2]
           sse [sse2]
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -680,9 +896,9 @@ prim<m:=(m,m)> mask_deinterleave_odd(mask_a, mask_b):
       arith:
         requires [sve]
         safety:
-          internal_unsafe false
+          internal_unsafe true
           caller_unsafe false
-          reasons []
+          reasons [raw_memory]
         implementation:
           tsil """
             let<type>(Base, base::in);
@@ -692,8 +908,8 @@ prim<m:=(m,m)> mask_deinterleave_odd(mask_a, mask_b):
             var<runtime_array>(Base, a_lanes, lanes);
             var<runtime_array>(Base, b_lanes, lanes);
             var<runtime_array>(Base, result, lanes);
-            call<primitive=store[Vec], attrs[aligned=false]>(a_lanes, a_vec);
-            call<primitive=store[Vec], attrs[aligned=false]>(b_lanes, b_vec);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(a_lanes, a_vec);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(b_lanes, b_vec);
             loop<backend>(i, 0, lanes, 1) {
               if ((2 * i) < lanes) {
                 result[i] = a_lanes[2 * i + 1];
@@ -702,6 +918,35 @@ prim<m:=(m,m)> mask_deinterleave_odd(mask_a, mask_b):
               }
             }
             complete(call<primitive=unequal_zero[Vec]>(
-              call<primitive=load[Vec], attrs[aligned=false]>(result)
+              call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result)
+            ));
+          """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [raw_memory]
+        implementation:
+          tsil """
+            let<type>(Base, base::in);
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<const_infer>(a_vec, call<primitive=to_vector[Vec]>(mask_a));
+            var<const_infer>(b_vec, call<primitive=to_vector[Vec]>(mask_b));
+            var<runtime_array>(Base, a_lanes, lanes);
+            var<runtime_array>(Base, b_lanes, lanes);
+            var<runtime_array>(Base, result, lanes);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(a_lanes, a_vec);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(b_lanes, b_vec);
+            loop<backend>(i, 0, lanes, 1) {
+              if ((2 * i) < lanes) {
+                result[i] = a_lanes[2 * i + 1];
+              } else {
+                result[i] = b_lanes[2 * i - lanes + 1];
+              }
+            }
+            complete(call<primitive=unequal_zero[Vec]>(
+              call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result)
             ));
           """

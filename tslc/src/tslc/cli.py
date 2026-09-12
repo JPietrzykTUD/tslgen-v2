@@ -8,7 +8,13 @@ from collections.abc import Callable
 from pathlib import Path
 
 from tslc._cli_options import merge_toolchains, parse_assignments, split_csv
-from tslc.api import generate_project, verify_project, write_artifacts
+from tslc.api import (
+    generate_project,
+    refresh_artifact_manifest,
+    verify_project,
+    write_artifacts,
+)
+from tslc.backend.registry import registered_backend_ids
 from tslc.backend.rust_package import DEFAULT_RUST_PACKAGE_CONFIG
 from tslc.generation_command import (
     GenerationCommandSettings,
@@ -31,6 +37,7 @@ _COMMANDS = (
     "show",
     "audit",
     "coverage",
+    "release",
     "doctor",
     "lsp",
 )
@@ -91,6 +98,8 @@ def main(argv: list[str] | None = None) -> int:
         return _maintenance_group("audit", rest)
     if command == "coverage":
         return _maintenance_group("coverage", rest)
+    if command == "release":
+        return _maintenance_group("release", rest)
     parser = _root_parser()
     parser.error(f"unknown command {command!r}")
 
@@ -117,8 +126,9 @@ def _root_parser() -> argparse.ArgumentParser:
         "inspect": "dump a compiler pipeline stage",
         "list": "list catalog entries",
         "show": "describe one catalog entry",
-        "audit": "run source metadata audits",
+        "audit": "run source-contract audits",
         "coverage": "run coverage maintenance tools",
+        "release": "inspect or ratchet the generated-library release contract",
         "doctor": "probe configured toolchains and runners",
         "lsp": "run the editor-neutral language server",
     }
@@ -145,6 +155,7 @@ def _generation_main(
     pipeline = GenerationPipeline(
         generate=generate_project,
         write=write_artifacts,
+        refresh_manifest=refresh_artifact_manifest,
         verify=verify_project,
     )
     return run_generation_command(settings, pipeline)
@@ -202,7 +213,7 @@ def _generation_parser(
     )
     parser.add_argument(
         "--backends",
-        default=None if use_project_config else "cpp,rust",
+        default=None,
         help="comma-separated backends",
     )
     parser.add_argument(
@@ -213,6 +224,11 @@ def _generation_parser(
     )
     parser.add_argument("--output-root", default=None, help="write artifacts under this root")
     parser.add_argument("--verify", action="store_true", help="build-verify after writing")
+    parser.add_argument(
+        "--quality",
+        action="store_true",
+        help="run strict generated-product warning, lint, and documentation checks",
+    )
     parser.add_argument(
         "--test",
         action="store_true",
@@ -325,6 +341,7 @@ def _generation_command_settings(
         output_root=output_root,
         verify=args.verify or command == "build",
         run_value_tests=args.test or command == "test" or args.fuzz,
+        run_quality_checks=args.quality,
         fuzz=args.fuzz,
         coverage=args.coverage,
         value_test_warnings=args.value_test_warnings,
@@ -370,7 +387,7 @@ def _generation_settings(
         if args.backends is not None
         else list(project.backends)
         if project is not None
-        else ["cpp", "rust"]
+        else list(registered_backend_ids())
     )
     output_root: str | Path | None = (
         args.output_root
@@ -390,7 +407,11 @@ def _catalog_arguments(command: str, arguments: list[str]) -> list[str]:
     return [command, *arguments]
 
 
-def _configured_maintenance_arguments(arguments: list[str]) -> list[str]:
+def _configured_maintenance_arguments(
+    arguments: list[str],
+    *,
+    include_machine_profiles: bool = True,
+) -> list[str]:
     if "-h" in arguments or "--help" in arguments:
         return arguments
     values = list(arguments)
@@ -413,7 +434,7 @@ def _configured_maintenance_arguments(arguments: list[str]) -> list[str]:
                 "this inspector accepts one --sources root; pass it explicitly"
             )
         values.extend(("--sources", str(project.sources[0])))
-    if "--machine-profiles" not in values:
+    if include_machine_profiles and "--machine-profiles" not in values:
         values.extend(("--machine-profiles", str(project.machine_profiles)))
     return values
 
@@ -421,9 +442,14 @@ def _configured_maintenance_arguments(arguments: list[str]) -> list[str]:
 def _run_configured_maintenance(
     command: Callable[[list[str] | None], int],
     arguments: list[str],
+    *,
+    include_machine_profiles: bool = True,
 ) -> int:
     try:
-        configured = _configured_maintenance_arguments(arguments)
+        configured = _configured_maintenance_arguments(
+            arguments,
+            include_machine_profiles=include_machine_profiles,
+        )
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -432,7 +458,11 @@ def _run_configured_maintenance(
 
 def _maintenance_group(group: str, arguments: list[str]) -> int:
     if not arguments or arguments[0] in ("-h", "--help"):
-        choices = "metadata" if group == "audit" else "ratchet, inventory"
+        choices = {
+            "audit": "metadata, call-preconditions",
+            "coverage": "ratchet, target-ratchet, implementation-ratchet, inventory",
+            "release": "contract",
+        }[group]
         print(f"usage: tslc {group} {{{choices.replace(', ', ',')}}} [options]")
         return 0
     action, rest = arguments[0], arguments[1:]
@@ -440,6 +470,16 @@ def _maintenance_group(group: str, arguments: list[str]) -> int:
         from tslc.maintenance.metadata_audit import main as metadata_main
 
         return _run_configured_maintenance(metadata_main, rest)
+    if group == "audit" and action == "call-preconditions":
+        from tslc.maintenance.call_precondition_audit import (
+            main as call_preconditions_main,
+        )
+
+        return _run_configured_maintenance(
+            call_preconditions_main,
+            rest,
+            include_machine_profiles=False,
+        )
     if group == "coverage" and action == "ratchet":
         from tslc.maintenance.coverage_ratchet import main as ratchet_main
 
@@ -448,6 +488,20 @@ def _maintenance_group(group: str, arguments: list[str]) -> int:
         from tslc.maintenance.coverage_inventory import main as inventory_main
 
         return inventory_main(rest)
+    if group == "coverage" and action == "target-ratchet":
+        from tslc.maintenance.target_support_ratchet import main as target_ratchet_main
+
+        return _run_configured_maintenance(target_ratchet_main, rest)
+    if group == "coverage" and action == "implementation-ratchet":
+        from tslc.maintenance.implementation_slot_ratchet import (
+            main as implementation_ratchet_main,
+        )
+
+        return _run_configured_maintenance(implementation_ratchet_main, rest)
+    if group == "release" and action == "contract":
+        from tslc.maintenance.release_contract_cli import main as release_contract_main
+
+        return release_contract_main(rest)
     print(f"unknown tslc {group} command {action!r}", file=sys.stderr)
     return 2
 

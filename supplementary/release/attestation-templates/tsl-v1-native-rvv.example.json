@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "id": "rvv-native",
+  "target": "rvv",
+  "product_version": "1.0.0",
+  "compiler_input_sha256": "REPLACE_WITH_64_HEX_COMPILER_INPUT_DIGEST",
+  "generated_bundle_index_sha256": "REPLACE_WITH_64_HEX_BUNDLE_INDEX_DIGEST",
+  "generated_bundle_id": "cpp-rvv",
+  "generated_bundle_manifest_sha256": "REPLACE_WITH_64_HEX_CPP_RVV_MANIFEST_DIGEST",
+  "result": "passed",
+  "skips": [],
+  "reviewer": "REPLACE_WITH_REVIEWER_IDENTITY",
+  "machine": {
+    "manufacturer": "REPLACE_WITH_MANUFACTURER",
+    "model": "REPLACE_WITH_MODEL",
+    "architecture": "riscv64",
+    "feature_report": "REPLACE_WITH_NATIVE_FEATURE_REPORT"
+  },
+  "software": {
+    "operating_system": "REPLACE_WITH_OS_AND_VERSION",
+    "compiler": {
+      "executable": "REPLACE_WITH_COMPILER_PATH",
+      "version": "REPLACE_WITH_FULL_COMPILER_VERSION",
+      "flags": [
+        "REPLACE_WITH_EXACT_FLAG"
+      ]
+    }
+  },
+  "runtime_vector_bits": [
+    128
+  ],
+  "suites": {
+    "generated_values": {
+      "result": "passed",
+      "planned_cases": 0,
+      "passed_cases": 0,
+      "failed_cases": 0,
+      "skipped_cases": 0,
+      "commands": [
+        "REPLACE_WITH_EXACT_GENERATE_BUILD_AND_RUN_COMMAND"
+      ]
+    },
+    "differential_values": {
+      "result": "passed",
+      "planned_cases": 0,
+      "passed_cases": 0,
+      "failed_cases": 0,
+      "skipped_cases": 0,
+      "commands": [
+        "REPLACE_WITH_EXACT_DIFFERENTIAL_COMMAND"
+      ]
+    },
+    "scalable_showcase": {
+      "result": "passed",
+      "same_binary": true,
+      "binary_sha256": "REPLACE_WITH_64_HEX_SHOWCASE_BINARY_DIGEST",
+      "scalar_oracle": true,
+      "canaries_preserved": true,
+      "runs": [
+        {
+          "vector_bits": 128,
+          "runtime_lanes": 4,
+          "input_count": 14,
+          "selected": 9,
+          "tail": 1,
+          "output_digest": 0,
+          "command": "REPLACE_WITH_EXACT_SHOWCASE_COMMAND"
+        }
+      ]
+    }
+  }
+}

@@ -17,8 +17,13 @@ from tslc.catalog.conversion import (
     lane_count_relation_values,
     numeric_conversion_mode_values,
 )
-from tslc.catalog.memory import memory_access_values, memory_addressing_values
+from tslc.catalog.memory import (
+    memory_access_values,
+    memory_addressing_values,
+    memory_indexed_lane_extent_values,
+)
 from tslc.catalog.model import RESULT_DIM_VECTOR
+from tslc.catalog.preconditions import precondition_values
 from tslc.catalog.semantics import primitive_operation_values
 from tslc.catalog.shift import shift_count_rule_values, shift_lane_rule_values
 from tslc.catalog.validation._schema_benchmarks import KNOWN_OPERAND_DOMAINS
@@ -32,9 +37,12 @@ from tslc.catalog.validation._schema_primitives import (
     KNOWN_PRIMITIVE_ATTRIBUTES,
 )
 from tslc.catalog.validation._schema_tests import KNOWN_TEST_ROLES
-from tslc.diagnostics import SourceSpan
+from tslc.diagnostics import SourceSpan, source_subspan as _subspan
 from tslc.ir.region_registry import DEFAULT_TSIL_REGION_DESCRIPTORS
-from tslc.ir.region_syntax import parse_call_selector
+from tslc.ir.region_syntax import (
+    call_precondition_syntax_occurrences,
+    parse_call_selector,
+)
 from tslc.ir.scan import scan
 from tslc.ir.segments import Region, Segment
 from tslc.lower.query_authoring import DEFAULT_QUERY_AUTHORING_INDEX
@@ -92,6 +100,7 @@ _CLOSED_ENUM_VALUES = frozenset(
         *KNOWN_TEST_ROLES,
         *arithmetic_operation_values(),
         *arithmetic_guarantee_values(),
+        *precondition_values(),
         *shift_count_rule_values(),
         *shift_lane_rule_values(),
         *(value for values in KNOWN_PRIMITIVE_ATTRIBUTES.values() for value in values),
@@ -420,6 +429,7 @@ def _primitive_semantic_tokens(
                     {
                         "access": memory_access_values(),
                         "addressing": memory_addressing_values(),
+                        "indexed_lanes": memory_indexed_lane_extent_values(),
                     },
                 )
             )
@@ -589,6 +599,22 @@ def _region_semantic_tokens(region: Region) -> tuple[IndexedSemanticToken, ...]:
             span = _region_selector_name_span(region, call.primitive_ref)
             if span is not None:
                 tokens.append(IndexedSemanticToken("function", span))
+            selector_offset = region.full_text.find(region.selector_text)
+            if selector_offset >= 0:
+                tokens.extend(
+                    IndexedSemanticToken(
+                        "enumMember",
+                        _subspan(
+                            region.source,
+                            region.full_text,
+                            selector_offset + item.start,
+                            selector_offset + item.end,
+                        ),
+                    )
+                    for item in call_precondition_syntax_occurrences(
+                        region.selector_text, call
+                    )
+                )
     return tuple(tokens)
 
 
@@ -756,20 +782,6 @@ def _name_in_source(source: ParsedTslSourceSpan, name: str) -> SourceSpan:
     if offset < 0:
         return _source_span(source)
     return _subspan(_source_span(source), source.text, offset, offset + len(name))
-
-
-def _subspan(source: SourceSpan, text: str, start: int, end: int) -> SourceSpan:
-    start_line, start_column = _offset_position(source, text, start)
-    end_line, end_column = _offset_position(source, text, end)
-    return SourceSpan(source.path, start_line, start_column, end_line, end_column)
-
-
-def _offset_position(source: SourceSpan, text: str, offset: int) -> tuple[int, int]:
-    before = text[:offset]
-    line_offset = before.count("\n")
-    if line_offset == 0:
-        return source.line, source.column + offset
-    return source.line + line_offset, len(before.rsplit("\n", 1)[-1]) + 1
 
 
 def _source_span(source: ParsedTslSourceSpan) -> SourceSpan:

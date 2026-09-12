@@ -6,11 +6,12 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 from tslc.catalog.arithmetic import ARITHMETIC_INTEGER_IMMEDIATE_ZERO_MARKER
+from tslc.catalog.call_preconditions import CallPreconditionObligation
 from tslc.catalog.model import ImplementationSafety, PrimitiveMaskMode
 from tslc.diagnostics import Diagnostic, SourceSpan
 from tslc.documentation import PrimitiveDocumentation
 from tslc.lower.context import LaneListParameter
-from tslc.lower.dependencies import CallDependencyOrigin
+from tslc.lower.dependencies import CallDependencyOrigin, CallDependencyOriginKind
 from tslc.lower.implementation_state import ImplementationState
 from tslc.lower.primitive_semantics import LoweredPrimitiveSemantics
 from tslc.lower.target_vectors import TargetVector
@@ -87,6 +88,10 @@ class LoweredSpecialization:
     param_names: tuple[str, ...]
     param_kinds: tuple[str, ...]
     body: LoweredBody
+    # Exact authored callable identity retained independently of emitted naming.
+    # Synthetic lowered values may omit it; production lowering always supplies it.
+    source_signature: str | None = None
+    source_attributes: tuple[tuple[str, str], ...] = ()
     primitive_semantics: LoweredPrimitiveSemantics = field(
         default_factory=LoweredPrimitiveSemantics
     )
@@ -99,6 +104,8 @@ class LoweredSpecialization:
     lane_parameter: str | None = None
     axis: tuple[tuple[str, str], ...] = ()
     immediate: tuple[str, str] | None = None
+    immediate_range: tuple[int, int, bool] | None = None
+    immediate_valid_range: tuple[int, int, bool] | None = None
     arithmetic_preconditions: tuple[LoweredArithmeticPrecondition, ...] = ()
     generic_params: tuple[tuple[str, str, str], ...] = ()
     type_params: tuple[LoweredTypeParam, ...] = ()
@@ -111,6 +118,8 @@ class LoweredSpecialization:
     required_compiler_capabilities: frozenset[str] = frozenset()
     compiler_alternatives: tuple[LoweredSpecialization, ...] = ()
     call_dependency_origins: tuple[CallDependencyOrigin, ...] = ()
+    unavailable_checked_dependency_origins: tuple[CallDependencyOrigin, ...] = ()
+    unresolved_call_preconditions: tuple[CallPreconditionObligation, ...] = ()
     implementation_state: ImplementationState = ImplementationState.UNKNOWN
     safety: ImplementationSafety = field(default_factory=ImplementationSafety)
     variant_bodies: tuple[LoweredImplementationVariant, ...] = ()
@@ -145,6 +154,30 @@ class LoweredSpecialization:
         if len(self.param_type_overrides) == len(self.param_kinds):
             return self.param_type_overrides
         return (None,) * len(self.param_kinds)
+
+    @property
+    def implementation_call_dependency_origins(
+        self,
+    ) -> tuple[CallDependencyOrigin, ...]:
+        """Dependencies executed by the ordinary implementation body."""
+
+        return tuple(
+            origin
+            for origin in self.call_dependency_origins
+            if origin.kind is not CallDependencyOriginKind.CHECKED_GUARD
+        )
+
+    @property
+    def checked_guard_dependency_origins(
+        self,
+    ) -> tuple[CallDependencyOrigin, ...]:
+        """Dependencies used only while validating a checked companion."""
+
+        return tuple(
+            origin
+            for origin in self.call_dependency_origins
+            if origin.kind is CallDependencyOriginKind.CHECKED_GUARD
+        )
 
 
 @dataclass(frozen=True, slots=True)

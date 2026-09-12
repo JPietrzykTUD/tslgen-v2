@@ -7,6 +7,7 @@ from pathlib import Path
 from tslc.benchmark.model import (
     BenchmarkCorrectnessCase,
     BenchmarkCoverageEntry,
+    BenchmarkCrossLaneScenario,
     BenchmarkImmediateCorrectnessCase,
     BenchmarkImmediateScenario,
     BenchmarkIndexedLoadCorrectnessCase,
@@ -34,6 +35,7 @@ from tslc.output.verify_model import (
 )
 from tslc.pipeline import CoverageEntry, GenerationResult, SkippedEntry
 from tslc.value_tests.case_components import (
+    ValueTestCheckedPrecondition,
     ValueTestDifferential,
     ValueTestExpectation,
     ValueTestFailure,
@@ -44,6 +46,7 @@ from tslc.value_tests.case_components import (
     ValueTestRepresentation,
     ValueTestScalable,
     ValueTestTarget,
+    ValueTestTargetImaskHarness,
 )
 from tslc.value_tests.case_plan import ValueTestCasePlan
 from tslc.value_tests.model import ValueTestCoverageEntry
@@ -76,6 +79,51 @@ def serialize_generation_semantics(
         ],
         "coverage": [_serialize_coverage(item) for item in result.coverage],
         "skipped": [_serialize_skipped(item, repo_root) for item in result.skipped],
+        "target_support": (
+            None
+            if result.target_support is None
+            else {
+                "entries": [
+                    {
+                        "profile": item.key.profile,
+                        "backend": item.key.backend,
+                        "primitive": item.key.primitive,
+                        "signature": item.key.signature,
+                        "attributes": item.key.attributes,
+                        "result_target": item.key.result_target,
+                        "overload": item.key.overload,
+                        "type_tag": item.key.type_tag,
+                        "target_extension": item.key.target_extension,
+                        "conversion_target": item.key.conversion_target,
+                        "realization": (
+                            None
+                            if item.realization is None
+                            else {
+                                "source_extension": item.realization.source_extension,
+                                "selector_path": item.realization.selector_path,
+                                "required_features": item.realization.required_features,
+                                "required_compiler_capabilities": (
+                                    item.realization.required_compiler_capabilities
+                                ),
+                                "concrete_lanes": item.realization.concrete_lanes,
+                                "simd_type_base_bindings": (
+                                    item.realization.simd_type_base_bindings
+                                ),
+                                "variant_names": item.realization.variant_names,
+                            }
+                        ),
+                        "status": item.status.value,
+                        "reason_id": item.reason_id,
+                        "implementation_state": (
+                            None
+                            if item.implementation_state is None
+                            else item.implementation_state.value
+                        ),
+                    }
+                    for item in result.target_support.entries
+                ]
+            }
+        ),
         "verification": _serialize_verify_project(verification),
         "value_tests": (
             {
@@ -241,7 +289,10 @@ def _serialize_skipped(entry: SkippedEntry, repo_root: Path) -> dict[str, object
 
 
 def _serialize_verify_project(project: VerifyProject) -> dict[str, object]:
-    return {"backends": [_serialize_verify_backend(item) for item in project.backends]}
+    return {
+        "backends": [_serialize_verify_backend(item) for item in project.backends],
+        "input_digest": project.input_digest,
+    }
 
 
 def _serialize_verify_backend(backend: VerifyBackend) -> dict[str, object]:
@@ -282,7 +333,22 @@ def _serialize_verify_profile(profile: VerifyProfile) -> dict[str, object]:
 def _serialize_verify_runner(runner: VerifyRunner | None) -> dict[str, object] | None:
     if runner is None:
         return None
-    return {"kind": runner.kind, "profile": runner.profile, "args": runner.args}
+    return {
+        "kind": runner.kind,
+        "name": runner.name,
+        "profile": runner.profile,
+        "args": runner.args,
+        "vector_bits": runner.vector_bits,
+        "variants": tuple(
+            {
+                "name": variant.name,
+                "profile": variant.profile,
+                "args": variant.args,
+                "vector_bits": variant.vector_bits,
+            }
+            for variant in runner.variants
+        ),
+    }
 
 
 def _serialize_value_test_coverage(entry: ValueTestCoverageEntry) -> dict[str, object]:
@@ -309,11 +375,17 @@ def _serialize_value_test_case(case: ValueTestCasePlan) -> dict[str, object]:
         "inputs": _serialize_value_test_inputs(case.inputs),
         "expectation": _serialize_value_test_expectation(case.expectation),
         "failure": _serialize_value_test_failure(case.failure),
+        "checked_precondition": _serialize_value_test_checked_precondition(
+            case.checked_precondition
+        ),
         "invocation": _serialize_value_test_invocation(case.invocation),
         "target": _serialize_value_test_target(case.target),
         "index": _serialize_value_test_index(case.index),
         "memory": _serialize_value_test_memory(case.memory),
         "representation": _serialize_value_test_representation(case.representation),
+        "target_imask_harness": _serialize_value_test_target_imask_harness(
+            case.target_imask_harness
+        ),
         "scalable": _serialize_value_test_scalable(case.scalable),
         "differential": _serialize_value_test_differential(case.differential),
         "header_group": case.header_group,
@@ -347,6 +419,20 @@ def _serialize_value_test_failure(
     return {"reason": value.reason.value, "phase": value.phase}
 
 
+def _serialize_value_test_checked_precondition(
+    value: ValueTestCheckedPrecondition | None,
+) -> dict[str, object] | None:
+    if value is None:
+        return None
+    return {
+        "kind": value.kind.value,
+        "error": value.error.value,
+        "parameter_index": value.parameter_index,
+        "invalid_value": value.invalid_value.name.lower(),
+        "invalid_lane_index": value.invalid_lane_index,
+    }
+
+
 def _serialize_value_test_invocation(value: ValueTestInvocation) -> dict[str, object]:
     return {
         "result_kind": value.result_kind,
@@ -355,6 +441,7 @@ def _serialize_value_test_invocation(value: ValueTestInvocation) -> dict[str, ob
         "immediate": value.immediate,
         "generic_defaults": value.generic_defaults,
         "inferred_type_args": value.inferred_type_args,
+        "caller_unsafe": value.caller_unsafe,
     }
 
 
@@ -402,6 +489,20 @@ def _serialize_value_test_representation(
         "target_extension": value.target_extension,
         "from_array_name": value.from_array_name,
         "to_array_name": value.to_array_name,
+    }
+
+
+def _serialize_value_test_target_imask_harness(
+    value: ValueTestTargetImaskHarness | None,
+) -> dict[str, object] | None:
+    if value is None:
+        return None
+    return {
+        "source_mask_from_bits_template": value.source_mask_from_bits_template,
+        "target_mask_from_bits_template": value.target_mask_from_bits_template,
+        "target_mask_check_template": value.target_mask_check_template,
+        "mask_bits": value.mask_bits,
+        "expected_mask_bits": value.expected_mask_bits,
     }
 
 
@@ -485,7 +586,7 @@ def _serialize_benchmark_correctness(
 ) -> dict[str, object]:
     if isinstance(case, BenchmarkVectorCorrectnessCase):
         return {
-            "kind": "vector",
+            "kind": case.family,
             "case_name": case.case_name,
             "vector_inputs": case.vector_inputs,
             "expected": case.expected,
@@ -563,10 +664,10 @@ def _serialize_benchmark_scenario(scenario: BenchmarkScenario) -> dict[str, obje
         "kind": scenario.kind,
         "timing": timing,
     }
-    if isinstance(scenario, BenchmarkRegisterScenario):
+    if isinstance(scenario, (BenchmarkRegisterScenario, BenchmarkCrossLaneScenario)):
         common.update(
             {
-                "shape": "register",
+                "shape": scenario.family,
                 "operand_generators": scenario.operand_generators,
                 "dependency_parameter": scenario.dependency_parameter,
             }

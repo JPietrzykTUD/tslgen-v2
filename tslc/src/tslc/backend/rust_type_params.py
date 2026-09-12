@@ -50,14 +50,27 @@ def type_param_decls(
 ) -> list[str]:
     """Render generic declarations for free SIMD type parameters."""
 
-    decls: list[str] = []
+    return type_param_bound_clauses(shape, trait_prefix=trait_prefix)
+
+
+def type_param_bound_clauses(
+    shape: LoweredSpecialization,
+    *,
+    trait_prefix: str = "",
+) -> list[str]:
+    """Render complete trait bounds for free SIMD type parameters."""
+
+    clauses: list[str] = []
     for param in shape.type_params:
         traits = [
             "StaticSimdVector",
-            *(f"{trait_prefix}{rust_primitive_trait_name(bound)}" for bound in param.bounds),
+            *(
+                f"{trait_prefix}{rust_primitive_trait_name(bound)}"
+                for bound in param.bounds
+            ),
         ]
-        decls.append(f"{param.name}: {' + '.join(traits)}")
-    return decls
+        clauses.append(f"{param.name}: {' + '.join(traits)}")
+    return clauses
 
 
 def index_where(
@@ -65,10 +78,16 @@ def index_where(
     *,
     impl_register: str | None = None,
     base_dispatch: str = "none",
+    include_type_param_bounds: bool = False,
 ) -> str:
     """Render constraints for index vectors and specialized base dispatch."""
 
-    clauses = type_param_where_clauses(shape, base_dispatch=base_dispatch)
+    clauses = (
+        type_param_bound_clauses(shape) if include_type_param_bounds else []
+    )
+    clauses.extend(
+        type_param_where_clauses(shape, base_dispatch=base_dispatch)
+    )
     if not clauses:
         return ""
     if impl_register is not None and _needs_index_base_constraint(shape):

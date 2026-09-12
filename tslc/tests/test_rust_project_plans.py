@@ -11,6 +11,7 @@ import pytest
 from tslc.api import generate_project
 from tslc.backend import (
     rust_api_planner,
+    rust_algorithm_plan,
     rust_capability,
     rust_dispatch,
     rust_policy_selection,
@@ -38,6 +39,7 @@ def test_artifact_pass_plans_once_and_renderer_consumes_frozen_plans(
     planner_names = (
         "plan_rust_policy_selection",
         "plan_rust_static_selection",
+        "plan_rust_algorithm",
         "plan_rust_facade",
         "plan_rust_dispatch",
         "plan_rust_policy_consumption",
@@ -98,6 +100,7 @@ def test_artifact_pass_plans_once_and_renderer_consumes_frozen_plans(
     )
     static = rust_static_selection.plan_rust_static_selection(profiles)
     facade = rust_api_planner.plan_rust_facade(profiles, static)
+    algorithm = rust_algorithm_plan.plan_rust_algorithm(profiles, static)
     dispatch = rust_dispatch.plan_rust_dispatch(
         profiles,
         static,
@@ -126,6 +129,7 @@ def test_artifact_pass_plans_once_and_renderer_consumes_frozen_plans(
         media_type="text/rust",
         selection_plan=selection,
         static_selection_plan=static,
+        algorithm_plan=algorithm,
         facade_plan=facade,
         dispatch_plan=dispatch,
         consumption_plan=EMPTY_RUST_POLICY_CONSUMPTION_RENDER_PLAN,
@@ -137,6 +141,7 @@ def test_artifact_pass_plans_once_and_renderer_consumes_frozen_plans(
         media_type="text/rust",
         selection_plan=selection,
         static_selection_plan=static,
+        algorithm_plan=algorithm,
         facade_plan=facade,
         dispatch_plan=dispatch,
         consumption_plan=EMPTY_RUST_POLICY_CONSUMPTION_RENDER_PLAN,
@@ -161,5 +166,18 @@ def test_trusted_rust_project_renderer_has_one_production_caller() -> None:
         "render/rust_project.py",
     }
     assert "plan_rust_facade" not in renderer_source
+    assert "plan_rust_algorithm" not in renderer_source
     assert "plan_rust_dispatch" not in renderer_source
     assert "validate_rust_" not in renderer_source
+
+    formatter_source = (
+        source_root / "backend" / "rust_algorithm.py"
+    ).read_text(encoding="utf-8")
+    assert "LoweredSpecialization" not in formatter_source
+    assert "Mapping[" not in formatter_source
+    assert "Extension" not in formatter_source
+    assert "native_sort_order" not in formatter_source
+    assert "rust_vector_registrations" not in formatter_source
+    assert "classify_dataparallel_primitive_facade" not in formatter_source
+    assert "rust_algorithm_module_declaration(algorithm_profile)" in renderer_source
+    assert "_rust_profile_algorithm_artifacts(" in renderer_source

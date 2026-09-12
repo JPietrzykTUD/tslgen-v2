@@ -24,7 +24,7 @@ from tslc.select.selector import _compiler_capability_frontier
         ("avx2", "avx2", "ui16", "tsl::sse"),
         ("skylake", "avx512", "ui8", "tsl::avx2"),
         ("knl", "avx512", "si16", "tsl::sse"),
-        ("skylake", "avx2_vl", "si8", "_mm256_reduce_"),
+        ("skylake", "avx2_vl", "si8", "tsl::sse"),
     ],
 )
 def test_x86_integer_horizontal_minmax_stays_in_registers(
@@ -61,7 +61,7 @@ def test_x86_integer_horizontal_minmax_stays_in_registers(
         ("skylake", "sse_vl", "si8", "_mm_mask_reduce_"),
     ],
 )
-def test_vl_masked_small_integer_horizontal_minmax_uses_direct_reduction(
+def test_vl_masked_small_integer_horizontal_minmax_uses_direct_reduction_when_supported(
     catalog: Catalog,
     machine_profiles,
     primitive: str,
@@ -73,7 +73,14 @@ def test_vl_masked_small_integer_horizontal_minmax_uses_direct_reduction(
     slot = next(
         selected
         for selected in Selector()
-        .select_profile(catalog, machine_profiles[profile], primitive, (type_tag,))
+        .select_profile(
+            catalog,
+            machine_profiles[profile],
+            primitive,
+            (type_tag,),
+            backend_id="cpp",
+            compiler_capabilities=frozenset({"x86_narrow_reductions"}),
+        )
         .selected
         if selected.extension.name == extension
         and selected.primitive.signature == "s:=(m,v)"

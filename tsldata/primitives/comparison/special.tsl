@@ -120,6 +120,15 @@ prim<m:=v>[value=zero] unequal_zero(data):
           reasons []
         implementation:
           tsil "complete(call<primitive=nequal>(data, call<primitive=set_zero[Vec]>()));"
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(call<primitive=nequal[Vec]>(data, call<primitive=set_zero[Vec]>()));"
 
 prim<s:=(v,s)> count_matches(data, value):
   brief_description "Counts lanes whose value equals the supplied scalar value."
@@ -242,3 +251,12 @@ prim<s:=(v,s)> count_matches(data, value):
           reasons []
         implementation:
           tsil "complete(cast<static>(base::in, call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(cast<static>(base::in, call<primitive=mask_population_count[Vec]>(call<primitive=equal[Vec]>(data, call<primitive=set1[Vec]>(value)))));"

@@ -42,6 +42,7 @@ def render_project(
     assets: RenderAssets,
     config: ProjectRenderConfig = DEFAULT_PROJECT_RENDER_CONFIG,
     policy_inputs: BackendPolicyInputs = EMPTY_BACKEND_POLICY_INPUTS,
+    input_digest: str | None = None,
 ) -> RenderedProject:
     ordered = tuple(sorted(profiles, key=lambda profile: profile.profile.name))
     artifacts: list[Artifact] = []
@@ -70,7 +71,10 @@ def render_project(
     artifacts = [add_generated_license_notice(artifact) for artifact in artifacts]
     return RenderedProject(
         artifacts=ArtifactSet.create(tuple(artifacts)),
-        verify=VerifyProject(backends=tuple(verify_backends)),
+        verify=VerifyProject(
+            backends=tuple(verify_backends),
+            input_digest=input_digest,
+        ),
         value_tests=value_tests,
         benchmarks=benchmarks,
     )

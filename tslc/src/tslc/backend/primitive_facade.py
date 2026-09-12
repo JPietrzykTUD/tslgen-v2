@@ -10,7 +10,7 @@ from tslc.catalog.memory import (
     MemoryAccess,
     MemoryAddressing,
     MemoryAlignment,
-    memory_operation,
+    MemoryPayloadExtent,
 )
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
 from tslc.lower.lowerer import LoweredSpecialization, varying_positions
@@ -31,16 +31,24 @@ class DataparallelPrimitiveFacade:
     kind: DataparallelPrimitiveFacadeKind
     memory_access: MemoryAccess | None = None
     memory_addressing: MemoryAddressing | None = None
+    memory_payload_extent: MemoryPayloadExtent | None = None
     alignment_axis_name: str | None = None
     overload_parameter_positions: tuple[int, ...] = ()
 
     def __post_init__(self) -> None:
         is_memory = self.kind is DataparallelPrimitiveFacadeKind.CONTIGUOUS_MEMORY
-        has_memory_facts = (
-            self.memory_access is not None
-            and self.memory_addressing is not None
-            and self.alignment_axis_name is not None
+        memory_facts = (
+            self.memory_access,
+            self.memory_addressing,
+            self.memory_payload_extent,
+            self.alignment_axis_name,
         )
+        has_any_memory_fact = any(item is not None for item in memory_facts)
+        has_memory_facts = all(item is not None for item in memory_facts)
+        if has_any_memory_fact and not has_memory_facts:
+            raise ValueError(
+                "Dataparallel primitive facades cannot retain partial memory facts"
+            )
         if is_memory != has_memory_facts:
             raise ValueError(
                 "Contiguous-memory facades require exactly the typed memory facts"
@@ -87,6 +95,36 @@ class DataparallelPrimitiveFacadeDecision:
             raise ValueError(
                 "A dataparallel facade decision requires exactly one outcome"
             )
+
+
+@dataclass(frozen=True, slots=True)
+class ContiguousMemoryPrimitiveFacades:
+    """The independently classified contiguous read/write facade slots."""
+
+    read: DataparallelPrimitiveFacade | None
+    write: DataparallelPrimitiveFacade | None
+
+    @property
+    def missing_accesses(self) -> tuple[MemoryAccess, ...]:
+        return tuple(
+            access
+            for access, facade in (
+                (MemoryAccess.READ, self.read),
+                (MemoryAccess.WRITE, self.write),
+            )
+            if facade is None
+        )
+
+    @property
+    def complete(self) -> bool:
+        return not self.missing_accesses
+
+    def require_complete(
+        self,
+    ) -> tuple[DataparallelPrimitiveFacade, DataparallelPrimitiveFacade]:
+        if self.read is None or self.write is None:
+            raise ValueError("contiguous-memory facade pair is incomplete")
+        return self.read, self.write
 
 
 def classify_dataparallel_primitive_facade(
@@ -156,6 +194,15 @@ def contiguous_memory_primitive_facades(
 ] | None:
     """Return the unique typed contiguous read/write pair, when available."""
 
+    plan = plan_contiguous_memory_primitive_facades(by_primitive)
+    return plan.require_complete() if plan.complete else None
+
+
+def plan_contiguous_memory_primitive_facades(
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
+) -> ContiguousMemoryPrimitiveFacades:
+    """Classify both mandatory contiguous-memory facade slots."""
+
     by_access: dict[MemoryAccess, DataparallelPrimitiveFacade] = {}
     for primitive_name in sorted(by_primitive):
         decision = plan_dataparallel_primitive_facade(
@@ -182,17 +229,20 @@ def contiguous_memory_primitive_facades(
                 f"multiple contiguous-memory facades provide {access.value} access"
             )
         by_access[access] = facade
-    read = by_access.get(MemoryAccess.READ)
-    write = by_access.get(MemoryAccess.WRITE)
-    return None if read is None or write is None else (read, write)
+    return ContiguousMemoryPrimitiveFacades(
+        read=by_access.get(MemoryAccess.READ),
+        write=by_access.get(MemoryAccess.WRITE),
+    )
 
 
 __all__ = (
     "DataparallelPrimitiveFacade",
     "DataparallelPrimitiveFacadeDecision",
     "DataparallelPrimitiveFacadeKind",
+    "ContiguousMemoryPrimitiveFacades",
     "classify_dataparallel_primitive_facade",
     "contiguous_memory_primitive_facades",
+    "plan_contiguous_memory_primitive_facades",
     "plan_dataparallel_primitive_facade",
 )
 
@@ -202,12 +252,14 @@ def _memory_facade_decision(
     specializations: tuple[LoweredSpecialization, ...],
 ) -> DataparallelPrimitiveFacadeDecision | None:
     if not any(
-        spec.primitive_semantics.memory is not None
-        or (
-            spec.primitive_semantics.operation is not None
-            and spec.primitive_semantics.operation.kind
-            in {PrimitiveOperation.LOAD, PrimitiveOperation.STORE}
-        )
+        spec.primitive_semantics.operation is not None
+        and spec.primitive_semantics.operation.kind
+        in {PrimitiveOperation.LOAD, PrimitiveOperation.STORE}
+        and spec.target is None
+        and not spec.type_params
+        and spec.immediate is None
+        and not spec.generic_params
+        and spec.mask_policy is None
         for spec in specializations
     ):
         return None
@@ -287,6 +339,7 @@ def _memory_facade_decision(
             kind=DataparallelPrimitiveFacadeKind.CONTIGUOUS_MEMORY,
             memory_access=memory.access,
             memory_addressing=memory.addressing,
+            memory_payload_extent=memory.payload_extent,
             alignment_axis_name=alignment.axis_name,
             overload_parameter_positions=overload_parameter_positions,
         )
@@ -301,7 +354,10 @@ def _memory_specialization_issue(
     memory = semantics.memory
     if memory is None:
         return "memory operation is missing its typed memory contract"
-    expected_operation = memory_operation(memory.access)
+    expected_operation = {
+        MemoryAccess.READ: PrimitiveOperation.LOAD,
+        MemoryAccess.WRITE: PrimitiveOperation.STORE,
+    }[memory.access]
     if operation is None or operation.kind is not expected_operation:
         return (
             f"memory access {memory.access.value!r} disagrees with its "
@@ -380,6 +436,7 @@ def _is_contiguous_memory_facade_shape(
     if memory.access is MemoryAccess.READ:
         return (
             operation.kind is PrimitiveOperation.LOAD
+            and memory.payload_extent is MemoryPayloadExtent.VECTOR
             and spec.result_kind == "v"
             and spec.param_kinds == ("cptr",)
             and roles == ((OperandRole.MEMORY_SOURCE, 0, "cptr"),)
@@ -387,6 +444,7 @@ def _is_contiguous_memory_facade_shape(
     overload = semantics.overload
     return (
         operation.kind is PrimitiveOperation.STORE
+        and memory.payload_extent is MemoryPayloadExtent.VECTOR
         and spec.result_kind == "void"
         and spec.param_kinds == ("ptr", "v")
         and roles

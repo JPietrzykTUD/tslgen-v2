@@ -43,6 +43,7 @@ from tslc.catalog.semantics import (
 from tslc.catalog.memory import (
     MemoryAccess,
     MemoryAddressing,
+    MemoryPayloadExtent,
     PrimitiveMemoryContract,
 )
 from tslc.catalog.validation import validate_catalog
@@ -325,6 +326,7 @@ def test_backend_closure_seed_primitives_are_capability_owned() -> None:
                     PrimitiveMemoryContract(
                         MemoryAccess.READ,
                         MemoryAddressing.CONTIGUOUS,
+                        MemoryPayloadExtent.VECTOR,
                     ),
                 ),
                 "store": (
@@ -344,6 +346,7 @@ def test_backend_closure_seed_primitives_are_capability_owned() -> None:
                     PrimitiveMemoryContract(
                         MemoryAccess.WRITE,
                         MemoryAddressing.CONTIGUOUS,
+                        MemoryPayloadExtent.VECTOR,
                     ),
                 ),
                 "read_contiguous": (
@@ -362,6 +365,7 @@ def test_backend_closure_seed_primitives_are_capability_owned() -> None:
                     PrimitiveMemoryContract(
                         MemoryAccess.READ,
                         MemoryAddressing.CONTIGUOUS,
+                        MemoryPayloadExtent.VECTOR,
                     ),
                 ),
                 "write_contiguous": (
@@ -381,6 +385,7 @@ def test_backend_closure_seed_primitives_are_capability_owned() -> None:
                     PrimitiveMemoryContract(
                         MemoryAccess.WRITE,
                         MemoryAddressing.CONTIGUOUS,
+                        MemoryPayloadExtent.VECTOR,
                     ),
                 ),
                 "to_array": (
@@ -437,9 +442,9 @@ def test_backend_closure_seed_primitives_are_capability_owned() -> None:
     assert RUST_BACKEND.helper_manifest is RUST_HELPER_MANIFEST
     assert CPP_BACKEND.closure_seed_primitives(catalog) == ("load", "store")
     assert RUST_BACKEND.closure_seed_primitives(catalog) == (
+        "load",
         "store",
         "to_array",
-        "load",
     )
     renamed_catalog = FakeCatalog(
         {"read_contiguous", "write_contiguous", "to_array"}
@@ -561,6 +566,7 @@ def test_fake_backend_drives_documentation_and_artifact_media_type(monkeypatch) 
         (profile,),
         ("fake",),
         assets=load_default_render_assets(),
+        input_digest="b" * 64,
     )
     artifacts = {
         artifact.logical_path: artifact for artifact in rendered.artifacts.artifacts
@@ -572,6 +578,7 @@ def test_fake_backend_drives_documentation_and_artifact_media_type(monkeypatch) 
     assert artifacts["fake/lib.fake"].media_type == "text/fake"
     assert "fake-register" in documentation["strings"]
     assert "fake facade" in documentation["strings"]
+    assert rendered.verify.input_digest == "b" * 64
 
 
 def test_render_project_filters_profiles_by_backend_membership(monkeypatch) -> None:

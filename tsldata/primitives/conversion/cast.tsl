@@ -1774,6 +1774,32 @@ prim<v:=v>[cast=convert] cast(data):
             implementation:
               tsil "complete(intrin<svcvt_, build[infix=ToBase, suffix=base::in, post=x]>(call<primitive=mask_true[Vec]>(), data));"
     rvv:
+      [?i8, ?i16]:
+        requires [v]
+        ToBase:
+          arith:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [raw_memory]
+            implementation:
+              tsil """
+                let<type>(InBase, base::in);
+                let<type>(OutVec, vector::as_base(ToBase));
+                let<type>(OutBase, base::generic(OutVec));
+                var<const_infer>(source_lanes, value(vector::runtime_length));
+                var<const_infer>(out_lanes, value(generic::runtime_length(OutVec)));
+                var<runtime_array>(InBase, input, source_lanes);
+                var<runtime_array>(OutBase, result, out_lanes);
+                call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(input, data);
+                loop<backend>(i, 0, out_lanes, 1) {
+                  result[i] = cast<static>(OutBase, 0);
+                  if (i < source_lanes) {
+                    result[i] = cast<static>(OutBase, input[i]);
+                  }
+                }
+                complete(call<primitive=load[OutVec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
+              """
       f32:
         requires [v]
         ToBase:
@@ -1901,11 +1927,11 @@ prim<v:=v>[cast=convert] cast(data):
                 cpp:
                   capabilities [convertvector]
             safety:
-              internal_unsafe false
+              internal_unsafe true
               caller_unsafe false
-              reasons []
+              reasons [compiler_builtin, intrinsic]
             implementation:
-              tsil "complete(__builtin_convertvector(data, type(register::generic(ToType))));"
+              tsil "complete(intrin<__builtin_convertvector>(data, type(register::generic(ToType))));"
           arith:
             prefer_fixed_native true
             safety:
@@ -1948,11 +1974,11 @@ prim<v:=v>[cast=convert] cast(data):
                 cpp:
                   capabilities [convertvector]
             safety:
-              internal_unsafe false
+              internal_unsafe true
               caller_unsafe false
-              reasons []
+              reasons [compiler_builtin, intrinsic]
             implementation:
-              tsil "complete(__builtin_convertvector(data, type(register::generic(ToType))));"
+              tsil "complete(intrin<__builtin_convertvector>(data, type(register::generic(ToType))));"
           arith:
             prefer_fixed_native true
             safety:
@@ -1995,11 +2021,11 @@ prim<v:=v>[cast=convert] cast(data):
                 cpp:
                   capabilities [convertvector]
             safety:
-              internal_unsafe false
+              internal_unsafe true
               caller_unsafe false
-              reasons []
+              reasons [compiler_builtin, intrinsic]
             implementation:
-              tsil "complete(__builtin_convertvector(data, type(register::generic(ToType))));"
+              tsil "complete(intrin<__builtin_convertvector>(data, type(register::generic(ToType))));"
           arith:
             prefer_fixed_native true
             safety:
@@ -2026,11 +2052,11 @@ prim<v:=v>[cast=convert] cast(data):
                 cpp:
                   capabilities [convertvector]
             safety:
-              internal_unsafe false
+              internal_unsafe true
               caller_unsafe false
-              reasons []
+              reasons [compiler_builtin, intrinsic]
             implementation:
-              tsil "complete(__builtin_convertvector(data, type(register::generic(ToType))));"
+              tsil "complete(intrin<__builtin_convertvector>(data, type(register::generic(ToType))));"
           arith:
             prefer_fixed_native true
             safety:
@@ -2433,6 +2459,7 @@ prim<v:=v> convert_lanes(data):
     kind numeric
     lane_count preserve_lane_count
     numeric_mode scalar_as
+  preconditions [equal_lane_count]
   return_type:
     vector ToVec
   generic_params:
@@ -2473,7 +2500,7 @@ prim<v:=v> convert_lanes(data):
     - {tags [generic_equivalence], type "si32", to_type "f64", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8]], expected [1.0, -2.0, 3.0, -4.0, 5.0, -6.0, 7.0, -8.0]}}
     - {tags [hardware], extension "avx2", type "si32", to_type "f64", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8]], expected [1.0, -2.0, 3.0, -4.0, 5.0, -6.0, 7.0, -8.0]}}
   impls:
-    [scalar, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, wasm128]:
+    [scalar, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve128, sve256, sve512, wasm128]:
       arith:
         prefer_fixed_native true
         requires:
@@ -2493,7 +2520,9 @@ prim<v:=v> convert_lanes(data):
           avx2 [avx]
           sse [sse]
           neon [neon]
-          sve [sve]
+          sve128 [sve]
+          sve256 [sve]
+          sve512 [sve]
           wasm128 [simd128]
         safety:
           internal_unsafe false
@@ -2501,9 +2530,6 @@ prim<v:=v> convert_lanes(data):
           reasons []
         implementation:
           tsil """
-            helper<require_same_lanes>(
-              value(vector::length), value(generic::length(ToVec))
-            );
             let<type>(OutBase, base::generic(ToVec));
             var<const_infer>(source, call<primitive=to_array[Vec]>(data));
             var<infer>(result, call<primitive=to_array[ToVec]>(
@@ -2513,4 +2539,25 @@ prim<v:=v> convert_lanes(data):
               result[i] = cast<scalar_as>(OutBase, source[i]);
             }
             complete(call<primitive=from_array[ToVec]>(result));
+          """
+    [sve, rvv]:
+      arith:
+        requires:
+          sve [sve]
+          rvv [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(OutBase, base::generic(ToVec));
+            var<infer>(result, call<primitive=set_zero[ToVec]>());
+            loop<backend>(i, 0, value(vector::runtime_length), 1) {
+              var<const_infer>(lane, call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(data, i));
+              result = call<primitive=insert_value_at[ToVec], discharge[lane_index_in_range]>(
+                result, i, cast<scalar_as>(OutBase, lane)
+              );
+            }
+            complete(result);
           """

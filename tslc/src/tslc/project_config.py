@@ -128,6 +128,7 @@ def _rust_package_config(path: Path, value: object) -> RustPackageConfig:
     keys = {
         "name",
         "version",
+        "description",
         "edition",
         "rust_version",
         "license",

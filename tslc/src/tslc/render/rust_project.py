@@ -4,35 +4,60 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping, Sequence
+
+from tslc.backend.emitted_profile import (
+    EmittedProfile,
+    used_extensions,
+)
 from tslc.backend.rust import RustBackend
-from tslc.backend.rust_api_model import RustFacadePlan, RustFacadeReceiverKind
-from tslc.backend.rust_dispatch import RustDispatchPlan
+from tslc.backend.rust_algorithm import (
+    rust_algorithm_family_module,
+    rust_algorithm_module_declaration,
+    rust_algorithm_root_module,
+    rust_algorithm_support_module,
+)
+from tslc.backend.rust_algorithm_facade import (
+    rust_algorithm_facade_child_modules,
+    rust_algorithm_facade_root_module,
+)
+from tslc.backend.rust_algorithm_plan import (
+    RustAlgorithmPlan,
+    RustAlgorithmProfilePlan,
+)
+from tslc.backend.rust_api_model import RustFacadePlan
 from tslc.backend.rust_benchmark_context import (
     RUST_BENCHMARK_CODEGEN_CONTRACT,
     RUST_BENCHMARK_POLICY_SCHEMA_VERSION,
     RUST_POLICY_CONSUMPTION_SCHEMA_VERSION,
 )
-from tslc.backend.rust_policy_selection import (
-    RustPolicySelectionPlan,
-)
+from tslc.backend.rust_dispatch import RustDispatchPlan
+from tslc.backend.rust_documentation import rust_checked_api_examples
+from tslc.backend.rust_names import rust_primitive_tag_name
 from tslc.backend.rust_package import (
     DEFAULT_RUST_PACKAGE_CONFIG,
     RustPackageConfig,
+)
+from tslc.backend.rust_policy_selection import (
+    RustPolicySelectionPlan,
+)
+from tslc.backend.rust_public_api import (
+    rust_fallback_profile_reexport_declaration,
+    rust_public_api_manifest,
+    rust_root_declaration_holes,
+    rust_selected_profile_reexport_declaration,
 )
 from tslc.backend.rust_static_selection import (
     RustStaticProfileSelection,
     RustStaticSelectionPlan,
 )
-from tslc.backend.emitted_profile import (
-    EmittedProfile,
-    used_extensions,
+from tslc.backend.rust_static_public_declarations import (
+    rust_static_declaration_holes,
 )
-from tslc.backend.rust_names import rust_primitive_tag_name
-from tslc.backend.rust_translation import rust_raw_identifier
+from tslc.backend.rust_vectors import rust_registrations, rust_vector_registrations
 from tslc.backend.target_capability import rust_arch_module
+from tslc.benchmark.planner import BENCHMARK_PROTOCOL_VERSION
 from tslc.catalog.model import Extension
 from tslc.catalog.target_families import ProfileFamilyCapability
-from tslc.benchmark.planner import BENCHMARK_PROTOCOL_VERSION
 from tslc.compiler_assets import RenderAssets
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact
@@ -55,8 +80,6 @@ from tslc.render.rust_static_selection import (
     rust_static_fallback_cfg,
     rust_static_profile_cfg,
 )
-from tslc.backend.rust_algorithm import rust_algorithm_module
-from tslc.backend.rust_vectors import rust_registrations, rust_vector_registrations
 
 
 def _rust_artifacts(
@@ -66,6 +89,7 @@ def _rust_artifacts(
     media_type: str,
     selection_plan: RustPolicySelectionPlan,
     static_selection_plan: RustStaticSelectionPlan,
+    algorithm_plan: RustAlgorithmPlan,
     facade_plan: RustFacadePlan,
     dispatch_plan: RustDispatchPlan,
     consumption_plan: RustPolicyConsumptionRenderPlan,
@@ -75,6 +99,8 @@ def _rust_artifacts(
     """Render compiler-owned plans that were finalized for this artifact pass."""
 
     emitted_names = {profile.profile.name for profile in profiles}
+    if {profile.profile_name for profile in algorithm_plan.profiles} != emitted_names:
+        raise ValueError("Rust algorithm plan does not match the project profiles")
     if any(
         entry.profile.profile_name not in emitted_names
         for entry in consumption_plan.profiles
@@ -111,13 +137,41 @@ def _rust_artifacts(
         ),
         text(
             "rust/src/tsl_core.rs",
-            _rust_core(profiles, assets),
+            _rust_core(assets),
+            media_type=media_type,
+        ),
+        text(
+            "rust/src/tsl_core/memory.rs",
+            assets.text("tsl_core_memory.rs"),
+            media_type=media_type,
+        ),
+        text(
+            "rust/src/tsl_core/scalar.rs",
+            _rust_core_scalar(profiles, assets),
+            media_type=media_type,
+        ),
+        text(
+            "rust/src/tsl_core/mask.rs",
+            assets.text("tsl_core_mask.rs"),
+            media_type=media_type,
+        ),
+        text(
+            "rust/src/tsl_core/io.rs",
+            assets.text("tsl_core_io.rs"),
             media_type=media_type,
         ),
         text(
             "rust/src/tsl_algorithm.rs",
-            assets.text("tsl_algorithm.rs"),
+            rust_algorithm_facade_root_module(assets),
             media_type=media_type,
+        ),
+        *(
+            text(
+                f"rust/src/tsl_algorithm/{module.module_name}.rs",
+                module.content,
+                media_type=media_type,
+            )
+            for module in rust_algorithm_facade_child_modules(assets)
         ),
         text(
             "rust/src/tsl_facade.rs",
@@ -159,6 +213,17 @@ def _rust_artifacts(
         # Ship the formatter config at the crate root so `rustfmt`/`cargo fmt` finds it and the
         # generated crate is self-contained.
         text("rust/rustfmt.toml", assets.text("rustfmt.toml"), media_type=media_type),
+        text(
+            "rust/public-api.json",
+            rust_public_api_manifest(
+                profiles,
+                static_selection_plan,
+                algorithm_plan,
+                facade_plan,
+                dispatch_plan,
+            ).serialize(),
+            media_type="application/json",
+        ),
     ]
     dispatch = rust_dispatch_module(dispatch_plan, assets)
     if dispatch:
@@ -177,6 +242,9 @@ def _rust_artifacts(
             )
         )
     for emitted_profile in profiles:
+        algorithm_profile = algorithm_plan.profile(emitted_profile.profile.name)
+        if algorithm_profile is None:
+            raise ValueError("Rust project rendering requires algorithm profiles")
         benchmark_layout = benchmark_layout_plan.profile(emitted_profile.profile.name)
         if benchmark_layout is None:
             raise ValueError("Rust project rendering requires benchmark layout profiles")
@@ -252,8 +320,10 @@ def _rust_artifacts(
             ).rstrip(),
             registrations=registrations,
             bodies=bodies,
-            algorithm=rust_algorithm_module(
-                by_primitive, emitted_profile.extensions, assets
+            algorithm=(
+                rust_algorithm_module_declaration(algorithm_profile)
+                if algorithm_profile.supported
+                else ""
             ),
         )
         artifacts.append(
@@ -263,6 +333,15 @@ def _rust_artifacts(
                 media_type=media_type,
             )
         )
+        if algorithm_profile.supported:
+            artifacts.extend(
+                _rust_profile_algorithm_artifacts(
+                    f"rust/src/tsl_{slug(emitted_profile.profile.name)}",
+                    algorithm_profile,
+                    assets,
+                    media_type=media_type,
+                )
+            )
         artifacts.append(
             text(
                 f"rust/benches/{benchmark_layout.benchmark_target}.rs",
@@ -324,8 +403,10 @@ def _rust_artifacts(
             fallback_by_primitive, fallback_extensions
         ),
         bodies=fallback_bodies,
-        algorithm=rust_algorithm_module(
-            fallback_by_primitive, fallback_extensions, assets
+        algorithm=(
+            rust_algorithm_module_declaration(algorithm_plan.fallback)
+            if algorithm_plan.fallback.supported
+            else ""
         ),
     )
     artifacts.append(
@@ -335,6 +416,15 @@ def _rust_artifacts(
             media_type=media_type,
         )
     )
+    if algorithm_plan.fallback.supported:
+        artifacts.extend(
+            _rust_profile_algorithm_artifacts(
+                "rust/src/tsl_target_fallback",
+                algorithm_plan.fallback,
+                assets,
+                media_type=media_type,
+            )
+        )
 
     artifacts.append(
         text(
@@ -389,10 +479,51 @@ def _rust_artifacts(
     return artifacts
 
 
-def _rust_core(profiles: Sequence[EmittedProfile], assets: RenderAssets) -> str:
-    core = assets.text("tsl_core.rs").rstrip()
+def _rust_profile_algorithm_artifacts(
+    profile_path: str,
+    plan: RustAlgorithmProfilePlan,
+    assets: RenderAssets,
+    *,
+    media_type: str,
+) -> tuple[Artifact, ...]:
+    """Render one profile and fallback through the same private module layout."""
+
+    return (
+        text(
+            f"{profile_path}/algo.rs",
+            rust_algorithm_root_module(plan),
+            media_type=media_type,
+        ),
+        text(
+            f"{profile_path}/algo/support.rs",
+            rust_algorithm_support_module(plan),
+            media_type=media_type,
+        ),
+        *(
+            text(
+                f"{profile_path}/algo/{family.module_name}.rs",
+                rust_algorithm_family_module(family, assets),
+                media_type=media_type,
+            )
+            for family in plan.family_modules
+        ),
+    )
+
+
+def _rust_core(assets: RenderAssets) -> str:
+    return f'{assets.fill("tsl_core.rs", **rust_static_declaration_holes()).rstrip()}\n'
+
+
+def _rust_core_scalar(
+    profiles: Sequence[EmittedProfile], assets: RenderAssets
+) -> str:
+    scalar = assets.text("tsl_core_scalar.rs").rstrip()
     register_impls = _rust_valid_bit_pattern_impls(profiles)
-    return f"{core}\n\n{register_impls}\n" if register_impls else f"{core}\n"
+    return (
+        f"{scalar}\n\n{register_impls}\n"
+        if register_impls
+        else f"{scalar}\n"
+    )
 
 
 def _rust_valid_bit_pattern_impls(profiles: Sequence[EmittedProfile]) -> str:
@@ -471,6 +602,12 @@ def _rust_lib(
         profile_slug="target_fallback",
         module_cfg_attr="",
         selected_profile_cfg=rust_cfg_all("not(doc)", fallback_cfg),
+        profile_export=(
+            rust_fallback_profile_reexport_declaration(
+                static_selection_plan
+            ).render_head()
+            + ";"
+        ),
         runtime_private_module="",
     ).rstrip()
     profile_modules = "\n\n".join(
@@ -500,7 +637,8 @@ def _rust_lib(
     )
     return assets.fill(
         "rust_lib.rs.tmpl",
-        facade_function_exports=_rust_facade_function_exports(facade_plan),
+        **rust_root_declaration_holes(facade_plan),
+        checked_api_examples=rust_checked_api_examples(profiles),
         primitive_tags=(f"{primitive_tags}\n\n" if primitive_tags else ""),
         profile_modules=profile_modules,
         benchmark_modules=benchmark_modules,
@@ -539,22 +677,12 @@ def _rust_lib_profile_module(
         profile_slug=profile_slug,
         module_cfg_attr=f"#[cfg({selected_cfg})]",
         selected_profile_cfg=rust_cfg_all("not(doc)", selected_cfg),
+        profile_export=(
+            rust_selected_profile_reexport_declaration(selection).render_head()
+            + ";"
+        ),
         runtime_private_module=runtime_private_module,
     ).rstrip()
-
-
-def _rust_facade_function_exports(plan: RustFacadePlan) -> str:
-    names = tuple(
-        sorted(
-            method.public_name
-            for method in plan.comprehensive_methods
-            if method.receiver_kind is RustFacadeReceiverKind.FREE
-        )
-    )
-    if not names:
-        return ""
-    rendered = ", ".join(rust_raw_identifier(name) for name in names)
-    return f"pub use tsl_facade::{{{rendered}}};"
 
 
 def _rust_documentation_module(
@@ -701,12 +829,14 @@ def _rust_cargo(
         "rust_cargo.toml.tmpl",
         package_name=json.dumps(package_config.name),
         package_version=json.dumps(package_config.version),
+        package_description=json.dumps(package_config.description),
         package_edition=json.dumps(package_config.edition),
         rust_version=json.dumps(package_config.rust_version),
         package_license=json.dumps(package_config.license),
         repository_url=json.dumps(package_config.repository),
         documentation_url=json.dumps(package_config.documentation),
         readme_path=json.dumps(package_config.readme),
+        package_readme=json.dumps(package_config.readme),
         features="\n".join(features),
         bench_targets=(
             "\n\n"

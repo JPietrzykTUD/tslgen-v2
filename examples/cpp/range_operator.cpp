@@ -152,39 +152,39 @@ bool run_range_case() {
     std::vector<std::int32_t> selected(count, 1234567);
     fill_inputs(left, right);
 
-    tsl::algo::transform_unary<parallelism, tsl::algo::alignment::unaligned>(
+    auto error = tsl::algo::transform_unary_checked<parallelism>(
         square_op{}, left, output);
-    if (!verify_transform_unary(left, output)) {
+    if (error != tsl::precondition_error::none ||
+        !verify_transform_unary(left, output)) {
         return false;
     }
 
-    tsl::algo::transform_binary<parallelism, tsl::algo::alignment::unaligned>(
+    error = tsl::algo::transform_binary_checked<parallelism>(
         add_op{}, left, right, output);
-    if (!verify_transform_binary(left, right, output)) {
+    if (error != tsl::precondition_error::none ||
+        !verify_transform_binary(left, right, output)) {
         return false;
     }
 
     using mask_type = tsl::algo::integral_mask_type<parallelism, std::int32_t>;
     std::vector<mask_type> masks(
         tsl::algo::integral_mask_chunk_count<parallelism, std::int32_t>(count));
-    const auto mask_chunks = tsl::algo::predicate_binary<
-        parallelism,
-        tsl::algo::alignment::unaligned>(
+    const auto mask_chunks = tsl::algo::predicate_binary_checked<parallelism>(
         less_than_op{},
         left,
         right,
-        masks);
-    if (mask_chunks != masks.size()) {
+        masks,
+        error);
+    if (error != tsl::precondition_error::none || mask_chunks != masks.size()) {
         return false;
     }
 
-    const auto produced = tsl::algo::select_masked_unary<
-        parallelism,
-        tsl::algo::alignment::unaligned>(
+    const auto produced = tsl::algo::select_masked_unary_checked<parallelism>(
         negative_op{},
         left,
         masks,
-        selected);
+        selected,
+        error);
     std::size_t expected_selected = 0;
     for (std::size_t i = 0; i < count; ++i) {
         if ((left[i] < right[i]) && (left[i] < 0)) {
@@ -194,23 +194,24 @@ bool run_range_case() {
             expected_selected += 1;
         }
     }
-    if (produced != expected_selected) {
+    if (error != tsl::precondition_error::none || produced != expected_selected) {
         return false;
     }
 
-    const auto aggregate = tsl::algo::aggregate_masked_binary<
-        parallelism,
-        tsl::algo::alignment::unaligned>(
+    const auto aggregate =
+        tsl::algo::aggregate_masked_binary_checked<parallelism>(
         masked_pair_sum_op{},
         left,
         right,
-        masks);
-    if (aggregate != expected_masked_pair_sum(left, right)) {
+        masks,
+        error);
+    if (error != tsl::precondition_error::none ||
+        aggregate != expected_masked_pair_sum(left, right)) {
         return false;
     }
 
     masked_sum_sink sink;
-    tsl::algo::consume_masked_unary<parallelism, tsl::algo::alignment::unaligned>(
+    error = tsl::algo::consume_masked_unary_checked<parallelism>(
         sink,
         left,
         masks);
@@ -221,7 +222,7 @@ bool run_range_case() {
             expected_sink += left[i];
         }
     }
-    if (sink.total != expected_sink) {
+    if (error != tsl::precondition_error::none || sink.total != expected_sink) {
         return false;
     }
 

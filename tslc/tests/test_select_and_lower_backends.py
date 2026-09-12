@@ -230,7 +230,7 @@ def test_lower_generic_masked_division_sanitizes_inactive_operands(
             assert body.index("safe_divisor") < body.rindex("div")
 
 
-def test_lower_sve_integer_division_checks_participating_zero_lanes(
+def test_lower_sve_integer_division_has_no_hidden_zero_check(
     catalog: Catalog,
     machine_profiles,
 ) -> None:
@@ -251,11 +251,9 @@ def test_lower_sve_integer_division_checks_participating_zero_lanes(
         ).specialization
         assert lowered is not None
         body = lowered.body_text
-        assert "arith_zero_divisor_fail" in body
-        assert body.index("arith_zero_divisor_fail") < body.index("svdiv")
-        if slot.primitive.mask_mode is not None:
-            assert "active_zero_divisors" in body
-            assert "mask_binary_and" in body
+        assert "svdiv" in body
+        assert "arith_zero_divisor_fail" not in body
+        assert "zero_divisors" not in body
 
 
 @pytest.mark.parametrize(
@@ -267,7 +265,7 @@ def test_lower_sve_integer_division_checks_participating_zero_lanes(
         ("mod", "ui32", "__riscv_vremu_vv_u32m1"),
     ),
 )
-def test_lower_rvv_integer_division_and_remainder_preserve_failure_contract(
+def test_lower_rvv_integer_division_and_remainder_have_no_hidden_zero_check(
     catalog: Catalog,
     machine_profiles,
     primitive: str,
@@ -293,8 +291,8 @@ def test_lower_rvv_integer_division_and_remainder_preserve_failure_contract(
         body = lowered.body_text
         if slot.primitive.mask_mode is None:
             assert intrinsic in body
-            assert "arith_zero_divisor_fail" in body
-            assert body.index("arith_zero_divisor_fail") < body.index(intrinsic)
+            assert "arith_zero_divisor_fail" not in body
+            assert "zero_divisors" not in body
             assert "__riscv_vlenb()" in body
         else:
             assert "safe_dividend" in body
@@ -333,6 +331,8 @@ def test_lower_scalar_generic_and_clang_integer_remainder_use_normalized_helper(
             ).specialization
             assert lowered is not None
             assert helper_call in lowered.body_text
+            if backend_id == "rust":
+                assert f"unsafe {{ {helper_call}" in lowered.body_text
 
 
 def test_lower_sve_floating_remainder_uses_fmod_helper_without_vector_quotient(

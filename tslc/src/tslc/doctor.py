@@ -15,7 +15,7 @@ from typing import Any
 
 from tslc._cli_options import merge_toolchains, parse_assignments, split_csv
 from tslc.authoring import check_catalog
-from tslc.backend.registry import backend_capabilities
+from tslc.backend.registry import backend_capabilities, registered_backend_ids
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.model import Catalog
 from tslc.diagnostics import has_errors
@@ -124,7 +124,7 @@ def _settings(args: argparse.Namespace, project: ProjectConfig | None) -> _Setti
         if args.backends
         else project.backends
         if project is not None
-        else ("cpp", "rust")
+        else registered_backend_ids()
     )
     base_toolchains = merge_toolchains(
         project.toolchains if project is not None else {},
@@ -292,7 +292,7 @@ def _profile_preflight_headers(
                 if catalog.target_families.extension_targets_profile(
                     extension.family, profile.family
                 )
-                for header in extension.headers_for_backend(backend_id)
+                for header in extension.required_headers_for_backend(backend_id)
             }
         )
     )
@@ -332,6 +332,15 @@ def _profile_report(
         runner_tool = {
             "kind": runner.kind,
             "profile": runner.profile,
+            "variants": [
+                {
+                    "name": variant.name,
+                    "profile": variant.profile,
+                    "args": list(variant.args),
+                    "vector_bits": variant.vector_bits,
+                }
+                for variant in runner.executions
+            ],
             "configured": path,
             "tool": None if path is None else _tool(path),
         }
@@ -410,7 +419,23 @@ def _format_text(report: dict[str, Any]) -> str:
                 if runner["tool"] is None:
                     lines.append(f"    runner: {runner['kind']} (not configured)")
                 else:
-                    lines.append(_tool_line(f"runner {runner['kind']}", runner["tool"], indent="    "))
+                    lines.append(
+                        _tool_line(
+                            f"runner {runner['kind']}",
+                            runner["tool"],
+                            indent="    ",
+                        )
+                    )
+                for variant in runner["variants"]:
+                    vector_bits = (
+                        ""
+                        if variant["vector_bits"] is None
+                        else f"; vector bits {variant['vector_bits']}"
+                    )
+                    lines.append(
+                        f"      {variant['name']}: {variant['profile']}"
+                        f"{vector_bits}"
+                    )
             for missing in profile["missing"]:
                 lines.append(f"    missing: {missing}")
     return "\n".join(lines) if lines else "no profiles selected"

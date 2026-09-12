@@ -47,6 +47,20 @@ cargo run --manifest-path examples/rust/Cargo.toml --bin selected_refinement_ope
 cargo run --manifest-path examples/rust/Cargo.toml --bin selected_aggregate_consume_operator
 ```
 
+## Checked and unchecked algorithm paths
+
+Algorithms with related ranges, mask capacity, selected indices, or output
+capacity expose two deliberate paths. The safe slice form is named
+`*_checked` and returns `Result<_, PreconditionError>`. The unsuffixed form is
+the `unsafe` raw-pointer kernel; the descriptive `*_raw` name remains an alias.
+Single-slice algorithms without a cross-range precondition, such as
+`count_unary`, remain ordinary safe functions and have no checked twin.
+
+Selected-row families also provide `*_scaled_checked`. These validate byte-scale
+multiplication, element alignment, every selected address, and output capacity
+before invoking the operation. The examples use `.expect(...)` only because
+their locally constructed ranges are known to satisfy those contracts.
+
 ## Parity Matrix
 
 Rust examples are added only when the generated Rust helper API they demonstrate
@@ -81,7 +95,7 @@ scalar-only lookalikes.
 
 ### `unary_operator.rs`
 
-Demonstrates `profile::algo::transform_unary` with a register-level square
+Demonstrates `profile::algo::transform_unary_checked` with a register-level square
 operation:
 
 ```rust
@@ -142,7 +156,7 @@ type for the target vector.
 
 ### `binary_operator.rs`
 
-Demonstrates `profile::algo::transform_binary` with a register-level add operation:
+Demonstrates `profile::algo::transform_binary_checked` with a register-level add operation:
 
 ```rust
 struct Add;
@@ -222,7 +236,8 @@ separate overload layer. The example composes:
 
 ```rust
 let policy = tsl::dataparallel::generic::<4>();
-profile::algo::transform_unary(policy, &mut square, &left, &mut output);
+profile::algo::transform_unary_checked(policy, &mut square, &left, &mut output)
+    .expect("checked algorithm preconditions");
 ```
 
 The example verifies transformed output, integral mask chunk production,
@@ -231,8 +246,8 @@ using one shared set of input slices.
 
 ### `predicate_operator.rs`
 
-Demonstrates `profile::algo::predicate_unary` and
-`profile::algo::predicate_binary`. Predicate helpers own contiguous partitioning,
+Demonstrates `profile::algo::predicate_unary_checked` and
+`profile::algo::predicate_binary_checked`. Predicate helpers own contiguous partitioning,
 loading, scalar tail handling, conversion from native mask to integral mask,
 and writing one integral mask chunk per vector chunk:
 
@@ -284,8 +299,8 @@ native mask and compares it with the expected active-lane count.
 
 ### `where_operator.rs`
 
-Demonstrates `profile::algo::transform_where_unary` and
-`profile::algo::transform_where_binary` with integral mask chunks produced by
+Demonstrates `profile::algo::transform_where_unary_checked` and
+`profile::algo::transform_where_binary_checked` with integral mask chunks produced by
 `predicate_binary`. Where helpers own contiguous partitioning, mask conversion,
 loading, masked storage, and scalar tail handling. Inactive output lanes are
 preserved:
@@ -310,8 +325,8 @@ for fixed scalar and explicit generic policies.
 
 ### `masked_operator.rs`
 
-Demonstrates `profile::algo::transform_masked_unary` and
-`profile::algo::transform_masked_binary` with the same integral mask chunks used by
+Demonstrates `profile::algo::transform_masked_unary_checked` and
+`profile::algo::transform_masked_binary_checked` with the same integral mask chunks used by
 the where example. Masked full-store helpers own partitioning, mask conversion,
 loading, scalar tail handling, and storing every output lane. The operation is
 responsible for meaningful inactive-lane values:
@@ -361,7 +376,7 @@ that predicate generation clears inactive and out-of-range tail bits.
 
 ### `consume_operator.rs`
 
-Demonstrates `profile::algo::consume_unary` and `profile::algo::consume_binary`.
+Demonstrates `profile::algo::consume_unary` and `profile::algo::consume_binary_checked`.
 Consume helpers own contiguous partitioning, loading, and scalar tail handling,
 but produce no helper-owned output:
 
@@ -386,8 +401,8 @@ policies.
 
 ### `masked_consume_operator.rs`
 
-Demonstrates `profile::algo::consume_masked_unary` and
-`profile::algo::consume_masked_binary` with integral mask chunks produced by
+Demonstrates `profile::algo::consume_masked_unary_checked` and
+`profile::algo::consume_masked_binary_checked` with integral mask chunks produced by
 `predicate_binary`. Masked consume helpers own contiguous partitioning, mask
 conversion, loading, and scalar tail handling, but produce no helper-owned
 output:
@@ -418,7 +433,7 @@ fixed scalar, and explicit generic policies.
 
 ### `aggregation_operator.rs`
 
-Demonstrates `profile::algo::aggregate_unary` and `profile::algo::aggregate_binary`.
+Demonstrates `profile::algo::aggregate_unary` and `profile::algo::aggregate_binary_checked`.
 Aggregate helpers own contiguous partitioning, loading, scalar tail handling,
 and returning the operation's final value:
 
@@ -463,8 +478,8 @@ let matches = profile::algo::count_matches::<_, i32>(
 
 ### `masked_aggregation_operator.rs`
 
-Demonstrates `profile::algo::aggregate_masked_unary` and
-`profile::algo::aggregate_masked_binary` with integral mask chunks produced by
+Demonstrates `profile::algo::aggregate_masked_unary_checked` and
+`profile::algo::aggregate_masked_binary_checked` with integral mask chunks produced by
 `predicate_binary`. Masked aggregate helpers own contiguous partitioning, mask
 conversion, loading, scalar tail handling, and returning the operation's final
 value:
@@ -502,12 +517,12 @@ verifies fixed scalar and explicit generic policies.
 ### `count_operator.rs`
 
 Demonstrates dense, masked, and selected-row predicate cardinality helpers:
-`profile::algo::count_unary`, `profile::algo::count_binary`,
-`profile::algo::count_masked_unary`, `profile::algo::count_masked_binary`,
-`profile::algo::count_masked_unary_mask_layout`,
-`profile::algo::count_masked_binary_mask_layout`,
-`profile::algo::count_selected_unary`, and
-`profile::algo::count_selected_binary`.
+`profile::algo::count_unary`, `profile::algo::count_binary_checked`,
+`profile::algo::count_masked_unary_checked`, `profile::algo::count_masked_binary_checked`,
+`profile::algo::count_masked_unary_mask_layout_checked`,
+`profile::algo::count_masked_binary_mask_layout_checked`,
+`profile::algo::count_selected_unary_checked`, and
+`profile::algo::count_selected_binary_checked`.
 The dense helpers evaluate predicate kernels and return the number of active
 lanes. The masked helpers additionally intersect the predicate mask with a
 caller-owned mask stream:
@@ -536,7 +551,7 @@ binary entry point where `SCALE = 4` matches `sizeof(i32)`.
 ### `selection_operator.rs`
 
 Demonstrates dense compacting selection helpers:
-`profile::algo::select_unary` and `profile::algo::select_binary`. These helpers
+`profile::algo::select_unary_checked` and `profile::algo::select_binary_checked`. These helpers
 evaluate predicate kernels, compact selected input values into caller-provided
 output storage, and return the number of produced values:
 
@@ -560,8 +575,8 @@ helper contract. Unwritten output slots remain untouched.
 ### `masked_selection_operator.rs`
 
 Demonstrates layout-aware masked compacting selection helpers:
-`profile::algo::select_masked_unary_mask_layout` and
-`profile::algo::select_masked_binary_mask_layout`. These helpers intersect a
+`profile::algo::select_masked_unary_mask_layout_checked` and
+`profile::algo::select_masked_binary_mask_layout_checked`. These helpers intersect a
 caller-owned mask stream with the operation predicate, compact selected input
 values into caller-provided output storage, and return the number of produced
 values.
@@ -576,9 +591,9 @@ untouched.
 ### `selection_vector_operator.rs`
 
 Demonstrates selection-vector production helpers:
-`profile::algo::select_indices_unary`, `profile::algo::select_indices_binary`,
-`profile::algo::select_masked_indices_unary`, and
-`profile::algo::select_masked_indices_binary`, plus their layout-aware masked
+`profile::algo::select_indices_unary_checked`, `profile::algo::select_indices_binary_checked`,
+`profile::algo::select_masked_indices_unary_checked`, and
+`profile::algo::select_masked_indices_binary_checked`, plus their layout-aware masked
 counterparts. These helpers evaluate predicate kernels and write selected row
 ids as `usize` values into caller-provided output storage:
 
@@ -604,8 +619,8 @@ untouched.
 ### `selected_transform_operator.rs`
 
 Demonstrates selection-vector consumer helpers:
-`profile::algo::transform_selected_unary` and
-`profile::algo::transform_selected_binary`. These helpers read caller-owned
+`profile::algo::transform_selected_unary_checked` and
+`profile::algo::transform_selected_binary_checked`. These helpers read caller-owned
 `usize` row ids, load the selected rows, apply ordinary register-level kernels,
 and write dense selected output values.
 
@@ -620,8 +635,8 @@ output slots remain untouched.
 ### `selected_refinement_operator.rs`
 
 Demonstrates selection-vector refinement helpers:
-`profile::algo::select_selected_indices_unary` and
-`profile::algo::select_selected_indices_binary`. These helpers read caller-owned
+`profile::algo::select_selected_indices_unary_checked` and
+`profile::algo::select_selected_indices_binary_checked`. These helpers read caller-owned
 `usize` row ids, evaluate predicates on the selected rows, and write the
 matching original row ids densely to caller-provided output storage.
 
@@ -634,10 +649,10 @@ slots remain untouched.
 ### `selected_aggregate_consume_operator.rs`
 
 Demonstrates selected-row sink helpers:
-`profile::algo::aggregate_selected_unary`,
-`profile::algo::aggregate_selected_binary`,
-`profile::algo::consume_selected_unary`, and
-`profile::algo::consume_selected_binary`. These helpers read caller-owned `usize`
+`profile::algo::aggregate_selected_unary_checked`,
+`profile::algo::aggregate_selected_binary_checked`,
+`profile::algo::consume_selected_unary_checked`, and
+`profile::algo::consume_selected_binary_checked`. These helpers read caller-owned `usize`
 row ids, load selected rows, and pass selected values to ordinary aggregate or
 consume kernels.
 

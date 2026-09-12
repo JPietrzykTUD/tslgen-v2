@@ -26,10 +26,15 @@ Modes:
   ./${self} doctor     probe selected backend/profile toolchains and runners
   ./${self} list       list catalog entries
   ./${self} show       describe one catalog entry
-  ./${self} audit      audit source metadata
+  ./${self} audit      audit source metadata or call preconditions
   ./${self} ratchet    coverage regression gate vs the committed baseline   (no compiler needed)
+  ./${self} target-ratchet
+  ./${self} implementation-ratchet
+                       classify/ratchet every exact v1 implementation slot   (no compiler needed)
   ./${self} benchmark-ratchet
                        reject new variant benchmark coverage gaps             (no compiler needed)
+  ./${self} release-contract
+                       inspect/check/update the generated-library v1 contract (no compiler needed)
   ./${self} dump       dump one pipeline stage (catalog/segments/selection/lowered) (no compiler)
 
 Extra flags pass through after generator modes; document-site honors --output-root
@@ -45,6 +50,7 @@ and --backends for the existing tree, e.g.:
   ./${self} editor-package-runtime
   ./${self} ratchet --update
   ./${self} benchmark-ratchet --update
+  ./${self} release-contract --check
   ./${self} dump    --stage segments --primitive add
 
 generate/build/test and authoring tools drive the unified \`python -m tslc\`
@@ -64,9 +70,9 @@ EOF
 mode="build"
 if (( $# > 0 )); then
   case "$1" in
-    generate|build|test|document|document-site|explain|preview|analyze|editor-install|editor-package-runtime|check|doctor|list|show|audit|ratchet|benchmark-ratchet|dump) mode="$1"; shift ;;
+    generate|build|test|document|document-site|explain|preview|analyze|editor-install|editor-package-runtime|check|doctor|list|show|audit|ratchet|target-ratchet|implementation-ratchet|benchmark-ratchet|release-contract|dump) mode="$1"; shift ;;
     -h|--help|help) usage; exit 0 ;;
-    *) echo "usage: $0 [generate|build|test|document|document-site|explain|preview|analyze|editor-install|editor-package-runtime|check|doctor|list|show|audit|ratchet|benchmark-ratchet|dump] [extra flags...]" >&2; exit 2 ;;
+    *) echo "usage: $0 [generate|build|test|document|document-site|explain|preview|analyze|editor-install|editor-package-runtime|check|doctor|list|show|audit|ratchet|target-ratchet|implementation-ratchet|benchmark-ratchet|release-contract|dump] [extra flags...]" >&2; exit 2 ;;
   esac
 fi
 extra_args=("$@")
@@ -161,9 +167,19 @@ case "$mode" in
     ;;
   list)    exec python -m tslc list "${extra_args[@]}" ;;
   show)    exec python -m tslc show "${extra_args[@]}" ;;
-  audit)   exec python -m tslc audit metadata "${extra_args[@]}" ;;
+  audit)
+    audit_action="metadata"
+    if (( ${#extra_args[@]} > 0 )) && [[ "${extra_args[0]}" != -* ]]; then
+      audit_action="${extra_args[0]}"
+      extra_args=("${extra_args[@]:1}")
+    fi
+    exec python -m tslc audit "$audit_action" "${extra_args[@]}"
+    ;;
   ratchet) exec python -m tslc coverage ratchet "${extra_args[@]}" ;;
+  target-ratchet) exec python -m tslc coverage target-ratchet "${extra_args[@]}" ;;
+  implementation-ratchet) exec python -m tslc coverage implementation-ratchet "${extra_args[@]}" ;;
   benchmark-ratchet) exec python -m tslc.maintenance.benchmark_coverage "${extra_args[@]}" ;;
+  release-contract) exec python -m tslc release contract "${extra_args[@]}" ;;
   dump)    exec python -m tslc inspect "${extra_args[@]}" ;;
 esac
 

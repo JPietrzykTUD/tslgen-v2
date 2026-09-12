@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from tslc.diagnostics import has_errors
+from tslc.maintenance import metadata_audit
 from tslc.maintenance.metadata_audit import (
     apply_suggestions,
     audit_metadata,
@@ -13,6 +14,49 @@ from tslc.maintenance.metadata_audit import (
 )
 from tslc.pipeline import GenerationRequest, generate
 from tslc.sources import expand_source_paths
+
+
+def test_metadata_audit_resolves_omitted_backends_for_each_call(
+    monkeypatch,
+) -> None:
+    backend_ids = [("future",), ("next",)]
+    captured: list[tuple[str, ...]] = []
+    monkeypatch.setattr(
+        metadata_audit,
+        "registered_backend_ids",
+        lambda: backend_ids.pop(0),
+    )
+
+    def fake_load_inputs(source_paths, backends):
+        del source_paths
+        captured.append(backends)
+        return None, ()
+
+    monkeypatch.setattr(metadata_audit, "_load_inputs", fake_load_inputs)
+
+    metadata_audit.audit_metadata(())
+    metadata_audit.audit_metadata(())
+    metadata_audit.audit_metadata((), backends=())
+
+    assert captured == [("future",), ("next",), ()]
+
+
+def test_metadata_audit_cli_preserves_omitted_backend_selection(
+    monkeypatch,
+    capsys,
+) -> None:
+    captured: list[object] = []
+
+    def fake_audit_metadata(source_paths, **kwargs):
+        del source_paths
+        captured.append(kwargs["backends"])
+        return metadata_audit.MetadataAuditResult((), ())
+
+    monkeypatch.setattr(metadata_audit, "audit_metadata", fake_audit_metadata)
+
+    assert metadata_audit.main(["--sources", "unused", "--checks", "safety"]) == 0
+    assert captured == [None]
+    assert capsys.readouterr().out.endswith("0 suggestion(s), 0 applicable\n")
 
 
 def test_safety_suggestion_applies_missing_direct_facts(tmp_path: Path) -> None:
@@ -31,7 +75,6 @@ def test_safety_suggestion_applies_missing_direct_facts(tmp_path: Path) -> None:
     suggestion = result.suggestions[0]
     assert suggestion.kind == "safety"
     assert suggestion.applicable
-    assert "raw_pointer" in suggestion.after
     assert "intrinsic" in suggestion.after
 
     assert apply_suggestions(result.suggestions, kinds=("safety",)) == 1
@@ -39,8 +82,8 @@ def test_safety_suggestion_applies_missing_direct_facts(tmp_path: Path) -> None:
     assert (
         "        safety:\n"
         "          internal_unsafe true\n"
-        "          caller_unsafe true\n"
-        "          reasons [intrinsic, raw_pointer]\n"
+        "          caller_unsafe false\n"
+        "          reasons [intrinsic]\n"
         "        implementation:\n"
     ) in text
 
@@ -58,7 +101,27 @@ def test_interactive_apply_accepts_applicable_suggestion(tmp_path: Path) -> None
     written = interactive_apply(result.suggestions, input_func=lambda _prompt: "a")
 
     assert written == 1
-    assert "reasons [intrinsic, raw_pointer]" in source.read_text(encoding="utf-8")
+    assert "reasons [intrinsic]" in source.read_text(encoding="utf-8")
+
+
+def test_safety_audit_does_not_infer_unsafety_from_pointer_syntax(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "pointer_observer.tsl"
+    source.write_text(
+        _safety_source().replace(
+            'tsil "intrin<store>(ptr, data);"',
+            'tsil "auto observed = ptr; (void)observed;"',
+        ),
+        encoding="utf-8",
+    )
+
+    result = audit_metadata(
+        (source,), checks=("safety",), machine_profiles_path=None, backends=("cpp",)
+    )
+
+    assert result.diagnostics == ()
+    assert result.suggestions == ()
 
 
 def test_safety_audit_keeps_raw_comments_and_literals_opaque(tmp_path: Path) -> None:
@@ -273,6 +336,9 @@ def _requires_source() -> str:
         "    aarch64:\n"
         "      extension_families [arm]\n"
         '      runner_kinds ["qemu-aarch64"]\n'
+        "      backends:\n"
+        "        cpp:\n"
+        "          feature_flags false\n"
         "    riscv:\n"
         "      extension_families [rvv]\n"
         '      runner_kinds ["qemu-riscv64"]\n'
@@ -331,6 +397,9 @@ def _single_backend_callee_source() -> str:
         "    aarch64:\n"
         "      extension_families [arm]\n"
         '      runner_kinds ["qemu-aarch64"]\n'
+        "      backends:\n"
+        "        cpp:\n"
+        "          feature_flags false\n"
         "    riscv:\n"
         "      extension_families [rvv]\n"
         '      runner_kinds ["qemu-riscv64"]\n'

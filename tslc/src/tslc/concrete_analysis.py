@@ -42,6 +42,29 @@ class ConcreteAnalysisContext:
     extension: str
     type_tag: str
     to_target: str | None = None
+    signature: str | None = None
+    attributes: tuple[tuple[str, str], ...] = ()
+
+    def matches(self, slot: LoweringTraceSlot) -> bool:
+        """Whether one pipeline trace slot belongs to this requested identity."""
+
+        spec = slot.specialization
+        return (
+            slot.profile == self.profile
+            and slot.backend == self.backend
+            and self.primitive
+            in {spec.primitive_name, spec.source_primitive_name}
+            and spec.extension_name == self.extension
+            and spec.type_tag == self.type_tag
+            and _matches_target(spec, self.to_target)
+            and (
+                self.signature is None
+                or (
+                    spec.source_signature == self.signature
+                    and spec.source_attributes == self.attributes
+                )
+            )
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,6 +80,8 @@ class ConcreteAnalysisNode:
     origin: str | None = None
     reason: str | None = None
     source: SourceSpan | None = None
+    source_signature: str | None = None
+    source_attributes: tuple[tuple[str, str], ...] = ()
     param_names: tuple[str, ...] = ()
     param_kinds: tuple[str, ...] = ()
     target_extension: str | None = None
@@ -88,6 +113,8 @@ def analyze_concrete_specialization(
     extension: str,
     type_tag: str,
     to_target: str | None = None,
+    signature: str | None = None,
+    attributes: tuple[tuple[str, str], ...] = (),
 ) -> tuple[ConcreteAnalysis | None, tuple[Diagnostic, ...]]:
     """Load one saved corpus and analyze an exact lowered specialization."""
 
@@ -113,6 +140,8 @@ def analyze_concrete_specialization(
         extension=extension,
         type_tag=type_tag,
         to_target=to_target,
+        signature=signature,
+        attributes=tuple(sorted(attributes)),
     )
     trace = result.lowering_trace
     roots = (
@@ -166,15 +195,7 @@ def _matches_context(
     slot: LoweringTraceSlot,
     context: ConcreteAnalysisContext,
 ) -> bool:
-    spec = slot.specialization
-    return (
-        slot.profile == context.profile
-        and slot.backend == context.backend
-        and context.primitive in {spec.primitive_name, spec.source_primitive_name}
-        and spec.extension_name == context.extension
-        and spec.type_tag == context.type_tag
-        and _matches_target(spec, context.to_target)
-    )
+    return context.matches(slot)
 
 
 def _matches_target(spec: LoweredSpecialization, to_target: str | None) -> bool:
@@ -290,6 +311,8 @@ def _slot_node(
         origin=origin,
         reason=reason,
         source=spec.source,
+        source_signature=spec.source_signature,
+        source_attributes=spec.source_attributes,
         param_names=spec.param_names,
         param_kinds=spec.param_kinds,
         target_extension=target.extension_isa if target is not None else None,
@@ -376,17 +399,21 @@ def _missing_root(
     context: ConcreteAnalysisContext,
     skipped: tuple[SkippedEntry, ...],
 ) -> ConcreteAnalysisNode:
-    reasons = tuple(
-        sorted(
-            {
-                item.reason
-                for item in skipped
-                if item.profile == context.profile
-                and item.backend == context.backend
-                and item.primitive == context.primitive
-                and item.extension == context.extension
-                and item.type_tag == context.type_tag
-            }
+    reasons = (
+        ()
+        if context.signature is not None
+        else tuple(
+            sorted(
+                {
+                    item.reason
+                    for item in skipped
+                    if item.profile == context.profile
+                    and item.backend == context.backend
+                    and item.primitive == context.primitive
+                    and item.extension == context.extension
+                    and item.type_tag == context.type_tag
+                }
+            )
         )
     )
     reason = (
@@ -402,6 +429,8 @@ def _missing_root(
         type_tag=context.type_tag,
         implementation_state=ImplementationState.UNKNOWN,
         reason=reason,
+        source_signature=context.signature,
+        source_attributes=context.attributes,
     )
 
 

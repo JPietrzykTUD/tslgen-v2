@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from _select_lower_core_support import (
     Catalog,
     create_backend_dialect,
@@ -20,7 +22,12 @@ from _select_lower_core_support import (
     _slots,
     _TYPES,
 )
+from tslc.lower.dependencies import VectorIdentity
 from tslc.lower.lowerer import LoweredArithmeticPreconditionKind
+from tslc.select.selector import (
+    SelectionSlotDisposition,
+    SelectionSlotInapplicability,
+)
 
 
 def test_lowerer_keeps_target_vector_resolution_boundary() -> None:
@@ -28,6 +35,155 @@ def test_lowerer_keeps_target_vector_resolution_boundary() -> None:
     assert lowerer_module.TargetVector is TargetVector
     assert TargetVector.__module__ == "tslc.lower.target_vectors"
     assert resolve_target_vector.__module__ == "tslc.lower.target_vectors"
+
+
+def test_selector_classifies_runtime_scalable_fixed_shapes_before_lowering(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    selection = Selector().select_profile(
+        catalog,
+        machine_profiles["sve"],
+        "to_array",
+        ("si32",),
+        backend_id="cpp",
+    )
+
+    scalable = tuple(
+        slot for slot in selection.slots if slot.extension.name == "sve"
+    )
+    assert len(scalable) == 1
+    assert scalable[0].selected == ()
+    assert scalable[0].disposition is SelectionSlotDisposition.FIXED_SHAPE_ONLY
+    assert scalable[0].fixed_shape_kinds == frozenset({"s[]"})
+    assert not any(slot.extension.name == "sve" for slot in selection.selected)
+
+
+def test_selector_classifies_an_empty_representation_target_axis_as_not_applicable(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    selection = Selector().select_profile(
+        catalog,
+        machine_profiles["scalar"],
+        "convert_up",
+        ("f64",),
+        backend_id="cpp",
+        collect_slots=True,
+    )
+
+    slot = next(item for item in selection.slots if item.extension.name == "scalar")
+    assert slot.selected == ()
+    assert slot.disposition is SelectionSlotDisposition.NOT_APPLICABLE
+    assert slot.inapplicability_reason is (
+        SelectionSlotInapplicability.NO_COMPATIBLE_BASE_TARGET
+    )
+
+
+def test_selector_classifies_unavailable_target_specific_operation(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    selection = Selector().select_profile(
+        catalog,
+        machine_profiles["sse"],
+        "random_step",
+        ("ui64",),
+        backend_id="cpp",
+        collect_slots=True,
+    )
+
+    assert len(selection.slots) == 1
+    assert selection.slots[0].disposition is SelectionSlotDisposition.NOT_APPLICABLE
+    assert selection.slots[0].inapplicability_reason is (
+        SelectionSlotInapplicability.TARGET_SPECIFIC_UNAVAILABLE
+    )
+
+
+@pytest.mark.parametrize(
+    ("profile_name", "runtime_lane_expression"),
+    (("sve", "svcntb()"), ("rvv", "__riscv_vlenb()")),
+)
+def test_scalable_lane_conversion_uses_runtime_lane_query(
+    catalog: Catalog,
+    machine_profiles,
+    profile_name: str,
+    runtime_lane_expression: str,
+) -> None:
+    selection = Selector().select_profile(
+        catalog,
+        machine_profiles[profile_name],
+        "convert_lanes",
+        ("si8",),
+        backend_id="cpp",
+    )
+    selected = next(
+        item
+        for item in selection.selected
+        if item.extension.name == profile_name
+        and any(
+            binding.param_name == "ToVec" and binding.base_tag == "si16"
+            for binding in item.simd_type_base_bindings
+        )
+    )
+
+    lowered = Lowerer().lower(
+        selected,
+        catalog,
+        create_backend_dialect(catalog, "cpp"),
+    )
+
+    assert lowered.diagnostics == ()
+    assert lowered.specialization is not None
+    assert runtime_lane_expression in lowered.specialization.body_text
+    assert "vector_element_count" not in lowered.specialization.body_text
+    assert "to_array" not in lowered.specialization.body_text
+    assert "from_array" not in lowered.specialization.body_text
+    assert "require_same_lanes" not in lowered.specialization.body_text
+
+
+@pytest.mark.parametrize("profile_name", ("sve256", "sve512"))
+def test_fixed_sve_extract_dependencies_stay_inside_the_requested_profile(
+    catalog: Catalog,
+    machine_profiles,
+    profile_name: str,
+) -> None:
+    selection = Selector().select_profile(
+        catalog,
+        machine_profiles[profile_name],
+        "extract",
+        ("si32",),
+        backend_id="cpp",
+    )
+    selected = tuple(
+        item for item in selection.selected if item.extension.name == profile_name
+    )
+
+    assert selected
+    assert {item.to_target for item in selected} == {"neon"}
+    for item in selected:
+        lowered = Lowerer().lower(
+            item,
+            catalog,
+            create_backend_dialect(catalog, "cpp"),
+        )
+        assert lowered.diagnostics == ()
+        assert lowered.specialization is not None
+        assert item.implementation.extension == "sve"
+        dependencies = tuple(
+            origin.dependency
+            for origin in lowered.specialization.call_dependency_origins
+        )
+        assert {dependency.primitive for dependency in dependencies} == {
+            "from_array",
+            "set_zero",
+            "to_array",
+        }
+        assert all(
+            isinstance(dependency.source, VectorIdentity)
+            and dependency.source.extension_isa in {profile_name, "neon"}
+            for dependency in dependencies
+        )
 
 
 def test_lowerer_catalog_facts_cache_is_owned_by_catalog_identity(
@@ -119,6 +275,13 @@ def test_profile_reachability(catalog: Catalog, machine_profiles) -> None:
         "clang_v256_bool",
         "clang_v512_bool",
     }
+
+    sse_extensions = set(
+        Selector().emitted_extensions(catalog, machine_profiles["sse"])
+    )
+    assert "sse" in sse_extensions
+    assert "avx2" not in sse_extensions
+    assert "avx512" not in sse_extensions
 
     # avx profile: avx2 integer add needs the avx2 flag (absent) -> falls to sse;
     # but avx2 float add only needs `avx`, so it IS present.

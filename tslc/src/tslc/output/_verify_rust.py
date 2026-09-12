@@ -41,6 +41,7 @@ _RUST_WARNING_FLAGS = (
 )
 _RUSTDOC_WARNING_FLAGS = (
     "-Dwarnings",
+    "-Dmissing-docs",
     "-Drustdoc::broken-intra-doc-links",
     "-Drustdoc::bare-urls",
 )
@@ -228,6 +229,17 @@ def _prepare_rust_backend(
                 )
     target_profiles: list[VerifyProfile] = []
     for profile in backend.profiles:
+        if (
+            config.run_value_tests
+            and profile.runner is not None
+            and len(profile.runner.executions) > 1
+        ):
+            skipped.append(
+                f"rust: profile {profile.profile_name} declares "
+                f"{len(profile.runner.executions)} runner variants, but Rust "
+                "multi-variant value-test execution is not supported"
+            )
+            continue
         if profile in host_dependent_profiles:
             if host_target is None:
                 continue
@@ -435,7 +447,93 @@ def _rust_command_groups(
             for failure in profile.compile_failures
         )
         groups.append(tuple(commands))
+    doctest_profile = _rust_doctest_profile(backend, config)
+    if config.run_quality_checks and doctest_profile is not None:
+        # rustdoc exposes the same profile-neutral documentation facade for every
+        # emitted profile. Run its examples once through a natively executable
+        # profile, while the per-profile `cargo doc` commands above still prove
+        # that every selected target configuration builds the documentation.
+        profile = doctest_profile
+        target_dir = project_root / "target" / profile.file_stem
+        cargo_profile_args = (
+            "--manifest-path",
+            str(manifest),
+            "--no-default-features",
+            *rust_target_args(profile, config),
+            "--target-dir",
+            str(target_dir),
+        )
+        groups.append(
+            (
+                BuildCommand(
+                    backend_id="rust",
+                    profile_name=profile.profile_name,
+                    step="doctest",
+                    argv=("cargo", "test", *cargo_profile_args, "--doc"),
+                    cwd=root,
+                    env=_rust_lint_environment(
+                        profile,
+                        config,
+                        key="RUSTDOCFLAGS",
+                        flags=_RUSTDOC_WARNING_FLAGS,
+                    ),
+                ),
+            )
+        )
+    if config.run_quality_checks and backend.profiles:
+        profile = backend.profiles[0]
+        groups.append(
+            (
+                BuildCommand(
+                    backend_id="rust",
+                    profile_name=profile.profile_name,
+                    step="package-list",
+                    argv=(
+                        "cargo",
+                        "package",
+                        "--manifest-path",
+                        str(manifest),
+                        "--allow-dirty",
+                        "--no-verify",
+                        "--list",
+                    ),
+                    cwd=root,
+                    env=rust_environment(profile, config),
+                ),
+            )
+        )
     return tuple(groups)
+
+
+def _rust_doctest_profile(
+    backend: VerifyBackend,
+    config: BuildVerifierConfig,
+) -> VerifyProfile | None:
+    """Choose the least demanding profile that can execute on this host."""
+
+    candidates = tuple(
+        profile
+        for profile in backend.profiles
+        if (
+            profile.native_without_runner
+            or rust_target(profile, config) is None
+            or (
+                profile.family == "x86"
+                and profile.runner is not None
+                and profile.runner.kind == "sde"
+                and config.runner_path("sde") is not None
+            )
+        )
+    )
+    if not candidates:
+        return None
+    return min(
+        candidates,
+        key=lambda profile: (
+            len(profile.target_features),
+            profile.profile_name,
+        ),
+    )
 
 
 def _rust_environment_with_cfg(

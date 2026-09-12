@@ -6,6 +6,7 @@ import re
 from collections.abc import Callable
 
 from tslc.catalog.model import PrimitiveMaskMode
+from tslc.catalog.preconditions import PreconditionKind
 from tslc.diagnostics import Diagnostic, diagnostic_at
 from tslc.ir.region_registry import DEFAULT_TSIL_REGION_DESCRIPTORS, region_shell_validator
 from tslc.ir.query_syntax import is_tsil_type_expression_syntax
@@ -122,6 +123,52 @@ def _validate_call_region(
             None,
         )
         if invalid_mask is None:
+            dispositions = (
+                *parsed.forwarded_preconditions,
+                *parsed.discharged_preconditions,
+            )
+            invalid_precondition = next(
+                (
+                    value
+                    for value in dispositions
+                    if value not in {kind.value for kind in PreconditionKind}
+                ),
+                None,
+            )
+            if invalid_precondition is not None:
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-BODY-BAD-CALL-PRECONDITION",
+                        message=(
+                            f"primitive {primitive_name!r}: unknown call "
+                            f"precondition {invalid_precondition!r}"
+                        ),
+                        source=region.source,
+                    )
+                )
+                return
+            duplicate = next(
+                (
+                    value
+                    for value in dispositions
+                    if dispositions.count(value) > 1
+                ),
+                None,
+            )
+            if duplicate is not None:
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-BODY-DUPLICATE-CALL-PRECONDITION",
+                        message=(
+                            f"primitive {primitive_name!r}: call precondition "
+                            f"{duplicate!r} has more than one disposition"
+                        ),
+                        source=region.source,
+                    )
+                )
+                return
             return
         diagnostics.append(
             diagnostic_at(
@@ -240,6 +287,39 @@ def _validate_mask_region(
                 "`mask<test, imask>(imask, index)`, "
                 "`mask<set>(mask, index)`, `mask<clear>(mask, index)`, or "
                 "`mask<set_to>(mask, index, value)`"
+            ),
+            source=region.source,
+        )
+    )
+
+
+def _validate_mem_region(
+    primitive_name: str,
+    region: Region,
+    diagnostics: list[Diagnostic],
+) -> None:
+    expected_arity = {
+        "load_scalar": 1,
+        "store_scalar": 2,
+        "copy": 3,
+        "set": 3,
+        "alloc": 1,
+        "alloc_aligned": 2,
+        "free": 1,
+    }
+    selector = region.selector_text.strip()
+    groups = split_arg_groups(region.body)
+    if expected_arity.get(selector) == len(groups) and all(
+        _segments_text(group).strip() for group in groups
+    ):
+        return
+    diagnostics.append(
+        diagnostic_at(
+            severity="error",
+            code="TSL-BODY-BAD-MEM",
+            message=(
+                f"primitive {primitive_name!r}: malformed memory operation "
+                f"mem<{region.selector_text}>"
             ),
             source=region.source,
         )
@@ -451,6 +531,7 @@ _SHELL_VALIDATORS: dict[str, ShellValidator] = {
     "let_type": _validate_let_region,
     "intrin_selector": _validate_intrin_region,
     "mask_selector": _validate_mask_region,
+    "mem_selector": _validate_mem_region,
     "no_selector": _validate_no_selector_region,
     "select_expr": _validate_select_expr_region,
     "var_selector": _validate_var_region,

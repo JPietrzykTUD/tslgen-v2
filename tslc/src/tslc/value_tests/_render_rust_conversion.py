@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from tslc.catalog.model import TestComparison
 from tslc.backend.rust_translation import rust_raw_identifier
-from tslc.value_tests._render_rust_helpers import rust_extension_tag
+from tslc.value_tests._render_rust_helpers import public_call, rust_extension_tag
 from tslc.value_tests.literals import rust_literal, rust_literal_list
 from tslc.value_tests.model import ValueTestCasePlan
 
@@ -108,9 +108,10 @@ def _lane_convert(case: ValueTestCasePlan) -> str:
                 f"        let source = {from_array}::<Vec>(&source_array);",
             ]
         )
+    call = f"{rust_raw_identifier(case.call_name)}::<Vec, ToVec>(source)"
     lines.extend(
         [
-            f"        let result = {rust_raw_identifier(case.call_name)}::<Vec, ToVec>(source);",
+            f"        let result = {public_call(case, call)};",
             f"        let expected: [{target}; {case.lanes}] = [{expected}];",
             f"        for i in 0..{case.lanes} {{ assert!(result[i].lane_eq(expected[i]), "
             f'"{case.case_name} lane {{}}: expected {{:?}}, got {{:?}}", '
@@ -460,6 +461,8 @@ def _differential(case: ValueTestCasePlan) -> str:
         f"{rust_raw_identifier(case.call_name)}"
         f"::<{', '.join(ref_template_args)}>({', '.join(ref_args)})"
     )
+    hw_call = public_call(case, hw_call)
+    ref_call = public_call(case, ref_call)
     if case.invocation.result_kind == "m":
         to_integral = _required_name(
             differential.to_integral_name,

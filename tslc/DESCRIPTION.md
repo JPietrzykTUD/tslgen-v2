@@ -43,7 +43,7 @@ sources + compiler assets → parse → catalog → select → scan body → low
 | **sources** | [sources.py](src/tslc/sources.py) | Read `.tsl` source files |
 | **syntax** | [syntax/](src/tslc/syntax/) | Lark grammar → parse tree (outer declarations + TSIL body envelopes) |
 | **catalog** | [catalog/](src/tslc/catalog/) | Promote parse tree → typed, immutable domain model (`Primitive`, `Extension`, `Catalog`) |
-| **select** | [select/](src/tslc/select/) | For each `(backend, extension, type)` slot, pick the best implementation body |
+| **select** | [select/](src/tslc/select/) | Enumerate each applicable `(backend, declaration, extension, type, target)` slot and pick the best implementation body, retaining explicit absences for requested analyses |
 | **ir / scan** | [ir/](src/tslc/ir/) | Turn a TSIL body into a recursive `tuple[Segment, ...]` — *not* an AST |
 | **lower** | [lower/](src/tslc/lower/) | Walk segments, resolve queries/intrinsics → `LoweredSpecialization` |
 | **backend** | [backend/](src/tslc/backend/) | Own target type projection, helper manifests, emitted profiles, Rust compile-target selection, validation, and C++/Rust function text |
@@ -247,11 +247,25 @@ prim<v:=(v,v)> add(left, right):
   and `PrimitiveValueMode`. Selection, lowering, dependency closure, benchmark
   inventory, and value-test planning consume those typed fields rather than
   comparing raw attribute strings or recognizing primitive names.
+- **Primitive portability**: primitive families are portable by default.
+  `portability target_specific` is the narrow source-owned declaration that an
+  operation itself has no target-independent availability promise. Selection
+  uses that fact only to classify an otherwise absent slot as not applicable;
+  it never changes candidate ranking or excuses a missing portable fallback.
 - **Type-group keys**: `?i?` (any int), `f?` (any float), `arith` (all), plus
   concrete tags. Ranked by **specificity** — `si32` beats `?i?` beats `arith`.
 - **Extension fallback**: extensions form `inherits` chains (e.g. `avx2_vl →
   avx2`); an active variant can explicitly `supersedes` another extension while
   still borrowing fallback bodies from its inheritance chain.
+- **Register multiplicity**: `register_multiplicity_types` is a sparse,
+  source-owned map from a physical capacity (`x2`, `x4`, `d2`, and so on) and
+  scalar type/group to backend spelling. The catalog promotes the capacity to
+  `RegisterMultiplicity`; conversion semantics derive the required capacity
+  from concrete source/target widths, and backend dialects translate only that
+  finalized fact. These physical spellings are deliberately not inherited by
+  fixed-width facades, whose register representation may differ. The map does
+  not create a general target-language type AST or make a grouped vector part
+  of the public API by itself.
 - **Target-family capabilities**: `target_families:` owns behavioral roles for
   source-named extension families—fallback classification, free-function
   ownership, declared-register requirements, and index-vector support—and for
@@ -444,12 +458,27 @@ lowering never parses C++ `&` or Rust `&mut` tokens from `RawText`.
 
 Successful `call<...>` lowering records typed dependency origins using the same
 query evaluator and live generation-time control flow that produced the body.
+An edge to a callee with an applicable catastrophic precondition also carries
+one source-located typed obligation per condition. Source authors either
+`forward[...]` the condition through an unchanged vector identity and exact
+caller/callee parameter and condition-context identities to the caller's
+matching root precondition, or make an explicit
+`discharge[...]` implementation assertion. This proof model never interprets
+raw target-language expressions or treats an unsafe render frame as proof.
+Catalog validation rejects missing, stale, ambiguous, or mismatched
+dispositions; lowering retains unresolved obligations so checked-wrapper
+admission can fail closed, including after transitive closure.
+
 The pipeline then runs a **profile-scoped dependency closure**: from the
 requested primitives it resolves those lowered call facts
 ([lower/dependencies.py](src/tslc/lower/dependencies.py)), lowers callees, and
-**prunes to a fixpoint** any specialization whose callees aren't themselves
-emitted for the same concrete `simd<type,ext>` (else the generated call
-wouldn't link). A call on a free SIMD type parameter instead retains a symbolic
+**prunes to a fixpoint** any specialization whose implementation-body callees
+aren't themselves emitted for the same concrete `simd<type,ext>` (else the
+generated call wouldn't link). Compiler-created checked-guard calls are
+discovered through the same typed dependency model but are not body edges:
+after ordinary closure stabilizes, an unavailable guard dependency suppresses
+only the optional checked companion, never the unchecked callable. A call on a
+free SIMD type parameter instead retains a symbolic
 reference containing the authored parameter name and its optional selected base
 binding, never the caller's extension. Its compiler-derived trait bounds are
 validated during lowering, and dependency discovery keeps the corresponding
@@ -471,6 +500,15 @@ a backend unsupported is not admitted as a coverage attempt for that backend.
 Helper dependency roots and helper
 admission both come from typed manifests in
 [backend/helper_requirements.py](src/tslc/backend/helper_requirements.py).
+[backend/algorithm_admission.py](src/tslc/backend/algorithm_admission.py)
+joins those exact primitive and mask-policy requirements to the shared
+algorithm families. C++ computes a project-wide intersection in
+[backend/cpp_algorithm_plan.py](src/tslc/backend/cpp_algorithm_plan.py); Rust
+retains a profile-local admission. Both expose deterministic gaps carrying the
+backend, profile, helper feature, semantic family, primitive, and mask policy,
+so optional compaction or mask helpers suppress only dependent forms. The same
+helper groups seed dependency closure, including Rust's mandatory contiguous
+load/store foundation.
 
 Backends differ idiomatically (a `BackendDialect`,
 [backend/translation.py](src/tslc/backend/translation.py), abstracts type
@@ -495,6 +533,12 @@ benchmark plans as one frozen snapshot. This lets a backend compute any shared
 semantic-to-layout projection once before its focused project, test, and
 benchmark formatters run.
 
+C++ extension metadata separates ordinary `headers` from third-party
+`system_headers`. The latter are parsed inside a narrowly scoped compiler
+diagnostic boundary, before `tsl_core.hpp` when vendor types affect core helper
+overloads. Both classes remain part of the typed compiler/doctor preflight; the
+classification changes warning ownership, not dependency detection.
+
 Sized-vector lane arithmetic crosses that boundary as a typed `LaneCount`.
 C++ renders scaled symbolic counts as constant expressions; stable Rust rejects
 them before target text is produced unless selection has monomorphized the
@@ -513,12 +557,98 @@ count. Neutral lowering never constructs a C++ or Rust lane-count expression.
   public signature per emitted Rust primitive; concrete profile availability
   stays in the specialization explorer, while normal builds select their
   `profile` alias from compile-target cfgs with an exact generic fallback.
-  Profile-local algorithm trait impls
-  share typed Scalar/Generic/concrete render targets in
-  [backend/rust_algorithm.py](src/tslc/backend/rust_algorithm.py). Static
+  [backend/rust_algorithm_plan.py](src/tslc/backend/rust_algorithm_plan.py)
+  finalizes profile-local algorithm admission, exact static/native mappings,
+  memory and optional-helper bindings, implementation targets, and primitive
+  facades before rendering. It reuses the mapping records selected by
+  `RustStaticSelectionPlan`; profiles without a compile-target selection reuse
+  that plan's exact generic fallback. The target formatter in
+  [backend/rust_algorithm.py](src/tslc/backend/rust_algorithm.py) consumes only
+  those decided facts and semantic-family static assets. The project renderer
+  keeps the stable `profile::algo` module path while emitting a private
+  `algo/support.rs` for helper implementations and primitive policy facades,
+  plus ordered private utility, iteration, predicate, count, selection,
+  transform, consume, and aggregate wrapper modules. `algo.rs` explicitly
+  re-exports their stable functions and `Profile`; concrete and fallback
+  profiles use the same layout, and the parent profile cfg owns whether any
+  child is compiled. Missing mandatory contiguous memory support and missing
+  optional family helpers remain typed admission gaps rather than an empty
+  formatter result or a template-time decision. Static
   algorithm-wrapper names are reserved by the compiler manifest in
   [backend/rust_algorithm_manifest.py](src/tslc/backend/rust_algorithm_manifest.py),
   with an asset-consistency test preventing drift.
+  [backend/rust_algorithm_facade.py](src/tslc/backend/rust_algorithm_facade.py)
+  separately formats the shared `tsl_algorithm` facade. Its stable root module
+  explicitly re-exports public policy/representation types, mask layouts,
+  kernel traits, and callable algorithms from private generated children.
+  Representation, mask, kernel-trait, and range/address-validation substrate
+  modules depend only on shared substrate; semantic-family modules may consume
+  them but are never imported by them. Utility, iteration, predicate, count,
+  selection/index, transform, consume, and aggregate implementations each have
+  one focused private child derived in semantic-family order.
+
+C++ keeps `tsl_algorithm.hpp` as the stable public umbrella. The project-wide
+algorithm admission plan owns its ordered generated family-header records and
+the renderer only formats those decided includes. Utility aliases and helpers,
+iteration, predicate, count, selection/index, transform, consume, and aggregate
+each have focused public headers; every behavioral family also owns a matching
+private detail-loop header.
+
+The public safety surface is a typed projection, not a renderer convention.
+[backend/checked_api.py](src/tslc/backend/checked_api.py) admits a `_checked`
+companion only for a complete catastrophic runtime precondition declared in the
+catalog. C++ value companions preserve the ordinary value return and append a
+final `precondition_error&`; C++ void companions return that error directly.
+Rust companions return `Result`, while the ordinary Rust function remains
+`unsafe` when its caller contract can cause undefined behavior. A failed
+companion reports before dispatch; C++ returns only an initialized,
+semantically unspecified placeholder. Memory companions replace bare pointers
+with spans/slices carrying the exact checkable extent, but valid object
+lifetime, provenance, references, and concurrency remain caller obligations.
+Checked-memory admission also fails closed unless every caller-unsafe
+specialization carries the reviewed `raw_pointer` obligation and only the
+narrow implementation-mechanism labels currently known to coexist with it.
+Unknown labels, unchecked indexing, and generic unsafe operations cannot be
+erased by a range signature. Compiler-derived, internal-only
+`value_reinterpretation` and `unsafe_callee` framing effects are admitted; the
+latter does not itself prove that the callee's own condition was forwarded or
+discharged. Typed `forward[...]` and `discharge[...]` call dispositions own
+that proof independently, and unresolved obligations make checked admission
+fail closed through the live ordinary call graph.
+
+This two-path surface is implemented and release-ratcheted; it is not pending
+refactor work. In particular, `internal_unsafe` describes the implementation
+boundary needed by generated Rust, while `caller_unsafe` describes the public
+call contract. Pointer-shaped signature syntax is not enough to infer either
+fact: source metadata owns uncheckable caller obligations, while typed TSIL
+regions contribute only their internal implementation effects. A `raw_memory`
+mechanism without a `raw_pointer` or another
+outstanding catastrophic caller obligation does not make the public function
+unsafe. The unsuffixed operation remains direct in both languages, and the
+optional checked companion never changes its behavior.
+[catalog/memory.py](src/tslc/catalog/memory.py) also owns whether indexed
+operations consume one address per result-vector lane or per index-vector lane;
+catalog validation requires that fact for indexed memory, and checked wrappers
+validate the corresponding lane-count relationship before inspecting index
+lanes or dispatching.
+Compacted memory likewise carries both its mask-dependent payload extent and
+the selected alignment contract. Checked wrappers validate capacity first and,
+when an aligned specialization would access at least one element, validate the
+selected vector alignment before dispatch. An all-inactive compacted operation
+accesses no memory and therefore does not reject an empty, unaligned view.
+[backend/cpp_checked_api.py](src/tslc/backend/cpp_checked_api.py) owns C++
+signature/check projection, and the backend-neutral algorithm family inventory
+and repeated callable forms in
+[backend/algorithm_surface.py](src/tslc/backend/algorithm_surface.py) prevent
+C++ and Rust algorithm surfaces from drifting. Typed range and result checks
+remain owned by
+[backend/algorithm_contracts.py](src/tslc/backend/algorithm_contracts.py);
+each backend joins those target-neutral identities to its exact declaration
+records and explicitly classifies unsupported forms. Iteration, predicate,
+count, selection, index-producing, transform, consume, and aggregate
+declarations and render-hole identities are expanded by focused backend
+builders from those shared forms; exceptional target signatures remain explicit
+inside the backend projection.
 
 The ordinary Rust API is finalized before source rendering by the frozen records
 in [backend/rust_api_model.py](src/tslc/backend/rust_api_model.py), the
@@ -527,6 +657,13 @@ cross-record invariants in
 the joined semantic-and-call inventory in
 [backend/rust_api_core.py](src/tslc/backend/rust_api_core.py), and focused
 candidate, comprehensive, curated, and surface planners under `backend/rust_api_*`.
+Rust facade checked-condition translation remains in
+[backend/rust_facade_checked.py](src/tslc/backend/rust_facade_checked.py); the
+renderer receives those finalized backend facts and only formats public items.
+Primitive-call lowering records callee identities, source-located typed
+precondition dispositions, and the necessary local Rust unsafe boundary.
+Catalog validation and transitive closure reject or retain unresolved proof
+gaps without inferring anything from raw target text.
 The public
 [backend/rust_api_planner.py](src/tslc/backend/rust_api_planner.py)
 orchestrates those projections directly and preserves the compiler-facing
@@ -545,8 +682,8 @@ the plan at the post-lowering boundary, exposing one compiler-owned input for
 Rust source, rustdoc, fixture, benchmark, and dispatch projections.
 For artifact production,
 [backend/rust_capability.py](src/tslc/backend/rust_capability.py) constructs the
-static-selection, facade, dispatch, policy-consumption, and benchmark-layout
-plans once. The private project boundary in
+static-selection, algorithm, facade, dispatch, policy-consumption, and
+benchmark-layout plans once. The private project boundary in
 [render/rust_project.py](src/tslc/render/rust_project.py) trusts and formats
 those frozen plans; it does not replan or recompute-and-compare them.
 
@@ -557,14 +694,89 @@ compile target selects one exact private hardware representation or the
 source-backed generic representation; no profile or extension is a Cargo
 feature. Complete release metadata is carried through the backend-neutral
 `ProjectRenderConfig` into the Rust package renderer, so templates format
-configured Cargo facts rather than owning repository release policy.
+configured Cargo facts rather than owning repository release policy. The Cargo
+manifest uses an explicit source/test/benchmark include set: generated docs,
+research history, scratch trees, and unrelated checkout files cannot enter the
+published crate merely because documentation was built in place.
 
-A static substrate ships as assets
-([backend/assets/tsl_core.hpp](src/tslc/backend/assets/tsl_core.hpp),
-[tsl_core.rs](src/tslc/backend/assets/tsl_core.rs)) defining `simd<T,Ext>` /
-`SimdVector` and helpers. Whole-file scaffolding and stable profile metadata
-also live there as named templates; Python renderers supply only finalized,
-typed holes and dynamic declarations. Backend target-text values use
+Generated documentation is assembled by
+[maintenance/documentation.py](src/tslc/maintenance/documentation.py). Doxygen
+consumes the documentation-only primitive facade plus stable core,
+data-parallel, and ordinary/checked algorithm headers. Strict mode validates
+typed public type and algorithm manifests, primitive prose, unique callable
+identities, and ordinary twins for checked callables. Rustdoc treats the opaque
+root facade and selected `profile` API as the stable documented boundary; its
+public low-level substrate remains available for generated signatures but is
+hidden from the stable overview. Shared examples and the Sphinx contract page
+explain unchecked preconditions, checked errors, and residual language-level
+obligations. The repository maintenance projections
+[maintenance/public_api_baseline.py](src/tslc/maintenance/public_api_baseline.py)
+and [maintenance/checked_api_census.py](src/tslc/maintenance/checked_api_census.py)
+ratchet the typed v1 callable-family contract and exact checked coverage
+separately; both load the typed corpus through one maintenance-only catalog
+boundary. Each generated C++ and Rust project also carries `public-api.json`,
+serialized from backend-owned frozen declaration records. Those records own
+names, owners, reachability, overload identities, generic/template bounds,
+parameters and roles, qualifiers or safety, results, checked twins, reexports,
+stable type members, and stability classification. Static assets contain named
+holes for stable declarations and retain implementation bodies; renderers and
+the manifest consume the same records. A non-stable module/type may provide the
+default classification for otherwise-unrecorded descendants, while every
+stable exception remains an exact record. Rust reachability records include the
+typed target architecture,
+features, stronger-profile exclusions, and fallback selection. No compiler or
+maintenance path parses or hashes generated target text to reconstruct this
+contract. The schema-v3 release baseline ratchets the reviewed scalar/AVX2
+records in addition to the per-project scope-exact manifests.
+
+Executable whole-array coverage is a test-owned projection. The frozen cases in
+[tests/algorithm_conformance.py](tests/algorithm_conformance.py) key behavior
+evidence to the shared family/form inventory without carrying target code.
+Separate [C++](tests/algorithm_conformance_cpp.py) and
+[Rust](tests/algorithm_conformance_rust.py) adapters consume the exact backend
+declaration records, emit one compile witness per stable callable identity, and
+exercise a shared expected-result case. Completeness diagnostics report the
+missing form, behavioral axis, or backend declaration identity. Existing paired
+examples remain the broader behavioral evidence and are required to stay wired
+into the generated-consumer execution gate.
+
+Compile cost is repository measurement evidence, not a compiler semantic or a
+render-stage decision. The non-networked
+[support compile-cost script](../supplementary/benchmarks/measure_support_compile_cost.py)
+generates a fixed scalar/AVX2 project, then compares frozen generated roots by
+invoking GCC, Clang, the declared Rust MSRV, and current stable directly. It
+records preprocessing volume, compiler-reported token records, and interleaved
+clean-build wall/CPU samples without interpreting target text. The durable
+[Slice 0/final report](../research/tsl-v1-support-file-compile-cost.md) is
+informational until a stable runner and noise band exist; it does not alter
+backend admission, artifact layout, or the public packaging contract.
+
+The repository release projection is split by ownership across
+[maintenance/release_contract_model.py](src/tslc/maintenance/release_contract_model.py),
+[maintenance/release_contract_policy.py](src/tslc/maintenance/release_contract_policy.py),
+[maintenance/release_contract.py](src/tslc/maintenance/release_contract.py), and
+[maintenance/release_contract_render.py](src/tslc/maintenance/release_contract_render.py).
+It layers only product choices—version lines, release profile selection,
+target-specific/portable exceptions, and fallback policy—over the typed catalog,
+machine profiles, support policy, implementation-state meanings, and public-API
+baseline. The generated JSON and Markdown are projections of the same frozen
+model. Distributable packaging consumes that projection, while CI profile
+sharding reads the same narrow policy file; neither owns a second release
+profile list.
+
+A static substrate ships as assets. C++ keeps
+[backend/assets/tsl_core.hpp](src/tslc/backend/assets/tsl_core.hpp) as its stable
+facade over a directly includable type foundation and focused memory, scalar,
+integral-mask, and I/O runtime headers. Rust likewise keeps
+[tsl_core.rs](src/tslc/backend/assets/tsl_core.rs) as the stable facade defining
+its public representation types while private generated `tsl_core` children own
+memory/allocation, scalar arithmetic and conversion, integral-mask, and text-I/O
+runtime support. Explicit root and `detail::helpers` re-exports preserve the
+existing visibility and generated paths; typed vector registrations append
+their destination-validity proofs only to the scalar child. Whole-file
+scaffolding and stable profile metadata also live there as named templates;
+Python renderers supply only finalized, typed holes and dynamic declarations.
+Backend target-text values use
 [target_text.py](src/tslc/target_text.py); [render/](src/tslc/render/) only formats
 finalized, validated profiles, prebuilt value-test plans, and prebuilt
 benchmark plans into a per-profile project with a top-level dispatch
@@ -578,8 +790,9 @@ coverage for unsupported signature shapes. C++ renders those facts as a
 standalone native benchmark/policy tool. Rust admits scenario coverage through
 explicit named `profile × scenario-family` pairs while deriving profile family,
 features, spellings, modes, and flags from the live machine profile. It renders
-the `sse2` register and immediate families plus `avx2` one-vector scalar
-reductions as standard-library-only custom Cargo benchmarks. Native feature
+the `sse2` register, whole-register cross-lane, and immediate families plus
+`avx2` one-vector scalar reductions as standard-library-only custom Cargo
+benchmarks. Native feature
 detection consumes the profile family's typed strategy ID; concrete Rust
 `target_arch` and feature-test macro spellings live in
 [backend/rust_benchmark_detection.py](src/tslc/backend/rust_benchmark_detection.py),
@@ -674,9 +887,11 @@ specialization compatibility and owns its canonical policy identity. Candidate
 sets only enforce homogeneous matching families. Harness discovery/closure is
 checked through one planner boundary, while C++ scenario renderers supply typed
 fragments to one shared timing skeleton; the remaining family dispatch selects
-genuinely different input construction and invocation behavior. Pure-register
-scenarios carry
-their operand generators and dependency parameter, vector-plus-scalar scenarios
+genuinely different input construction and invocation behavior. Lane-local
+pure-register scenarios carry their operand generators and dependency parameter
+and may tile authored correctness vectors. Whole-register cross-lane scenarios
+use the same vector call wiring but require an authored correctness case at the
+exact specialization width. Vector-plus-scalar scenarios
 keep the scalar input independent, immediate scenarios carry an authored
 concrete value, indexed-load scenarios carry a SIMD index binding and bounded
 hot-L1 memory contract, vector-to-scalar reduction scenarios carry an
@@ -717,8 +932,21 @@ array↔register round-trip uses auto-discovered "harness primitives"
 [value_tests/harness.py](src/tslc/value_tests/harness.py)). A **differential**
 mode cross-checks each hardware implementation against the portable `generic`
 one. [output/verify.py](src/tslc/output/verify.py) then actually compiles and
-runs them — optionally under **Intel SDE** or **qemu-aarch64** so
-AVX-512/NEON/SVE code runs on hardware that lacks it.
+runs them — optionally under **Intel SDE**, **qemu-aarch64**, or
+**qemu-riscv64** so target code runs on hardware that lacks it. Scalable
+machine profiles may provide typed, named runner variants. The verifier builds
+one value-test binary and executes that exact binary at every declared vector
+length; CI consumes the same profile-owned matrix.
+
+Verification writes mutable run evidence under
+`.tslctmp/verification/attestation.json`, separately from deterministic
+generated artifacts. The versioned attestation references both the compiler
+input digest and `.tslc-manifest.json` digest, then records exact commands,
+explicit command environment, runner CPU/profile and vector length, captured
+outcomes, diagnostics, and skips. QEMU executions are correctness evidence;
+their timings are not performance evidence. When a configured formatter is
+invoked, the artifact writer re-hashes exactly the manifest-owned files before
+verification, so the attestation identifies the bytes that were compiled.
 
 ## State / outcome
 
@@ -733,6 +961,28 @@ AVX-512/NEON/SVE code runs on hardware that lacks it.
   shown beside backend-local lowering success. Profile rows use the typed
   architecture order, then target-feature count and name. Explicit `--update`
   and `--check` modes own the canonical tracked Markdown evidence.
+  The opt-in exact target-support trace in
+  [target_support.py](src/tslc/target_support.py) is different: selection owns
+  its complete declaration/type/target universe, including slots with no
+  candidate, and the pipeline advances each selected realization through
+  `selected`, `lowered`, `pruned`, `policy_deferred`, or `emitted`. Emitted
+  realizations retain the propagated implementation state. The release-only
+  [target_support_ratchet.py](src/tslc/maintenance/target_support_ratchet.py)
+  filters those facts through the typed v1 support contract and serializes the
+  exact SVE/SVE128/SVE256/SVE512/RVV baseline; it never selects or infers a
+  body itself. Release CI uses `--require-complete`, so a previously recorded
+  absent, selected-only, deferred, or pruned applicable slot is still a
+  failure; impossible source/target pairs must be declared as reviewed typed
+  exclusions rather than hidden in the baseline.
+  The corpus-wide
+  [implementation_slot_ratchet.py](src/tslc/maintenance/implementation_slot_ratchet.py)
+  consumes the same trace across every backend/profile scope in the v1 product
+  contract and projects exactly four fail-closed quality classes: native,
+  composed, generic fallback, and unsupported. Emitted unknown state is
+  unsupported in this quality view rather than guessed from opaque target text,
+  and is an absolute gate failure even during a baseline update.
+  Its compact baseline groups identical records across profiles only while
+  serializing; comparison restores every exact selector realization.
 - **Honest edges**: [support_policy.py](src/tslc/support_policy.py) centralizes
   what the compiler can emit today; some keyword forms are *recognized so a
   body skips cleanly* rather than leaking through as raw text.

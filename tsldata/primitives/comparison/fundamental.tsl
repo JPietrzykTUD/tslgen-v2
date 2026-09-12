@@ -58,7 +58,7 @@ prim<m:=(v,v)> equal(left, right):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(left == right);"
+          tsil "complete(op<equal>(left, right));"
     generic:
       arith:
         requires []
@@ -154,6 +154,28 @@ prim<m:=(v,v)> equal(left, right):
               intrin<cmpeq, build[suffix=base::signed_of(base::in)]>(left, right)
             );
           """
+      ?i?:
+        requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(HalfVec, vector::as_extension(sse));
+            var<const_infer>(low, call<primitive=@self[HalfVec]>(
+              call<primitive=extract[Vec, sse, 0]>(left),
+              call<primitive=extract[Vec, sse, 0]>(right)
+            ));
+            var<const_infer>(high, call<primitive=@self[HalfVec]>(
+              call<primitive=extract[Vec, sse, 1]>(left),
+              call<primitive=extract[Vec, sse, 1]>(right)
+            ));
+            var<infer>(result, call<primitive=insert[HalfVec, Vec, 0]>(
+              call<primitive=set_zero[Vec]>(), low
+            ));
+            complete(call<primitive=insert[HalfVec, Vec, 1]>(result, high));
+          """
       f?:
         requires [avx]
         safety:
@@ -211,7 +233,7 @@ prim<m:=(v,v)> equal(left, right):
             var<const_infer>(word_bits, call<primitive=to_integral[WordVec]>(word_equal));
             var<const_infer>(paired, word_bits & (word_bits >> 1));
             var<const_infer>(compact, (paired & 1) | ((paired >> 1) & 2));
-            complete(call<primitive=to_mask[Vec]>(compact));
+            complete(call<primitive=to_mask[Vec]>(cast<static>(vector::imask, compact)));
           """
     neon:
       arith:
@@ -404,7 +426,7 @@ prim<m:=(v,v)> nequal(left, right):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(left != right);"
+          tsil "complete(op<not_equal>(left, right));"
     generic:
       arith:
         requires []
@@ -727,7 +749,7 @@ prim<m:=(v,v)> less_than(left, right):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(left < right);"
+          tsil "complete(op<less_than>(left, right));"
     generic:
       arith:
         requires []
@@ -968,7 +990,7 @@ prim<m:=(v,v)> less_than(left, right):
             var<const_infer>(right_high, intrin<_mm_shuffle_epi32>(right, 0xF5));
             var<const_infer>(left_low, intrin<_mm_shuffle_epi32>(left, 0xA0));
             var<const_infer>(right_low, intrin<_mm_shuffle_epi32>(right, 0xA0));
-            var<const_infer>(sign_bit, call<primitive=set1[WordVec]>(cast<static>(si32, -2147483648)));
+            var<const_infer>(sign_bit, call<primitive=set1[WordVec]>(cast<static>(si32, (-2147483647 - 1))));
             var<const_infer>(low_less, call<primitive=@self[WordVec]>(
               call<primitive=binary_xor[WordVec]>(left_low, sign_bit),
               call<primitive=binary_xor[WordVec]>(right_low, sign_bit)
@@ -1236,7 +1258,7 @@ prim<m:=(v,v)> greater_than(left, right):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(left > right);"
+          tsil "complete(op<greater_than>(left, right));"
     generic:
       arith:
         requires []
@@ -1565,7 +1587,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(left <= right);"
+          tsil "complete(op<less_than_or_equal>(left, right));"
     generic:
       arith:
         requires []
@@ -2025,7 +2047,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(left >= right);"
+          tsil "complete(op<greater_than_or_equal>(left, right));"
     generic:
       arith:
         requires []
@@ -2479,6 +2501,16 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
               )
             );
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(call<primitive=mask_binary_and[Vec]>(mask, call<primitive=equal[Vec]>(left, right)));"
+
 prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
   operation compare_not_equal
   operand_roles:
@@ -2721,6 +2753,16 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
               )
             );
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(call<primitive=mask_binary_and[Vec]>(mask, call<primitive=nequal[Vec]>(left, right)));"
+
 prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
   operation compare_less
   operand_roles:
@@ -2962,6 +3004,16 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
               )
             );
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(call<primitive=mask_binary_and[Vec]>(mask, call<primitive=less_than[Vec]>(left, right)));"
+
 prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
   operation compare_greater
   operand_roles:
@@ -3203,6 +3255,16 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
               )
             );
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(call<primitive=mask_binary_and[Vec]>(mask, call<primitive=greater_than[Vec]>(left, right)));"
+
 prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
   operation compare_less_equal
   operand_roles:
@@ -3444,6 +3506,16 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
               )
             );
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(call<primitive=mask_binary_and[Vec]>(mask, call<primitive=less_than_or_equal[Vec]>(left, right)));"
+
 prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
   operation compare_greater_equal
   operand_roles:
@@ -3685,3 +3757,12 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
               )
             );
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(call<primitive=mask_binary_and[Vec]>(mask, call<primitive=greater_than_or_equal[Vec]>(left, right)));"

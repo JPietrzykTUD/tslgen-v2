@@ -65,23 +65,25 @@ fn main() {
             let mut masks = vec![Default::default(); mask_count];
 
             let mut predicate = LessThan;
-            let produced = profile::algo::predicate_binary_mask_layout::<
+            let produced = profile::algo::predicate_binary_mask_layout_checked::<
                 _,
                 profile::algo::mask_layout::Native,
                 _,
                 i32,
-            >(policy, &mut predicate, &left, &right, &mut masks);
+            >(policy, &mut predicate, &left, &right, &mut masks)
+            .expect("checked algorithm preconditions");
             assert_eq!(produced, masks.len());
 
             let preserved = -345678;
             let mut unary_output = vec![preserved; left.len()];
             let mut square = SquareWhere;
-            profile::algo::transform_where_unary_mask_layout::<
+            profile::algo::transform_where_unary_mask_layout_checked::<
                 _,
                 profile::algo::mask_layout::Native,
                 _,
                 i32,
-            >(policy, &mut square, &left, &masks, &mut unary_output);
+            >(policy, &mut square, &left, &masks, &mut unary_output)
+            .expect("checked algorithm preconditions");
 
             for (i, actual) in unary_output.iter().enumerate() {
                 let expected = if left[i] < right[i] {
@@ -94,12 +96,13 @@ fn main() {
 
             let mut binary_output = vec![0i32; left.len()];
             let mut add = AddOrLeft;
-            profile::algo::transform_masked_binary_mask_layout::<
+            profile::algo::transform_masked_binary_mask_layout_checked::<
                 _,
                 profile::algo::mask_layout::Native,
                 _,
                 i32,
-            >(policy, &mut add, &left, &right, &masks, &mut binary_output);
+            >(policy, &mut add, &left, &right, &masks, &mut binary_output)
+            .expect("checked algorithm preconditions");
 
             for (i, actual) in binary_output.iter().enumerate() {
                 let expected = if left[i] < right[i] {

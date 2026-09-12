@@ -10,23 +10,32 @@ from tslc.catalog._semantic_promotion_common import (
 from tslc.catalog.memory import (
     MemoryAccess,
     MemoryAddressing,
+    MemoryIndexedLaneExtent,
+    MemoryPayloadExtent,
     PrimitiveMemoryContract,
     memory_access_values,
     memory_addressing_values,
-    memory_operation,
+    memory_indexed_lane_extent_values,
+    memory_operations,
 )
-from tslc.catalog.semantics import PrimitiveOperation, PrimitiveSemanticContract
+from tslc.catalog.semantics import (
+    OperandRole,
+    PrimitiveOperation,
+    PrimitiveSemanticContract,
+)
+from tslc.catalog.signatures import parse_signature
 from tslc.diagnostics import Diagnostic, diagnostic_at
 from tslc.syntax.access import source_span
 from tslc.syntax.ast import ParsedPrimitiveDeclaration
 
 
-KNOWN_MEMORY_FIELDS = frozenset({"access", "addressing"})
+KNOWN_MEMORY_FIELDS = frozenset({"access", "addressing", "indexed_lanes"})
 
 
 def build_memory_contract(
     declaration: ParsedPrimitiveDeclaration,
     semantic: PrimitiveSemanticContract | None,
+    result_target: tuple[str, str] | None,
     diagnostics: list[Diagnostic],
 ) -> PrimitiveMemoryContract | None:
     fields = declaration.fields_by_name("memory")
@@ -56,6 +65,7 @@ def build_memory_contract(
         KNOWN_MEMORY_FIELDS,
         "memory",
         diagnostics,
+        required={"access", "addressing"},
     )
     access = enum_member(
         declaration,
@@ -75,17 +85,60 @@ def build_memory_contract(
         "TSL-CATALOG-MEMORY-ADDRESSING",
         diagnostics,
     )
+    indexed_lane_extent = enum_member(
+        declaration,
+        members.get("indexed_lanes"),
+        MemoryIndexedLaneExtent,
+        memory_indexed_lane_extent_values(),
+        "indexed memory lane extent",
+        "TSL-CATALOG-MEMORY-INDEXED-LANES",
+        diagnostics,
+    )
     if access is None or addressing is None:
         return None
-    expected_operation = memory_operation(access)
-    if semantic is None or semantic.kind is not expected_operation:
+    if addressing is MemoryAddressing.INDEXED and indexed_lane_extent is None:
+        if members.get("indexed_lanes") is None:
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-MISSING-MEMORY-INDEXED-LANES",
+                    message=(
+                        f"indexed memory on primitive {declaration.name!r} must "
+                        "declare 'indexed_lanes'"
+                    ),
+                    source=source_span(field.source),
+                )
+            )
+        return None
+    if addressing is not MemoryAddressing.INDEXED and indexed_lane_extent is not None:
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-MEMORY-INDEXED-LANES",
+                message=(
+                    f"memory addressing {addressing.value!r} on primitive "
+                    f"{declaration.name!r} cannot declare 'indexed_lanes'"
+                ),
+                source=(
+                    member_value_source(members.get("indexed_lanes"))
+                    or source_span(field.source)
+                ),
+            )
+        )
+        return None
+    expected_operations = memory_operations(access)
+    if semantic is None or semantic.kind not in expected_operations:
+        expected = ", ".join(
+            repr(operation.value)
+            for operation in sorted(expected_operations, key=lambda item: item.value)
+        )
         diagnostics.append(
             diagnostic_at(
                 severity="error",
                 code="TSL-CATALOG-MEMORY-OPERATION",
                 message=(
                     f"memory access {access.value!r} on primitive {declaration.name!r} "
-                    f"requires operation {expected_operation.value!r}"
+                    f"requires one of the operations {expected}"
                 ),
                 source=(
                     member_value_source(members.get("access"))
@@ -94,13 +147,133 @@ def build_memory_contract(
             )
         )
         return None
+    if not _validate_addressing_roles(
+        declaration, semantic, addressing, diagnostics
+    ):
+        return None
+    payload_extent = _payload_extent(
+        declaration,
+        semantic,
+        access,
+        addressing,
+        result_target,
+        diagnostics,
+    )
+    if payload_extent is None:
+        return None
     return PrimitiveMemoryContract(
         access=access,
         addressing=addressing,
+        payload_extent=payload_extent,
+        indexed_lane_extent=indexed_lane_extent,
         source=source_span(field.source),
         access_source=member_value_source(members.get("access")),
         addressing_source=member_value_source(members.get("addressing")),
+        indexed_lane_extent_source=member_value_source(
+            members.get("indexed_lanes")
+        ),
     )
+
+
+def _payload_extent(
+    declaration: ParsedPrimitiveDeclaration,
+    semantic: PrimitiveSemanticContract,
+    access: MemoryAccess,
+    addressing: MemoryAddressing,
+    result_target: tuple[str, str] | None,
+    diagnostics: list[Diagnostic],
+) -> MemoryPayloadExtent | None:
+    if addressing is MemoryAddressing.COMPACTED:
+        return MemoryPayloadExtent.ACTIVE_LANES
+    if semantic.kind in {
+        PrimitiveOperation.LOAD_SCALAR,
+        PrimitiveOperation.RANDOM_STEP,
+    }:
+        return MemoryPayloadExtent.SCALAR
+    if access is MemoryAccess.READ and result_target is not None:
+        return MemoryPayloadExtent.TARGET_VECTOR
+    signature = parse_signature(declaration.signature)
+    kind: str | None
+    if signature is None:
+        kind = None
+    elif access is MemoryAccess.READ:
+        kind = signature.result_kind
+    else:
+        value = semantic.binding(OperandRole.VALUE)
+        kind = None if value is None else value.parameter_kind
+    payload_extent = (
+        None
+        if kind is None
+        else {
+            "s": MemoryPayloadExtent.SCALAR,
+            "v": MemoryPayloadExtent.VECTOR,
+        }.get(kind)
+    )
+    if payload_extent is not None:
+        return payload_extent
+    diagnostics.append(
+        diagnostic_at(
+            severity="error",
+            code="TSL-CATALOG-MEMORY-PAYLOAD-EXTENT",
+            message=(
+                f"memory access {access.value!r} on primitive "
+                f"{declaration.name!r} requires a scalar or vector payload"
+            ),
+            source=source_span(declaration.signature_source),
+        )
+    )
+    return None
+
+
+def _validate_addressing_roles(
+    declaration: ParsedPrimitiveDeclaration,
+    semantic: PrimitiveSemanticContract,
+    addressing: MemoryAddressing,
+    diagnostics: list[Diagnostic],
+) -> bool:
+    roles = frozenset(binding.role for binding in semantic.operand_bindings)
+    required = {
+        MemoryAddressing.CONTIGUOUS: frozenset(),
+        MemoryAddressing.INDEXED: frozenset(
+            {OperandRole.INDEX, OperandRole.SCALE}
+        ),
+        MemoryAddressing.COMPACTED: frozenset({OperandRole.CONTROL_MASK}),
+    }[addressing]
+    forbidden = {
+        MemoryAddressing.CONTIGUOUS: frozenset(
+            {OperandRole.INDEX, OperandRole.SCALE}
+        ),
+        MemoryAddressing.INDEXED: frozenset(),
+        MemoryAddressing.COMPACTED: frozenset(
+            {OperandRole.INDEX, OperandRole.SCALE}
+        ),
+    }[addressing]
+    missing = required - roles
+    unexpected = forbidden.intersection(roles)
+    if not missing and not unexpected:
+        return True
+    details: list[str] = []
+    if missing:
+        details.append(
+            "requires " + ", ".join(repr(role.value) for role in sorted(missing))
+        )
+    if unexpected:
+        details.append(
+            "forbids "
+            + ", ".join(repr(role.value) for role in sorted(unexpected))
+        )
+    diagnostics.append(
+        diagnostic_at(
+            severity="error",
+            code="TSL-CATALOG-MEMORY-ADDRESSING-ROLES",
+            message=(
+                f"memory addressing {addressing.value!r} on primitive "
+                f"{declaration.name!r} " + "; ".join(details)
+            ),
+            source=semantic.operand_roles_source or semantic.source,
+        )
+    )
+    return False
 
 
 __all__ = ("KNOWN_MEMORY_FIELDS", "build_memory_contract")

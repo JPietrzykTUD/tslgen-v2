@@ -18,6 +18,15 @@ _GRAMMAR_FILE = "tsl_data.lark"
 _RENDER_ASSETS_PACKAGE = "tslc.backend.assets"
 
 
+def _is_render_asset_name(name: str) -> bool:
+    # Source checkouts may contain transient editor files; .clang-format is the
+    # only intentional hidden render asset.
+    return name == ".clang-format" or (
+        not name.startswith((".", "#"))
+        and not name.endswith(("~", ".swp", ".swo", ".swx"))
+    )
+
+
 class _AtTemplate(string.Template):
     # Generated build files / sources use `${VAR}` (CMake) and `{ }`
     # (C++/Rust) natively, so the substitution delimiter is `@`.
@@ -58,7 +67,7 @@ def load_default_render_assets() -> RenderAssets:
     files = {
         entry.name: entry.read_text(encoding="utf-8")
         for entry in sorted(root.iterdir(), key=lambda item: item.name)
-        if entry.is_file()
+        if entry.is_file() and _is_render_asset_name(entry.name)
     }
     return RenderAssets(files)
 

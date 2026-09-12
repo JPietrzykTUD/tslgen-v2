@@ -44,6 +44,26 @@ def test_direct_state_classifies_intrinsic_call_composition_and_fallback() -> No
     )
     assert _state("native", "complete(data);") is ImplementationState.NATIVE
     assert _state("native", "complete(left + right);") is ImplementationState.UNKNOWN
+    assert _state("native", "complete(mem<load_scalar>(ptr));") is (
+        ImplementationState.COMPOSED
+    )
+
+
+def test_exact_compiler_operations_and_direct_recipes_are_native() -> None:
+    assert _state("native", "complete(op<add>(left, right));") is (
+        ImplementationState.NATIVE
+    )
+    assert _state("native", "complete(select_expr(mask, left, right));") is (
+        ImplementationState.NATIVE
+    )
+    assert _state(
+        "native",
+        "complete(op<add>(op<mul>(left, right), right));",
+    ) is ImplementationState.NATIVE
+    assert _state(
+        "native",
+        "var<init_register>(result); complete(intrin<first>(intrin<second>()));",
+    ) is ImplementationState.NATIVE
 
 
 def test_direct_state_recognizes_only_the_canonical_parameter_return() -> None:
@@ -242,8 +262,6 @@ def _render_state(selected: SelectedImplementation) -> ImplementationState:
             type_tag=selected.type_tag,
         ),
         LoweringScope(),
-        shape,
-        SimpleNamespace(requires_unsafe_frame=lambda shape: False),
     )
     result = render_body(
         selected=selected,

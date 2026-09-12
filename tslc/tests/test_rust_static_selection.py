@@ -9,6 +9,7 @@ import pytest
 
 from tslc.api import generate_project
 from tslc.backend.emitted_profile import EmittedProfile
+from tslc.backend.rust_algorithm_plan import plan_rust_algorithm
 from tslc.backend.rust_static_selection import (
     RustStaticSelectionPlan,
     RustStaticVectorMapping,
@@ -92,6 +93,38 @@ def test_static_selection_uses_only_exact_width_available_hardware(
     assert sse_wide.vector_spelling == "Simd<i32, Generic<8>>"
     assert avx_lanes.extension_name == "avx2"
     assert avx_lanes.vector_spelling == "Simd<i32, Avx2>"
+
+
+def test_algorithm_native_mapping_reuses_static_selection_exactly(
+    rust_static_result,
+    rust_static_plan: RustStaticSelectionPlan,
+) -> None:
+    static_avx2 = rust_static_plan.profile("avx2")
+    assert static_avx2 is not None
+    static_i32 = next(
+        mapping
+        for mapping in static_avx2.native_mappings
+        if mapping.type_tag == "si32"
+    )
+    assert static_i32.extension_name == "avx2"
+    assert any(
+        mapping.type_tag == "si32" and mapping.extension_name == "sse"
+        for mapping in static_avx2.mappings
+    )
+
+    algorithm = plan_rust_algorithm(
+        rust_static_result.emitted_profiles,
+        rust_static_plan,
+    )
+    algorithm_avx2 = algorithm.profile("avx2")
+    assert algorithm_avx2 is not None
+    assert algorithm_avx2.static_mappings is static_avx2.mappings
+    assert algorithm_avx2.native_mappings is static_avx2.native_mappings
+    assert next(
+        mapping
+        for mapping in algorithm_avx2.native_mappings
+        if mapping.type_tag == "si32"
+    ) is static_i32
 
 
 def test_static_selection_fallback_preserves_supported_lane_counts(

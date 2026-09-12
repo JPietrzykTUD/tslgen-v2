@@ -21,6 +21,7 @@ from tslc.catalog.model import (
     MaskPolicyKind,
     VectorBitsKind,
 )
+from tslc.catalog.register_shapes import RegisterMultiplicity
 from tslc.syntax.access import child as _child
 from tslc.syntax.access import children as _children
 from tslc.syntax.access import field_text as _field_text
@@ -72,6 +73,10 @@ def _resolve_extension_inheritance(
                 ext.vector_register_types,
             ),
             backend_headers=_merge_header_maps(parent.backend_headers, ext.backend_headers),
+            backend_system_headers=_merge_header_maps(
+                parent.backend_system_headers,
+                ext.backend_system_headers,
+            ),
             backend_supported={**parent.backend_supported, **ext.backend_supported},
             metadata=replace(
                 ext.metadata,
@@ -172,7 +177,11 @@ def _build_extension(
         family=_field_text(fields.get("family")) or "",
         intrinsic_composition=_intrinsic_composition(compose),
         vector_register_types=_vector_register_types(fields.get("vector_register_types")),
+        register_multiplicity_types=_register_multiplicity_types(
+            fields.get("register_multiplicity_types")
+        ),
         backend_headers=_backend_headers(fields, backend_ids),
+        backend_system_headers=_backend_system_headers(fields, backend_ids),
         backend_supported=_backend_supported(fields, backend_ids),
         inherits=_field_text(fields.get("inherits")),
         active_when=_extension_activation(fields.get("active_when")),
@@ -256,6 +265,30 @@ def _vector_register_types(
     return result
 
 
+def _register_multiplicity_types(
+    field: ParsedTslField | None,
+) -> dict[RegisterMultiplicity, dict[str, dict[str, str]]]:
+    """Promote ``xN``/``dN`` register shapes to typed multiplicities."""
+
+    result: dict[RegisterMultiplicity, dict[str, dict[str, str]]] = {}
+    for multiplicity_entry in _children(field):
+        multiplicity = RegisterMultiplicity.parse(multiplicity_entry.key.text)
+        if multiplicity is None:
+            continue
+        by_type: dict[str, dict[str, str]] = {}
+        for type_entry in _children(multiplicity_entry):
+            by_backend = {
+                backend_entry.key.text: (_field_text(backend_entry) or "")
+                for backend_entry in _children(type_entry)
+                if _field_text(backend_entry) is not None
+            }
+            if by_backend:
+                by_type[type_entry.key.text] = by_backend
+        if by_type:
+            result[multiplicity] = by_type
+    return result
+
+
 def _backend_headers(
     fields: dict[str, ParsedTslField],
     backend_ids: frozenset[str],
@@ -265,6 +298,20 @@ def _backend_headers(
     result: dict[str, tuple[str, ...]] = {}
     for backend_id in sorted(backend_ids):
         headers = _list_text(_child(fields.get(backend_id), "headers"))
+        if headers:
+            result[backend_id] = headers
+    return result
+
+
+def _backend_system_headers(
+    fields: dict[str, ParsedTslField],
+    backend_ids: frozenset[str],
+) -> dict[str, tuple[str, ...]]:
+    """Promote third-party includes that require a scoped system boundary."""
+
+    result: dict[str, tuple[str, ...]] = {}
+    for backend_id in sorted(backend_ids):
+        headers = _list_text(_child(fields.get(backend_id), "system_headers"))
         if headers:
             result[backend_id] = headers
     return result

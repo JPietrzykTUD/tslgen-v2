@@ -10,7 +10,11 @@ import pytest
 
 from tslc.backend.registry import registered_compiler_capabilities
 from tslc.catalog.builder import CatalogBuilder
-from tslc.catalog.machine_profiles import load_machine_profiles_checked
+from tslc.catalog.machine_profiles import (
+    MachineProfileRunner,
+    MachineProfileRunnerVariant,
+    load_machine_profiles_checked,
+)
 from tslc.catalog.target_families import (
     ProfileFamilyCapability,
     TargetFamilyCatalog,
@@ -111,6 +115,20 @@ def _base_source(extra: str = "") -> str:
 
 def test_valid_tiny_catalog_has_no_validation_diagnostics() -> None:
     assert _diagnostics(_base_source()) == ()
+
+
+def test_invalid_primitive_portability_is_diagnosed() -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            "  impls:\n",
+            "  portability sometimes\n  impls:\n",
+        )
+    )
+
+    diagnostic = next(
+        item for item in diagnostics if item.code == "TSL-CATALOG-INVALID-ENUM"
+    )
+    assert "portability value 'sometimes'" in diagnostic.message
 
 
 def test_valid_overload_registry_has_no_schema_diagnostics() -> None:
@@ -1704,6 +1722,46 @@ def test_scalable_cpp_extension_requires_runtime_lane_count() -> None:
     assert "runtime_lane_count entry for backend 'cpp'" in diagnostic.message
 
 
+@pytest.mark.parametrize("token", ("pair", "x0", "x01", "x1", "d1"))
+def test_register_multiplicity_keys_are_validated(token: str) -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "extension grouped:\n"
+            '  extension_name "grouped"\n'
+            '  family "x86"\n'
+            "  register_multiplicity_types:\n"
+            f"    {token}:\n"
+            "      si32:\n"
+            '        cpp "group_type"\n'
+        )
+    )
+
+    assert any(
+        diagnostic.code == "TSL-CATALOG-MALFORMED-REGISTER-MULTIPLICITY"
+        for diagnostic in diagnostics
+    )
+
+
+def test_register_multiplicity_backend_keys_are_validated() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "extension grouped:\n"
+            '  extension_name "grouped"\n'
+            '  family "x86"\n'
+            "  register_multiplicity_types:\n"
+            "    x2:\n"
+            "      si32:\n"
+            '        mystery "group_type"\n'
+        )
+    )
+
+    assert any(
+        diagnostic.code == "TSL-CATALOG-UNKNOWN-BACKEND"
+        and "mystery" in diagnostic.message
+        for diagnostic in diagnostics
+    )
+
+
 def test_invalid_enum_like_values_are_diagnosed() -> None:
     diagnostics = _diagnostics(
         "target_families:\n"
@@ -2100,6 +2158,39 @@ def test_unknown_call_mask_mode_is_diagnosed() -> None:
     )
     assert "unknown call mask mode 'merge'" in diagnostic.message
 
+
+@pytest.mark.parametrize(
+    ("selector", "code"),
+    (
+        (
+            "primitive=id, forward[future_condition]",
+            "TSL-BODY-BAD-CALL-PRECONDITION",
+        ),
+        (
+            "primitive=id, forward[active_divisor_nonzero, "
+            "active_divisor_nonzero]",
+            "TSL-BODY-DUPLICATE-CALL-PRECONDITION",
+        ),
+        (
+            "primitive=id, forward[active_divisor_nonzero], "
+            "discharge[active_divisor_nonzero]",
+            "TSL-BODY-DUPLICATE-CALL-PRECONDITION",
+        ),
+    ),
+)
+def test_invalid_call_precondition_dispositions_are_diagnosed(
+    selector: str,
+    code: str,
+) -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            '          tsil "complete(data);"\n',
+            f'          tsil "complete(call<{selector}>(data));"\n',
+        )
+    )
+
+    assert code in {diagnostic.code for diagnostic in diagnostics}
+
 def test_malformed_let_body_region_is_diagnosed() -> None:
     diagnostics = _diagnostics(
         "types:\n"
@@ -2260,6 +2351,25 @@ def test_malformed_mask_body_region_is_diagnosed(body: str) -> None:
 
     diagnostic = next(d for d in diagnostics if d.code == "TSL-BODY-BAD-MASK-SELECTOR")
     assert "malformed mask selector" in diagnostic.message
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "complete(mem<load_scalar>());",
+        "complete(mem<load_scalar>(ptr, extra));",
+        "mem<store_scalar>(ptr); complete(data);",
+        "mem<copy>(dst, src); complete(data);",
+        "mem<unknown>(ptr); complete(data);",
+    ],
+)
+def test_malformed_mem_body_region_is_diagnosed(body: str) -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace('tsil "complete(data);"', f'tsil "{body}"')
+    )
+
+    diagnostic = next(d for d in diagnostics if d.code == "TSL-BODY-BAD-MEM")
+    assert "malformed memory operation" in diagnostic.message
 
 
 def test_array_set_body_region_is_accepted_with_nested_index() -> None:
@@ -2623,7 +2733,9 @@ def test_machine_profile_valid_runners_are_preserved_verbatim(tmp_path: Path) ->
         '  "aarch64": [\n'
         '    {"name": "neon", "target_features": "neon", '
         '"runner": {"kind": "qemu-aarch64", "profile": "cortex-a76", '
-        '"args": ["-cpu"]}}\n'
+        '"args": ["-cpu"], "name": "vl128", "vector_bits": 128, '
+        '"variants": [{"name": "vl256", "profile": "max,sve=on", '
+        '"vector_bits": 256}]}}\n'
         '  ]\n'
         '}\n',
         encoding="utf-8",
@@ -2639,6 +2751,69 @@ def test_machine_profile_valid_runners_are_preserved_verbatim(tmp_path: Path) ->
         "qemu-aarch64",
         "cortex-a76",
         ("-cpu",),
+    )
+    assert tuple(
+        (variant.name, variant.profile, variant.vector_bits)
+        for variant in qemu.executions
+    ) == (
+        ("vl128", "cortex-a76", 128),
+        ("vl256", "max,sve=on", 256),
+    )
+
+
+def test_machine_profile_runner_variants_reject_invalid_or_duplicate_names(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "machine_profiles.json"
+    path.write_text(
+        '{"aarch64": [{"name": "sve_invalid", "target_features": "sve", '
+        '"runner": {"kind": "qemu-aarch64", "name": "vl128", '
+        '"profile": "max", "vector_bits": 128, "variants": ['
+        '{"name": "vl256", "profile": "max", "vector_bits": 0}]}}, '
+        '{"name": "sve_duplicate", "target_features": "sve", '
+        '"runner": {"kind": "qemu-aarch64", "name": "vl128", '
+        '"profile": "max", "vector_bits": 128, "variants": ['
+        '{"name": "vl128", "profile": "max", "vector_bits": 256}]}}]}\n',
+        encoding="utf-8",
+    )
+
+    result = load_machine_profiles_checked(path, _target_family_catalog())
+
+    assert result.profiles["sve_invalid"].runner is None
+    assert result.profiles["sve_duplicate"].runner is None
+    messages = [
+        diagnostic.message
+        for diagnostic in result.diagnostics
+        if diagnostic.code == "TSL-PROFILE-MALFORMED-RUNNER"
+    ]
+    assert any("vector_bits must be a positive integer" in message for message in messages)
+    assert any("variant names must be unique" in message for message in messages)
+
+
+def test_machine_profile_runner_typed_model_owns_variant_invariants() -> None:
+    with pytest.raises(ValueError, match="positive integer"):
+        MachineProfileRunnerVariant("vl0", "max", vector_bits=0)
+    with pytest.raises(ValueError, match="must not start"):
+        MachineProfileRunnerVariant("vl128", "-cpu max", vector_bits=128)
+    with pytest.raises(ValueError, match="names must be unique"):
+        MachineProfileRunner(
+            kind="qemu-aarch64",
+            name="vl128",
+            profile="max",
+            vector_bits=128,
+            variants=(
+                MachineProfileRunnerVariant("vl128", "max", vector_bits=256),
+            ),
+        )
+    normalized = MachineProfileRunner(
+        kind=" qemu-aarch64 ",
+        name=" vl128 ",
+        profile=" max ",
+    )
+    assert (normalized.kind, normalized.name, normalized.profile) == (
+        "qemu-aarch64",
+        "vl128",
+        "max",
     )
 
 

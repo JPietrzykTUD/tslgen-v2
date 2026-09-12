@@ -34,6 +34,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--type", required=True, dest="type_tag")
     parser.add_argument("--extension", required=True)
     parser.add_argument(
+        "--signature",
+        default=None,
+        help="restrict analysis to one authored callable signature",
+    )
+    parser.add_argument(
+        "--attribute",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="authored callable attribute; repeat for an exact callable identity",
+    )
+    parser.add_argument(
         "--to-target",
         default=None,
         help="for a representation-change primitive, the concrete target type/extension",
@@ -54,6 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--format", choices=("text", "json"), default="text")
     args = parser.parse_args(argv)
+    attributes = _parse_attributes(parser, args.signature, args.attribute)
 
     sources, machine_profiles = _repo_context.resolve_corpus_paths(
         parser, args.sources, args.machine_profiles
@@ -67,6 +80,8 @@ def main(argv: list[str] | None = None) -> int:
         extension=args.extension,
         type_tag=args.type_tag,
         to_target=args.to_target,
+        signature=args.signature,
+        attributes=attributes,
     )
     if args.format == "json":
         payload = diagnostics_json(
@@ -97,6 +112,8 @@ def analysis_json(analysis: ConcreteAnalysis) -> dict[str, object]:
             "extension": context.extension,
             "type": context.type_tag,
             "toTarget": context.to_target,
+            "signature": context.signature,
+            "attributes": dict(context.attributes),
         },
         "implementationState": analysis.implementation_state.value,
         "roots": [_node_json(node) for node in analysis.roots],
@@ -114,6 +131,8 @@ def _node_json(node: ConcreteAnalysisNode) -> dict[str, object]:
         "implementationState": node.implementation_state.value,
         "origin": node.origin,
         "reason": node.reason,
+        "signature": node.source_signature,
+        "attributes": dict(node.source_attributes),
         "parameters": list(node.param_names),
         "parameterKinds": list(node.param_kinds),
         "target": (
@@ -137,17 +156,44 @@ def _node_json(node: ConcreteAnalysisNode) -> dict[str, object]:
 def format_analysis_text(analysis: ConcreteAnalysis) -> str:
     context = analysis.context
     target = f" -> {context.to_target}" if context.to_target is not None else ""
+    callable_identity = "family aggregate"
+    if context.signature is not None:
+        attributes = ", ".join(
+            f"{key}={value}" for key, value in context.attributes
+        )
+        callable_identity = (
+            f"signature={context.signature} attributes=[{attributes}]"
+        )
     lines = [
         (
             f"analyzed {context.primitive}<{context.type_tag}{target}> "
             f"({context.profile}/{context.extension}/{context.backend}): "
             f"{analysis.implementation_state.value}"
         ),
+        f"callable: {callable_identity}",
         f"input snapshot: sha256:{analysis.input_digest}",
     ]
     for root in analysis.roots:
         _append_node_text(lines, root, depth=0)
     return "\n".join(lines)
+
+
+def _parse_attributes(
+    parser: argparse.ArgumentParser,
+    signature: str | None,
+    values: list[str],
+) -> tuple[tuple[str, str], ...]:
+    if values and signature is None:
+        parser.error("--attribute requires --signature")
+    parsed: dict[str, str] = {}
+    for value in values:
+        key, separator, item = value.partition("=")
+        if not separator or not key or not item:
+            parser.error("--attribute must use non-empty KEY=VALUE syntax")
+        if key in parsed:
+            parser.error(f"duplicate --attribute key {key!r}")
+        parsed[key] = item
+    return tuple(sorted(parsed.items()))
 
 
 def _append_node_text(

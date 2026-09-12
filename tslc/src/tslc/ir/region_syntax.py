@@ -217,10 +217,20 @@ class ParsedCallSelector:
     primitive_ref: str
     type_args: tuple[str, ...] = ()
     attrs: tuple[tuple[str, str], ...] = ()
+    forwarded_preconditions: tuple[str, ...] = ()
+    discharged_preconditions: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class CallPreconditionSyntaxOccurrence:
+    disposition: Literal["forward", "discharge"]
+    condition: str
+    start: int
+    end: int
 
 
 def parse_call_selector(selector_text: str) -> ParsedCallSelector | None:
-    """Parse ``primitive=NAME[...], attrs[...]`` selector metadata."""
+    """Parse a primitive call selector and its precondition dispositions."""
 
     selector = selector_text.strip()
     if not selector.startswith("primitive="):
@@ -240,24 +250,48 @@ def parse_call_selector(selector_text: str) -> ParsedCallSelector | None:
         type_args = tuple(split_top_level(type_text)) if type_text else ()
         rest = rest.strip()
     attrs: tuple[tuple[str, str], ...] = ()
-    if rest:
+    forwarded: tuple[str, ...] = ()
+    discharged: tuple[str, ...] = ()
+    seen: set[str] = set()
+    order = {"attrs": 0, "forward": 1, "discharge": 2}
+    last_order = -1
+    while rest:
         if not rest.startswith(","):
             return None
         rest = rest[1:].strip()
-        if not rest.startswith("attrs"):
+        bag_match = re.match(r"([A-Za-z_][A-Za-z0-9_]*)", rest)
+        if bag_match is None:
             return None
-        bracket = _take_bracket(rest[len("attrs") :].lstrip())
+        bag_name = bag_match.group(1)
+        if bag_name not in order or bag_name in seen or order[bag_name] < last_order:
+            return None
+        bracket = _take_bracket(rest[bag_match.end() :].lstrip())
         if bracket is None:
             return None
-        attr_text, rest = bracket
-        parsed_attrs = _parse_attrs(attr_text)
-        if parsed_attrs is None:
-            return None
-        attrs = parsed_attrs
+        bag_text, rest = bracket
+        if bag_name == "attrs":
+            parsed_attrs = _parse_attrs(bag_text)
+            if parsed_attrs is None:
+                return None
+            attrs = parsed_attrs
+        else:
+            parsed_names = _parse_identifier_list(bag_text)
+            if parsed_names is None:
+                return None
+            if bag_name == "forward":
+                forwarded = parsed_names
+            else:
+                discharged = parsed_names
+        seen.add(bag_name)
+        last_order = order[bag_name]
         rest = rest.strip()
-    if rest:
-        return None
-    return ParsedCallSelector(primitive_ref=primitive_ref, type_args=type_args, attrs=attrs)
+    return ParsedCallSelector(
+        primitive_ref=primitive_ref,
+        type_args=type_args,
+        attrs=attrs,
+        forwarded_preconditions=forwarded,
+        discharged_preconditions=discharged,
+    )
 
 
 def _parse_attrs(attr_text: str) -> tuple[tuple[str, str], ...] | None:
@@ -268,6 +302,60 @@ def _parse_attrs(attr_text: str) -> tuple[tuple[str, str], ...] | None:
             return None
         attrs.append((key.strip(), value.strip()))
     return tuple(attrs)
+
+
+def _parse_identifier_list(text: str) -> tuple[str, ...] | None:
+    names = tuple(split_top_level(text))
+    if not names or any(_CALL_NAME.fullmatch(name) is None for name in names):
+        return None
+    return names
+
+
+def call_precondition_syntax_occurrences(
+    selector_text: str,
+    parsed: ParsedCallSelector | None = None,
+) -> tuple[CallPreconditionSyntaxOccurrence, ...]:
+    """Locate disposition condition tokens relative to the selector text."""
+
+    selector = parsed or parse_call_selector(selector_text)
+    if selector is None:
+        return ()
+    records: list[CallPreconditionSyntaxOccurrence] = []
+    search_start = 0
+    disposition_values: tuple[
+        tuple[Literal["forward", "discharge"], tuple[str, ...]], ...
+    ] = (
+        ("forward", selector.forwarded_preconditions),
+        ("discharge", selector.discharged_preconditions),
+    )
+    for disposition, names in disposition_values:
+        if not names:
+            continue
+        bag_match = re.search(rf"\b{disposition}\s*\[", selector_text[search_start:])
+        if bag_match is None:
+            continue
+        open_offset = search_start + bag_match.end() - 1
+        bracket = _take_bracket(selector_text[open_offset:])
+        if bracket is None:
+            continue
+        inner, _rest = bracket
+        cursor = open_offset + 1
+        for name in names:
+            match = re.search(rf"\b{re.escape(name)}\b", selector_text[cursor:])
+            if match is None or match.start() >= len(inner) + open_offset + 1 - cursor:
+                continue
+            start = cursor + match.start()
+            records.append(
+                CallPreconditionSyntaxOccurrence(
+                    disposition=disposition,
+                    condition=name,
+                    start=start,
+                    end=start + len(name),
+                )
+            )
+            cursor = start + len(name)
+        search_start = open_offset + len(inner) + 2
+    return tuple(records)
 
 
 def _take_bracket(text: str) -> tuple[str, str] | None:
@@ -447,6 +535,7 @@ __all__ = (
     "ConditionLeaf",
     "ConditionOr",
     "ConditionTerm",
+    "CallPreconditionSyntaxOccurrence",
     "GenericParamReference",
     "IntrinsicSelector",
     "LoopSelector",
@@ -454,6 +543,7 @@ __all__ = (
     "ParsedCallSelector",
     "VarSelector",
     "parse_call_selector",
+    "call_precondition_syntax_occurrences",
     "parse_cast_selector",
     "parse_condition",
     "parse_generic_param_reference",

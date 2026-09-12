@@ -30,14 +30,21 @@ from tslc.catalog.conversion import (
     numeric_conversion_mode_values,
 )
 from tslc.catalog.conversion_promotion import KNOWN_CONVERSION_FIELDS
-from tslc.catalog.memory import memory_access_values, memory_addressing_values
+from tslc.catalog.memory import (
+    memory_access_values,
+    memory_addressing_values,
+    memory_indexed_lane_extent_values,
+)
 from tslc.catalog.memory_promotion import KNOWN_MEMORY_FIELDS
 from tslc.catalog.model import (
     Catalog,
     IntrinsicNameOrder,
     Primitive,
+    PrimitivePortability,
     RESULT_DIM_VECTOR,
 )
+from tslc.catalog.preconditions import precondition_values
+from tslc.catalog.register_shapes import REGISTER_MULTIPLICITY_COMPLETIONS
 from tslc.catalog.semantics import operand_role_values, primitive_operation_values
 from tslc.catalog.scalar_types import KNOWN_SCALAR_TYPE_TAGS
 from tslc.catalog.shift import shift_count_rule_values, shift_lane_rule_values
@@ -438,6 +445,16 @@ def _extension_fields(
         return (*catalog.type_groups, *KNOWN_SCALAR_TYPE_TAGS), "type", "type selector"
     if "vector_register_types" in path and path[-2] == "vector_register_types":
         return backends, "keyword", "backend ID"
+    if name == "register_multiplicity_types":
+        return (
+            REGISTER_MULTIPLICITY_COMPLETIONS,
+            "class",
+            "register multiplicity",
+        )
+    if path[-2:-1] == ("register_multiplicity_types",):
+        return (*catalog.type_groups, *KNOWN_SCALAR_TYPE_TAGS), "type", "type selector"
+    if len(path) >= 4 and path[-3] == "register_multiplicity_types":
+        return backends, "keyword", "backend ID"
     if name == "backend_spelling_by_lanes":
         return backends, "keyword", "backend ID"
     if len(path) == 2 and name in backends:
@@ -499,12 +516,21 @@ def _value_completions(
     elif field == "operation" and context.block_path == ("primitive",):
         values = primitive_operation_values()
         detail = "primitive operation"
+    elif field == "portability" and context.block_path == ("primitive",):
+        values = tuple(item.value for item in PrimitivePortability)
+        detail = "primitive portability"
+    elif field == "preconditions" and context.block_path == ("primitive",):
+        values = precondition_values()
+        detail = "primitive precondition"
     elif field == "access" and context.block_path == ("primitive", "memory"):
         values = memory_access_values()
         detail = "memory access"
     elif field == "addressing" and context.block_path == ("primitive", "memory"):
         values = memory_addressing_values()
         detail = "memory addressing"
+    elif field == "indexed_lanes" and context.block_path == ("primitive", "memory"):
+        values = memory_indexed_lane_extent_values()
+        detail = "indexed memory lane extent"
     elif field == "kind" and context.block_path == ("primitive", "conversion"):
         values = conversion_kind_values()
         detail = "conversion kind"

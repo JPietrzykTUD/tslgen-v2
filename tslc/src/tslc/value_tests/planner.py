@@ -5,7 +5,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 
+from tslc.backend.checked_api import CheckedConditionPlan, checked_api_plan
+from tslc.catalog.arithmetic import matches_numeric_domain
 from tslc.catalog.model import Catalog, Primitive, TestCase
+from tslc.catalog.preconditions import PreconditionKind
+from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS
 from tslc.diagnostics import Diagnostic, SourceSpan
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.lower.lowerer import varying_positions
@@ -18,6 +22,10 @@ from tslc.value_tests._pattern_base import (
     unplanned_case_reason,
 )
 from tslc.value_tests.case_capabilities import DEFAULT_VALUE_TEST_CASE_REQUIREMENTS
+from tslc.value_tests.case_components import (
+    ValueTestCheckedPrecondition,
+    ValueTestInvalidPreconditionValue,
+)
 from tslc.value_tests.case_plans import (
     compile_failure_case,
     compile_only_case,
@@ -106,6 +114,9 @@ class ValueTestPlanner:
     ) -> ValueTestProfilePlan:
         backend = self._backend_supports[profile.backend_id]
         cases: list[ValueTestCasePlan] = []
+        checked_case_keys: set[
+            tuple[str, str, tuple[str, ...], str, bool, PreconditionKind]
+        ] = set()
         for emitted_name in sorted(profile.specializations):
             emitted_specs = profile.specializations[emitted_name]
             inferred_type_args = (
@@ -221,6 +232,54 @@ class ValueTestPlanner:
                         diagnostics,
                     )
                     cases.extend(supported)
+                    checked_key = (
+                        emitted_name,
+                        source_name,
+                        specs[0].param_kinds,
+                        test_case.type_tag,
+                    )
+                    checked_planned = tuple(
+                        case
+                        for case in _checked_precondition_cases(supported, specs)
+                        if case.checked_precondition is not None
+                        and (
+                            *checked_key,
+                            case.scalable is not None,
+                            case.checked_precondition.kind,
+                        )
+                        not in checked_case_keys
+                    )
+                    if checked_planned:
+                        checked_supported, checked_drops = self._supported_cases(
+                            checked_planned,
+                            backend,
+                            profile.observes_runtime_failures,
+                            profile.specializations,
+                            diagnostics,
+                        )
+                        cases.extend(checked_supported)
+                        checked_case_keys.update(
+                            (
+                                *checked_key,
+                                case.scalable is not None,
+                                case.checked_precondition.kind,
+                            )
+                            for case in checked_planned
+                            if case.checked_precondition is not None
+                        )
+                        for drop in checked_drops:
+                            diagnostics.append(
+                                Diagnostic(
+                                    severity="error",
+                                    code="TSL-VALUE-TEST-CHECKED-CASE-DROPPED",
+                                    message=(
+                                        f"{profile.backend_id} checked-precondition "
+                                        f"case {drop.case.function_name!r} was dropped: "
+                                        f"{drop.detail or drop.cause}"
+                                    ),
+                                    span=specs[0].source,
+                                )
+                            )
                     entry = case_coverage(
                         backend=backend,
                         profile_name=profile.profile_name,
@@ -485,6 +544,118 @@ def _duplicate_case_diagnostics(
                 )
             )
     return tuple(diagnostics)
+
+
+def _checked_precondition_cases(
+    supported: tuple[ValueTestCasePlan, ...],
+    specs: tuple[LoweredSpecialization, ...],
+) -> tuple[ValueTestCasePlan, ...]:
+    plan = checked_api_plan(specs)
+    if plan is None or not supported:
+        return ()
+    eligible = tuple(
+        case
+        for case in supported
+        if case.differential is None
+        and case.failure is None
+        and case.checked_precondition is None
+    )
+    bases = tuple(
+        case
+        for case in (
+            next((item for item in eligible if item.scalable is None), None),
+            next((item for item in eligible if item.scalable is not None), None),
+        )
+        if case is not None
+    )
+    if not bases:
+        return ()
+    result: list[ValueTestCasePlan] = []
+    for condition in plan.conditions:
+        for base in bases:
+            invalid_cases: tuple[
+                tuple[str, ValueTestInvalidPreconditionValue, ValueTestCasePlan], ...
+            ]
+            if condition.kind is PreconditionKind.LANE_INDEX_IN_RANGE:
+                invalid_cases = tuple(
+                    (suffix, invalid_value, base)
+                    for suffix, invalid_value in (
+                        ("lane_count", ValueTestInvalidPreconditionValue.LANE_COUNT),
+                        ("size_max", ValueTestInvalidPreconditionValue.SIZE_MAX),
+                    )
+                )
+            elif condition.kind is PreconditionKind.ACTIVE_DIVISOR_NONZERO:
+                info = SCALAR_TYPE_INFOS.get(base.type_tag)
+                invalid_base = _with_active_zero_divisor(base, condition)
+                if (
+                    info is None
+                    or condition.numeric_domain is None
+                    or not matches_numeric_domain(info, condition.numeric_domain)
+                    or invalid_base is None
+                ):
+                    continue
+                invalid_cases = ((
+                    "active_zero",
+                    ValueTestInvalidPreconditionValue.ACTIVE_DIVISOR_ZERO,
+                    invalid_base,
+                ),)
+            else:
+                continue
+            for suffix, invalid_value, invalid_base in invalid_cases:
+                result.append(
+                    replace(
+                        invalid_base,
+                        kind="checked_precondition",
+                        function_name=f"{base.function_name}__checked_{suffix}",
+                        case_name=f"{base.case_name} checked {suffix}",
+                        expectation=replace(base.expectation, values=(), text=None),
+                        invocation=replace(base.invocation, caller_unsafe=False),
+                        checked_precondition=ValueTestCheckedPrecondition(
+                            condition.kind,
+                            condition.error,
+                            condition.parameter_index,
+                            invalid_value,
+                        ),
+                    )
+                )
+    return tuple(result)
+
+
+def _with_active_zero_divisor(
+    case: ValueTestCasePlan,
+    condition: CheckedConditionPlan,
+) -> ValueTestCasePlan | None:
+    vector_ordinal = sum(
+        kind == "v"
+        for kind in case.invocation.param_kinds[: condition.parameter_index]
+    )
+    if vector_ordinal >= len(case.inputs.vectors):
+        return None
+    lane = 0
+    if condition.mask_parameter_index is not None:
+        mask_ordinal = sum(
+            kind == "m"
+            for kind in case.invocation.param_kinds[: condition.mask_parameter_index]
+        )
+        if mask_ordinal >= len(case.inputs.masks):
+            return None
+        try:
+            bits = int(case.inputs.masks[mask_ordinal], 0)
+        except ValueError:
+            return None
+        lane = next(
+            (index for index in range(case.lanes) if bits & (1 << index)),
+            -1,
+        )
+        if lane < 0:
+            return None
+    vectors = list(case.inputs.vectors)
+    divisor = list(vectors[vector_ordinal])
+    if lane >= len(divisor):
+        return None
+    divisor[lane] = "0"
+    vectors[vector_ordinal] = tuple(divisor)
+    return replace(case, inputs=replace(case.inputs, vectors=tuple(vectors)))
 
 
 def _value_test_spec_groups(

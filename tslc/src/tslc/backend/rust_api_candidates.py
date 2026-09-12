@@ -16,16 +16,26 @@ from tslc.backend.rust_static_selection import (
     RustStaticSelectionPlan,
     RustStaticVectorMapping,
 )
-from tslc.catalog.arithmetic import ArithmeticOperandRole, ArithmeticOperation
+from tslc.catalog.arithmetic import (
+    ArithmeticOperandBinding,
+    ArithmeticOperandRole,
+    ArithmeticOperation,
+)
 from tslc.catalog.conversion import (
     ConversionKind,
     LaneCountRelation,
     NumericConversionMode,
 )
-from tslc.catalog.memory import MemoryAccess, MemoryAddressing
+from tslc.catalog.memory import (
+    MemoryAccess,
+    MemoryAddressing,
+    MemoryIndexedLaneExtent,
+    MemoryPayloadExtent,
+)
 from tslc.catalog.model import Extension, PrimitiveMaskMode, VectorBitsKind
+from tslc.catalog.preconditions import PreconditionKind
 from tslc.catalog.scalar_types import scalar_bit_width
-from tslc.catalog.semantics import OperandRole, PrimitiveOperation
+from tslc.catalog.semantics import OperandBinding, OperandRole, PrimitiveOperation
 from tslc.diagnostics import Diagnostic, diagnostic_at
 from tslc.lower.lowerer import LoweredSpecialization, varying_positions
 
@@ -49,12 +59,20 @@ class _CandidateKey:
     conversion: tuple[
         ConversionKind, LaneCountRelation, NumericConversionMode | None
     ] | None
-    memory: tuple[MemoryAccess, MemoryAddressing] | None
+    memory: tuple[
+        MemoryAccess,
+        MemoryAddressing,
+        MemoryPayloadExtent,
+        MemoryIndexedLaneExtent | None,
+    ] | None
     has_concrete_target: bool
     mask_policy: PrimitiveMaskMode | None
     overload: tuple[str, str, bool] | None
     operation: PrimitiveOperation | None
     operation_roles: tuple[tuple[OperandRole, int, str], ...]
+    preconditions: tuple[
+        tuple[PreconditionKind, tuple[tuple[str, str, int, str], ...]], ...
+    ]
     arithmetic_operations: tuple[ArithmeticOperation, ...]
     arithmetic_roles: tuple[tuple[ArithmeticOperandRole, int, str], ...]
     param_type_overrides: tuple[str | None, ...]
@@ -237,6 +255,17 @@ def _specialization_vector_type_tags(
     )
 
 
+def _precondition_binding_key(
+    binding: OperandBinding | ArithmeticOperandBinding,
+) -> tuple[str, str, int, str]:
+    return (
+        "arithmetic" if isinstance(binding, ArithmeticOperandBinding) else "operation",
+        binding.role.value,
+        binding.parameter_index,
+        binding.parameter_kind,
+    )
+
+
 def _candidate_key(spec: LoweredSpecialization) -> _CandidateKey:
     semantics = spec.primitive_semantics
     operation = semantics.operation
@@ -260,7 +289,12 @@ def _candidate_key(spec: LoweredSpecialization) -> _CandidateKey:
             else None
         ),
         memory=(
-            (memory.access, memory.addressing)
+            (
+                memory.access,
+                memory.addressing,
+                memory.payload_extent,
+                memory.indexed_lane_extent,
+            )
             if memory is not None
             else None
         ),
@@ -283,6 +317,21 @@ def _candidate_key(spec: LoweredSpecialization) -> _CandidateKey:
         )
         if operation is not None
         else (),
+        preconditions=tuple(
+            (
+                item.kind,
+                tuple(
+                    sorted(
+                        (
+                            _precondition_binding_key(binding)
+                            for binding in item.operand_bindings
+                        ),
+                        key=lambda binding: binding,
+                    )
+                ),
+            )
+            for item in semantics.preconditions
+        ),
         arithmetic_operations=arithmetic.ordered_operations if arithmetic else (),
         arithmetic_roles=tuple(
             sorted(

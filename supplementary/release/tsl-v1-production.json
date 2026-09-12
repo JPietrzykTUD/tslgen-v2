@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "release_policy": "supplementary/release/tsl-v1-policy.json",
+  "generated_config": "tslc.toml",
+  "compiler_project": "tslc/pyproject.toml",
+  "editor_package": "editors/vscode-tsl/package.json",
+  "changelog": "CHANGELOG.md",
+  "generated_bundles": {
+    "layout": "backend-deployment-bundles-v1",
+    "release_contract": "coverage/tsl-v1-support.json",
+    "backend_grouping": {
+      "cpp": "per_profile",
+      "rust": "combined"
+    },
+    "backend_product_markers": {
+      "cpp": "CMakeLists.txt",
+      "rust": "Cargo.toml"
+    },
+    "generated_scope_additions": {
+      "rust": ["fallback"]
+    },
+    "shared_artifact_roots": ["docs"]
+  },
+  "editor_targets": [
+    "linux-x64",
+    "linux-arm64",
+    "win32-x64",
+    "darwin-x64",
+    "darwin-arm64"
+  ],
+  "native_evidence": [
+    {
+      "id": "sve-native",
+      "filename": "tsl-v1-native-sve.json",
+      "target": "sve"
+    },
+    {
+      "id": "rvv-native",
+      "filename": "tsl-v1-native-rvv.json",
+      "target": "rvv"
+    }
+  ]
+}

@@ -30,7 +30,7 @@ class SignatureKindCapability:
     index_vector: bool = False
     target_vector_parameter: bool = False
     test_mask_argument: bool = False
-    scalable_deferred: bool = False
+    requires_static_lane_count: bool = False
     requires_vector_axis: bool = True
     overload_token: str = "base"
     overload_token_when_register_is_base: str | None = None
@@ -139,11 +139,11 @@ class SignatureKindCatalog:
         )
 
     @property
-    def scalable_deferred_kinds(self) -> frozenset[str]:
+    def fixed_shape_kinds(self) -> frozenset[str]:
         return frozenset(
             capability.kind
             for capability in self.capabilities
-            if capability.scalable_deferred
+            if capability.requires_static_lane_count
         )
 
     @property
@@ -292,14 +292,14 @@ DEFAULT_SIGNATURE_KINDS = SignatureKindCatalog(
         SignatureKindCapability(
             "s[]",
             borrowed_parameter=True,
-            scalable_deferred=True,
+            requires_static_lane_count=True,
             overload_token="array",
         ),
         SignatureKindCapability(
             LANE_LIST_KIND,
             borrowed_parameter=True,
             lane_list=True,
-            scalable_deferred=True,
+            requires_static_lane_count=True,
             overload_token="lane_list",
         ),
         SignatureKindCapability(

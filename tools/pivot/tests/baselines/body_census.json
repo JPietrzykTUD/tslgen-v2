@@ -3,12 +3,11 @@
     "cpp": {
       "categories": {
         "call_and_local": 77,
-        "call_only": 2912,
-        "local_only": 10,
-        "native_leaf": 4112,
-        "synthetic_fixed": 2970
+        "call_only": 2890,
+        "native_leaf": 4168,
+        "synthetic_fixed": 3126
       },
-      "entries": 10081,
+      "entries": 10261,
       "failures": 0,
       "feature_combinations": [
         {
@@ -68,7 +67,7 @@
           ]
         },
         {
-          "count": 2190,
+          "count": 2148,
           "features": [
             "multi_statement",
             "nested_typed_call",
@@ -78,7 +77,7 @@
           ]
         },
         {
-          "count": 722,
+          "count": 742,
           "features": [
             "multi_statement",
             "residual_expression",
@@ -87,22 +86,14 @@
           ]
         },
         {
-          "count": 10,
-          "features": [
-            "multi_statement",
-            "residual_expression",
-            "typed_local"
-          ]
-        },
-        {
-          "count": 4112,
+          "count": 4168,
           "features": [
             "residual_expression",
             "result_only"
           ]
         },
         {
-          "count": 2820,
+          "count": 2976,
           "features": [
             "residual_expression",
             "result_only",
@@ -121,30 +112,29 @@
       ],
       "features": {
         "call_and_local": 77,
-        "multi_statement": 2999,
+        "multi_statement": 2967,
         "multiple_locals": 3,
-        "nested_typed_call": 2263,
-        "residual_expression": 9931,
-        "result_only": 10042,
-        "synthetic_fixed": 2970,
-        "typed_call": 5959,
-        "typed_local": 87
+        "nested_typed_call": 2221,
+        "residual_expression": 10111,
+        "result_only": 10232,
+        "synthetic_fixed": 3126,
+        "typed_call": 6093,
+        "typed_local": 77
       },
-      "multi_statement": 2999,
+      "multi_statement": 2967,
       "origins": {
-        "fixed_wrapper": 2970,
-        "lowered_source": 7111
+        "fixed_wrapper": 3126,
+        "lowered_source": 7135
       }
     },
     "rust": {
       "categories": {
         "call_and_local": 5,
-        "call_only": 1640,
-        "local_only": 10,
-        "native_leaf": 2186,
-        "synthetic_fixed": 2954
+        "call_only": 1588,
+        "native_leaf": 2206,
+        "synthetic_fixed": 3126
       },
-      "entries": 6795,
+      "entries": 6925,
       "failures": 0,
       "feature_combinations": [
         {
@@ -184,7 +174,7 @@
           ]
         },
         {
-          "count": 1376,
+          "count": 1322,
           "features": [
             "multi_statement",
             "nested_typed_call",
@@ -205,7 +195,7 @@
           ]
         },
         {
-          "count": 164,
+          "count": 156,
           "features": [
             "multi_statement",
             "residual_expression",
@@ -219,7 +209,8 @@
           "features": [
             "multi_statement",
             "residual_expression",
-            "typed_local"
+            "result_only",
+            "typed_call"
           ]
         },
         {
@@ -230,7 +221,7 @@
           ]
         },
         {
-          "count": 1610,
+          "count": 1630,
           "features": [
             "residual_expression",
             "result_only",
@@ -238,7 +229,7 @@
           ]
         },
         {
-          "count": 2804,
+          "count": 2976,
           "features": [
             "residual_expression",
             "result_only",
@@ -257,31 +248,31 @@
       ],
       "features": {
         "call_and_local": 5,
-        "multi_statement": 1655,
+        "multi_statement": 1593,
         "multiple_locals": 3,
-        "nested_typed_call": 1477,
-        "residual_expression": 6645,
-        "result_only": 6780,
-        "rust_unsafe_frame": 3155,
-        "synthetic_fixed": 2954,
-        "typed_call": 4599,
-        "typed_local": 15
+        "nested_typed_call": 1423,
+        "residual_expression": 6775,
+        "result_only": 6920,
+        "rust_unsafe_frame": 3113,
+        "synthetic_fixed": 3126,
+        "typed_call": 4719,
+        "typed_local": 5
       },
-      "multi_statement": 1655,
+      "multi_statement": 1593,
       "origins": {
-        "fixed_wrapper": 2954,
-        "lowered_source": 3841
+        "fixed_wrapper": 3126,
+        "lowered_source": 3799
       }
     }
   },
-  "location_digest": "faf38b41a733fc88ea2ef1b124fa2e3c6f7d21e6b489d89848b2d4e25f0bef9e",
+  "location_digest": "e1578a1483a1f68d268f28e3329a2168f31e008bb5de271220008ae14a9c47c8",
   "schema": "tslc-pivot-body-census-v2",
-  "semantic_digest": "b001e865ccd7aaa49e83878382b21cd86f85a0b6ba98509a6ceadece742928e9",
+  "semantic_digest": "c7a131b8cc8d42c4ce62ec87c61a6f236ce9ef31d0b84b3d97cc07e397313034",
   "summary": {
-    "entries": 16876,
+    "entries": 17186,
     "failures": 0,
-    "fixed_wrappers": 5924,
-    "multi_statement": 4654,
+    "fixed_wrappers": 6252,
+    "multi_statement": 4560,
     "nominal_collision_entries": 640,
     "nominal_collision_groups": 320
   }

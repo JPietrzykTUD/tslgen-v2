@@ -21,12 +21,18 @@ from tslc.backend.rust_static_selection import (
     RustTargetRequirement,
 )
 from tslc.catalog.arithmetic import ArithmeticOperandRole, ArithmeticOperation
-from tslc.catalog.memory import MemoryAccess, MemoryAddressing, MemoryAlignment
+from tslc.catalog.memory import (
+    MemoryAccess,
+    MemoryAddressing,
+    MemoryAlignment,
+    MemoryPayloadExtent,
+)
 from tslc.catalog.model import PrimitiveMaskMode, VectorBitsKind
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
 from tslc.documentation import PrimitiveDocumentation
 
 if TYPE_CHECKING:
+    from tslc.backend.checked_api import CheckedConditionPlan
     from tslc.backend.rust_api_arms import (
         RustComprehensivePrivateImplementationArm,
         RustCuratedMethodImplementationArm,
@@ -376,6 +382,7 @@ class RustFacadeOperationBinding:
     axis_names: tuple[str, ...]
     memory_access: MemoryAccess | None
     memory_addressing: MemoryAddressing | None
+    memory_payload_extent: MemoryPayloadExtent | None
     memory_alignment_axis_name: str | None
     memory_alignment_modes: tuple[MemoryAlignment, ...]
     mask_policy: PrimitiveMaskMode | None
@@ -387,14 +394,30 @@ class RustFacadeOperationBinding:
     def __post_init__(self) -> None:
         if not self.source_primitive_name or not self.result_kind or not self.type_tags:
             raise ValueError("Rust facade operation bindings require complete source facts")
-        has_memory = (
-            self.memory_access is not None
-            and self.memory_addressing is not None
+        memory_facts = (
+            self.memory_access,
+            self.memory_addressing,
+            self.memory_payload_extent,
         )
-        if has_memory != (
+        has_any_memory_fact = any(item is not None for item in memory_facts)
+        has_memory = all(item is not None for item in memory_facts)
+        if has_any_memory_fact and not has_memory:
+            raise ValueError(
+                "Rust facade operation bindings cannot retain a partial memory contract"
+            )
+        has_any_memory_alignment = (
+            self.memory_alignment_axis_name is not None
+            or bool(self.memory_alignment_modes)
+        )
+        has_memory_alignment = (
             self.memory_alignment_axis_name is not None
             and bool(self.memory_alignment_modes)
-        ):
+        )
+        if has_any_memory_alignment and not has_memory_alignment:
+            raise ValueError(
+                "Rust facade memory bindings cannot retain partial alignment facts"
+            )
+        if has_memory != has_memory_alignment:
             raise ValueError(
                 "Rust facade memory bindings require complete typed memory facts"
             )
@@ -404,10 +427,6 @@ class RustFacadeOperationBinding:
         ):
             raise ValueError(
                 "Rust facade memory alignment must name a retained specialization axis"
-            )
-        if (self.memory_access is None) != (self.memory_addressing is None):
-            raise ValueError(
-                "Rust facade operation bindings cannot retain a partial memory contract"
             )
         if len(set(self.memory_alignment_modes)) != len(
             self.memory_alignment_modes
@@ -433,6 +452,7 @@ class RustFacadeCoreOperationRequirement:
     axis_names: tuple[str, ...] = ()
     memory_access: MemoryAccess | None = None
     memory_addressing: MemoryAddressing | None = None
+    memory_payload_extent: MemoryPayloadExtent | None = None
     memory_alignment_modes: tuple[MemoryAlignment, ...] = ()
     overload: tuple[str, str, bool] | None = None
 
@@ -445,13 +465,18 @@ class RustFacadeCoreOperationRequirement:
             )
         if len(set(self.public_roles)) != len(self.public_roles):
             raise ValueError("Rust facade core requirement roles must be unique")
-        if (self.memory_access is None) != (self.memory_addressing is None):
+        memory_facts = (
+            self.memory_access,
+            self.memory_addressing,
+            self.memory_payload_extent,
+        )
+        has_any_memory_fact = any(item is not None for item in memory_facts)
+        has_memory = all(item is not None for item in memory_facts)
+        if has_any_memory_fact and not has_memory:
             raise ValueError(
                 "Rust facade core requirements cannot state a partial memory contract"
             )
-        if (self.memory_access is not None) != bool(
-            self.memory_alignment_modes
-        ):
+        if has_memory != bool(self.memory_alignment_modes):
             raise ValueError(
                 "Rust facade core memory requirements require alignment modes"
             )
@@ -503,10 +528,12 @@ class RustComprehensiveMethod:
     result_kind: str
     type_tags: tuple[str, ...]
     shape_keys: tuple[tuple[str, int], ...]
+    lower_call_unsafe: bool
     caller_unsafe: bool
+    caller_unsafe_type_tags: tuple[str, ...]
     safety_requirements: tuple[str, ...]
     panic_conditions: tuple[str, ...]
-    bounds_checked_parameters: tuple[str, ...]
+    checked_conditions: tuple[CheckedConditionPlan, ...]
     must_use: bool
     suppress_should_implement_trait_lint: bool
     documentation: PrimitiveDocumentation
@@ -517,7 +544,6 @@ class RustComprehensiveMethod:
         RustComprehensivePrivateImplementationArm, ...
     ] = ()
 
-
 @dataclass(frozen=True, slots=True)
 class RustCuratedMethod:
     public_name: str
@@ -526,6 +552,7 @@ class RustCuratedMethod:
     source_primitive_name: str
     type_tags: tuple[str, ...]
     shape_keys: tuple[tuple[str, int], ...]
+    lower_call_unsafe: bool
     caller_unsafe: bool
     invocation: RustFacadeInvocation
     conversion_pairs: tuple[RustFacadeConversionPair, ...]

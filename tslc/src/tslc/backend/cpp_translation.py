@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from tslc.backend import translation_common as common
 from tslc.backend.translation import PointerCastOperand
 from tslc.catalog.model import Catalog, Extension
+from tslc.catalog.register_shapes import RegisterMultiplicity
 from tslc.lane_count import LaneCount
 from tslc.target_text import RenderField, RenderText, literal_text, render_sequence
 
@@ -72,6 +73,20 @@ class _CppTypes:
             if declared is None:
                 return None
         return f"typename {self.vector_type_spelling(base, extension_isa)}::register_type"
+
+    def register_multiplicity_spelling(
+        self,
+        base_tag: str,
+        extension_isa: str,
+        multiplicity: RegisterMultiplicity,
+    ) -> str | None:
+        return common.register_multiplicity_type(
+            self.catalog,
+            self.backend_id,
+            extension_isa,
+            base_tag,
+            multiplicity,
+        )
 
     def register_type_spelling(self) -> str:
         return "typename Vec::register_type"
@@ -259,6 +274,18 @@ class _CppSyntax:
     def render_compile_switch(
         self, selector: RenderField, arms: tuple[tuple[str, RenderField], ...]
     ) -> RenderText:
+        if len(arms) == 2 and arms[0][0] == "true" and arms[1][0] == "_":
+            return render_sequence(
+                (
+                    literal_text("if constexpr ("),
+                    selector,
+                    literal_text(") {\n        "),
+                    arms[0][1],
+                    literal_text("\n      } else {\n        "),
+                    arms[1][1],
+                    literal_text("\n      }"),
+                )
+            )
         parts: list[RenderField] = []
         for label, body in arms:
             if label == "_":

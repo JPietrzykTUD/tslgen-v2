@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from tslc.backend.emitted_profile import EmittedProfile
+from tslc.backend.verification import verify_runner
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.target_families import ProfileFamilyCapability
 from tslc.names import identifier_slug
-from tslc.output.verify_model import VerifyProfile, VerifyRunner
+from tslc.output.verify_model import VerifyProfile
 
 
 def rust_verify_profiles(
@@ -35,7 +36,7 @@ def rust_verify_profile(
         target_features=rust_target_features(profile, capability),
         target=rust_target(profile, capability),
         linker=rust_linker(profile, capability),
-        runner=_verify_runner(profile),
+        runner=verify_runner(profile.runner),
     )
 
 
@@ -66,16 +67,6 @@ def rust_linker(
 ) -> str | None:
     capability = capability or ProfileFamilyCapability(profile.family)
     return capability.backend("rust").linker
-
-
-def _verify_runner(profile: MachineProfile) -> VerifyRunner | None:
-    if profile.runner is None:
-        return None
-    return VerifyRunner(
-        kind=profile.runner.kind,
-        profile=profile.runner.profile,
-        args=profile.runner.args,
-    )
 
 
 __all__ = (

@@ -18,9 +18,11 @@ from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import (
     Catalog,
+    PrimitivePortability,
     PrimitiveValueMode,
     TargetConstraint,
 )
+from tslc.catalog.register_shapes import RegisterMultiplicity
 from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.sources import SourceDocument
 from tslc.syntax.parser import TslParser
@@ -67,6 +69,18 @@ def test_scalar_extension_has_no_intrinsic_compose(catalog: Catalog) -> None:
     scalar = catalog.extensions["scalar"]
     assert scalar.family == "scalar"
     assert scalar.compose_prefix == {}  # scalar has no intrinsic prefix
+
+
+def test_primitive_portability_is_typed_and_defaults_portable(
+    catalog: Catalog,
+) -> None:
+    random_step = catalog.primitive("random_step")
+    add = catalog.primitive("add")
+
+    assert random_step is not None
+    assert add is not None
+    assert random_step.portability is PrimitivePortability.TARGET_SPECIFIC
+    assert add.portability is PrimitivePortability.PORTABLE
 
 
 def test_target_constraint_matches_exact_double_width(catalog: Catalog) -> None:
@@ -202,6 +216,15 @@ def test_nested_requires_promoted_per_type_group(catalog: Catalog) -> None:
 
 
 def test_extension_inheritance_activation_and_supersession(catalog: Catalog) -> None:
+    assert catalog.extensions["avx512"].active_when.target_features == frozenset(
+        {"avx512f"}
+    )
+    assert catalog.extensions["avx2"].active_when.target_features == frozenset(
+        {"avx"}
+    )
+    assert catalog.extensions["sse"].active_when.target_features == frozenset(
+        {"sse"}
+    )
     avx2_vl = catalog.extensions["avx2_vl"]
     assert avx2_vl.inherits == "avx2"
     assert avx2_vl.isa_name == "avx2"  # emitted as avx2; _vl is internal only
@@ -235,7 +258,11 @@ def test_extension_inheritance_activation_and_supersession(catalog: Catalog) -> 
     assert oneapi.mask_policy.kind == "exact_lane_bitmask"
     assert oneapi.mask_policy.spelling("cpp") == "ac_int<LANES, false>"
     assert oneapi.imask_policy.kind == "same_as_mask_type"
-    assert oneapi.headers_for_backend("cpp") == (
+    assert oneapi.headers_for_backend("cpp") == ()
+    assert oneapi.system_headers_for_backend("cpp") == (
+        "sycl/ext/intel/ac_types/ac_int.hpp",
+    )
+    assert oneapi.required_headers_for_backend("cpp") == (
         "sycl/ext/intel/ac_types/ac_int.hpp",
     )
     assert (
@@ -270,8 +297,24 @@ def test_extension_compiler_metadata_is_promoted(catalog: Catalog) -> None:
     assert avx2.headers_for_backend("cpp") == ("immintrin.h",)
     assert avx2.metadata.backend["rust"].type_name == "Avx2"
     assert avx2.metadata.backend["rust"].arch_module == "x86_64"
+    assert sve.headers_for_backend("cpp") == ("arm_sve.h", "vector")
+    assert catalog.extensions["sve128"].headers_for_backend("cpp") == (
+        "arm_sve.h",
+        "vector",
+    )
+    assert catalog.extensions["rvv"].headers_for_backend("cpp") == (
+        "riscv_vector.h",
+        "vector",
+    )
     assert neon.metadata.backend["rust"].arch_module == "aarch64"
     assert sve.runtime_lane_count["cpp"] == "svcntb() / sizeof({base_type})"
+    assert (
+        sve.direct_register_multiplicity_type(
+            "cpp", "si16", RegisterMultiplicity(2)
+        )
+        == "svint16x2_t"
+    )
+    assert catalog.extensions["sve128"].register_multiplicity_types == {}
 
 
 def test_boolean_wildcard_attributes_expand_to_concrete_variants() -> None:
@@ -419,7 +462,24 @@ def test_machine_profiles_loaded(machine_profiles) -> None:
     )
     assert machine_profiles["neon"].flags_for_backend("cpp") == ()
     assert machine_profiles["sve"].features == frozenset({"sve"})
-    assert machine_profiles["sve"].flags_for_backend("cpp") == ("-mcpu=a64fx",)
+    expected_sve_flags = {
+        "sve": ("-march=armv8.2-a+sve", "-msve-vector-bits=scalable"),
+        "sve128": ("-march=armv8.2-a+sve", "-msve-vector-bits=128"),
+        "sve256": ("-march=armv8.2-a+sve", "-msve-vector-bits=256"),
+        "sve512": ("-march=armv8.2-a+sve", "-msve-vector-bits=512"),
+    }
+    for profile_name, expected_flags in expected_sve_flags.items():
+        profile = machine_profiles[profile_name]
+        assert profile.flags_for_backend("cpp") == expected_flags
+        assert all(not flag.startswith("-mcpu=") for flag in expected_flags)
+        assert profile.supported_backends == frozenset({"cpp"})
+        assert profile.supports_backend("cpp")
+        assert not profile.supports_backend("rust")
+    assert machine_profiles["sve"].runner is not None
+    assert tuple(
+        (variant.name, variant.vector_bits)
+        for variant in machine_profiles["sve"].runner.executions
+    ) == (("vl128", 128), ("vl256", 256), ("vl512", 512))
     assert machine_profiles["sve128"].runner is not None
     assert (
         machine_profiles["sve128"].runner.profile
@@ -430,15 +490,11 @@ def test_machine_profiles_loaded(machine_profiles) -> None:
         machine_profiles["sve256"].runner.profile
         == "max,sve=on,sve128=on,sve256=on,sve512=off"
     )
-    assert machine_profiles["sve512"].features == frozenset({"sve"})
+    assert machine_profiles["sve512"].features == frozenset({"neon", "sve"})
     assert machine_profiles["sve512"].compile_modes == frozenset(
         {"sve_vector_bits_512"}
     )
     assert machine_profiles["sve512"].auto_detect_gate is None
-    assert machine_profiles["sve512"].flags_for_backend("cpp") == (
-        "-mcpu=a64fx",
-        "-msve-vector-bits=512",
-    )
     assert machine_profiles["skylake-oneapi"].compile_modes == frozenset(
         {"oneapi_fpga"}
     )
@@ -453,6 +509,11 @@ def test_machine_profiles_loaded(machine_profiles) -> None:
     assert machine_profiles["wasm32-simd128"].flags_for_backend("cpp") == ()
     assert machine_profiles["wasm32-simd128"].runner is not None
     assert machine_profiles["wasm32-simd128"].runner.kind == "wasmtime"
+    assert machine_profiles["rvv"].runner is not None
+    assert tuple(
+        (variant.name, variant.vector_bits)
+        for variant in machine_profiles["rvv"].runner.executions
+    ) == (("vlen128", 128), ("vlen256", 256), ("vlen512", 512))
 
 
 def test_target_families_promoted(catalog: Catalog) -> None:

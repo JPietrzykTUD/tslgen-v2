@@ -7,15 +7,28 @@ The generated crate exposes primitive functions through the public ``profile``
 module. This reference renders a profile-neutral union of the generated Rust
 primitive APIs, so no concrete machine-profile Cargo feature is selected and
 each primitive appears once. Concrete profile availability and implementation
-state belong to the specialization reference.
+state belong to the specialization reference. The opaque root ``Simd`` and
+``Mask`` facade and the selected ``profile`` primitive module are the stable
+TSL 1.x Rust surface. ``tsl_core`` and ``tsl_algorithm`` remain reachable
+because generated signatures depend on them, but are intentionally hidden from
+the stable index and their representations are not a stable ABI.
+Those root and profile algorithm paths remain stable facades even though their
+implementations are divided into private support and semantic-family modules;
+the split does not introduce Cargo features or selective-compilation promises.
 
-Normal crate builds still select exactly one machine profile through Cargo
-features. Rust target-feature auto-selection is not implemented yet, so
-selecting a non-default machine profile remains explicit.
+Normal crate builds select the best generated profile through compile-target
+``cfg(target_feature)`` predicates and use the generated generic fallback when
+no native profile matches. Cargo does not expose one feature per machine
+profile. The optional ``runtime-dispatch`` feature is a separate ``std``-based
+mode.
 
-``tsl_core`` and ``tsl_algorithm`` are the current public vector and algorithm
-substrates used by those primitive functions. Generated test helpers and the
-physical ``tsl_<profile>`` module names are implementation details and are
-hidden from the API index.
+Unsuffixed lower-level calls do not sanitize their operands. UB-capable calls
+are ``unsafe fn``; checked companions use slices or references where necessary
+and return ``Result<_, PreconditionError>``. See
+:doc:`checked_api_contract` for the shared two-path contract and residual
+obligations.
+
+Generated test helpers and physical ``tsl_<profile>`` module names are
+implementation details and are hidden from the API index.
 
 `Open the Rust API reference <rust/index.html>`_

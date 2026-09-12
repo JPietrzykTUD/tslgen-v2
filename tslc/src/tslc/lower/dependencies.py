@@ -11,8 +11,15 @@ from __future__ import annotations
 
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
+from enum import StrEnum
 
+from tslc.catalog.call_preconditions import (
+    CallArgumentBinding,
+    CallPreconditionObligation,
+    call_precondition_obligation_sort_key,
+)
 from tslc.catalog.model import RESULT_DIM_VECTOR, PrimitiveMaskMode
+from tslc.diagnostics import SourceSpan
 from tslc.ir.region_syntax import ParsedCallSelector
 from tslc.lower.context import LoweringSession, VectorValue
 from tslc.lower.queries import QueryEvaluator, TypeValue
@@ -43,12 +50,30 @@ class CallDependency:
     target: CallVectorReference | None = None
 
 
+class CallDependencyOriginKind(StrEnum):
+    """Who owns the proof obligations associated with one lowered edge."""
+
+    AUTHORED = "authored"
+    CHECKED_GUARD = "checked_guard"
+    FIXED_NATIVE = "fixed_native"
+
+
 @dataclass(frozen=True, slots=True)
 class CallDependencyOrigin:
     """One lowered call edge plus its authored implementation origin."""
 
     dependency: CallDependency
     origin: str
+    kind: CallDependencyOriginKind = CallDependencyOriginKind.AUTHORED
+    source: SourceSpan | None = None
+    argument_bindings: tuple[CallArgumentBinding, ...] = ()
+    precondition_obligations: tuple[CallPreconditionObligation, ...] = ()
+
+    @property
+    def unresolved_preconditions(self) -> tuple[CallPreconditionObligation, ...]:
+        return tuple(
+            item for item in self.precondition_obligations if not item.resolved
+        )
 
 
 def resolve_lowered_call_dependency(
@@ -106,8 +131,28 @@ def dependency_sort_key(
 
 def origin_sort_key(
     origin: CallDependencyOrigin,
-) -> tuple[str, ...]:
-    return (*dependency_sort_key(origin.dependency), origin.origin)
+) -> tuple[
+    tuple[str, ...],
+    str,
+    str,
+    str,
+    int,
+    int,
+    tuple[tuple[object, ...], ...],
+]:
+    source = origin.source
+    return (
+        dependency_sort_key(origin.dependency),
+        origin.origin,
+        origin.kind.value,
+        source.path.as_posix() if source is not None else "",
+        source.line if source is not None else 0,
+        source.column if source is not None else 0,
+        tuple(
+            call_precondition_obligation_sort_key(item)
+            for item in origin.precondition_obligations
+        ),
+    )
 
 
 def resolve_lowered_call_vector(
@@ -289,6 +334,7 @@ def _lowered_callee_has_target_axis(
 __all__ = (
     "CallDependency",
     "CallDependencyOrigin",
+    "CallDependencyOriginKind",
     "CallVectorReference",
     "GenericVectorReference",
     "VectorIdentity",

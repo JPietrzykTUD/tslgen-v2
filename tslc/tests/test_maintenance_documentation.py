@@ -15,7 +15,11 @@ from tslc.backend.capability import (
     GeneratedDocumentationSpec,
 )
 from tslc.backend.rust_capability import RUST_BACKEND
-from tslc.maintenance.documentation import _run_subprocess, document_generated
+from tslc.maintenance.documentation import (
+    _run_subprocess,
+    document_generated,
+    validate_cpp_documentation,
+)
 
 
 def test_document_generated_writes_assets_and_runs_tools(
@@ -61,7 +65,16 @@ def test_document_generated_writes_assets_and_runs_tools(
     assert str((output_root / "cpp/docs/input/tsl_api_docs.hpp").resolve()) in (
         doxyfile.read_text()
     )
-    assert str((output_root / "cpp/include").resolve()) not in doxyfile.read_text()
+    for name in (
+        "tsl_core.hpp",
+        "tsl_dataparallel.hpp",
+        "tsl_algorithm_tags.hpp",
+        "tsl_algorithm.hpp",
+        "tsl_algorithm_checked.hpp",
+    ):
+        assert str((output_root / f"cpp/include/{name}").resolve()) in (
+            doxyfile.read_text()
+        )
     assert "GENERATE_HTML          = NO" in doxyfile.read_text()
     assert "GENERATE_XML           = YES" in doxyfile.read_text()
 
@@ -81,6 +94,8 @@ def test_document_generated_writes_assets_and_runs_tools(
     assert (site_source / "cpp_api.rst").is_file()
     assert (site_source / "rust_api.rst").is_file()
     assert (site_source / "specializations.rst").is_file()
+    assert (site_source / "checked_api_contract.rst").is_file()
+    assert (site_source / "checked_api_example.cpp").is_file()
     assert (site_source / "_static/tslc.css").is_file()
     assert (site_source / "_static/tsl_logo_small.png").is_file()
     assert (site_source / "_static/tsl_repo_logo_wide.png").is_file()
@@ -189,6 +204,46 @@ def test_document_generated_reports_missing_generated_projects(tmp_path) -> None
     assert any("Rust Cargo.toml not found" in error for error in report.errors)
 
 
+def test_strict_cpp_documentation_reports_malformed_xml(tmp_path) -> None:
+    xml_root = tmp_path / "xml"
+    xml_root.mkdir()
+    (xml_root / "index.xml").write_text("not XML\n", encoding="utf-8")
+
+    errors = validate_cpp_documentation(xml_root)
+
+    assert len(errors) == 1
+    assert errors[0].startswith("cannot read C++ documentation XML:")
+
+
+def test_strict_cpp_documentation_accepts_windows_facade_paths(tmp_path) -> None:
+    xml_root = tmp_path / "xml"
+    xml_root.mkdir()
+    (xml_root / "index.xml").write_text(
+        "<doxygenindex></doxygenindex>\n", encoding="utf-8"
+    )
+    (xml_root / "namespacetsl.xml").write_text(
+        """
+<doxygen>
+  <compounddef>
+    <sectiondef>
+      <memberdef kind="function">
+        <name>add</name>
+        <argsstring>()</argsstring>
+        <briefdescription><para>Adds values.</para></briefdescription>
+        <location declfile="C:\\generated\\cpp\\docs\\input\\tsl_api_docs.hpp" />
+      </memberdef>
+    </sectiondef>
+  </compounddef>
+</doxygen>
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    errors = validate_cpp_documentation(xml_root)
+
+    assert "C++ documentation contains no primitive callable identities" not in errors
+
+
 def test_fake_backend_drives_generated_documentation(monkeypatch, tmp_path) -> None:
     from tslc.backend import registry
 
@@ -273,6 +328,16 @@ inline int add(int left, int right) { return left + right; }
         + "\n",
         encoding="utf-8",
     )
+    for name in (
+        "tsl_core.hpp",
+        "tsl_dataparallel.hpp",
+        "tsl_algorithm_tags.hpp",
+        "tsl_algorithm.hpp",
+        "tsl_algorithm_checked.hpp",
+    ):
+        (root / f"cpp/include/{name}").write_text(
+            "#pragma once\n", encoding="utf-8"
+        )
     (root / "cpp/docs/input").mkdir(parents=True)
     (root / "cpp/docs/input/tsl_api_docs.hpp").write_text(
         """

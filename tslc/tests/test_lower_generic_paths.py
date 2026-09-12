@@ -235,7 +235,7 @@ def test_lane_preserving_conversion_keeps_explicit_target_vector_typed(
                 GenericVectorReference("ToVec", "f64"),
             ),
         }
-        assert "require_same_lanes" in lowered.body_text
+        assert "require_same_lanes" not in lowered.body_text
         assert "scalar_as_cast" in lowered.body_text
         rendered_doc = (
             cpp_doc(lowered, context="implementation")
@@ -472,6 +472,28 @@ def test_generic_cast_mutates_native_output_register_directly(
         assert "result[i]" in lowered.body_text
         assert "to_array" not in lowered.body_text
         assert "from_array" not in lowered.body_text
+
+
+def test_cpp_intrinsic_register_reinterpretation_uses_portable_bit_cast(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles["avx"], "cast", ("si8",))
+        .selected
+        if selected.extension.name == "sse"
+        and selected.to_target == "si16"
+    )
+
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert lowered is not None
+    assert "::tsl::bit_cast<" in lowered.body_text
+    assert "reinterpret_cast<" not in lowered.body_text
 
 
 @pytest.mark.parametrize("extension", ["generic", "oneapi_fpga"])
@@ -996,7 +1018,7 @@ def test_clang_mask_kernels_use_direct_comparison_and_integral_bridge(
         equal_slot, catalog, create_backend_dialect(catalog, "cpp")
     ).specialization
     assert equal is not None
-    assert equal.body_text == "return left == right;"
+    assert equal.body_text == "return (left == right);"
 
     to_integral_slot = _by_key(catalog, profile, "to_integral")[
         ("f32", "clang_v256")
@@ -1034,7 +1056,7 @@ def test_clang_mask_kernels_use_direct_comparison_and_integral_bridge(
         bool_equal_slot, catalog, create_backend_dialect(catalog, "cpp")
     ).specialization
     assert bool_equal is not None
-    assert bool_equal.body_text == "return left == right;"
+    assert bool_equal.body_text == "return (left == right);"
 
     bool_to_integral_slot = _by_key(catalog, profile, "to_integral")[
         ("f32", "clang_v256_bool")

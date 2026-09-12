@@ -15,6 +15,7 @@ from tslc.value_tests.case_components import (
     MemoryStorage,
     ValueTestCaseCapability,
     ValueTestCaseRequirements,
+    ValueTestCheckedPrecondition,
     ValueTestDifferential,
     ValueTestExpectation,
     ValueTestFailure,
@@ -22,10 +23,12 @@ from tslc.value_tests.case_components import (
     ValueTestIndex,
     ValueTestInputs,
     ValueTestInvocation,
+    ValueTestInvalidPreconditionValue,
     ValueTestMemory,
     ValueTestRepresentation,
     ValueTestScalable,
     ValueTestTarget,
+    ValueTestTargetImaskHarness,
 )
 from tslc.value_tests.case_plan import ValueTestCasePlan
 
@@ -134,6 +137,7 @@ __all__ = (
     "ValueTestCaseCapability",
     "ValueTestCasePlan",
     "ValueTestCaseRequirements",
+    "ValueTestCheckedPrecondition",
     "ValueTestCoverageEntry",
     "ValueTestCoverageStatus",
     "ValueTestDifferential",
@@ -142,6 +146,7 @@ __all__ = (
     "ValueTestIndex",
     "ValueTestInputs",
     "ValueTestInvocation",
+    "ValueTestInvalidPreconditionValue",
     "ValueTestMemory",
     "ValueTestParityEntry",
     "ValueTestProfilePlan",
@@ -149,4 +154,5 @@ __all__ = (
     "ValueTestRepresentation",
     "ValueTestScalable",
     "ValueTestTarget",
+    "ValueTestTargetImaskHarness",
 )

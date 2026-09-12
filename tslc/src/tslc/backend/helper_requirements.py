@@ -113,18 +113,40 @@ CPP_HELPER_MANIFEST = BackendHelperManifest(
     "cpp",
     (
         HelperFeature(
-            "algorithm",
-            (
-                PrimitiveRequirement("load"),
-                PrimitiveRequirement("store"),
-                PrimitiveRequirement("store", PrimitiveMaskMode.PASS_THROUGH),
-                PrimitiveRequirement("to_integral"),
-                PrimitiveRequirement("to_mask"),
-                PrimitiveRequirement("gather_narrow"),
-                PrimitiveRequirement("compress_store"),
-                PrimitiveRequirement("mask_population_count"),
-                PrimitiveRequirement("mask_binary_and"),
-            ),
+            "contiguous_read",
+            (PrimitiveRequirement("load"),),
+        ),
+        HelperFeature(
+            "contiguous_write",
+            (PrimitiveRequirement("store"),),
+        ),
+        HelperFeature(
+            "masked_write",
+            (PrimitiveRequirement("store", PrimitiveMaskMode.PASS_THROUGH),),
+        ),
+        HelperFeature(
+            "selected_read",
+            (PrimitiveRequirement("gather_narrow"),),
+        ),
+        HelperFeature(
+            "integral_mask",
+            (PrimitiveRequirement("to_integral"),),
+        ),
+        HelperFeature(
+            "mask_from_integral",
+            (PrimitiveRequirement("to_mask"),),
+        ),
+        HelperFeature(
+            "compaction",
+            (PrimitiveRequirement("compress_store"),),
+        ),
+        HelperFeature(
+            "mask_population_count",
+            (PrimitiveRequirement("mask_population_count"),),
+        ),
+        HelperFeature(
+            "mask_intersection",
+            (PrimitiveRequirement("mask_binary_and"),),
         ),
     ),
 )
@@ -133,6 +155,13 @@ CPP_HELPER_MANIFEST = BackendHelperManifest(
 RUST_HELPER_MANIFEST = BackendHelperManifest(
     "rust",
     (
+        HelperFeature(
+            "contiguous_memory",
+            (
+                PrimitiveRequirement("load"),
+                PrimitiveRequirement("store"),
+            ),
+        ),
         HelperFeature(
             "masked_store",
             (PrimitiveRequirement("store", PrimitiveMaskMode.PASS_THROUGH),),

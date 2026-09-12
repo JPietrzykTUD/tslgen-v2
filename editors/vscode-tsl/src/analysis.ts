@@ -42,6 +42,11 @@ export class ConcreteAnalysisManager implements vscode.Disposable {
         slot.backend,
         "--extension",
         slot.extension,
+        "--signature",
+        slot.signature,
+        ...Object.entries(slot.attributes)
+          .sort(([left], [right]) => left.localeCompare(right))
+          .flatMap(([key, value]) => ["--attribute", `${key}=${value}`]),
         ...(slot.toTarget ? ["--to-target", slot.toTarget] : []),
         "--format",
         "json",

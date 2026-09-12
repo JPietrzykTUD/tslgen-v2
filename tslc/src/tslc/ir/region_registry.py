@@ -13,7 +13,13 @@ from typing import Literal
 
 RegionBodyShape = Literal["call", "if_block", "loop_block", "switch_block"]
 TsilSelectorTermKind = Literal["value", "named", "bag"]
-TsilDynamicValueSource = Literal["cast", "helper", "operator", "primitive"]
+TsilDynamicValueSource = Literal[
+    "cast",
+    "helper",
+    "operator",
+    "precondition",
+    "primitive",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +43,7 @@ class TsilSelectorTermDescriptor:
     open_value: bool = False
     options: tuple[TsilSelectorOptionDescriptor, ...] = ()
     allow_bare: bool = False
+    dynamic_bare_values: TsilDynamicValueSource | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,12 +100,14 @@ def _bag(
     name: str,
     *options: TsilSelectorOptionDescriptor,
     allow_bare: bool = False,
+    dynamic_bare_values: TsilDynamicValueSource | None = None,
 ) -> TsilSelectorTermDescriptor:
     return TsilSelectorTermDescriptor(
         "bag",
         name=name,
         options=options,
         allow_bare=allow_bare,
+        dynamic_bare_values=dynamic_bare_values,
     )
 
 
@@ -127,6 +136,14 @@ _CALL_ATTRS_BAG = _bag(
     "attrs",
     TsilSelectorOptionDescriptor("aligned", ("false", "true")),
     TsilSelectorOptionDescriptor("mask", ("zero", "pass_through")),
+)
+_CALL_FORWARD_BAG = _bag(
+    "forward",
+    dynamic_bare_values="precondition",
+)
+_CALL_DISCHARGE_BAG = _bag(
+    "discharge",
+    dynamic_bare_values="precondition",
 )
 _CAST_TYPE = _named("type", "value", "ptr", "const_ptr")
 
@@ -161,7 +178,7 @@ DEFAULT_TSIL_REGION_DESCRIPTORS: tuple[TsilRegionDescriptor, ...] = (
     ),
     TsilRegionDescriptor(
         "op",
-        "Render a backend-specific operator.",
+        "Render a typed direct operator.",
         ("op<name>(arg0, arg1, ...)",),
         _authoring((_value(dynamic_values="operator"),)),
     ),
@@ -229,8 +246,10 @@ DEFAULT_TSIL_REGION_DESCRIPTORS: tuple[TsilRegionDescriptor, ...] = (
     ),
     TsilRegionDescriptor(
         "mem",
-        "Perform raw byte-memory operations.",
+        "Perform typed scalar or raw byte-memory operations.",
         (
+            "mem<load_scalar>(ptr)",
+            "mem<store_scalar>(ptr, value)",
             "mem<copy>(dst, src, count)",
             "mem<set>(ptr, value, count)",
             "mem<alloc>(count)",
@@ -240,9 +259,18 @@ DEFAULT_TSIL_REGION_DESCRIPTORS: tuple[TsilRegionDescriptor, ...] = (
         _authoring(
             *(
                 (_value(selector),)
-                for selector in ("copy", "set", "alloc", "alloc_aligned", "free")
+                for selector in (
+                    "load_scalar",
+                    "store_scalar",
+                    "copy",
+                    "set",
+                    "alloc",
+                    "alloc_aligned",
+                    "free",
+                )
             )
         ),
+        shell_validator="mem_selector",
     ),
     TsilRegionDescriptor(
         "lanes",
@@ -296,6 +324,8 @@ DEFAULT_TSIL_REGION_DESCRIPTORS: tuple[TsilRegionDescriptor, ...] = (
         (
             "call<primitive=name>(args)",
             "call<primitive=name[VecOrTypeArgs], attrs[key=value, ...]>(args)",
+            "call<primitive=name[...], forward[precondition, ...]>(args)",
+            "call<primitive=name[...], discharge[precondition, ...]>(args)",
             "call<primitive=@self[...], attrs[key=value, ...]>(args)",
         ),
         _authoring(
@@ -303,6 +333,35 @@ DEFAULT_TSIL_REGION_DESCRIPTORS: tuple[TsilRegionDescriptor, ...] = (
             (
                 _named("primitive", dynamic_values="primitive"),
                 _CALL_ATTRS_BAG,
+            ),
+            (
+                _named("primitive", dynamic_values="primitive"),
+                _CALL_FORWARD_BAG,
+            ),
+            (
+                _named("primitive", dynamic_values="primitive"),
+                _CALL_DISCHARGE_BAG,
+            ),
+            (
+                _named("primitive", dynamic_values="primitive"),
+                _CALL_ATTRS_BAG,
+                _CALL_FORWARD_BAG,
+            ),
+            (
+                _named("primitive", dynamic_values="primitive"),
+                _CALL_ATTRS_BAG,
+                _CALL_DISCHARGE_BAG,
+            ),
+            (
+                _named("primitive", dynamic_values="primitive"),
+                _CALL_FORWARD_BAG,
+                _CALL_DISCHARGE_BAG,
+            ),
+            (
+                _named("primitive", dynamic_values="primitive"),
+                _CALL_ATTRS_BAG,
+                _CALL_FORWARD_BAG,
+                _CALL_DISCHARGE_BAG,
             ),
         ),
         shell_validator="call_selector",

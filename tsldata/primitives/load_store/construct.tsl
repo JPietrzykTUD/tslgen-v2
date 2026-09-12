@@ -302,6 +302,23 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
                  )
                );
             """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=select, attrs[mask=pass_through]>(
+                mask,
+                call<primitive=set1[Vec]>(scalar),
+                data
+              )
+            );
+          """
     [generic, oneapi_fpga]:
       arith:
         requires:
@@ -513,10 +530,9 @@ prim<v:=()>[value=undef] set_undef():
           caller_unsafe false
           reasons []
         implementation:
-          tsil """
-              var<typed>(base::in, result, value(uninit::scalar));
-              complete(result);
-            """
+          # The contract leaves the value unspecified; choosing zero for the scalar
+          # representation avoids reading an indeterminate C++ scalar.
+          tsil "complete(cast<static>(base::in, 0));"
     [clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool]:
       arith:
         prefer_fixed_native true
@@ -630,6 +646,15 @@ prim<v:=()>[value=undef] set_undef():
               intrin<svundef, build[suffix=base::in]>()
             );
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(call<primitive=set_zero[Vec]>());"
 
 prim<v:=(lanes<s>)> set(values):
   brief_description "Creates a vector register from an explicit list of lane values."
@@ -846,7 +871,7 @@ prim<v:=(lanes<s>)> set(values):
                loop<backend>(i, 0, value(vector::length), 1)  {
                 data[i] = cast<static>(base::in, values[value(vector::length) - 1 - i]);
               }
-               complete(call<primitive=load[Vec], attrs[aligned=false]>(data.as_ptr())) ;
+               complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(data.as_ptr())) ;
             """
     [generic, oneapi_fpga]:
       arith:

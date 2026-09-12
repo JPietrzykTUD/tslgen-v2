@@ -18,6 +18,7 @@ class CppCompilerOption:
 
 _FEATURE_FLAG_COMPILER_IDS = ("GNU", "Clang", "AppleClang", "IntelLLVM")
 _WRAPPING_ARITHMETIC_COMPILER_IDS = ("GNU", "Clang", "AppleClang")
+_MSVC_COMPILER_IDS = ("MSVC",)
 
 
 def cpp_profile_flags(
@@ -43,10 +44,37 @@ def cpp_profile_compile_options(
     profile: MachineProfile,
     capability: ProfileFamilyCapability | None = None,
 ) -> tuple[CppCompilerOption, ...]:
-    return tuple(
+    capability = capability or ProfileFamilyCapability(profile.family)
+    options = tuple(
         CppCompilerOption(flag, _FEATURE_FLAG_COMPILER_IDS)
         for flag in cpp_profile_flags(profile, capability)
     )
+    msvc_arch = _msvc_arch_option(profile, capability)
+    if msvc_arch is not None:
+        options += (CppCompilerOption(msvc_arch, _MSVC_COMPILER_IDS),)
+    return options
+
+
+def _msvc_arch_option(
+    profile: MachineProfile,
+    capability: ProfileFamilyCapability,
+) -> str | None:
+    """Map one x86 feature profile to MSVC's cumulative architecture switch."""
+
+    if capability.name != "x86":
+        return None
+    features = profile.features
+    if "avx512f" in features:
+        return "/arch:AVX512"
+    if "avx2" in features:
+        return "/arch:AVX2"
+    if "avx" in features:
+        return "/arch:AVX"
+    if "sse4_2" in features:
+        return "/arch:SSE4.2"
+    if features & {"sse", "sse2", "ssse3", "sse4_1"}:
+        return "/arch:SSE2"
+    return None
 
 
 def cpp_profile_target(

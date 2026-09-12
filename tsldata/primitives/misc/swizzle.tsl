@@ -57,8 +57,10 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
               var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
               loop<generation, scoped>(i, 0, value(vector::length), 1) {
                 var<const_infer>(source, value(i) + offset);
-                if (source < value(vector::length)) { result[value(i)] = right_lanes[source]; }
-                else { result[value(i)] = left_lanes[source - value(vector::length)]; }
+                switch<compile>(source < value(vector::length)) {
+                  true => { result[value(i)] = right_lanes[source]; }
+                  _ => { result[value(i)] = left_lanes[source - value(vector::length)]; }
+                }
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -92,8 +94,10 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
               var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
               loop<generation, scoped>(i, 0, value(vector::length), 1) {
                 var<const_infer>(source, value(i) + offset);
-                if (source < value(vector::length)) { result[value(i)] = right_lanes[source]; }
-                else { result[value(i)] = left_lanes[source - value(vector::length)]; }
+                switch<compile>(source < value(vector::length)) {
+                  true => { result[value(i)] = right_lanes[source]; }
+                  _ => { result[value(i)] = left_lanes[source - value(vector::length)]; }
+                }
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -111,8 +115,10 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
             var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
               var<const_infer>(source, value(i) + offset);
-              if (source < value(vector::length)) { result[value(i)] = right_lanes[source]; }
-              else { result[value(i)] = left_lanes[source - value(vector::length)]; }
+              switch<compile>(source < value(vector::length)) {
+                true => { result[value(i)] = right_lanes[source]; }
+                _ => { result[value(i)] = left_lanes[source - value(vector::length)]; }
+              }
             }
             complete(call<primitive=from_array[Vec]>(result));
           """
@@ -136,8 +142,10 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
               var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
               loop<generation, scoped>(i, 0, value(vector::length), 1) {
                 var<const_infer>(source, value(i) + offset);
-                if (source < value(vector::length)) { result[value(i)] = right_lanes[source]; }
-                else { result[value(i)] = left_lanes[source - value(vector::length)]; }
+                switch<compile>(source < value(vector::length)) {
+                  true => { result[value(i)] = right_lanes[source]; }
+                  _ => { result[value(i)] = left_lanes[source - value(vector::length)]; }
+                }
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -173,8 +181,10 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
               var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
               loop<generation, scoped>(i, 0, value(vector::length), 1) {
                 var<const_infer>(source, value(i) + offset);
-                if (source < value(vector::length)) { result[value(i)] = right_lanes[source]; }
-                else { result[value(i)] = left_lanes[source - value(vector::length)]; }
+                switch<compile>(source < value(vector::length)) {
+                  true => { result[value(i)] = right_lanes[source]; }
+                  _ => { result[value(i)] = left_lanes[source - value(vector::length)]; }
+                }
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -221,8 +231,10 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
               var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
               loop<generation, scoped>(i, 0, value(vector::length), 1) {
                 var<const_infer>(source, value(i) + offset);
-                if (source < value(vector::length)) { result[value(i)] = right_lanes[source]; }
-                else { result[value(i)] = left_lanes[source - value(vector::length)]; }
+                switch<compile>(source < value(vector::length)) {
+                  true => { result[value(i)] = right_lanes[source]; }
+                  _ => { result[value(i)] = left_lanes[source - value(vector::length)]; }
+                }
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -269,8 +281,10 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
               var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
               loop<generation, scoped>(i, 0, value(vector::length), 1) {
                 var<const_infer>(source, value(i) + offset);
-                if (source < value(vector::length)) { result[value(i)] = right_lanes[source]; }
-                else { result[value(i)] = left_lanes[source - value(vector::length)]; }
+                switch<compile>(source < value(vector::length)) {
+                  true => { result[value(i)] = right_lanes[source]; }
+                  _ => { result[value(i)] = left_lanes[source - value(vector::length)]; }
+                }
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -311,8 +325,10 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
               var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
               loop<generation, scoped>(i, 0, value(vector::length), 1) {
                 var<const_infer>(source, value(i) + offset);
-                if (source < value(vector::length)) { result[value(i)] = right_lanes[source]; }
-                else { result[value(i)] = left_lanes[source - value(vector::length)]; }
+                switch<compile>(source < value(vector::length)) {
+                  true => { result[value(i)] = right_lanes[source]; }
+                  _ => { result[value(i)] = left_lanes[source - value(vector::length)]; }
+                }
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -333,8 +349,10 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
             var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
               var<const_infer>(source, value(i) + offset);
-              if (source < value(vector::length)) { result[value(i)] = right_lanes[source]; }
-              else { result[value(i)] = left_lanes[source - value(vector::length)]; }
+              switch<compile>(source < value(vector::length)) {
+                true => { result[value(i)] = right_lanes[source]; }
+                _ => { result[value(i)] = left_lanes[source - value(vector::length)]; }
+              }
             }
             complete(call<primitive=from_array[Vec]>(result));
           """
@@ -368,8 +386,10 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
               var<const_infer>(offset, cast<static>(scalar::size, count) % value(vector::length));
               loop<generation, scoped>(i, 0, value(vector::length), 1) {
                 var<const_infer>(source, value(i) + offset);
-                if (source < value(vector::length)) { result[value(i)] = right[source]; }
-                else { result[value(i)] = left[source - value(vector::length)]; }
+                switch<compile>(source < value(vector::length)) {
+                  true => { result[value(i)] = right[source]; }
+                  _ => { result[value(i)] = left[source - value(vector::length)]; }
+                }
               }
               complete(result);
             """
@@ -438,17 +458,40 @@ prim<v:=(v,v,sImm)> align_right_lanes(left, right, count):
               var<runtime_array>(Base, left_lanes, lanes);
               var<runtime_array>(Base, right_lanes, lanes);
               var<runtime_array>(Base, result, lanes);
-              call<primitive=store[Vec], attrs[aligned=false]>(left_lanes, left);
-              call<primitive=store[Vec], attrs[aligned=false]>(right_lanes, right);
+              call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(left_lanes, left);
+              call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(right_lanes, right);
               var<const_infer>(offset, cast<static>(scalar::size, count) % lanes);
               loop<backend>(i, 0, lanes, 1) {
                 var<const_infer>(source, i + offset);
                 if (source < lanes) { result[i] = right_lanes[source]; }
                 else { result[i] = left_lanes[source - lanes]; }
               }
-              complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
+              complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
             """
-
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [raw_memory]
+        implementation:
+          tsil """
+            let<type>(Base, base::in);
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<runtime_array>(Base, left_lanes, lanes);
+            var<runtime_array>(Base, right_lanes, lanes);
+            var<runtime_array>(Base, result, lanes);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(left_lanes, left);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(right_lanes, right);
+            var<const_infer>(offset, cast<static>(scalar::size, count) % lanes);
+            loop<backend>(i, 0, lanes, 1) {
+              var<const_infer>(source, i + offset);
+              if (source < lanes) { result[i] = right_lanes[source]; }
+              else { result[i] = left_lanes[source - lanes]; }
+            }
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
+          """
 prim<v:=(v,v)> interleave_lo(left, right):
   brief_description "Interleaves the low halves of two vectors lane by lane."
   detailed_description """
@@ -474,6 +517,31 @@ prim<v:=(v,v)> interleave_lo(left, right):
     - {tags [short_vector], type "si64", case {inputs [[9, 10], [4, 5]], expected [9, 4]}}
     - {tags [clang, wide], extension "clang_v512", type "si32", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], [100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115]], expected [0, 100, 1, 101, 2, 102, 3, 103, 4, 104, 5, 105, 6, 106, 7, 107]}}
     - {tags [sse_exact], extension "sse", type "si32", case {inputs [[10, 20, 30, 40], [50, 60, 70, 80]], expected [10, 50, 20, 60]}}
+    - {tags [benchmark_exact_128], type "f64", case {inputs [[1.0, 2.0], [3.0, 4.0]], expected [1.0, 3.0]}}
+    - {tags [benchmark_exact_128], type "si16", case {inputs [[1, 1, 1, 1, 2, 2, 2, 2], [3, 3, 3, 3, 4, 4, 4, 4]], expected [1, 3, 1, 3, 1, 3, 1, 3]}}
+    - {tags [benchmark_exact_128], type "si32", case {inputs [[1, 1, 2, 2], [3, 3, 4, 4]], expected [1, 3, 1, 3]}}
+    - {tags [benchmark_exact_128], type "si8", case {inputs [[1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2], [3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4]], expected [1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3]}}
+    - {tags [benchmark_exact_128], type "ui32", case {inputs [[1, 1, 2, 2], [3, 3, 4, 4]], expected [1, 3, 1, 3]}}
+    - {tags [benchmark_exact_128], type "ui64", case {inputs [[1, 2], [3, 4]], expected [1, 3]}}
+    - {tags [benchmark_exact_128], type "ui8", case {inputs [[1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2], [3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4]], expected [1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3]}}
+    - {tags [benchmark_exact_256], type "f32", case {inputs [[1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0], [3.0, 3.0, 3.0, 3.0, 4.0, 4.0, 4.0, 4.0]], expected [1.0, 3.0, 1.0, 3.0, 1.0, 3.0, 1.0, 3.0]}}
+    - {tags [benchmark_exact_256], type "f64", case {inputs [[1.0, 1.0, 2.0, 2.0], [3.0, 3.0, 4.0, 4.0]], expected [1.0, 3.0, 1.0, 3.0]}}
+    - {tags [benchmark_exact_256], type "si16", case {inputs [[1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2], [3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4]], expected [1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3]}}
+    - {tags [benchmark_exact_256], type "si64", case {inputs [[1, 1, 2, 2], [3, 3, 4, 4]], expected [1, 3, 1, 3]}}
+    - {tags [benchmark_exact_256], type "si8", case {inputs [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2], [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4]], expected [1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3]}}
+    - {tags [benchmark_exact_256], type "ui16", case {inputs [[1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2], [3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4]], expected [1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3]}}
+    - {tags [benchmark_exact_256], type "ui32", case {inputs [[1, 1, 1, 1, 2, 2, 2, 2], [3, 3, 3, 3, 4, 4, 4, 4]], expected [1, 3, 1, 3, 1, 3, 1, 3]}}
+    - {tags [benchmark_exact_256], type "ui64", case {inputs [[1, 1, 2, 2], [3, 3, 4, 4]], expected [1, 3, 1, 3]}}
+    - {tags [benchmark_exact_256], type "ui8", case {inputs [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2], [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4]], expected [1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3]}}
+    - {tags [benchmark_exact_512], type "f32", case {inputs [[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0], [3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0]], expected [1.0, 3.0, 1.0, 3.0, 1.0, 3.0, 1.0, 3.0, 1.0, 3.0, 1.0, 3.0, 1.0, 3.0, 1.0, 3.0]}}
+    - {tags [benchmark_exact_512], type "f64", case {inputs [[1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0], [3.0, 3.0, 3.0, 3.0, 4.0, 4.0, 4.0, 4.0]], expected [1.0, 3.0, 1.0, 3.0, 1.0, 3.0, 1.0, 3.0]}}
+    - {tags [benchmark_exact_512], type "si16", case {inputs [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2], [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4]], expected [1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3]}}
+    - {tags [benchmark_exact_512], type "si64", case {inputs [[1, 1, 1, 1, 2, 2, 2, 2], [3, 3, 3, 3, 4, 4, 4, 4]], expected [1, 3, 1, 3, 1, 3, 1, 3]}}
+    - {tags [benchmark_exact_512], type "si8", case {inputs [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2], [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4]], expected [1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3]}}
+    - {tags [benchmark_exact_512], type "ui16", case {inputs [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2], [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4]], expected [1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3]}}
+    - {tags [benchmark_exact_512], type "ui32", case {inputs [[1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2], [3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4]], expected [1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3]}}
+    - {tags [benchmark_exact_512], type "ui64", case {inputs [[1, 1, 1, 1, 2, 2, 2, 2], [3, 3, 3, 3, 4, 4, 4, 4]], expected [1, 3, 1, 3, 1, 3, 1, 3]}}
+    - {tags [benchmark_exact_512], type "ui8", case {inputs [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2], [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4]], expected [1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3]}}
   impls:
     scalar:
       arith:
@@ -502,9 +570,9 @@ prim<v:=(v,v)> interleave_lo(left, right):
               var<const_infer>(left_lanes, call<primitive=to_array[Vec]>(left));
               var<const_infer>(right_lanes, call<primitive=to_array[Vec]>(right));
               var<infer>(result, left_lanes);
-              loop<generation, scoped>(i, 0, value(vector::length), 1) {
-                if ((value(i) % 2) == 0) { result[value(i)] = left_lanes[value(i) / 2]; }
-                else { result[value(i)] = right_lanes[value(i) / 2]; }
+              loop<generation, scoped>(i, 0, value(vector::length) / 2, 1) {
+                result[2 * value(i)] = left_lanes[value(i)];
+                result[2 * value(i) + 1] = right_lanes[value(i)];
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -527,9 +595,9 @@ prim<v:=(v,v)> interleave_lo(left, right):
               var<const_infer>(left_lanes, call<primitive=to_array[Vec]>(left));
               var<const_infer>(right_lanes, call<primitive=to_array[Vec]>(right));
               var<infer>(result, left_lanes);
-              loop<generation, scoped>(i, 0, value(vector::length), 1) {
-                if ((value(i) % 2) == 0) { result[value(i)] = left_lanes[value(i) / 2]; }
-                else { result[value(i)] = right_lanes[value(i) / 2]; }
+              loop<generation, scoped>(i, 0, value(vector::length) / 2, 1) {
+                result[2 * value(i)] = left_lanes[value(i)];
+                result[2 * value(i) + 1] = right_lanes[value(i)];
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -551,9 +619,9 @@ prim<v:=(v,v)> interleave_lo(left, right):
               var<const_infer>(left_lanes, call<primitive=to_array[Vec]>(left));
               var<const_infer>(right_lanes, call<primitive=to_array[Vec]>(right));
               var<infer>(result, left_lanes);
-              loop<generation, scoped>(i, 0, value(vector::length), 1) {
-                if ((value(i) % 2) == 0) { result[value(i)] = left_lanes[value(i) / 2]; }
-                else { result[value(i)] = right_lanes[value(i) / 2]; }
+              loop<generation, scoped>(i, 0, value(vector::length) / 2, 1) {
+                result[2 * value(i)] = left_lanes[value(i)];
+                result[2 * value(i) + 1] = right_lanes[value(i)];
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -574,9 +642,9 @@ prim<v:=(v,v)> interleave_lo(left, right):
             var<const_infer>(left_lanes, call<primitive=to_array[Vec]>(left));
             var<const_infer>(right_lanes, call<primitive=to_array[Vec]>(right));
             var<infer>(result, left_lanes);
-            loop<generation, scoped>(i, 0, value(vector::length), 1) {
-              if ((value(i) % 2) == 0) { result[value(i)] = left_lanes[value(i) / 2]; }
-              else { result[value(i)] = right_lanes[value(i) / 2]; }
+            loop<generation, scoped>(i, 0, value(vector::length) / 2, 1) {
+              result[2 * value(i)] = left_lanes[value(i)];
+              result[2 * value(i) + 1] = right_lanes[value(i)];
             }
             complete(call<primitive=from_array[Vec]>(result));
           """
@@ -608,9 +676,9 @@ prim<v:=(v,v)> interleave_lo(left, right):
               reasons []
             tsil """
               var<init_register>(result);
-              loop<generation, scoped>(i, 0, value(vector::length), 1) {
-                if ((value(i) % 2) == 0) { result[value(i)] = left[value(i) / 2]; }
-                else { result[value(i)] = right[value(i) / 2]; }
+              loop<generation, scoped>(i, 0, value(vector::length) / 2, 1) {
+                result[2 * value(i)] = left[value(i)];
+                result[2 * value(i) + 1] = right[value(i)];
               }
               complete(result);
             """
@@ -660,15 +728,36 @@ prim<v:=(v,v)> interleave_lo(left, right):
               var<runtime_array>(Base, left_lanes, lanes);
               var<runtime_array>(Base, right_lanes, lanes);
               var<runtime_array>(Base, result, lanes);
-              call<primitive=store[Vec], attrs[aligned=false]>(left_lanes, left);
-              call<primitive=store[Vec], attrs[aligned=false]>(right_lanes, right);
+              call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(left_lanes, left);
+              call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(right_lanes, right);
               loop<backend>(i, 0, lanes, 1) {
                 if ((i % 2) == 0) { result[i] = left_lanes[i / 2]; }
                 else { result[i] = right_lanes[i / 2]; }
               }
-              complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
+              complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
             """
-
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [raw_memory]
+        implementation:
+          tsil """
+            let<type>(Base, base::in);
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<runtime_array>(Base, left_lanes, lanes);
+            var<runtime_array>(Base, right_lanes, lanes);
+            var<runtime_array>(Base, result, lanes);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(left_lanes, left);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(right_lanes, right);
+            loop<backend>(i, 0, lanes, 1) {
+              if ((i % 2) == 0) { result[i] = left_lanes[i / 2]; }
+              else { result[i] = right_lanes[i / 2]; }
+            }
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
+          """
 prim<v:=(v)> reverse(data):
   brief_description "Reverses the order of all lanes across the whole register."
   detailed_description """
@@ -693,6 +782,31 @@ prim<v:=(v)> reverse(data):
     - {tags [short_vector], type "si64", case {inputs [[9, 10]], expected [10, 9]}}
     - {tags [clang, wide], extension "clang_v512", type "si32", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]], expected [15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]}}
     - {tags [sse_exact], extension "sse", type "si32", case {inputs [[10, 20, 30, 40]], expected [40, 30, 20, 10]}}
+    - {tags [benchmark_exact_128], type "f64", case {inputs [[1.0, 2.0]], expected [2.0, 1.0]}}
+    - {tags [benchmark_exact_128], type "si16", case {inputs [[1, 1, 1, 1, 2, 2, 2, 2]], expected [2, 2, 2, 2, 1, 1, 1, 1]}}
+    - {tags [benchmark_exact_128], type "si32", case {inputs [[1, 1, 2, 2]], expected [2, 2, 1, 1]}}
+    - {tags [benchmark_exact_128], type "si8", case {inputs [[1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2]], expected [2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1]}}
+    - {tags [benchmark_exact_128], type "ui32", case {inputs [[1, 1, 2, 2]], expected [2, 2, 1, 1]}}
+    - {tags [benchmark_exact_128], type "ui64", case {inputs [[1, 2]], expected [2, 1]}}
+    - {tags [benchmark_exact_128], type "ui8", case {inputs [[1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2]], expected [2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1]}}
+    - {tags [benchmark_exact_256], type "f32", case {inputs [[1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0]], expected [2.0, 2.0, 2.0, 2.0, 1.0, 1.0, 1.0, 1.0]}}
+    - {tags [benchmark_exact_256], type "f64", case {inputs [[1.0, 1.0, 2.0, 2.0]], expected [2.0, 2.0, 1.0, 1.0]}}
+    - {tags [benchmark_exact_256], type "si16", case {inputs [[1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2]], expected [2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1]}}
+    - {tags [benchmark_exact_256], type "si64", case {inputs [[1, 1, 2, 2]], expected [2, 2, 1, 1]}}
+    - {tags [benchmark_exact_256], type "si8", case {inputs [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]], expected [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]}}
+    - {tags [benchmark_exact_256], type "ui16", case {inputs [[1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2]], expected [2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1]}}
+    - {tags [benchmark_exact_256], type "ui32", case {inputs [[1, 1, 1, 1, 2, 2, 2, 2]], expected [2, 2, 2, 2, 1, 1, 1, 1]}}
+    - {tags [benchmark_exact_256], type "ui64", case {inputs [[1, 1, 2, 2]], expected [2, 2, 1, 1]}}
+    - {tags [benchmark_exact_256], type "ui8", case {inputs [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]], expected [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]}}
+    - {tags [benchmark_exact_512], type "f32", case {inputs [[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]], expected [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]}}
+    - {tags [benchmark_exact_512], type "f64", case {inputs [[1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0]], expected [2.0, 2.0, 2.0, 2.0, 1.0, 1.0, 1.0, 1.0]}}
+    - {tags [benchmark_exact_512], type "si16", case {inputs [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]], expected [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]}}
+    - {tags [benchmark_exact_512], type "si64", case {inputs [[1, 1, 1, 1, 2, 2, 2, 2]], expected [2, 2, 2, 2, 1, 1, 1, 1]}}
+    - {tags [benchmark_exact_512], type "si8", case {inputs [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]], expected [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]}}
+    - {tags [benchmark_exact_512], type "ui16", case {inputs [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]], expected [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]}}
+    - {tags [benchmark_exact_512], type "ui32", case {inputs [[1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2]], expected [2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1]}}
+    - {tags [benchmark_exact_512], type "ui64", case {inputs [[1, 1, 1, 1, 2, 2, 2, 2]], expected [2, 2, 2, 2, 1, 1, 1, 1]}}
+    - {tags [benchmark_exact_512], type "ui8", case {inputs [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]], expected [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]}}
   impls:
     scalar:
       arith:
@@ -759,11 +873,17 @@ prim<v:=(v)> reverse(data):
               }
               complete(result);
             """
-    [generic, oneapi_fpga, oneapi_fpga_rtl]:
+    [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, oneapi_fpga_rtl]:
       arith:
         prefer_fixed_native true
         requires:
           generic []
+          clang_v128 []
+          clang_v256 []
+          clang_v512 []
+          clang_v128_bool []
+          clang_v256_bool []
+          clang_v512_bool []
           oneapi_fpga []
           oneapi_fpga_rtl []
         safety:
@@ -799,12 +919,31 @@ prim<v:=(v)> reverse(data):
               var<const_infer>(lanes, value(vector::runtime_length));
               var<runtime_array>(Base, source_lanes, lanes);
               var<runtime_array>(Base, result, lanes);
-              call<primitive=store[Vec], attrs[aligned=false]>(source_lanes, data);
+              call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(source_lanes, data);
               loop<backend>(i, 0, lanes, 1) {
                 result[i] = source_lanes[lanes - 1 - i];
               }
-              complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
+              complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
             """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [raw_memory]
+        implementation:
+          tsil """
+            let<type>(Base, base::in);
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<runtime_array>(Base, source_lanes, lanes);
+            var<runtime_array>(Base, result, lanes);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(source_lanes, data);
+            loop<backend>(i, 0, lanes, 1) {
+              result[i] = source_lanes[lanes - 1 - i];
+            }
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
+          """
 
 prim<v:=(v,sImm)> permute_lanes(data, control):
   brief_description "Permutes consecutive groups of up to four lanes using two-bit selectors."
@@ -1226,7 +1365,7 @@ prim<v:=(v,sImm)> permute_lanes(data, control):
             var<const_infer>(lanes, value(vector::runtime_length));
             var<runtime_array>(Base, input, lanes);
             var<runtime_array>(Base, result, lanes);
-            call<primitive=store[Vec], attrs[aligned=false]>(input, data);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(input, data);
             loop<backend>(i, 0, lanes, 1) {
               var<const_infer>(group_start, (i / 4) * 4);
               var<infer>(group_length, lanes - group_start);
@@ -1234,7 +1373,30 @@ prim<v:=(v,sImm)> permute_lanes(data, control):
               var<const_infer>(selector, (cast<static>(scalar::size, control) >> (2 * (i % 4))) & 3);
               result[i] = input[group_start + selector % group_length];
             }
-            complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
+          """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [raw_memory]
+        implementation:
+          tsil """
+            let<type>(Base, base::in);
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<runtime_array>(Base, input, lanes);
+            var<runtime_array>(Base, result, lanes);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(input, data);
+            loop<backend>(i, 0, lanes, 1) {
+              var<const_infer>(group_start, (i / 4) * 4);
+              var<infer>(group_length, lanes - group_start);
+              if (group_length > 4) { group_length = 4; }
+              var<const_infer>(selector, (cast<static>(scalar::size, control) >> (2 * (i % 4))) & 3);
+              result[i] = input[group_start + selector % group_length];
+            }
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
           """
 
 prim<v:=(v,vidx)> permute_lanes(data, indexes):
@@ -1530,13 +1692,13 @@ prim<v:=(v,vidx)> permute_lanes(data, indexes):
               var<runtime_array>(Base, input, lanes);
               var<runtime_array>(IndexBase, index_lanes, lanes);
               var<runtime_array>(Base, result, lanes);
-              call<primitive=store[Vec], attrs[aligned=false]>(input, data);
-              call<primitive=store[IndicesType], attrs[aligned=false]>(index_lanes, indexes);
+              call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(input, data);
+              call<primitive=store[IndicesType], attrs[aligned=false], discharge[contiguous_memory_extent]>(index_lanes, indexes);
               loop<backend>(i, 0, lanes, 1) {
                 var<const_infer>(source, idx_offset(index_lanes[i], 1) % lanes);
                 result[i] = input[source];
               }
-              complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
+              complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
             """
     [avx2, sse, neon, wasm128]:
       arith:
@@ -1617,13 +1779,36 @@ prim<v:=(v,vidx)> permute_lanes(data, indexes):
             var<runtime_array>(Base, input, lanes);
             var<runtime_array>(IndexBase, index_lanes, lanes);
             var<runtime_array>(Base, result, lanes);
-            call<primitive=store[Vec], attrs[aligned=false]>(input, data);
-            call<primitive=store[IndicesType], attrs[aligned=false]>(index_lanes, indexes);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(input, data);
+            call<primitive=store[IndicesType], attrs[aligned=false], discharge[contiguous_memory_extent]>(index_lanes, indexes);
             loop<backend>(i, 0, lanes, 1) {
               var<const_infer>(source, idx_offset(index_lanes[i], 1) % lanes);
               result[i] = input[source];
             }
-            complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
+          """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [raw_memory]
+        implementation:
+          tsil """
+            let<type>(Base, base::in);
+            let<type>(IndexBase, base::generic(IndicesType));
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<runtime_array>(Base, input, lanes);
+            var<runtime_array>(IndexBase, index_lanes, lanes);
+            var<runtime_array>(Base, result, lanes);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(input, data);
+            call<primitive=store[IndicesType], attrs[aligned=false], discharge[contiguous_memory_extent]>(index_lanes, indexes);
+            loop<backend>(i, 0, lanes, 1) {
+              var<const_infer>(source, idx_offset(index_lanes[i], 1) % lanes);
+              result[i] = input[source];
+            }
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
           """
 
 prim<v:=(m,v,v,vidx)>[mask=pass_through] permute_lanes(mask, src, data, indexes):
@@ -1767,6 +1952,21 @@ prim<v:=(m,v,v,vidx)>[mask=pass_through] permute_lanes(mask, src, data, indexes)
               call<primitive=permute_lanes[Vec, IndicesType]>(data, indexes)
             ));
           """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(call<primitive=mov, attrs[mask=pass_through]>(
+              mask,
+              src,
+              call<primitive=permute_lanes[Vec, IndicesType]>(data, indexes)
+            ));
+          """
 
 prim<v:=(m,v,vidx)>[mask=zero] permute_lanes(mask, data, indexes):
   brief_description "Permutes lanes under a mask and zeros inactive lanes."
@@ -1881,6 +2081,20 @@ prim<v:=(m,v,vidx)>[mask=zero] permute_lanes(mask, data, indexes):
           clang_v512_bool []
           oneapi_fpga []
           scalar []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(call<primitive=mov, attrs[mask=zero]>(
+              mask,
+              call<primitive=permute_lanes[Vec, IndicesType]>(data, indexes)
+            ));
+          """
+    rvv:
+      arith:
+        requires [v]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2149,15 +2363,15 @@ prim<v:=(v,vidx,v)> table_lookup(left, indexes, right):
               var<runtime_array>(Base, right_lanes, lanes);
               var<runtime_array>(IndexBase, index_lanes, lanes);
               var<runtime_array>(Base, result, lanes);
-              call<primitive=store[Vec], attrs[aligned=false]>(left_lanes, left);
-              call<primitive=store[Vec], attrs[aligned=false]>(right_lanes, right);
-              call<primitive=store[IndicesType], attrs[aligned=false]>(index_lanes, indexes);
+              call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(left_lanes, left);
+              call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(right_lanes, right);
+              call<primitive=store[IndicesType], attrs[aligned=false], discharge[contiguous_memory_extent]>(index_lanes, indexes);
               loop<backend>(i, 0, lanes, 1) {
                 var<const_infer>(source, idx_offset(index_lanes[i], 1) % (2 * lanes));
                 if (source < lanes) { result[i] = left_lanes[source]; }
                 else { result[i] = right_lanes[source - lanes]; }
               }
-              complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
+              complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
             """
     [avx2, sse, neon, wasm128]:
       arith:
@@ -2243,13 +2457,39 @@ prim<v:=(v,vidx,v)> table_lookup(left, indexes, right):
             var<runtime_array>(Base, right_lanes, lanes);
             var<runtime_array>(IndexBase, index_lanes, lanes);
             var<runtime_array>(Base, result, lanes);
-            call<primitive=store[Vec], attrs[aligned=false]>(left_lanes, left);
-            call<primitive=store[Vec], attrs[aligned=false]>(right_lanes, right);
-            call<primitive=store[IndicesType], attrs[aligned=false]>(index_lanes, indexes);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(left_lanes, left);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(right_lanes, right);
+            call<primitive=store[IndicesType], attrs[aligned=false], discharge[contiguous_memory_extent]>(index_lanes, indexes);
             loop<backend>(i, 0, lanes, 1) {
               var<const_infer>(source, idx_offset(index_lanes[i], 1) % (2 * lanes));
               if (source < lanes) { result[i] = left_lanes[source]; }
               else { result[i] = right_lanes[source - lanes]; }
             }
-            complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
+          """
+    rvv:
+      arith:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [raw_memory]
+        implementation:
+          tsil """
+            let<type>(Base, base::in);
+            let<type>(IndexBase, base::generic(IndicesType));
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<runtime_array>(Base, left_lanes, lanes);
+            var<runtime_array>(Base, right_lanes, lanes);
+            var<runtime_array>(IndexBase, index_lanes, lanes);
+            var<runtime_array>(Base, result, lanes);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(left_lanes, left);
+            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(right_lanes, right);
+            call<primitive=store[IndicesType], attrs[aligned=false], discharge[contiguous_memory_extent]>(index_lanes, indexes);
+            loop<backend>(i, 0, lanes, 1) {
+              var<const_infer>(source, idx_offset(index_lanes[i], 1) % (2 * lanes));
+              if (source < lanes) { result[i] = left_lanes[source]; }
+              else { result[i] = right_lanes[source - lanes]; }
+            }
+            complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
           """

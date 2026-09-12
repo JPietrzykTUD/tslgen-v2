@@ -34,7 +34,7 @@ _REGION_FACTS = (
         "Invoke a compiler-owned helper.",
         ("helper<name>(args)", "helper<name, template_arg, ...>(args)"),
     ),
-    ("op", "Render a backend-specific operator.", ("op<name>(arg0, arg1, ...)",)),
+    ("op", "Render a typed direct operator.", ("op<name>(arg0, arg1, ...)",)),
     (
         "var",
         "Declare local storage.",
@@ -66,8 +66,10 @@ _REGION_FACTS = (
     ),
     (
         "mem",
-        "Perform raw byte-memory operations.",
+        "Perform typed scalar or raw byte-memory operations.",
         (
+            "mem<load_scalar>(ptr)",
+            "mem<store_scalar>(ptr, value)",
             "mem<copy>(dst, src, count)",
             "mem<set>(ptr, value, count)",
             "mem<alloc>(count)",
@@ -106,6 +108,8 @@ _REGION_FACTS = (
         (
             "call<primitive=name>(args)",
             "call<primitive=name[VecOrTypeArgs], attrs[key=value, ...]>(args)",
+            "call<primitive=name[...], forward[precondition, ...]>(args)",
+            "call<primitive=name[...], discharge[precondition, ...]>(args)",
             "call<primitive=@self[...], attrs[key=value, ...]>(args)",
         ),
     ),

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from _select_lower_extension_support import (
     Catalog,
     create_backend_dialect,
@@ -245,6 +247,65 @@ def test_x86_byte_shift_right_composes_sign_mask(
         assert "movm_epi8" not in lowered.body_text
 
 
+def _assert_preserve_sign_returns_use_closed_branches(
+    body_text: str, expected_count: int
+) -> None:
+    marker = "if constexpr (PreserveSign) {"
+    starts = [match.start() for match in re.finditer(re.escape(marker), body_text)]
+
+    assert len(starts) == expected_count
+    for start in starts:
+        opening = body_text.index("{", start)
+        depth = 1
+        cursor = opening + 1
+        while depth:
+            assert cursor < len(body_text)
+            depth += (body_text[cursor] == "{") - (body_text[cursor] == "}")
+            cursor += 1
+        assert re.match(r"\s*else\s*\{", body_text[cursor:])
+
+
+@pytest.mark.parametrize(
+    ("profile", "extension", "type_tag", "signature", "expected_count"),
+    [
+        ("sse2", "sse", "si8", "v:=(v,s)", 2),
+        ("avx2", "avx2", "si8", "v:=(v,s)", 2),
+        ("skylake", "avx512", "si8", "v:=(v,s)", 2),
+        ("avx2", "avx2", "si8", "v:=(v,v)", 1),
+        ("avx2", "avx2", "si16", "v:=(v,v)", 1),
+        ("skylake", "avx512", "si8", "v:=(v,v)", 1),
+    ],
+)
+def test_x86_shift_right_closes_compile_time_return_branches(
+    catalog: Catalog,
+    machine_profiles,
+    profile: str,
+    extension: str,
+    type_tag: str,
+    signature: str,
+    expected_count: int,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles[profile],
+            "shift_right",
+            (type_tag,),
+        )
+        .selected
+        if selected.extension.name == extension
+        and selected.primitive.signature == signature
+    )
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert cpp is not None
+    _assert_preserve_sign_returns_use_closed_branches(cpp.body_text, expected_count)
+
+
 @pytest.mark.parametrize(
     ("profile", "extension", "type_tag", "expected_fragment"),
     [
@@ -444,6 +505,146 @@ def test_clang_vector_shift_left_uses_builtin_vector_operator(
     assert "valid ? shifted" in cpp.body_text
     assert "for (" not in cpp.body_text
     assert "to_array" not in cpp.body_text
+
+
+@pytest.mark.parametrize("signature", ["v:=(v,sImm)", "v:=(v,s)"])
+def test_clang_uniform_shift_left_preserves_vector_result(
+    catalog: Catalog,
+    machine_profiles,
+    signature: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles["avx2"], "shift_left", ("ui16",))
+        .selected
+        if selected.extension.name == "clang_v256"
+        and selected.primitive.signature == signature
+    )
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert cpp is not None
+    assert "auto const ures = ua <<" in cpp.body_text
+    assert "auto const ures = static_cast" not in cpp.body_text
+
+
+@pytest.mark.parametrize("signature", ["v:=(v,sImm)", "v:=(v,s)"])
+def test_scalar_uniform_shift_left_keeps_narrowing_cast(
+    catalog: Catalog,
+    machine_profiles,
+    signature: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles["scalar"], "shift_left", ("ui16",))
+        .selected
+        if selected.extension.name == "scalar"
+        and selected.primitive.signature == signature
+    )
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert cpp is not None
+    assert "auto const ures = static_cast<uint16_t>" in cpp.body_text
+    if signature == "v:=(v,sImm)":
+        assert "if constexpr (static_cast<uint64_t>(shift) >= 16)" in cpp.body_text
+
+
+@pytest.mark.parametrize(
+    ("backend_id", "expected", "continuation"),
+    (
+        (
+            "cpp",
+            "if constexpr (static_cast<uint64_t>(shift) >= 8)",
+            "auto const ua",
+        ),
+        ("rust", "if (shift) as u64 >= 8", "let ua"),
+    ),
+)
+def test_scalar_immediate_shift_bound_uses_static_control(
+    catalog: Catalog,
+    machine_profiles,
+    backend_id: str,
+    expected: str,
+    continuation: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog, machine_profiles["scalar"], "shift_left", ("si8",)
+        )
+        .selected
+        if selected.extension.name == "scalar"
+        and selected.primitive.signature == "v:=(v,sImm)"
+    )
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, backend_id)
+    ).specialization
+
+    assert lowered is not None
+    assert expected in lowered.body_text
+    assert re.search(
+        rf"\}}\s+else\s+\{{\s*{re.escape(continuation)}", lowered.body_text
+    )
+
+
+@pytest.mark.parametrize(
+    ("primitive", "type_tag", "continuation"),
+    (
+        ("shift_left", "ui32", "return __riscv_vsll_vx_u32m1"),
+        ("shift_right", "si32", "auto const shifted = __riscv_vsra_vx_i32m1"),
+    ),
+)
+def test_rvv_immediate_shift_bound_encloses_normal_path(
+    catalog: Catalog,
+    machine_profiles,
+    primitive: str,
+    type_tag: str,
+    continuation: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles["rvv"], primitive, (type_tag,))
+        .selected
+        if selected.extension.name == "rvv"
+        and selected.primitive.signature == "v:=(v,sImm)"
+    )
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert lowered is not None
+    assert re.search(
+        rf"\}}\s+else\s+\{{\s*{re.escape(continuation)}", lowered.body_text
+    )
+    if primitive == "shift_right":
+        _assert_preserve_sign_returns_use_closed_branches(lowered.body_text, 2)
+
+
+def test_rvv_runtime_shift_right_closes_large_count_branch(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles["rvv"], "shift_right", ("si32",))
+        .selected
+        if selected.extension.name == "rvv"
+        and selected.primitive.signature == "v:=(v,s)"
+    )
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert cpp is not None
+    _assert_preserve_sign_returns_use_closed_branches(cpp.body_text, 2)
 
 
 def test_clang_vector_shift_right_uses_builtin_vector_operator(

@@ -63,7 +63,8 @@ fn main() {
             assert_eq!(unary.total, expected_unary);
 
             let mut binary = PairSumSink { total: 0 };
-            profile::algo::consume_binary($policy, &mut binary, &left, &right);
+            profile::algo::consume_binary_checked($policy, &mut binary, &left, &right)
+                .expect("checked algorithm preconditions");
             assert_eq!(binary.total, expected_binary);
         }};
     }

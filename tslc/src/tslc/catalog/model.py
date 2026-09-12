@@ -21,6 +21,8 @@ from tslc.catalog.overloads import (
     PrimitiveOverload,
     ResolvedPrimitiveOverload,
 )
+from tslc.catalog.preconditions import PrimitivePrecondition
+from tslc.catalog.register_shapes import RegisterMultiplicity
 from tslc.catalog.semantics import PrimitiveSemanticContract
 from tslc.catalog.shift import PrimitiveShiftContract
 from tslc.catalog.signature_kinds import PointerMutability
@@ -84,6 +86,13 @@ class PrimitiveValueMode(StrEnum):
     ZERO = "zero"
 
 
+class PrimitivePortability(StrEnum):
+    """Whether a primitive promises a portable implementation surface."""
+
+    PORTABLE = "portable"
+    TARGET_SPECIFIC = "target_specific"
+
+
 class TestComparison(StrEnum):
     """How authored expected lane values are compared to generated results."""
 
@@ -95,6 +104,50 @@ class TestFailureReason(StrEnum):
     """Closed language-neutral reasons authored failure cases may expect."""
 
     INTEGER_ZERO_DIVISOR = "integer_zero_divisor"
+    CONVERSION_CHUNK_INDEX_OUT_OF_RANGE = "conversion_chunk_index_out_of_range"
+
+
+IMMEDIATE_CONVERSION_CHUNK_INDEX_MARKER = (
+    "TSL_CONVERSION_CHUNK_INDEX_OUT_OF_RANGE"
+)
+
+
+class ImmediateRangeUpperKind(StrEnum):
+    """Closed source expressions accepted as an immediate range's upper bound."""
+
+    LITERAL = "literal"
+    SOURCE_BASE_BIT_WIDTH = "source_base_bit_width"
+    CONVERSION_CHUNK_COUNT = "conversion_chunk_count"
+
+
+@dataclass(frozen=True, slots=True)
+class ImmediateRangeUpper:
+    """Typed upper bound retained after parsing a ``value_range`` declaration."""
+
+    kind: ImmediateRangeUpperKind
+    literal: int | None = None
+
+    def __post_init__(self) -> None:
+        if (self.kind is ImmediateRangeUpperKind.LITERAL) != (self.literal is not None):
+            raise ValueError("only a literal immediate upper bound carries a value")
+
+    @property
+    def source_text(self) -> str:
+        if self.kind is ImmediateRangeUpperKind.LITERAL:
+            assert self.literal is not None
+            return str(self.literal)
+        if self.kind is ImmediateRangeUpperKind.SOURCE_BASE_BIT_WIDTH:
+            return "base_bit_width(data)"
+        return "conversion_chunk_count(data, ToBase)"
+
+
+@dataclass(frozen=True, slots=True)
+class ImmediateValueRange:
+    """A source-declared legal interval for one compile-time immediate."""
+
+    lower: int
+    upper: ImmediateRangeUpper
+    inclusive: bool = False
 
 
 MaskPolicyKind = Literal[
@@ -153,6 +206,8 @@ class ImplementationSafety:
     boundary. ``caller_unsafe`` means calling the generated API requires the
     caller to uphold an unsafe contract. ``reasons`` are stable source-authored
     and compiler-propagated labels for diagnostics, review, and future docs.
+    Neither pointer-shaped signature syntax nor an internal unsafe mechanism is
+    by itself a public caller obligation.
     """
 
     internal_unsafe: bool = False
@@ -309,6 +364,10 @@ class Primitive:
     brief_description: str | None = None
     detailed_description: str | None = None
     semantics: str | None = None
+    # Portable primitives are expected to remain implementable for every
+    # otherwise-valid selector slot. Target-specific primitives deliberately
+    # expose only the implementation/feature combinations authored below.
+    portability: PrimitivePortability = PrimitivePortability.PORTABLE
     # Explicit language-neutral arithmetic operations, operand roles, and
     # guarantees. Selection and backend code must not infer these facts from
     # primitive names, signature positions, prose, or implementation text.
@@ -317,6 +376,7 @@ class Primitive:
     # and conversion add only their domain-specific facts; no target spelling
     # or facade policy is source data.
     operation: PrimitiveSemanticContract | None = None
+    preconditions: tuple[PrimitivePrecondition, ...] = ()
     memory: PrimitiveMemoryContract | None = None
     conversion: PrimitiveConversionContract | None = None
     shift: PrimitiveShiftContract | None = None
@@ -371,17 +431,18 @@ class ImmediateParam:
 
     - ``type_tag``: the immediate's public type (C++ non-type template param / Rust const
       generic), e.g. ``ui32``/``si32``.
-    - ``value_range``: the legal value range as ``(lo, hi_expr, inclusive)`` — ``lo`` is an
-      int, ``hi_expr`` is an int-literal string or the symbolic token ``base_bit_width(data)``
-      resolved at lowering against the selected type; ``inclusive`` distinguishes ``a..b``
-      (half-open) from ``a..=b``. None when undeclared.
+    - ``value_range``: the typed finite dispatch domain used by a backend strategy such as
+      Rust ``literal_match``. Values outside it may still have defined primitive semantics.
+    - ``valid_range``: an optional static well-formedness interval. Values outside it must
+      be rejected at compile time rather than clamped, wrapped, or checked at runtime.
     - ``dispatch``: backend-id -> forwarding strategy pairs (e.g. ``(("rust", "literal_match"),)``).
       A backend with no entry passes the immediate as a positional const arg.
     """
 
     name: str
     type_tag: str = "ui32"
-    value_range: tuple[int, str, bool] | None = None
+    value_range: ImmediateValueRange | None = None
+    valid_range: ImmediateValueRange | None = None
     dispatch: tuple[tuple[str, str], ...] = ()
     source: SourceSpan | None = None
 
@@ -708,7 +769,14 @@ class Extension:
     vector_register_types: Mapping[str, Mapping[str, str]] = field(
         default_factory=dict
     )  # type tag/group -> backend_id -> register type
+    # Physical register multiplicity -> type tag/group -> backend -> spelling.
+    # Entries are intentionally sparse: they describe only concrete scalable
+    # conversion representations a target can actually expose.
+    register_multiplicity_types: Mapping[
+        RegisterMultiplicity, Mapping[str, Mapping[str, str]]
+    ] = field(default_factory=dict)
     backend_headers: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    backend_system_headers: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     # backend_id -> whether this extension is emittable for that backend. Missing entries are
     # unsupported; inherited extensions receive parent entries during catalog promotion.
     backend_supported: Mapping[str, bool] = field(default_factory=dict)
@@ -762,11 +830,26 @@ class Extension:
         )
         object.__setattr__(
             self,
+            "register_multiplicity_types",
+            _freeze_three_level_mapping(self.register_multiplicity_types),
+        )
+        object.__setattr__(
+            self,
             "backend_headers",
             MappingProxyType(
                 {
                     backend: tuple(headers)
                     for backend, headers in self.backend_headers.items()
+                }
+            ),
+        )
+        object.__setattr__(
+            self,
+            "backend_system_headers",
+            MappingProxyType(
+                {
+                    backend: tuple(headers)
+                    for backend, headers in self.backend_system_headers.items()
                 }
             ),
         )
@@ -830,8 +913,36 @@ class Extension:
 
         return self.vector_register_types.get(type_tag_or_group, {}).get(backend_id)
 
+    def direct_register_multiplicity_type(
+        self,
+        backend_id: str,
+        type_tag_or_group: str,
+        multiplicity: RegisterMultiplicity,
+    ) -> str | None:
+        if multiplicity.is_single:
+            return self.direct_vector_register_type(backend_id, type_tag_or_group)
+        by_type = self.register_multiplicity_types.get(multiplicity, {})
+        return by_type.get(type_tag_or_group, {}).get(backend_id)
+
     def headers_for_backend(self, backend_id: str) -> tuple[str, ...]:
         return self.backend_headers.get(backend_id, ())
+
+    def system_headers_for_backend(self, backend_id: str) -> tuple[str, ...]:
+        """Third-party headers whose diagnostics must not weaken product checks."""
+
+        return self.backend_system_headers.get(backend_id, ())
+
+    def required_headers_for_backend(self, backend_id: str) -> tuple[str, ...]:
+        """All compiler preflight dependencies, independent of warning policy."""
+
+        return tuple(
+            dict.fromkeys(
+                (
+                    *self.headers_for_backend(backend_id),
+                    *self.system_headers_for_backend(backend_id),
+                )
+            )
+        )
 
 @dataclass(frozen=True, slots=True)
 class Catalog:
@@ -991,4 +1102,20 @@ def _freeze_nested_mapping(
 ) -> Mapping[_K, Mapping[_InnerK, _InnerV]]:
     return MappingProxyType(
         {key: _freeze_mapping(value) for key, value in mapping.items()}
+    )
+
+
+def _freeze_three_level_mapping(
+    mapping: Mapping[_K, Mapping[_InnerK, Mapping[str, str]]],
+) -> Mapping[_K, Mapping[_InnerK, Mapping[str, str]]]:
+    return MappingProxyType(
+        {
+            key: MappingProxyType(
+                {
+                    inner_key: MappingProxyType(dict(inner_value))
+                    for inner_key, inner_value in value.items()
+                }
+            )
+            for key, value in mapping.items()
+        }
     )

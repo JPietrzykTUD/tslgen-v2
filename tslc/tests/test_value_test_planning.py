@@ -15,6 +15,7 @@ from tslc.catalog.model import (
     Catalog,
     Extension,
     ExtensionMetadata,
+    ImaskPolicy,
     ParamTypeExpression,
     ParamTypeRule,
     Primitive,
@@ -23,9 +24,17 @@ from tslc.catalog.model import (
     TestArg as TslTestArg,
     TestCase as TslTestCase,
 )
+from tslc.catalog.preconditions import (
+    PreconditionErrorKind,
+    PreconditionKind,
+    PrimitivePrecondition,
+)
+from tslc.catalog.semantics import OperandBinding, OperandRole
 from tslc.compiler_assets import RenderAssets
 from tslc.diagnostics import Diagnostic, SourceSpan
 from tslc.lower.lowerer import LoweredSpecialization
+from tslc.lower.model import LoweredTypeParam
+from tslc.lower.primitive_semantics import LoweredPrimitiveSemantics
 from tslc.lower.target_vectors import TargetVector
 from tslc.backend.emitted_names import finalize_emitted_names
 from tslc.target_text import LoweredBody
@@ -138,6 +147,7 @@ def ValueTestCasePlan(*identity: object, **fields: Any) -> _ValueTestCasePlan:
             axis_args=values.pop("axis_args", ()),
             immediate=values.pop("immediate_value", None),
             generic_defaults=values.pop("generic_defaults", ()),
+            caller_unsafe=values.pop("caller_unsafe", False),
         ),
         target=ValueTestTarget(**target_values) if any(value is not None for value in target_values.values()) else None,
         index=ValueTestIndex(**index_values) if any(value is not None for value in index_values.values()) else None,
@@ -467,6 +477,7 @@ def test_differential_renderers_support_runtime_lane_scalar_kinds() -> None:
         hardware_extension="avx2",
         from_array_name="from_array",
         to_array_name="to_array",
+        caller_unsafe=True,
     )
     insert = ValueTestCasePlan(
         "differential",
@@ -483,6 +494,7 @@ def test_differential_renderers_support_runtime_lane_scalar_kinds() -> None:
         hardware_extension="avx2",
         from_array_name="from_array",
         to_array_name="to_array",
+        caller_unsafe=True,
     )
     set_mask = ValueTestCasePlan(
         "differential",
@@ -501,18 +513,23 @@ def test_differential_renderers_support_runtime_lane_scalar_kinds() -> None:
         to_array_name="to_array",
         to_integral_name="to_integral",
         to_mask_name="to_mask",
+        caller_unsafe=True,
     )
 
     cpp_extract = CPP_VALUE_TEST_RENDERER.render_case(extract)
     rust_extract = RUST_VALUE_TEST_RENDERER.render_case(extract)
     assert "extract_value_at<Hw>(tsl::from_array<Hw>(hin0), static_cast<std::size_t>(7))" in cpp_extract
     assert "check_scalar<i32>" in cpp_extract
-    assert "extract_value_at::<Hw>(from_array::<Hw>(&hin0), 7usize)" in rust_extract
+    assert (
+        "unsafe { extract_value_at::<Hw>(from_array::<Hw>(&hin0), 7usize) }"
+        in rust_extract
+    )
     assert "hw.lane_eq(reference)" in rust_extract
 
     cpp_insert = CPP_VALUE_TEST_RENDERER.render_case(insert)
     rust_insert = RUST_VALUE_TEST_RENDERER.render_case(insert)
     assert "static_cast<std::size_t>(7), 9" in cpp_insert
+    assert "unsafe { insert_value_at::<Hw>" in rust_insert
     assert "7usize, 9" in rust_insert
 
     cpp_mask = CPP_VALUE_TEST_RENDERER.render_case(set_mask)
@@ -520,7 +537,34 @@ def test_differential_renderers_support_runtime_lane_scalar_kinds() -> None:
     assert "static_cast<std::size_t>(1)" in cpp_mask
     assert "to_integral<Hw>(tsl::set_mask_lane<Hw>" in cpp_mask
     assert "1usize" in rust_mask
-    assert "to_integral::<Hw>(set_mask_lane::<Hw>" in rust_mask
+    assert "to_integral::<Hw>(unsafe { set_mask_lane::<Hw>" in rust_mask
+
+
+def test_rust_lane_conversion_frames_its_unchecked_contract() -> None:
+    case = ValueTestCasePlan(
+        "lane_convert",
+        "test_convert_lanes",
+        "convert_lanes_si32_to_f32",
+        "convert_lanes",
+        "si32",
+        "i32",
+        4,
+        vector_inputs=(("1", "2", "3", "4"),),
+        expected=("1.0", "2.0", "3.0", "4.0"),
+        expected_type_tag="f32",
+        target_base_spelling="f32",
+        target_lanes=4,
+        result_kind="v",
+        param_kinds=("v",),
+        caller_unsafe=True,
+    )
+
+    source = RUST_VALUE_TEST_RENDERER.render_case(case)
+
+    assert (
+        "let result = unsafe { convert_lanes::<Vec, ToVec>(source) };"
+        in source
+    )
 
 
 def test_masked_immediate_cases_plan_and_render_for_both_backends(
@@ -591,7 +635,7 @@ def test_masked_immediate_cases_plan_and_render_for_both_backends(
     assert "mod_imm::<Vec, 3>(m0, a0)" in rust_source
 
 
-def test_arithmetic_failure_masked_and_immediate_corpus_cases_have_typed_coverage(
+def test_arithmetic_checked_and_immediate_corpus_cases_have_typed_coverage(
     data_root: Path,
     machine_profiles_path: Path,
 ) -> None:
@@ -616,15 +660,40 @@ def test_arithmetic_failure_masked_and_immediate_corpus_cases_have_typed_coverag
 
     for backend in ("cpp", "rust"):
         cases = [case for profile in plan.profiles_for(backend) for case in profile.cases]
-        failure_cases = [
+        checked_cases = [
             case
             for case in cases
-            if case.kind == "runtime_failure"
+            if case.kind == "checked_precondition"
             and (case.call_name.startswith("div") or case.call_name.startswith("mod"))
         ]
-        assert len(failure_cases) == 6
-        assert all(case.failure is not None for case in failure_cases)
-        assert all(case.differential is None for case in failure_cases)
+        assert len(checked_cases) == 20
+        assert {case.call_name for case in checked_cases} == {
+            "div",
+            "div_mask",
+            "div_maskz",
+            "mod",
+            "mod_mask",
+            "mod_maskz",
+        }
+        assert {case.type_tag for case in checked_cases} == {
+            "si8",
+            "ui8",
+            "si16",
+            "ui16",
+            "si32",
+            "ui32",
+            "si64",
+            "ui64",
+        }
+        assert all(case.failure is None for case in checked_cases)
+        assert all(case.differential is None for case in checked_cases)
+        assert all(
+            case.checked_precondition is not None
+            and case.checked_precondition.kind
+            is PreconditionKind.ACTIVE_DIVISOR_NONZERO
+            and case.checked_precondition.error is PreconditionErrorKind.ZERO_DIVISOR
+            for case in checked_cases
+        )
         compile_failure_cases = [
             case
             for case in cases
@@ -753,6 +822,70 @@ def test_arithmetic_failure_masked_and_immediate_corpus_cases_have_typed_coverag
         'tsl = { package = "tsl", path = "../.." }' in artifacts[path]
         for path in rust_negative_manifests
     )
+
+
+def test_conversion_chunk_indices_have_static_failure_evidence(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["convert_up", "convert_down"],
+        profiles=["scalar"],
+        backends=["cpp", "rust"],
+        test_harness=True,
+        value_test_warnings=True,
+    )
+    assert result.rendered is not None
+    plan = result.rendered.value_tests
+    for backend in ("cpp", "rust"):
+        failures = [
+            case
+            for profile in plan.profiles_for(backend)
+            for case in profile.compile_failure_cases
+            if case.call_name in {"convert_up", "convert_down"}
+        ]
+        assert len(failures) == 2
+        assert {case.invocation.immediate for case in failures} == {"2"}
+        assert all(case.target is not None for case in failures)
+        assert all(
+            case.failure
+            == ValueTestFailure(
+                FailureReason.CONVERSION_CHUNK_INDEX_OUT_OF_RANGE,
+                phase="compile",
+            )
+            for case in failures
+        )
+
+    artifacts = {
+        artifact.logical_path: artifact.content
+        for artifact in result.artifacts.artifacts
+    }
+    cpp_failures = [
+        content
+        for path, content in artifacts.items()
+        if path.startswith("cpp/tests/tsl_compile_failure_")
+        and "convert_" in path
+    ]
+    rust_failures = [
+        content
+        for path, content in artifacts.items()
+        if path.startswith("rust/examples/tsl_compile_failure_")
+        and "convert_" in path
+    ]
+    assert len(cpp_failures) == 2
+    assert len(rust_failures) == 2
+    assert all("using ToVec =" in source for source in cpp_failures)
+    assert all("type ToVec =" in source for source in rust_failures)
+    assert "TSL_CONVERSION_CHUNK_INDEX_OUT_OF_RANGE" in artifacts[
+        "cpp/include/tsl_scalar.hpp"
+    ]
+    assert "TSL_CONVERSION_CHUNK_INDEX_OUT_OF_RANGE" in artifacts[
+        "rust/src/tsl_scalar.rs"
+    ]
+    assert "convert_up_checked" not in artifacts["cpp/include/tsl_scalar.hpp"]
+    assert "convert_down_checked" not in artifacts["rust/src/tsl_scalar.rs"]
 
 
 def test_emitted_name_split_preserves_source_primitive_identity() -> None:
@@ -990,6 +1123,86 @@ def test_target_imask_case_uses_source_and_target_mask_layouts() -> None:
     assert "tsl::insert_imask<Vec, ToVec>(a0, a1, a2)" in cpp_source
     assert "<ToVec as SimdVector>::ImaskType" in rust_source
     assert "insert_imask::<Vec, ToVec>(a0, a1, a2)" in rust_source
+
+
+def test_target_imask_case_uses_predicate_harness_for_fixed_sve() -> None:
+    primitive = Primitive(
+        "extract_imask",
+        "im:=(im,usize)",
+        ("data", "position"),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="sve_fixed_base",
+                type_tag="ui32",
+                tags=("sve_fixed",),
+                extension="sve256",
+                to_type="ui64",
+                inputs=(
+                    TslTestArg("mask", mask_bits="176"),
+                    TslTestArg("scalar", scalar="4"),
+                ),
+                expected=("11",),
+            ),
+        ),
+    )
+    mask_from_bits = "mask_from_bits<{vec}>({mask_bits}, {authored_lanes}, {lanes})"
+    mask_check = (
+        "check_mask_bits<{vec}>({case_name}, {mask}, {expected_bits}, "
+        "{authored_lanes}, {lanes})"
+    )
+    extension = Extension(
+        "sve256",
+        "sve256",
+        "arm",
+        {},
+        {},
+        backend_supported={"cpp": True},
+        vector_bits=256,
+        imask_policy=ImaskPolicy(kind="same_as_mask_type"),
+        test_mask_from_bits={"cpp": mask_from_bits},
+        test_mask_check={"cpp": mask_check},
+    )
+    catalog = Catalog(
+        primitives=(primitive, *_harness_primitives()),
+        type_groups={},
+        extensions={"sve256": extension},
+        type_spellings={},
+        translations={},
+    )
+    spec = replace(
+        _spec(
+            "extract_imask",
+            "extract_imask",
+            param_kinds=("im", "usize"),
+            result_kind="im",
+            extension_name="sve256",
+            uses_sized_vector=False,
+            lane_parameter=None,
+        ),
+        type_tag="ui32",
+        base_type_spelling="std::uint32_t",
+        target=TargetVector(
+            "target-vector",
+            "target-register",
+            "sve256",
+            "ui64",
+            "std::uint64_t",
+        ),
+    )
+
+    plan = ValueTestPlanner(catalog, _VALUE_TEST_SUPPORTS).plan(
+        _inputs(_profile(cpp={"extract_imask": (spec,)}))
+    )
+
+    assert plan.diagnostics == ()
+    case = plan.profiles_for("cpp")[0].cases[0]
+    assert case.target_imask_harness is not None
+    source = CPP_VALUE_TEST_RENDERER.render_case(case)
+    assert "mask_from_bits<Vec>(176ull, 8, 8)" in source
+    assert 'check_mask_bits<ToVec>("sve_fixed_base", result, 11ull, 4, 4)' in source
+    assert "static_cast<typename Vec::imask_type>" not in source
 
 
 def test_different_arity_leading_mask_form_gets_portable_emitted_name() -> None:
@@ -1259,7 +1472,19 @@ def test_planner_emits_fixed_masked_mask_result_cases() -> None:
     assert {entry.status for entry in plan.coverage} == {"emitted"}
 
 
-def test_runtime_lane_and_mask_mutation_shapes_reuse_typed_case_kinds() -> None:
+def test_runtime_lane_and_mask_mutation_shapes_reuse_typed_case_kinds(
+    render_assets: RenderAssets,
+) -> None:
+    lane_precondition = PrimitivePrecondition(
+        PreconditionKind.LANE_INDEX_IN_RANGE,
+        (
+            OperandBinding(OperandRole.PRIMARY, "p0", 0, "v"),
+            OperandBinding(OperandRole.INDEX, "p1", 1, "usize"),
+        ),
+    )
+    lane_semantics = LoweredPrimitiveSemantics(
+        preconditions=(lane_precondition,)
+    )
     extract = Primitive(
         "extract_value_at",
         "s:=(v,usize)",
@@ -1329,6 +1554,7 @@ def test_runtime_lane_and_mask_mutation_shapes_reuse_typed_case_kinds() -> None:
                 "extract_value_at",
                 result_kind="s",
                 param_kinds=("v", "usize"),
+                primitive_semantics=lane_semantics,
             ),
         ),
         "insert_value_at": (
@@ -1336,6 +1562,7 @@ def test_runtime_lane_and_mask_mutation_shapes_reuse_typed_case_kinds() -> None:
                 "insert_value_at",
                 "insert_value_at",
                 param_kinds=("v", "usize", "s"),
+                primitive_semantics=lane_semantics,
             ),
         ),
         "set_mask_lane": (
@@ -1344,6 +1571,7 @@ def test_runtime_lane_and_mask_mutation_shapes_reuse_typed_case_kinds() -> None:
                 "set_mask_lane",
                 result_kind="m",
                 param_kinds=("m", "usize", "usize"),
+                primitive_semantics=lane_semantics,
             ),
         ),
     }
@@ -1356,9 +1584,41 @@ def test_runtime_lane_and_mask_mutation_shapes_reuse_typed_case_kinds() -> None:
     cases = plan.profiles_for("cpp")[0].cases
     assert [(case.call_name, case.kind) for case in cases] == [
         ("extract_value_at", "scalar_result"),
+        ("extract_value_at", "checked_precondition"),
+        ("extract_value_at", "checked_precondition"),
         ("insert_value_at", "scalar_vector"),
+        ("insert_value_at", "checked_precondition"),
+        ("insert_value_at", "checked_precondition"),
         ("set_mask_lane", "mask_result"),
+        ("set_mask_lane", "checked_precondition"),
+        ("set_mask_lane", "checked_precondition"),
     ]
+    checked = [case for case in cases if case.kind == "checked_precondition"]
+    cpp = render_cpp_values_runner(
+        ValueTestProfilePlan("cpp", "unit", tuple(checked)), render_assets
+    )
+    assert "Vec::lane_count()" in cpp
+    assert "std::numeric_limits<std::size_t>::max()" in cpp
+    assert "precondition_error::index_out_of_bounds" in cpp
+    rust_cases = tuple(
+        replace(case, base_spelling="i32") for case in cases
+    )
+    rust = render_rust_values_file(
+        (
+            ValueTestProfilePlan(
+                "rust",
+                "unit",
+                rust_cases,
+            ),
+        ),
+        render_assets,
+    )
+    assert "unsafe { extract_value_at::<Vec>" in rust
+    assert "unsafe { insert_value_at::<Vec>" in rust
+    assert "unsafe { set_mask_lane::<Vec>" in rust
+    assert "Vec::lane_count()" in rust
+    assert "usize::MAX" in rust
+    assert "PreconditionError::IndexOutOfBounds" in rust
     assert {entry.status for entry in plan.coverage} == {"emitted"}
 
 
@@ -2407,6 +2667,44 @@ def test_extension_result_renderers_use_distinct_fixed_extensions(
     assert "for i in 0..4" in rust_source
 
 
+def test_pointer_lifetime_renderers_honor_null_expectations_and_allocator_pairing() -> None:
+    null_case = ValueTestCasePlan(
+        "pointer_lifetime",
+        "test_zero_allocation",
+        "zero",
+        "allocate_aligned",
+        "ptr",
+        "void*",
+        1,
+        scalar_inputs=("0", "32"),
+        expected=("false",),
+    )
+    free_case = ValueTestCasePlan(
+        "pointer_free",
+        "test_aligned_free",
+        "aligned_free",
+        "deallocate",
+        "ptr",
+        "void*",
+        1,
+        scalar_inputs=("64",),
+        expected=("true",),
+        alignment=32,
+    )
+
+    cpp_null = CPP_VALUE_TEST_RENDERER.render_case(null_case)
+    cpp_free = CPP_VALUE_TEST_RENDERER.render_case(free_case)
+    assert "expected null pointer" in cpp_null
+    assert "::tsl::detail::mem_free(ptr)" in cpp_null
+    assert "std::free(ptr)" not in cpp_null
+    assert "::tsl::detail::mem_alloc_aligned" in cpp_free
+    assert "std::aligned_alloc" not in cpp_free
+
+    rust_null = RUST_VALUE_TEST_RENDERER.render_case(null_case)
+    assert "expected null pointer" in rust_null
+    assert "if !ptr.is_null() { unsafe { mem_free(ptr); } }" in rust_null
+
+
 def test_value_test_case_plan_validates_kind_requirements() -> None:
     assert all(
         isinstance(fact, ValueTestFact)
@@ -2426,6 +2724,13 @@ def test_value_test_case_plan_validates_kind_requirements() -> None:
         param_kinds=(),
     )
     assert zero_arg.inputs.vectors == ()
+
+    with pytest.raises(ValueError, match="header_group must be non-empty"):
+        replace(zero_arg, header_group="")
+    with pytest.raises(ValueError, match="compiler capabilities must be non-empty"):
+        replace(zero_arg, required_compiler_capabilities=("",))
+    with pytest.raises(ValueError, match="sorted and unique"):
+        replace(zero_arg, required_compiler_capabilities=("sve", "sve"))
 
     aligned_free = ValueTestCasePlan(
         kind="pointer_free",
@@ -3132,6 +3437,98 @@ def test_scalable_immediate_cases_plan_and_render_runtime_lanes(
     assert "make_mask<tsl::simd<std::int32_t, tsl::sve>>(10ull, 4, lanes)" in source
     assert "authored_expected[i % 4]" in source
 
+
+def test_scalable_lane_conversion_tests_success_and_checked_mismatch(
+    render_assets: RenderAssets,
+) -> None:
+    lane_count_precondition = PrimitivePrecondition(
+        PreconditionKind.EQUAL_LANE_COUNT,
+        (OperandBinding(OperandRole.PRIMARY, "p0", 0, "v"),),
+    )
+    primitive = Primitive(
+        "convert_lanes",
+        "v:=v",
+        ("data",),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="equal_width",
+                type_tag="si32",
+                to_type="f32",
+                tags=("convert",),
+                lanes=4,
+                inputs=(TslTestArg("vector", values=("1", "-2", "3", "-4")),),
+                expected=("1.0", "-2.0", "3.0", "-4.0"),
+            ),
+            TslTestCase(
+                name="different_width",
+                type_tag="si32",
+                to_type="f64",
+                tags=("convert",),
+                lanes=4,
+                inputs=(TslTestArg("vector", values=("1", "-2", "3", "-4")),),
+                expected=("1.0", "-2.0", "3.0", "-4.0"),
+            ),
+        ),
+    )
+    semantics = LoweredPrimitiveSemantics(
+        preconditions=(lane_count_precondition,)
+    )
+    base = _spec(
+        "convert_lanes",
+        "convert_lanes",
+        param_kinds=("v",),
+        extension_name="sve",
+        uses_sized_vector=False,
+        lane_parameter=None,
+        primitive_semantics=semantics,
+    )
+    specs = tuple(
+        replace(
+            base,
+            result_vector_param="ToVec",
+            type_params=(
+                LoweredTypeParam(
+                    "ToVec",
+                    specialize_base=True,
+                    base_type_binding=type_tag,
+                    base_type_binding_spelling=spelling,
+                ),
+            ),
+        )
+        for type_tag, spelling in (("f32", "float"), ("f64", "double"))
+    )
+    catalog = Catalog(
+        primitives=(primitive, *_harness_primitives()),
+        type_groups={},
+        extensions={"sve": _scalable_test_extension()},
+        type_spellings={},
+        translations={},
+    )
+
+    plan = ValueTestPlanner(catalog, (CPP_VALUE_TEST_SUPPORT,)).plan(
+        (ValueTestBackendProfileInput("cpp", "sve", {"convert_lanes": specs}),)
+    )
+
+    assert not plan.diagnostics
+    cases = plan.profiles_for("cpp")[0].cases
+    assert [case.kind for case in cases] == [
+        "scalable_repr_cast",
+        "checked_precondition",
+    ]
+    assert cases[1].checked_precondition is not None
+    assert (
+        cases[1].checked_precondition.kind
+        is PreconditionKind.EQUAL_LANE_COUNT
+    )
+    source = render_cpp_values_runner(plan.profiles_for("cpp")[0], render_assets)
+    assert "using ToVec = tsl::simd<float, tsl::sve>;" in source
+    assert "tsl::convert_lanes<Vec, ToVec>(v0)" in source
+    assert "using ToVec = tsl::simd<double, tsl::sve>;" in source
+    assert "tsl::convert_lanes_checked<Vec, ToVec>(v0, error)" in source
+    assert "precondition_error::lane_count_mismatch" in source
+
 def test_scalable_indexed_lane_uses_one_runtime_lane() -> None:
     insert_value = Primitive(
         "insert_value",
@@ -3196,6 +3593,48 @@ def test_scalable_indexed_lane_uses_one_runtime_lane() -> None:
     assert "expected[i] = authored0[i % 4];" in source
     assert "if (3 < lanes) expected[3] = authored_expected[3];" in source
     assert "authored_expected[i % 4]" not in source
+
+
+def test_scalable_scatter_renders_a_runtime_lane_oracle() -> None:
+    case = ValueTestCasePlan(
+        "scalable_indexed_store",
+        "test_scalable_scatter",
+        "scatter_repeat",
+        "scatter",
+        "ui32",
+        "std::uint32_t",
+        8,
+        vector_inputs=(
+            ("1", "2", "3", "4", "5", "6", "7", "8"),
+            ("0", "0", "1", "1", "2", "2", "3", "3"),
+        ),
+        mask_inputs=("170",),
+        expected=("0", "4", "0", "8"),
+        immediate_value="4",
+        buffer_length=4,
+        index_type_tag="ui32",
+        index_base_spelling="std::uint32_t",
+        index_lanes=8,
+        index_style="register",
+        source_extension="rvv",
+        runtime_lanes_template="runtime_lanes()",
+        mask_from_bits_template="make_mask<{vec}>({mask_bits}, {authored_lanes}, {lanes})",
+        mask_bits=(170,),
+        load_name="load",
+        store_name="store",
+        result_kind="void",
+        param_kinds=("m", "ptr", "vidx", "v", "sImm"),
+    )
+
+    source = CPP_VALUE_TEST_RENDERER.render_case(case)
+
+    assert "std::vector<std::uint32_t> expected(4);" in source
+    assert "for (std::size_t i = 0; i < lanes; ++i)" in source
+    assert "((170ull >> (i % 8)) & 1u) != 0" in source
+    assert "static_cast<std::ptrdiff_t>(index_values[i]) * 4" in source
+    assert "*destination = in0[i];" in source
+    assert "expected.data(), 4" in source
+    assert "static const std::uint32_t expected" not in source
 
 
 def test_scalable_plan_facts_stay_backend_neutral_for_sve_case() -> None:
@@ -3640,6 +4079,7 @@ def test_rust_renderer_consumes_memory_and_conversion_plans_without_catalog(
             "*mut core::ffi::c_void",
             4,
             scalar_inputs=("64",),
+            expected=("true",),
         ),
         ValueTestCasePlan(
             "pointer_free",
@@ -4086,6 +4526,7 @@ def _spec(
     extension_name: str = "generic",
     uses_sized_vector: bool = True,
     lane_parameter: str | None = "4",
+    primitive_semantics: LoweredPrimitiveSemantics = LoweredPrimitiveSemantics(),
 ) -> LoweredSpecialization:
     return LoweredSpecialization(
         backend_id="cpp",
@@ -4104,4 +4545,5 @@ def _spec(
         axis=axis,
         immediate=immediate,
         mask_policy=mask_policy,
+        primitive_semantics=primitive_semantics,
     )

@@ -1,0 +1,595 @@
+"""Primitive preconditions are one typed source fact across projections."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from tslc.authoring_completion import authoring_completions
+from tslc.catalog.arithmetic import ArithmeticOperandRole
+from tslc.catalog.builder import CatalogBuilder
+from tslc.catalog.memory import (
+    MemoryAddressing,
+    MemoryIndexedLaneExtent,
+    MemoryPayloadExtent,
+)
+from tslc.catalog.model import Catalog
+from tslc.catalog.preconditions import PreconditionKind
+from tslc.catalog.semantics import OperandRole, PrimitiveOperation
+from tslc.catalog.validation import validate_catalog
+from tslc.catalog_index import build_catalog_index
+from tslc.compiler_assets import load_default_tsl_grammar
+from tslc.sources import SourceDocument
+from tslc.syntax.authoring import authoring_cursor_context
+from tslc.syntax.parser import TslParser
+
+
+_PATH = Path("tslctmp/preconditions.tsl").resolve()
+
+
+def _source(*, operation: str = "extract_lane", extra: str = "") -> str:
+    return (
+        "prim<s:=(v,usize)> lane_at(data, index):\n"
+        f"  operation {operation}\n"
+        "  operand_roles:\n"
+        "    primary data\n"
+        "    index index\n"
+        f"{extra}"
+        "  impls:\n"
+        "    scalar:\n"
+        "      arith:\n"
+        "        implementation:\n"
+        '          tsil "complete(data);"\n'
+    )
+
+
+def _build(text: str):
+    parsed = TslParser(load_default_tsl_grammar()).parse(
+        (SourceDocument(_PATH, text, "", "tsl"),)
+    )
+    assert parsed.diagnostics == ()
+    result = CatalogBuilder().build(parsed)
+    assert result.catalog is not None
+    diagnostics = (
+        *result.diagnostics,
+        *validate_catalog(result.catalog, parsed, required_backends=()),
+    )
+    return parsed, result.catalog, diagnostics
+
+
+def test_precondition_is_promoted_with_resolved_bindings() -> None:
+    _parsed, catalog, diagnostics = _build(
+        _source(extra="  preconditions [lane_index_in_range]\n")
+    )
+    assert diagnostics == ()
+
+    condition = catalog.primitives[0].preconditions[0]
+    assert condition.kind is PreconditionKind.LANE_INDEX_IN_RANGE
+    assert tuple(
+        (binding.role.value, binding.parameter_name, binding.parameter_index)
+        for binding in condition.operand_bindings
+    ) == (("index", "index", 1), ("primary", "data", 0))
+
+
+@pytest.mark.parametrize(
+    ("extra", "operation", "code", "token"),
+    (
+        (
+            "  preconditions [lane_index_in_ragne]\n",
+            "extract_lane",
+            "TSL-CATALOG-UNKNOWN-PRECONDITION",
+            "lane_index_in_ragne",
+        ),
+        (
+            "  preconditions [lane_index_in_range, lane_index_in_range]\n",
+            "extract_lane",
+            "TSL-CATALOG-DUPLICATE-PRECONDITION",
+            "lane_index_in_range",
+        ),
+        (
+            "  preconditions lane_index_in_range\n",
+            "extract_lane",
+            "TSL-CATALOG-PRECONDITIONS-MALFORMED-LIST",
+            "preconditions lane_index_in_range",
+        ),
+    ),
+)
+def test_invalid_preconditions_report_the_authored_token(
+    extra: str, operation: str, code: str, token: str
+) -> None:
+    _parsed, _catalog, diagnostics = _build(
+        _source(operation=operation, extra=extra)
+    )
+    diagnostic = next(item for item in diagnostics if item.code == code)
+    assert diagnostic.span is not None
+    line = (_source(operation=operation, extra=extra).splitlines())[
+        diagnostic.span.line - 1
+    ]
+    selected = line[diagnostic.span.column - 1 : diagnostic.span.end_column - 1]
+    if code == "TSL-CATALOG-PRECONDITIONS-MALFORMED-LIST":
+        assert token in line
+    else:
+        assert selected == token
+
+
+def test_lane_precondition_rejects_total_integral_mask_test() -> None:
+    source = (
+        "prim<im:=(im,usize)> bit_at(mask, index):\n"
+        "  operation integral_mask_test\n"
+        "  operand_roles:\n"
+        "    primary mask\n"
+        "    index index\n"
+        "  preconditions [lane_index_in_range]\n"
+    )
+    _parsed, _catalog, diagnostics = _build(source)
+    diagnostic = next(
+        item
+        for item in diagnostics
+        if item.code == "TSL-CATALOG-INCOMPATIBLE-PRECONDITION-OPERATION"
+    )
+    assert diagnostic.span is not None
+    line = source.splitlines()[diagnostic.span.line - 1]
+    assert (
+        line[diagnostic.span.column - 1 : diagnostic.span.end_column - 1]
+        == "lane_index_in_range"
+    )
+
+
+def test_lane_precondition_requires_the_index_binding() -> None:
+    source = (
+        "prim<s:=(v,usize)> lane_at(data, index):\n"
+        "  operation extract_lane\n"
+        "  operand_roles:\n"
+        "    primary data\n"
+        "  preconditions [lane_index_in_range]\n"
+    )
+    _parsed, _catalog, diagnostics = _build(source)
+
+    diagnostic = next(
+        item
+        for item in diagnostics
+        if item.code == "TSL-CATALOG-PRECONDITION-MISSING-ROLE"
+    )
+    assert diagnostic.span is not None
+    line = source.splitlines()[diagnostic.span.line - 1]
+    assert (
+        line[diagnostic.span.column - 1 : diagnostic.span.end_column - 1]
+        == "lane_index_in_range"
+    )
+
+
+def test_precondition_completion_hover_references_and_tokens_share_registry() -> None:
+    source = _source(extra="  preconditions [lane_index_in_range]\n")
+    parsed, catalog, diagnostics = _build(source)
+    assert diagnostics == ()
+    edited = source.split("lane_index_in_range", 1)[0] + "lane_index_"
+    context = authoring_cursor_context(parsed, _PATH, edited, len(edited))
+    assert {item.label for item in authoring_completions(context, catalog)} == {
+        "lane_index_in_range"
+    }
+    field_edit = source.split("  preconditions", 1)[0] + "  precond"
+    field_context = authoring_cursor_context(
+        parsed, _PATH, field_edit, len(field_edit)
+    )
+    assert "preconditions" in {
+        item.label for item in authoring_completions(field_context, catalog)
+    }
+
+    index = build_catalog_index(catalog, parsed)
+    occurrence = next(
+        item
+        for item in index.occurrences_by_path[_PATH]
+        if item.kind == "precondition"
+    )
+    assert occurrence.name == "lane_index_in_range"
+    assert len(index.references(occurrence)) == 1
+    hover = index.hover(occurrence) or ""
+    assert "Required operand roles" in hover
+    assert "catastrophic" in hover
+    token_text = {
+        source.splitlines()[token.span.line - 1][
+            token.span.column - 1 : token.span.end_column - 1
+        ]
+        for token in index.semantic_tokens_by_path[_PATH]
+        if token.kind == "enumMember"
+    }
+    assert "lane_index_in_range" in token_text
+
+
+def test_indexed_memory_precondition_hover_lists_every_checked_error() -> None:
+    source = (
+        "prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):\n"
+        "  operation load\n"
+        "  operand_roles:\n"
+        "    memory_source base_ptr\n"
+        "    index index\n"
+        "    scale scale\n"
+        "  memory:\n"
+        "    access read\n"
+        "    addressing indexed\n"
+        "    indexed_lanes vector\n"
+        "  preconditions [indexed_memory_address_valid]\n"
+    )
+    parsed, catalog, diagnostics = _build(source)
+    assert diagnostics == ()
+    index = build_catalog_index(catalog, parsed)
+    occurrence = next(
+        item
+        for item in index.occurrences_by_path[_PATH]
+        if item.kind == "precondition"
+    )
+
+    hover = index.hover(occurrence) or ""
+
+    assert "Checked errors" in hover
+    assert "`index_out_of_bounds`" in hover
+    assert "`address_overflow`" in hover
+    assert "`misaligned`" in hover
+    assert catalog.primitives[0].memory is not None
+    assert (
+        catalog.primitives[0].memory.indexed_lane_extent
+        is MemoryIndexedLaneExtent.VECTOR
+    )
+
+    lane_extent = next(
+        item
+        for item in index.occurrences_by_path[_PATH]
+        if item.kind == "memory-indexed-lane-extent"
+    )
+    assert lane_extent.name == "vector"
+    assert "index vector must cover" in (index.hover(lane_extent) or "")
+
+    edited = source.split("indexed_lanes vector", 1)[0] + "indexed_lanes v"
+    context = authoring_cursor_context(parsed, _PATH, edited, len(edited))
+    assert {item.label for item in authoring_completions(context, catalog)} == {
+        "vector"
+    }
+
+
+@pytest.mark.parametrize(
+    ("memory", "code"),
+    [
+        (
+            "    access read\n    addressing indexed\n",
+            "TSL-CATALOG-MISSING-MEMORY-INDEXED-LANES",
+        ),
+        (
+            "    access read\n    addressing contiguous\n"
+            "    indexed_lanes vector\n",
+            "TSL-CATALOG-MEMORY-INDEXED-LANES",
+        ),
+    ],
+)
+def test_indexed_lane_extent_is_present_only_on_indexed_memory(
+    memory: str,
+    code: str,
+) -> None:
+    source = (
+        "prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):\n"
+        "  operation load\n"
+        "  operand_roles:\n"
+        "    memory_source base_ptr\n"
+        "    index index\n"
+        "    scale scale\n"
+        "  memory:\n"
+        f"{memory}"
+    )
+
+    _parsed, _catalog, diagnostics = _build(source)
+
+    assert code in {diagnostic.code for diagnostic in diagnostics}
+
+
+def test_total_integral_mask_test_has_no_inferred_precondition(catalog: Catalog) -> None:
+    primitive = catalog.primitive("test_imask")
+    assert primitive.preconditions == ()
+
+
+def test_runtime_divisor_precondition_promotes_arithmetic_binding() -> None:
+    source = (
+        "prim<v:=(v,v)> divide(dividend, divisor):\n"
+        "  arithmetic:\n"
+        "    operations [division]\n"
+        "    operand_roles:\n"
+        "      primary dividend\n"
+        "      divisor divisor\n"
+        "    guarantees []\n"
+        "  preconditions [active_divisor_nonzero]\n"
+    )
+
+    _parsed, catalog, diagnostics = _build(source)
+
+    assert diagnostics == ()
+    condition = catalog.primitives[0].preconditions[0]
+    assert condition.kind is PreconditionKind.ACTIVE_DIVISOR_NONZERO
+    binding = condition.arithmetic_binding(ArithmeticOperandRole.DIVISOR)
+    assert binding is not None
+    assert (binding.parameter_name, binding.parameter_index, binding.parameter_kind) == (
+        "divisor",
+        1,
+        "v",
+    )
+
+    edited = source.split("active_divisor_nonzero", 1)[0] + "active_divisor_"
+    context = authoring_cursor_context(_parsed, _PATH, edited, len(edited))
+    assert {item.label for item in authoring_completions(context, catalog)} == {
+        "active_divisor_nonzero"
+    }
+    index = build_catalog_index(catalog, _parsed)
+    occurrence = next(
+        item
+        for item in index.occurrences_by_path[_PATH]
+        if item.kind == "precondition"
+    )
+    hover = index.hover(occurrence) or ""
+    assert "Required arithmetic operand roles" in hover
+    assert "`divisor`" in hover
+    assert "Compatible arithmetic operations" in hover
+    assert "`division`" in hover
+    assert "Numeric domain" in hover
+    assert "`integer`" in hover
+    assert "Checked error" in hover
+    assert "`zero_divisor`" in hover
+
+
+def test_runtime_divisor_precondition_rejects_compile_time_immediate() -> None:
+    source = (
+        "prim<v:=(v,sImm)> divide(dividend, divisor):\n"
+        "  arithmetic:\n"
+        "    operations [division]\n"
+        "    operand_roles:\n"
+        "      primary dividend\n"
+        "      divisor divisor\n"
+        "    guarantees []\n"
+        "  preconditions [active_divisor_nonzero]\n"
+    )
+
+    _parsed, _catalog, diagnostics = _build(source)
+
+    assert any(
+        item.code == "TSL-CATALOG-PRECONDITION-STATIC-OPERAND"
+        for item in diagnostics
+    )
+
+
+def test_runtime_scalar_divisor_is_rejected_until_its_check_shape_is_supported() -> None:
+    source = (
+        "prim<v:=(v,s)> divide(dividend, divisor):\n"
+        "  arithmetic:\n"
+        "    operations [division]\n"
+        "    operand_roles:\n"
+        "      primary dividend\n"
+        "      divisor divisor\n"
+        "    guarantees []\n"
+        "  preconditions [active_divisor_nonzero]\n"
+    )
+
+    _parsed, _catalog, diagnostics = _build(source)
+
+    assert any(
+        item.code == "TSL-CATALOG-PRECONDITION-UNCHECKABLE-OPERAND"
+        for item in diagnostics
+    )
+
+
+@pytest.mark.parametrize(
+    "primitive_name",
+    ("extract_value_at", "insert_value_at", "set_mask_lane"),
+)
+def test_current_lane_index_families_declare_precondition(
+    catalog: Catalog, primitive_name: str
+) -> None:
+    declarations = catalog.primitives_named(primitive_name, unmasked=False)
+    assert declarations
+    assert {
+        tuple(condition.kind for condition in primitive.preconditions)
+        for primitive in declarations
+    } == {(PreconditionKind.LANE_INDEX_IN_RANGE,)}
+
+
+@pytest.mark.parametrize("primitive_name", ("div", "mod"))
+def test_runtime_division_families_declare_nonzero_precondition(
+    catalog: Catalog, primitive_name: str
+) -> None:
+    declarations = catalog.primitives_named(primitive_name, unmasked=False)
+    assert declarations
+    assert {
+        tuple(condition.kind for condition in primitive.preconditions)
+        for primitive in declarations
+    } == {(PreconditionKind.ACTIVE_DIVISOR_NONZERO,)}
+
+
+def test_memory_preconditions_bind_the_typed_memory_operand_and_payload() -> None:
+    source = (
+        "prim<v:=cptr>[aligned=*] read(ptr):\n"
+        "  operation load\n"
+        "  operand_roles:\n"
+        "    memory_source ptr\n"
+        "  memory:\n"
+        "    access read\n"
+        "    addressing contiguous\n"
+        "  preconditions [contiguous_memory_extent, selected_memory_alignment]\n"
+    )
+
+    parsed, catalog, diagnostics = _build(source)
+
+    assert diagnostics == ()
+    primitive = catalog.primitives[0]
+    assert primitive.memory is not None
+    assert primitive.memory.payload_extent is MemoryPayloadExtent.VECTOR
+    assert tuple(condition.kind for condition in primitive.preconditions) == (
+        PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
+        PreconditionKind.SELECTED_MEMORY_ALIGNMENT,
+    )
+    assert {
+        (
+            binding.role,
+            binding.parameter_name,
+            binding.parameter_index,
+            binding.parameter_kind,
+        )
+        for condition in primitive.preconditions
+        for binding in condition.operand_bindings
+    } == {(OperandRole.MEMORY_SOURCE, "ptr", 0, "cptr")}
+
+    index = build_catalog_index(catalog, parsed)
+    hover = next(
+        index.hover(occurrence) or ""
+        for occurrence in index.occurrences_by_path[_PATH]
+        if occurrence.kind == "precondition"
+        and occurrence.name == "contiguous_memory_extent"
+    )
+    assert "Compatible memory accesses" in hover
+    assert "`read`" in hover
+    assert "Compatible memory addressing" in hover
+    assert "`contiguous`" in hover
+
+    edited = source.split("contiguous_memory_extent", 1)[0] + "contiguous_memory_"
+    context = authoring_cursor_context(parsed, _PATH, edited, len(edited))
+    assert {item.label for item in authoring_completions(context, catalog)} == {
+        "contiguous_memory_extent"
+    }
+
+
+def test_memory_precondition_requires_a_compatible_memory_contract() -> None:
+    source = (
+        "prim<v:=cptr>[aligned=*] read(ptr):\n"
+        "  operation load\n"
+        "  operand_roles:\n"
+        "    memory_source ptr\n"
+        "  preconditions [contiguous_memory_extent]\n"
+    )
+
+    _parsed, catalog, diagnostics = _build(source)
+
+    assert catalog.primitives[0].preconditions == ()
+    assert {
+        diagnostic.code for diagnostic in diagnostics
+    } >= {
+        "TSL-CATALOG-OPERATION-MISSING-MEMORY",
+        "TSL-CATALOG-INCOMPATIBLE-PRECONDITION-OPERATION",
+    }
+
+
+def test_current_contiguous_load_store_families_declare_memory_preconditions(
+    catalog: Catalog,
+) -> None:
+    load_declarations = catalog.primitives_named("load", unmasked=False)
+    store_declarations = catalog.primitives_named("store", unmasked=False)
+
+    assert len(load_declarations) == 6
+    assert len(store_declarations) == 6
+    assert {
+        tuple(condition.kind for condition in primitive.preconditions)
+        for primitive in (*load_declarations, *store_declarations)
+    } == {
+        (
+            PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
+            PreconditionKind.SELECTED_MEMORY_ALIGNMENT,
+        )
+    }
+    assert {
+        primitive.memory.payload_extent
+        for primitive in load_declarations
+        if primitive.memory is not None
+    } == {MemoryPayloadExtent.VECTOR}
+    assert {
+        primitive.memory.payload_extent
+        for primitive in store_declarations
+        if primitive.memory is not None
+    } == {MemoryPayloadExtent.SCALAR, MemoryPayloadExtent.VECTOR}
+
+
+def test_irregular_memory_families_declare_only_honest_checked_contracts(
+    catalog: Catalog,
+) -> None:
+    indexed = (
+        *catalog.primitives_named("gather", unmasked=False),
+        *catalog.primitives_named("gather_narrow_partial", unmasked=False),
+        *catalog.primitives_named("scatter", unmasked=False),
+    )
+    assert len(indexed) == 5
+    assert {
+        primitive.memory.addressing
+        for primitive in indexed
+        if primitive.memory is not None
+    } == {MemoryAddressing.INDEXED}
+    assert {
+        (primitive.name, primitive.memory.indexed_lane_extent)
+        for primitive in indexed
+        if primitive.memory is not None
+    } == {
+        ("gather", MemoryIndexedLaneExtent.VECTOR),
+        ("gather_narrow_partial", MemoryIndexedLaneExtent.INDEX_VECTOR),
+        ("scatter", MemoryIndexedLaneExtent.VECTOR),
+    }
+    assert {
+        tuple(condition.kind for condition in primitive.preconditions)
+        for primitive in indexed
+    } == {(PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID,)}
+
+    compacted = (
+        *catalog.primitives_named("compress_store", unmasked=False),
+        *catalog.primitives_named("expand_load", unmasked=False),
+    )
+    assert len(compacted) == 2
+    assert {
+        (
+            primitive.memory.addressing,
+            primitive.memory.payload_extent,
+        )
+        for primitive in compacted
+        if primitive.memory is not None
+    } == {(MemoryAddressing.COMPACTED, MemoryPayloadExtent.ACTIVE_LANES)}
+    assert {
+        tuple(condition.kind for condition in primitive.preconditions)
+        for primitive in compacted
+    } == {
+        (
+            PreconditionKind.COMPACTED_MEMORY_EXTENT,
+            PreconditionKind.SELECTED_MEMORY_ALIGNMENT,
+        )
+    }
+
+    pointer_indexed = catalog.primitives_named(
+        "gather_narrow", unmasked=False
+    )
+    assert len(pointer_indexed) == 1
+    assert pointer_indexed[0].memory is None
+    assert pointer_indexed[0].preconditions == ()
+
+
+def test_remaining_checked_memory_sources_distinguish_payload_owners(
+    catalog: Catalog,
+) -> None:
+    scalar = catalog.primitives_named("load_scalar", unmasked=False)
+    assert len(scalar) == 1
+    assert scalar[0].operation is not None
+    assert scalar[0].operation.kind is PrimitiveOperation.LOAD_SCALAR
+    assert scalar[0].memory is not None
+    assert scalar[0].memory.payload_extent is MemoryPayloadExtent.SCALAR
+    assert tuple(item.kind for item in scalar[0].preconditions) == (
+        PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
+    )
+
+    converted = catalog.primitives_named("load_convert_up", unmasked=False)
+    assert len(converted) == 1
+    assert converted[0].memory is not None
+    assert (
+        converted[0].memory.payload_extent
+        is MemoryPayloadExtent.TARGET_VECTOR
+    )
+    assert tuple(item.kind for item in converted[0].preconditions) == (
+        PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
+    )
+
+    random = catalog.primitives_named("random_step", unmasked=False)
+    assert len(random) == 1
+    assert random[0].operation is not None
+    assert random[0].operation.kind is PrimitiveOperation.RANDOM_STEP
+    assert random[0].memory is not None
+    assert random[0].memory.payload_extent is MemoryPayloadExtent.SCALAR
+    assert tuple(item.kind for item in random[0].preconditions) == (
+        PreconditionKind.CONTIGUOUS_MEMORY_EXTENT,
+    )

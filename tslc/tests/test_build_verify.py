@@ -5,6 +5,7 @@ Skips a backend whose toolchain is unavailable; fails on any build error.
 
 from __future__ import annotations
 
+from copy import copy
 import os
 from pathlib import Path
 import shutil
@@ -12,12 +13,31 @@ import shlex
 import subprocess
 import tarfile
 import textwrap
+from types import MappingProxyType
 
 import pytest
 
+from algorithm_conformance import (
+    ALGORITHM_CONFORMANCE_CASES,
+    SHARED_ALGORITHM_BEHAVIOR_CASE,
+    conformance_issues,
+)
+from algorithm_conformance_cpp import (
+    cpp_algorithm_compile_identities,
+    render_cpp_algorithm_behavior,
+    render_cpp_algorithm_compile_witness,
+)
+from algorithm_conformance_rust import (
+    render_rust_algorithm_behavior,
+    render_rust_algorithm_compile_witness,
+    rust_algorithm_compile_identities,
+)
 from tslc.api import generate_project, verify_project, write_artifacts
+from tslc.backend.algorithm_surface import ALGORITHM_CALLABLE_FORMS
+from tslc.compiler_assets import load_default_render_assets
 from tslc.diagnostics import has_errors
 from tslc.maintenance.build_verified import BUILD_VERIFIED_PRIMITIVE_SETS
+from tslc.output.artifacts import ArtifactSet
 from tslc.output.verify_model import (
     BackendToolchain,
     VerifyBackend,
@@ -25,6 +45,7 @@ from tslc.output.verify_model import (
     VerifyProfile,
     VerifyProject,
 )
+from tslc.render.cpp_project import cpp_artifacts
 
 pytestmark = pytest.mark.generated_build
 
@@ -103,6 +124,171 @@ def test_generated_profiles_build(
     # Each selected Rust profile also passes strict compiler, rustdoc, and
     # selected Clippy gates before its generated tests compile.
     assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_cpp_incomplete_compaction_keeps_admitted_algorithms_compilable(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    compiler = shutil.which("c++")
+    if compiler is None:
+        pytest.skip("a native C++ compiler is required")
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        profiles=["scalar"],
+        backends=["cpp"],
+        render_artifacts=False,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    profile = copy(result.emitted_profiles[0])
+    specializations = {
+        name: specs
+        for name, specs in profile.specializations("cpp").items()
+        if name != "compress_store"
+    }
+    object.__setattr__(
+        profile,
+        "specializations_by_backend",
+        MappingProxyType({"cpp": MappingProxyType(specializations)}),
+    )
+    artifacts = ArtifactSet.create(
+        tuple(
+            cpp_artifacts(
+                (profile,),
+                load_default_render_assets(),
+                media_type="text/x-c++",
+            )
+        )
+    )
+    generated = tmp_path / "generated"
+    write_report = write_artifacts(artifacts, generated)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    public_api = (generated / "cpp" / "public-api.json").read_text(
+        encoding="utf-8"
+    )
+    assert '"name": "transform_unary"' in public_api
+    assert '"name": "predicate_unary"' in public_api
+    assert '"name": "select_unary"' not in public_api
+
+    source = tmp_path / "partial_algorithm.cpp"
+    source.write_text(
+        textwrap.dedent(
+            """
+            #include <tsl.hpp>
+
+            struct identity {
+              template <class Vec>
+              typename Vec::register_type operator()(
+                  typename ::tsl::reg_param<Vec>::type value) const {
+                return value;
+              }
+            };
+
+            struct never {
+              template <class Vec>
+              typename Vec::mask_type operator()(
+                  typename ::tsl::reg_param<Vec>::type) const {
+                return {};
+              }
+            };
+
+            int main() {
+              int input[]{1, 2};
+              int output[]{0, 0};
+              ::tsl::algo::fixed_integral_mask_type<1, int> masks[2]{};
+              ::tsl::algo::transform_unary<
+                  ::tsl::dataparallel::fixed<1>,
+                  ::tsl::algo::alignment::unaligned>(
+                      identity{}, input, output, 2);
+              (void)::tsl::algo::predicate_unary<
+                  ::tsl::dataparallel::fixed<1>,
+                  ::tsl::algo::alignment::unaligned>(
+                      never{}, input, masks, 2);
+              return output[0] == 1 ? 0 : 1;
+            }
+            """
+        ),
+        encoding="utf-8",
+    )
+    executable = tmp_path / "partial_algorithm"
+    compiled = subprocess.run(
+        (
+            compiler,
+            "-std=c++17",
+            "-DTSL_PROFILE_SCALAR",
+            f"-I{generated / 'cpp' / 'include'}",
+            str(source),
+            "-o",
+            str(executable),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert compiled.returncode == 0, compiled.stderr
+    executed = subprocess.run(
+        (str(executable),), check=False, capture_output=True, text=True
+    )
+    assert executed.returncode == 0, executed.stderr
+
+
+def test_cpp_core_headers_are_self_contained(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    compilers = tuple(
+        dict.fromkeys(
+            compiler
+            for compiler in (shutil.which("c++"), _native_clangxx())
+            if compiler is not None
+        )
+    )
+    if not compilers:
+        pytest.skip("a native C++ compiler is required")
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["add"],
+        profiles=["scalar"],
+        backends=["cpp"],
+        type_tags=["si32"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    generated = tmp_path / "generated"
+    write_report = write_artifacts(result.artifacts, generated)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    headers = (
+        "tsl_core_detail_types.hpp",
+        "tsl_core_detail_memory.hpp",
+        "tsl_core_detail_scalar.hpp",
+        "tsl_core_detail_mask.hpp",
+        "tsl_core_detail_io.hpp",
+        "tsl_core.hpp",
+    )
+    for compiler in compilers:
+        compiler_name = Path(compiler).name.replace("+", "x")
+        for header in headers:
+            source = tmp_path / f"{compiler_name}_{header}.cpp"
+            source.write_text(f"#include <{header}>\n", encoding="utf-8")
+            compiled = subprocess.run(
+                (
+                    compiler,
+                    "-std=c++17",
+                    "-Wall",
+                    "-Wextra",
+                    "-Werror",
+                    "-pedantic",
+                    "-fsyntax-only",
+                    f"-I{generated / 'cpp' / 'include'}",
+                    str(source),
+                ),
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            assert compiled.returncode == 0, (
+                f"{compiler} could not compile {header}:\n{compiled.stderr}"
+            )
 
 
 def test_clang_vector_overlay_builds_and_runs_through_opt_in_target(
@@ -442,6 +628,9 @@ def test_cpp_fetch_content_consumer_builds(
 
             int main() {
               using Vec = tsl::simd<std::int32_t, tsl::scalar>;
+              static_assert(
+                  tsl::implementation_state_v<tsl::primitive::add, Vec> ==
+                  tsl::implementation_state::fallback);
               return tsl::add<Vec>(1, 2) == 3 ? 0 : 1;
             }
             """
@@ -507,10 +696,21 @@ def test_rust_path_dependency_consumer_builds(
     (consumer / "src" / "main.rs").write_text(
         textwrap.dedent(
             """
-            use tsl::{Mask, Simd};
-            use tsl::tsl_core::{Scalar, Simd as LowerSimd};
+            use tsl::primitive::Add;
+            use tsl::{Mask, PreconditionError, Simd};
+            use tsl::tsl_core::{
+                ImplementationState, ImplementationStateOf, Scalar,
+                Simd as LowerSimd,
+            };
 
             fn main() {
+                assert_eq!(
+                    <tsl::profile::Profile as ImplementationStateOf<
+                        Add,
+                        LowerSimd<i32, Scalar>,
+                    >>::VALUE,
+                    ImplementationState::Fallback,
+                );
                 let sum = tsl::profile::add::<LowerSimd<i32, Scalar>>(1, 2);
                 assert_eq!(sum, 3);
 
@@ -592,18 +792,25 @@ def test_rust_path_dependency_consumer_builds(
                 assigned *= Simd::splat(2);
                 assert_eq!(assigned.to_array(), [2, -4, -2, 0]);
 
-                let dividend = Simd::<i32, 4>::from_array([7, -7, i32::MIN, 9]);
-                let divisor = Simd::<i32, 4>::from_array([3, 3, -1, 2]);
-                assert_eq!((dividend / divisor).to_array(), [2, -2, i32::MIN, 4]);
-                assert_eq!((dividend % divisor).to_array(), [1, -1, 0, 1]);
-                assert!(std::panic::catch_unwind(|| {
-                    let _ = dividend / Simd::from_array([1, 0, 1, 1]);
-                })
-                .is_err());
-                assert!(std::panic::catch_unwind(|| {
-                    let _ = dividend % Simd::from_array([1, 0, 1, 1]);
-                })
-                .is_err());
+            let dividend = Simd::<i32, 4>::from_array([7, -7, i32::MIN, 9]);
+            let divisor = Simd::<i32, 4>::from_array([3, 3, -1, 2]);
+            assert_eq!(
+                unsafe { dividend.div(divisor) }.to_array(),
+                [2, -2, i32::MIN, 4],
+            );
+            assert_eq!(
+                unsafe { dividend.r#mod(divisor) }.to_array(),
+                [1, -1, 0, 1],
+            );
+            let zero_divisor = Simd::from_array([1, 0, 1, 1]);
+            assert!(matches!(
+                dividend.div_checked(zero_divisor),
+                Err(PreconditionError::ZeroDivisor),
+            ));
+            assert!(matches!(
+                dividend.mod_checked(zero_divisor),
+                Err(PreconditionError::ZeroDivisor),
+            ));
 
                 assert_eq!((left & right).to_array(), [0, 2, 1, i32::MIN]);
                 assert_eq!((left | right).to_array(), [3, -1, i32::MAX, -1]);
@@ -664,7 +871,7 @@ def test_rust_path_dependency_consumer_builds(
                     Simd::<f32, 4>::from_array([0.0, -0.0, 1.0, f32::NAN]);
                 let floating_divisor =
                     Simd::<f32, 4>::from_array([1.0, 1.0, 0.0, 1.0]);
-                let floating_quotient = floating_dividend / floating_divisor;
+            let floating_quotient = floating_dividend.div(floating_divisor);
                 assert_eq!(floating_quotient.to_bits().to_array()[..2], [0, 0x8000_0000]);
                 assert!(floating_quotient.to_array()[2].is_infinite());
                 assert!(floating_quotient.to_array()[3].is_nan());
@@ -852,7 +1059,47 @@ def test_rust_path_dependency_consumer_builds(
     assert packaged.returncode == 0, packaged.stderr + packaged.stdout
     packaged_paths = set(packaged.stdout.splitlines())
     assert {"Cargo.toml", "README.md", "src/lib.rs", "src/tsl_facade.rs"} <= packaged_paths
+    assert {
+        "src/tsl_algorithm.rs",
+        "src/tsl_algorithm/representation.rs",
+        "src/tsl_algorithm/masks.rs",
+        "src/tsl_algorithm/kernel_traits.rs",
+        "src/tsl_algorithm/validation.rs",
+        "src/tsl_algorithm/utility.rs",
+        "src/tsl_algorithm/iteration.rs",
+        "src/tsl_algorithm/predicate.rs",
+        "src/tsl_algorithm/count.rs",
+        "src/tsl_algorithm/select.rs",
+        "src/tsl_algorithm/transform.rs",
+        "src/tsl_algorithm/consume.rs",
+        "src/tsl_algorithm/aggregate.rs",
+        "src/tsl_scalar/algo.rs",
+        "src/tsl_scalar/algo/support.rs",
+        "src/tsl_scalar/algo/transform.rs",
+        "src/tsl_target_fallback/algo.rs",
+        "src/tsl_target_fallback/algo/support.rs",
+        "src/tsl_target_fallback/algo/transform.rs",
+    } <= packaged_paths
     assert not any(path.startswith("tslc/") for path in packaged_paths)
+    generated_doc_junk = generated / "rust/docs/target/doc/tsl/index.html"
+    generated_doc_junk.parent.mkdir(parents=True)
+    generated_doc_junk.write_text("generated docs must not enter the package\n")
+    repackaged = subprocess.run(
+        (
+            "cargo",
+            "package",
+            "--manifest-path",
+            str(generated_manifest),
+            "--allow-dirty",
+            "--no-verify",
+            "--list",
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert repackaged.returncode == 0, repackaged.stderr + repackaged.stdout
+    assert set(repackaged.stdout.splitlines()) == packaged_paths
     manifest_text = generated_manifest.read_text(encoding="utf-8")
     assert "[build-dependencies]" not in manifest_text
     assert 'rust-version = "1.89"' in manifest_text
@@ -909,12 +1156,14 @@ def test_rust_path_dependency_consumer_builds(
                 let left = [1_i32, 2, 3, 4];
                 let right = [4_i32, 3, 2, 1];
                 let mut output = [0_i32; 4];
-                Dispatcher::new().transform_binary(
-                    ops::Add,
-                    &left,
-                    &right,
-                    &mut output,
-                );
+                Dispatcher::new()
+                    .transform_binary_checked(
+                        ops::Add,
+                        &left,
+                        &right,
+                        &mut output,
+                    )
+                    .unwrap();
                 assert_eq!(output, [5; 4]);
             }
             """
@@ -954,7 +1203,7 @@ def test_rust_path_dependency_consumer_builds(
         check=False,
         capture_output=True,
         text=True,
-        env={**os.environ, "RUSTDOCFLAGS": "-D warnings"},
+        env={**os.environ, "RUSTDOCFLAGS": "-D warnings -D missing_docs"},
     )
     assert documented.returncode == 0, documented.stderr + documented.stdout
     root_docs = (
@@ -1287,6 +1536,463 @@ def test_rust_scalar_only_release_matrix(
         assert completed.returncode == 0, (
             f"{name} failed:\n{completed.stderr}{completed.stdout}"
         )
+
+
+def test_algorithm_conformance_compile_witnesses(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    compiler = shutil.which("c++")
+    cargo = shutil.which("cargo")
+    if compiler is None or cargo is None:
+        pytest.skip("C++ and Rust toolchains are required")
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=_build_verified("test_algorithm_conformance_compile_witnesses"),
+        profiles=["scalar"],
+        type_tags=["si32"],
+        backends=["cpp", "rust"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    generated = tmp_path / "generated"
+    write_report = write_artifacts(result.artifacts, generated)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    cpp_source, cpp_witnessed = render_cpp_algorithm_compile_witness()
+    rust_source, rust_witnessed = render_rust_algorithm_compile_witness()
+    assert conformance_issues(
+        ALGORITHM_CONFORMANCE_CASES,
+        ALGORITHM_CALLABLE_FORMS,
+        cpp_expected=cpp_algorithm_compile_identities(),
+        cpp_witnessed=cpp_witnessed,
+        rust_expected=rust_algorithm_compile_identities(),
+        rust_witnessed=rust_witnessed,
+    ) == ()
+
+    cpp_path = tmp_path / "algorithm_conformance.cpp"
+    cpp_path.write_text(cpp_source, encoding="utf-8")
+    cpp_executable = tmp_path / "algorithm_conformance"
+    compiled = subprocess.run(
+        (
+            compiler,
+            "-std=c++17",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-DTSL_PROFILE_SCALAR",
+            f"-I{generated / 'cpp' / 'include'}",
+            str(cpp_path),
+            "-o",
+            str(cpp_executable),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert compiled.returncode == 0, compiled.stderr + compiled.stdout
+    executed = subprocess.run(
+        (str(cpp_executable),),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert executed.returncode == 0, executed.stderr + executed.stdout
+
+    behavior_case = SHARED_ALGORITHM_BEHAVIOR_CASE
+    cpp_behavior_path = tmp_path / "algorithm_behavior.cpp"
+    cpp_behavior_path.write_text(
+        render_cpp_algorithm_behavior(behavior_case),
+        encoding="utf-8",
+    )
+    cpp_behavior_executable = tmp_path / "algorithm_behavior"
+    behavior_compiled = subprocess.run(
+        (
+            compiler,
+            "-std=c++17",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-DTSL_PROFILE_SCALAR",
+            f"-I{generated / 'cpp' / 'include'}",
+            str(cpp_behavior_path),
+            "-o",
+            str(cpp_behavior_executable),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert behavior_compiled.returncode == 0, (
+        behavior_compiled.stderr + behavior_compiled.stdout
+    )
+    cpp_behavior = subprocess.run(
+        (str(cpp_behavior_executable),),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert cpp_behavior.returncode == 0, cpp_behavior.stderr
+
+    rust_tests = generated / "rust" / "tests"
+    rust_tests.mkdir(exist_ok=True)
+    (rust_tests / "algorithm_conformance.rs").write_text(
+        rust_source,
+        encoding="utf-8",
+    )
+    tested = subprocess.run(
+        (
+            cargo,
+            "test",
+            "--quiet",
+            "--manifest-path",
+            str(generated / "rust" / "Cargo.toml"),
+            "--no-default-features",
+            "--test",
+            "algorithm_conformance",
+            "--target-dir",
+            str(tmp_path / "rust-conformance-target"),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert tested.returncode == 0, tested.stderr + tested.stdout
+
+    rust_behavior_crate = tmp_path / "rust-algorithm-behavior"
+    (rust_behavior_crate / "src").mkdir(parents=True)
+    (rust_behavior_crate / "Cargo.toml").write_text(
+        textwrap.dedent(
+            f"""
+            [package]
+            name = "tsl-algorithm-behavior"
+            version = "0.0.0"
+            edition = "2021"
+
+            [dependencies]
+            tsl = {{ path = "{(generated / 'rust').as_posix()}", default-features = false }}
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    (rust_behavior_crate / "src" / "main.rs").write_text(
+        render_rust_algorithm_behavior(behavior_case),
+        encoding="utf-8",
+    )
+    rust_behavior = subprocess.run(
+        (
+            cargo,
+            "run",
+            "--quiet",
+            "--manifest-path",
+            str(rust_behavior_crate / "Cargo.toml"),
+            "--target-dir",
+            str(tmp_path / "rust-conformance-target"),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert rust_behavior.returncode == 0, rust_behavior.stderr + rust_behavior.stdout
+    expected = behavior_case.expected_report
+    assert cpp_behavior.stdout == expected
+    assert rust_behavior.stdout == expected
+
+
+def test_rust_core_scalar_cast_matrix(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    if shutil.which("cargo") is None:
+        pytest.skip("cargo is required")
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=_build_verified("test_rust_core_scalar_cast_matrix"),
+        profiles=["scalar", "avx2"],
+        backends=["rust"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    generated = tmp_path / "generated"
+    write_report = write_artifacts(result.artifacts, generated)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    scalar_tests = generated / "rust" / "tests" / "core_scalar_casts.rs"
+    scalar_tests.write_text(
+        textwrap.dedent(
+            r"""
+            use tsl::tsl_core::detail::helpers::{
+                saturating_cast_value, scalar_as_cast_value,
+            };
+
+            macro_rules! assert_float_eq {
+                ($actual:expr, $expected:expr) => {{
+                    let actual = $actual;
+                    let expected = $expected;
+                    if expected.is_nan() {
+                        assert!(actual.is_nan());
+                    } else {
+                        assert_eq!(actual.to_bits(), expected.to_bits());
+                    }
+                }};
+            }
+
+            macro_rules! check_scalar_as_source {
+                ($source:ty, $value:expr) => {{
+                    let value: $source = $value;
+                    assert_eq!(scalar_as_cast_value::<$source, i8>(value), value as i8);
+                    assert_eq!(scalar_as_cast_value::<$source, u8>(value), value as u8);
+                    assert_eq!(scalar_as_cast_value::<$source, i16>(value), value as i16);
+                    assert_eq!(scalar_as_cast_value::<$source, u16>(value), value as u16);
+                    assert_eq!(scalar_as_cast_value::<$source, i32>(value), value as i32);
+                    assert_eq!(scalar_as_cast_value::<$source, u32>(value), value as u32);
+                    assert_eq!(scalar_as_cast_value::<$source, i64>(value), value as i64);
+                    assert_eq!(scalar_as_cast_value::<$source, u64>(value), value as u64);
+                    assert_float_eq!(
+                        scalar_as_cast_value::<$source, f32>(value),
+                        value as f32
+                    );
+                    assert_float_eq!(
+                        scalar_as_cast_value::<$source, f64>(value),
+                        value as f64
+                    );
+                }};
+            }
+
+            macro_rules! check_saturating_signed_source {
+                ($source:ty, $value:expr) => {{
+                    let value: $source = $value;
+                    let wide = value as i128;
+                    assert_eq!(
+                        saturating_cast_value::<$source, i8>(value),
+                        wide.clamp(i8::MIN as i128, i8::MAX as i128) as i8
+                    );
+                    assert_eq!(
+                        saturating_cast_value::<$source, u8>(value),
+                        wide.clamp(0, u8::MAX as i128) as u8
+                    );
+                    assert_eq!(
+                        saturating_cast_value::<$source, i16>(value),
+                        wide.clamp(i16::MIN as i128, i16::MAX as i128) as i16
+                    );
+                    assert_eq!(
+                        saturating_cast_value::<$source, u16>(value),
+                        wide.clamp(0, u16::MAX as i128) as u16
+                    );
+                    assert_eq!(
+                        saturating_cast_value::<$source, i32>(value),
+                        wide.clamp(i32::MIN as i128, i32::MAX as i128) as i32
+                    );
+                    assert_eq!(
+                        saturating_cast_value::<$source, u32>(value),
+                        wide.clamp(0, u32::MAX as i128) as u32
+                    );
+                    assert_eq!(
+                        saturating_cast_value::<$source, i64>(value),
+                        wide.clamp(i64::MIN as i128, i64::MAX as i128) as i64
+                    );
+                    assert_eq!(
+                        saturating_cast_value::<$source, u64>(value),
+                        wide.clamp(0, u64::MAX as i128) as u64
+                    );
+                    assert_float_eq!(
+                        saturating_cast_value::<$source, f32>(value),
+                        value as f32
+                    );
+                    assert_float_eq!(
+                        saturating_cast_value::<$source, f64>(value),
+                        value as f64
+                    );
+                }};
+            }
+
+            macro_rules! check_saturating_unsigned_source {
+                ($source:ty, $value:expr) => {{
+                    let value: $source = $value;
+                    let wide = value as u128;
+                    assert_eq!(
+                        saturating_cast_value::<$source, i8>(value),
+                        wide.min(i8::MAX as u128) as i8
+                    );
+                    assert_eq!(
+                        saturating_cast_value::<$source, u8>(value),
+                        wide.min(u8::MAX as u128) as u8
+                    );
+                    assert_eq!(
+                        saturating_cast_value::<$source, i16>(value),
+                        wide.min(i16::MAX as u128) as i16
+                    );
+                    assert_eq!(
+                        saturating_cast_value::<$source, u16>(value),
+                        wide.min(u16::MAX as u128) as u16
+                    );
+                    assert_eq!(
+                        saturating_cast_value::<$source, i32>(value),
+                        wide.min(i32::MAX as u128) as i32
+                    );
+                    assert_eq!(
+                        saturating_cast_value::<$source, u32>(value),
+                        wide.min(u32::MAX as u128) as u32
+                    );
+                    assert_eq!(
+                        saturating_cast_value::<$source, i64>(value),
+                        wide.min(i64::MAX as u128) as i64
+                    );
+                    assert_eq!(
+                        saturating_cast_value::<$source, u64>(value),
+                        wide.min(u64::MAX as u128) as u64
+                    );
+                    assert_float_eq!(
+                        saturating_cast_value::<$source, f32>(value),
+                        value as f32
+                    );
+                    assert_float_eq!(
+                        saturating_cast_value::<$source, f64>(value),
+                        value as f64
+                    );
+                }};
+            }
+
+            macro_rules! check_saturating_float_source {
+                ($source:ty, $value:expr) => {{
+                    let value: $source = $value;
+                    let wide = value as f64;
+                    assert_eq!(saturating_cast_value::<$source, i8>(value), value as i8);
+                    assert_eq!(saturating_cast_value::<$source, u8>(value), value as u8);
+                    assert_eq!(saturating_cast_value::<$source, i16>(value), value as i16);
+                    assert_eq!(saturating_cast_value::<$source, u16>(value), value as u16);
+                    assert_eq!(saturating_cast_value::<$source, i32>(value), value as i32);
+                    assert_eq!(saturating_cast_value::<$source, u32>(value), value as u32);
+                    assert_eq!(saturating_cast_value::<$source, i64>(value), value as i64);
+                    assert_eq!(saturating_cast_value::<$source, u64>(value), value as u64);
+                    let expected_f32 = if wide.is_nan() {
+                        f32::NAN
+                    } else if wide > f32::MAX as f64 {
+                        f32::MAX
+                    } else if wide < -(f32::MAX as f64) {
+                        -f32::MAX
+                    } else {
+                        wide as f32
+                    };
+                    assert_float_eq!(
+                        saturating_cast_value::<$source, f32>(value),
+                        expected_f32
+                    );
+                    assert_float_eq!(
+                        saturating_cast_value::<$source, f64>(value),
+                        wide
+                    );
+                }};
+            }
+
+            #[test]
+            fn every_ordinary_scalar_pair_matches_rust_as() {
+                check_scalar_as_source!(i8, i8::MIN);
+                check_scalar_as_source!(i8, i8::MAX);
+                check_scalar_as_source!(u8, u8::MIN);
+                check_scalar_as_source!(u8, u8::MAX);
+                check_scalar_as_source!(i16, i16::MIN);
+                check_scalar_as_source!(i16, i16::MAX);
+                check_scalar_as_source!(u16, u16::MIN);
+                check_scalar_as_source!(u16, u16::MAX);
+                check_scalar_as_source!(i32, i32::MIN);
+                check_scalar_as_source!(i32, i32::MAX);
+                check_scalar_as_source!(u32, u32::MIN);
+                check_scalar_as_source!(u32, u32::MAX);
+                check_scalar_as_source!(i64, i64::MIN);
+                check_scalar_as_source!(i64, i64::MAX);
+                check_scalar_as_source!(u64, u64::MIN);
+                check_scalar_as_source!(u64, u64::MAX);
+                for value in [f32::NEG_INFINITY, -0.0, 0.0, f32::MAX, f32::INFINITY, f32::NAN] {
+                    check_scalar_as_source!(f32, value);
+                }
+                for value in [f64::NEG_INFINITY, -0.0, 0.0, f64::MAX, f64::INFINITY, f64::NAN] {
+                    check_scalar_as_source!(f64, value);
+                }
+            }
+
+            #[test]
+            fn every_saturating_scalar_pair_clamps_at_the_declared_bounds() {
+                check_saturating_signed_source!(i8, i8::MIN);
+                check_saturating_signed_source!(i8, i8::MAX);
+                check_saturating_signed_source!(i16, i16::MIN);
+                check_saturating_signed_source!(i16, i16::MAX);
+                check_saturating_signed_source!(i32, i32::MIN);
+                check_saturating_signed_source!(i32, i32::MAX);
+                check_saturating_signed_source!(i64, i64::MIN);
+                check_saturating_signed_source!(i64, i64::MAX);
+                check_saturating_unsigned_source!(u8, u8::MIN);
+                check_saturating_unsigned_source!(u8, u8::MAX);
+                check_saturating_unsigned_source!(u16, u16::MIN);
+                check_saturating_unsigned_source!(u16, u16::MAX);
+                check_saturating_unsigned_source!(u32, u32::MIN);
+                check_saturating_unsigned_source!(u32, u32::MAX);
+                check_saturating_unsigned_source!(u64, u64::MIN);
+                check_saturating_unsigned_source!(u64, u64::MAX);
+                for value in [f32::NEG_INFINITY, -0.0, 0.0, f32::MAX, f32::INFINITY, f32::NAN] {
+                    check_saturating_float_source!(f32, value);
+                }
+                for value in [
+                    f64::NEG_INFINITY,
+                    -(f32::MAX as f64) * 2.0,
+                    -0.0,
+                    0.0,
+                    (f32::MAX as f64) * 2.0,
+                    f64::INFINITY,
+                    f64::NAN,
+                ] {
+                    check_saturating_float_source!(f64, value);
+                }
+            }
+
+            #[derive(Clone, Copy)]
+            struct Unsupported;
+
+            #[test]
+            fn unsupported_scalar_types_fail_closed() {
+                assert!(std::panic::catch_unwind(|| {
+                    scalar_as_cast_value::<Unsupported, i8>(Unsupported)
+                })
+                .is_err());
+                assert!(std::panic::catch_unwind(|| {
+                    scalar_as_cast_value::<i8, Unsupported>(1)
+                })
+                .is_err());
+                assert!(std::panic::catch_unwind(|| {
+                    saturating_cast_value::<Unsupported, i8>(Unsupported)
+                })
+                .is_err());
+                assert!(std::panic::catch_unwind(|| {
+                    saturating_cast_value::<i8, Unsupported>(1)
+                })
+                .is_err());
+            }
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    tested = subprocess.run(
+        (
+            "cargo",
+            "test",
+            "--quiet",
+            "--manifest-path",
+            str(generated / "rust" / "Cargo.toml"),
+            "--no-default-features",
+            "--test",
+            "core_scalar_casts",
+            "--target-dir",
+            str(tmp_path / "rust-cast-target"),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert tested.returncode == 0, tested.stderr + tested.stdout
 
 
 def test_rust_neon_compile_target_builds(
@@ -1965,110 +2671,6 @@ def test_convert_lanes_builds(
     assert report.diagnostics == (), report.diagnostics
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
-    if shutil.which("c++") is not None:
-        cpp_source = tmp_path / "convert-lanes-mismatch.cpp"
-        cpp_source.write_text(
-            textwrap.dedent(
-                """
-                #include <cstdint>
-                #include <stdexcept>
-                #include <string>
-                #include <tsl.hpp>
-
-                int main() {
-                  using Source = tsl::simd<std::int32_t, tsl::generic<4>>;
-                  using Target = tsl::simd<std::int32_t, tsl::generic<8>>;
-                  Source::register_type source{};
-                  try {
-                    (void)tsl::convert_lanes<Source, Target>(source);
-                  } catch (const std::invalid_argument& error) {
-                    return std::string(error.what()) ==
-                               "lane-preserving conversion requires equal source and target lane counts"
-                             ? 0
-                             : 2;
-                  }
-                  return 1;
-                }
-                """
-            ).lstrip(),
-            encoding="utf-8",
-        )
-        cpp_binary = tmp_path / "convert-lanes-mismatch"
-        compiled = subprocess.run(
-            (
-                "c++",
-                "-std=c++17",
-                "-DTSL_PROFILE_SCALAR",
-                f"-I{tmp_path / 'cpp' / 'include'}",
-                str(cpp_source),
-                "-o",
-                str(cpp_binary),
-            ),
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        assert compiled.returncode == 0, compiled.stderr + compiled.stdout
-        rejected = subprocess.run(
-            (str(cpp_binary),),
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        assert rejected.returncode == 0, rejected.stderr + rejected.stdout
-
-    if shutil.which("cargo") is not None:
-        consumer = tmp_path / "convert-lanes-mismatch-rust"
-        (consumer / "src").mkdir(parents=True)
-        (consumer / "Cargo.toml").write_text(
-            textwrap.dedent(
-                f"""
-                [package]
-                name = "convert-lanes-mismatch"
-                version = "0.0.0"
-                edition = "2021"
-
-                [dependencies]
-                tsl = {{ path = "{(tmp_path / 'rust').as_posix()}" }}
-                """
-            ).lstrip(),
-            encoding="utf-8",
-        )
-        (consumer / "src" / "main.rs").write_text(
-            textwrap.dedent(
-                """
-                use tsl::tsl_core::{Generic, Simd, SimdVector};
-
-                fn main() {
-                    type Source = Simd<i32, Generic<4>>;
-                    type Target = Simd<i32, Generic<8>>;
-                    let source: <Source as SimdVector>::RegisterType = Default::default();
-                    let rejected = std::panic::catch_unwind(|| {
-                        let _ = tsl::profile::convert_lanes::<Source, Target>(source);
-                    });
-                    assert!(rejected.is_err());
-                }
-                """
-            ).lstrip(),
-            encoding="utf-8",
-        )
-        rejected = subprocess.run(
-            (
-                "cargo",
-                "run",
-                "--quiet",
-                "--manifest-path",
-                str(consumer / "Cargo.toml"),
-                "--target-dir",
-                str(tmp_path / "convert-lanes-mismatch-rust-target"),
-            ),
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        assert rejected.returncode == 0, rejected.stderr + rejected.stdout
-
-
 def test_convert_lanes_cpp_sse_smoke_builds(
     data_root: Path,
     machine_profiles_path: Path,
@@ -2325,9 +2927,10 @@ def test_masked_load_store_build(
     # Masked category C (memory): `load` emits `load_maskz` (zero) + `load_mask` (pass_through);
     # `store` emits `store_mask` — each carrying the `aligned` const-generic (mask × aligned
     # compose orthogonally). avx512(_vl) uses native masked load/store (`maskz_loadu`/`mask_loadu`/
-    # `mask_storeu`); avx2/sse fall back to `load`+`mov`/`select`(+`store`) — the fallback forwards
-    # the caller's `aligned` via `attrs[aligned=value(primitive::attribute(aligned))]`,
-    # which the call lowerer now resolves. `void` store result types in both backends. scalar +
+    # `mask_storeu`); avx2 uses VMASKMOV for 32/64-bit lanes, while sse falls back to
+    # `load`+`mov`/`select`(+`store`) — the fallback forwards the caller's `aligned` via
+    # `attrs[aligned=value(primitive::attribute(aligned))]`, which the call lowerer now resolves.
+    # `void` store result types in both backends. scalar +
     # sse2 + avx2 + skylake. (gather/scatter masked are deferred on the `vidx` kind.)
     result = generate_project(
         [data_root],
@@ -2629,6 +3232,28 @@ def test_resize_and_indexed_permute_builds(
         machine_profiles_path=machine_profiles_path,
         primitives=_build_verified("test_resize_and_indexed_permute_builds"),
         profiles=["avx2", "skylake", "icelake_rockerlake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_interleave_reverse_builds(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # Full-width lane interleave/reverse plus their mask counterparts. Scalar
+    # covers the one-lane identities, SSE2 the native unpack and register-mask
+    # paths, AVX2 the cross-128-bit-lane array/composition paths, and Skylake
+    # the native-predicate mask representation. Build both public APIs.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=_build_verified("test_interleave_reverse_builds"),
+        profiles=["scalar", "sse2", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None
@@ -2961,7 +3586,7 @@ def test_memory_cp_builds(data_root: Path, machine_profiles_path: Path, tmp_path
     # count_bytes)`. `mem` is a scanned keyword lowered by `MemLowerer` to the `mem_copy`
     # translate template — C++ `std::memcpy` over `void *` reinterprets, Rust
     # `crate::tsl_core::mem_copy` over `u8` byte pointers (the `void`-cast maps to `*const/*mut
-    # u8`) with a `TslByteCount` normalization of the base-typed count. Same body for every
+    # u8`) with an explicit `usize` byte count accepted by `TslByteCount`. Same body for every
     # extension (no SIMD intrinsics), so it builds across scalar + SIMD in C++ and Rust.
     result = generate_project(
         [data_root],
@@ -2982,9 +3607,10 @@ def test_allocate_family_builds(data_root: Path, machine_profiles_path: Path, tm
     # The memory-allocation family is non-vector (`allocate` ptr:=(usize), `allocate_aligned`
     # ptr:=(usize,usize), `deallocate` void:=(ptr)) — derived `is_free_function` from the
     # signature, so each emits a single plain `tsl::` free function (no simd<> template), not a
-    # per-(type,ext) wrapper. Bodies lower mem<alloc|alloc_aligned|free> to std::malloc/
-    # aligned_alloc/free (C++) and crate::tsl_core::mem_* (Rust). ISA-independent, so one slot
-    # regardless of profile; builds in C++ and Rust across scalar + SIMD.
+    # per-(type,ext) wrapper. Bodies lower mem<alloc|alloc_aligned|free> to paired
+    # platform allocation helpers (C++) and crate::tsl_core::mem_* (Rust).
+    # ISA-independent, so one slot regardless of profile; builds in C++ and Rust
+    # across scalar + SIMD.
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,

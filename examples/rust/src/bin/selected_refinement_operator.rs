@@ -79,25 +79,27 @@ fn main() {
 
             let mut refined = vec![SENTINEL; indices.len()];
             let mut negative = Negative;
-            let produced = profile::algo::select_selected_indices_unary(
+            let produced = profile::algo::select_selected_indices_unary_checked(
                 policy,
                 &mut negative,
                 &left,
                 &indices,
                 &mut refined,
-            );
+            )
+            .expect("checked algorithm preconditions");
             verify_refined_indices(&indices, &refined, produced, SENTINEL, |row| left[row] < 0);
 
             refined.fill(SENTINEL);
             let mut less_than = LessThan;
-            let produced = profile::algo::select_selected_indices_binary(
+            let produced = profile::algo::select_selected_indices_binary_checked(
                 policy,
                 &mut less_than,
                 &left,
                 &right,
                 &indices,
                 &mut refined,
-            );
+            )
+            .expect("checked algorithm preconditions");
             verify_refined_indices(&indices, &refined, produced, SENTINEL, |row| {
                 left[row] < right[row]
             });

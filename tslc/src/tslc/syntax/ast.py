@@ -41,6 +41,8 @@ ParsedPrimitiveFieldKind = Literal[
     "operation",
     "operand_roles",
     "overload",
+    "portability",
+    "preconditions",
     "memory",
     "return_type",
     "semantics",

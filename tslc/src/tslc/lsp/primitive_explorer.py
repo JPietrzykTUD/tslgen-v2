@@ -94,11 +94,23 @@ class ExplorerPrimitive:
 
     name: str
     signatures: tuple[str, ...]
+    preconditions: tuple[str, ...]
     definitions: tuple[SourceSpan, ...]
     available_slots: int
     total_slots: int
     calls: tuple[str, ...]
     called_by: tuple[str, ...]
+    call_preconditions: tuple["ExplorerCallPrecondition", ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ExplorerCallPrecondition:
+    """Aggregated authored call-proof facts for one primitive explorer row."""
+
+    callee: str
+    condition: str
+    disposition: Literal["forward", "discharge"]
+    sites: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -236,6 +248,17 @@ class PrimitiveExplorerCache:
                         }
                     )
                 ),
+                preconditions=tuple(
+                    sorted(
+                        {
+                            condition.kind.value
+                            for primitive in catalog.primitives_named(
+                                name, unmasked=False
+                            )
+                            for condition in primitive.preconditions
+                        }
+                    )
+                ),
                 definitions=_scoped_definitions(index, name, path),
                 available_slots=sum(
                     slot.available for slot in slots_by_name[name]
@@ -243,6 +266,7 @@ class PrimitiveExplorerCache:
                 total_slots=len(slots_by_name[name]),
                 calls=index.primitive_calls.get(name, ()),
                 called_by=index.primitive_callers.get(name, ()),
+                call_preconditions=_explorer_call_preconditions(index, name),
             )
             for name in names
         )
@@ -306,6 +330,20 @@ def primitive_explorer(
         path=path.resolve() if path is not None else None,
         selected_primitive=selected_primitive,
         stale=stale,
+    )
+
+
+def _explorer_call_preconditions(
+    index: CatalogIndex,
+    primitive: str,
+) -> tuple[ExplorerCallPrecondition, ...]:
+    counts: dict[tuple[str, str, Literal["forward", "discharge"]], int] = {}
+    for item in index.primitive_call_preconditions.get(primitive, ()):
+        key = (item.callee, item.condition, item.disposition)
+        counts[key] = counts.get(key, 0) + 1
+    return tuple(
+        ExplorerCallPrecondition(callee, condition, disposition, sites)
+        for (callee, condition, disposition), sites in sorted(counts.items())
     )
 
 
@@ -461,6 +499,7 @@ def _resolved_primitive_slots(
                 extension,
                 type_tag,
                 selector.support,
+                profile=profile,
             )
         )
     keys.update(selected)
@@ -844,6 +883,7 @@ def _span_key(span: SourceSpan) -> tuple[str, int, int, int, int]:
 
 
 __all__ = (
+    "ExplorerCallPrecondition",
     "ExplorerMode",
     "ExplorerImplementation",
     "ExplorerPrimitive",

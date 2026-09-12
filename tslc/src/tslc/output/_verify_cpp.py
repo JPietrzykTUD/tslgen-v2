@@ -26,6 +26,7 @@ from tslc.output.verify_drivers import (
 )
 from tslc.output.verify_model import (
     BuildCommand,
+    BuildCommandEnvironment,
     BuildCommandResult,
     BuildCommandRunner,
     BuildVerifierConfig,
@@ -171,6 +172,23 @@ def _cpp_command_groups(
                 ),
             ]
         )
+        if config.run_quality_checks:
+            commands.append(
+                BuildCommand(
+                    backend_id="cpp",
+                    profile_name=profile.profile_name,
+                    step="check-warnings",
+                    argv=(
+                        "cmake",
+                        "--build",
+                        str(build_dir),
+                        "--target",
+                        "tsl_quality",
+                    ),
+                    cwd=root,
+                    env=env,
+                )
+            )
         if config.run_value_tests:
             commands.append(
                 BuildCommand(
@@ -183,23 +201,8 @@ def _cpp_command_groups(
                     severity_on_failure="warning",
                 )
             )
-            commands.append(
-                BuildCommand(
-                    backend_id="cpp",
-                    profile_name=profile.profile_name,
-                    step="test",
-                    argv=(
-                        "ctest",
-                        "--test-dir",
-                        str(build_dir),
-                        "--output-on-failure",
-                        "--timeout",
-                        "60",
-                    ),
-                    cwd=root,
-                    env=env,
-                    severity_on_failure="warning",
-                )
+            commands.extend(
+                _cpp_value_test_commands(root, build_dir, profile, config, env)
             )
         commands.extend(
             BuildCommand(
@@ -223,6 +226,53 @@ def _cpp_command_groups(
     return tuple(groups)
 
 
+def _cpp_value_test_commands(
+    root: Path,
+    build_dir: Path,
+    profile: VerifyProfile,
+    config: BuildVerifierConfig,
+    env: tuple[BuildCommandEnvironment, ...],
+) -> tuple[BuildCommand, ...]:
+    runner = profile.runner
+    if runner is not None and len(runner.executions) > 1:
+        binary = build_dir / "tsl_values"
+        return tuple(
+            BuildCommand(
+                backend_id="cpp",
+                profile_name=profile.profile_name,
+                step="test",
+                argv=(*runner_prefix(profile, config, variant), str(binary)),
+                cwd=root,
+                env=env,
+                severity_on_failure="warning",
+                runner_kind=runner.kind,
+                runner_variant=variant,
+                timeout_seconds=60,
+            )
+            for variant in runner.executions
+        )
+    return (
+        BuildCommand(
+            backend_id="cpp",
+            profile_name=profile.profile_name,
+            step="test",
+            argv=(
+                "ctest",
+                "--test-dir",
+                str(build_dir),
+                "--output-on-failure",
+                "--timeout",
+                "60",
+            ),
+            cwd=root,
+            env=env,
+            severity_on_failure="warning",
+            runner_kind=(None if runner is None else runner.kind),
+            runner_variant=(runner.executions[0] if runner is not None else None),
+        ),
+    )
+
+
 def _cpp_configure_args(
     project_root: Path,
     build_dir: Path,
@@ -238,6 +288,8 @@ def _cpp_configure_args(
         str(build_dir),
         f"-DTSL_PROFILE={profile.profile_name}",
     ]
+    if config.run_quality_checks:
+        args.append("-DTSL_STRICT_WARNINGS=ON")
     target = cpp_target(profile, config)
     if target is not None:
         args.extend(_cpp_cross_target_cmake_args(profile, target, compiler))

@@ -15,6 +15,7 @@ import {
   countDescription,
   groupSlots,
   implementationLabel,
+  preconditionDescription,
   slotCallableLabel,
   slotStatusDescription,
   slotTypeLabel,
@@ -35,6 +36,8 @@ export interface ExplorerPreviewSlot {
   readonly backend: string;
   readonly extension: string;
   readonly toTarget: string | null;
+  readonly signature: string;
+  readonly attributes: Readonly<Record<string, string>>;
   readonly sourceUri: vscode.Uri;
 }
 
@@ -573,6 +576,8 @@ export class TslExplorer implements vscode.Disposable {
       extension: element.slot.extension,
       type: element.slot.type,
       toTarget: element.slot.target?.value ?? null,
+      signature: element.slot.signature,
+      attributes: element.slot.attributes,
       sourceUri: vscode.Uri.parse(source),
     });
   }
@@ -593,6 +598,8 @@ export class TslExplorer implements vscode.Disposable {
       extension: element.slot.extension,
       type: element.slot.type,
       toTarget: element.slot.target?.value ?? null,
+      signature: element.slot.signature,
+      attributes: element.slot.attributes,
     };
     this.activeAnalysisContext = context;
     const cached = this.analysisCache.valid(context, this.response.generation);
@@ -617,6 +624,7 @@ export class TslExplorer implements vscode.Disposable {
     const workspaceGeneration = this.response.generation;
     const result = await this.analyze({
       ...context,
+      signature: element.slot.signature,
       sourceUri: vscode.Uri.parse(source),
     });
     if (!result) {
@@ -1104,7 +1112,7 @@ class DependencyTreeProvider
           : vscode.TreeItemCollapsibleState.None,
       );
       item.description =
-        `${node.status} • ${node.implementationState} • ${node.extension}/${node.type}`;
+        `${node.status} • ${node.implementationState} • ${analysisVectorLabel(node)}`;
       item.iconPath = new vscode.ThemeIcon(analysisNodeIcon(node));
       item.contextValue = node.location ? "tslAnalyzedDependency" : undefined;
       item.tooltip = analysisNodeTooltip(node);
@@ -1168,6 +1176,9 @@ function analysisNodeIcon(node: ConcreteAnalysisNode): string {
   if (node.status === "cycle") {
     return "sync";
   }
+  if (node.status === "symbolic") {
+    return "symbol-parameter";
+  }
   return implementationStateIcon(node.implementationState);
 }
 
@@ -1177,13 +1188,17 @@ function analysisNodeTooltip(node: ConcreteAnalysisNode): vscode.MarkdownString 
   value.appendMarkdown(
     `Status: ${node.status}; ${implementationStateDescription(node.implementationState)}.\n\n`,
   );
-  value.appendMarkdown(`Slot: \`${node.extension}/${node.type}/${node.backend}\`.\n\n`);
+  value.appendMarkdown(`Slot: \`${analysisVectorLabel(node)}/${node.backend}\`.\n\n`);
   if (node.origin) {
     value.appendMarkdown(`Call origin: \`${node.origin}\`.\n\n`);
   }
   if (node.target) {
+    const target =
+      "vectorReference" in node.target
+        ? node.target.vectorReference
+        : `${node.target.extension}/${node.target.type}`;
     value.appendMarkdown(
-      `Target: \`${node.target.extension}/${node.target.type}\`.\n\n`,
+      `Target: \`${target}\`.\n\n`,
     );
   }
   if (node.reason) {
@@ -1195,6 +1210,10 @@ function analysisNodeTooltip(node: ConcreteAnalysisNode): vscode.MarkdownString 
       : "No resolved source implementation is available for this edge.",
   );
   return value;
+}
+
+function analysisVectorLabel(node: ConcreteAnalysisNode): string {
+  return node.vectorReference ?? `${node.extension ?? "?"}/${node.type ?? "?"}`;
 }
 
 function primitiveTooltip(
@@ -1210,7 +1229,23 @@ function primitiveTooltip(
   );
   value.appendMarkdown(`Signatures: ${primitive.signatures.map(code).join(", ")}\n\n`);
   value.appendMarkdown(
+    `Preconditions: ${preconditionDescription(primitive.preconditions)}\n\n`,
+  );
+  value.appendMarkdown(
     `Calls: ${primitive.calls.length ? primitive.calls.map(code).join(", ") : "none"}\n\n`,
+  );
+  value.appendMarkdown(
+    `Call preconditions: ${
+      primitive.callPreconditions.length
+        ? primitive.callPreconditions
+            .map(
+              (item) =>
+                `${code(item.callee)}.${code(item.condition)} → ${code(item.disposition)}` +
+                (item.sites === 1 ? "" : ` (${String(item.sites)} sites)`),
+            )
+            .join(", ")
+        : "none"
+    }\n\n`,
   );
   value.appendMarkdown(
     `Called by: ${primitive.calledBy.length ? primitive.calledBy.map(code).join(", ") : "none"}`,

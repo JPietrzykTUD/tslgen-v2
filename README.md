@@ -1,11 +1,9 @@
 # tslgen-v2
 
 [![Python Logic](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/python.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/python.yml)
-[![Generated Build](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/generated-build.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/generated-build.yml)
 [![Generated Value Tests](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/generated-values.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/generated-values.yml)
 [![Generated Package](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/generated-package.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/generated-package.yml)
 [![Coverage Ratchet](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/coverage-ratchet.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/coverage-ratchet.yml)
-[![Docs](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/JPietrzykTUD/tslgen-v2/actions/workflows/docs.yml)
 
 This repository contains `tslc`, a Python compiler for the TSL data language,
 plus the authored source data, packaged compiler assets, generated-documentation
@@ -26,7 +24,7 @@ editors/      Editor clients; compiler semantics remain in tslc
 docs/         Human-authored maintainer guides
 examples/     Checked-in C++ and Rust generated-library consumers
 .github/      GitHub Actions workflows, actions, and workflow-only scripts
-supplementary/ Machine profiles, generated-doc inputs, and reusable CI helpers
+supplementary/ Machine profiles, generated-doc inputs, measurement and CI helpers
 coverage/     Coverage and benchmark ratchet evidence
 tools/        Downstream packages; tools/pivot/ owns standalone PIVOT export
 tslctmp/      Local generated output and scratch space; do not commit
@@ -78,11 +76,19 @@ overlay.
 
 - Package quick start: [tslc/README.md](tslc/README.md)
 - Standalone PIVOT exporter: [tools/pivot/README.md](tools/pivot/README.md)
+- TSL v1 release production: [docs/releasing-tsl-v1.md](docs/releasing-tsl-v1.md)
 - Command-line tools: [docs/tslc-cli.md](docs/tslc-cli.md)
+- Generated-library v1 user guide: [docs/tsl-v1-user-guide.md](docs/tsl-v1-user-guide.md)
+- Migration from pre-v1 generated output: [docs/migrating-to-tsl-v1.md](docs/migrating-to-tsl-v1.md)
+- Generated-library changes: [CHANGELOG.md](CHANGELOG.md)
+- Generated-library v1 support contract: [docs/tsl-v1-support.md](docs/tsl-v1-support.md)
+- Exact v1 SVE/RVV support ratchet: [coverage/tsl-v1-target-support.json](coverage/tsl-v1-target-support.json)
+- Exact v1 implementation-slot quality ratchet: [coverage/tsl-v1-implementation-slots.json](coverage/tsl-v1-implementation-slots.json)
 - Editor setup and architecture: [docs/tsl-editor.md](docs/tsl-editor.md)
 - Repository charter: [CHARTER.md](CHARTER.md)
 - Compiler charter: [tslc/CHARTER.md](tslc/CHARTER.md)
 - Architecture narrative: [tslc/DESCRIPTION.md](tslc/DESCRIPTION.md)
+- Support-file compile-cost evidence: [research/tsl-v1-support-file-compile-cost.md](research/tsl-v1-support-file-compile-cost.md)
 - Active planning guide: [PLANS.md](PLANS.md)
 - Repository instructions: [AGENTS.md](AGENTS.md)
 - Claude Code import bridge: [CLAUDE.md](CLAUDE.md)

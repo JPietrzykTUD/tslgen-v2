@@ -58,11 +58,20 @@ export interface ExplorerSlot {
 export interface ExplorerPrimitive {
   readonly name: string;
   readonly signatures: readonly string[];
+  readonly preconditions: readonly string[];
   readonly definitions: readonly ExplorerLocation[];
   readonly availableSlots: number;
   readonly totalSlots: number;
   readonly calls: readonly string[];
   readonly calledBy: readonly string[];
+  readonly callPreconditions: readonly ExplorerCallPrecondition[];
+}
+
+export interface ExplorerCallPrecondition {
+  readonly callee: string;
+  readonly condition: string;
+  readonly disposition: string;
+  readonly sites: number;
 }
 
 export interface PrimitiveExplorerResponse {
@@ -144,6 +153,14 @@ export function countDescription(
   return onlyUnavailable
     ? `${String(total - available)} unavailable • ${String(available)}/${String(total)} available`
     : `${String(available)}/${String(total)} available`;
+}
+
+export function preconditionDescription(
+  preconditions: readonly string[],
+): string {
+  return preconditions.length
+    ? preconditions.map((item) => `\`${item}\``).join(", ")
+    : "none";
 }
 
 export function slotStatusDescription(slot: ExplorerSlot): string {

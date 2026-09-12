@@ -5,8 +5,9 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Hashable
 
+from tslc.catalog.arithmetic import ArithmeticOperandBinding
 from tslc.catalog.model import Catalog, Primitive
-from tslc.catalog.semantics import OperandRole, PrimitiveSemanticContract
+from tslc.catalog.semantics import OperandBinding, OperandRole, PrimitiveSemanticContract
 from tslc.diagnostics import Diagnostic, RelatedLocation, SourceSpan, diagnostic_at
 
 
@@ -19,46 +20,61 @@ def validate_semantic_contracts(
         by_name[primitive.name].append(primitive)
     for name, expanded in sorted(by_name.items()):
         declarations = _unique_source_declarations(expanded)
+        first_declaration = declarations[0]
+        for primitive in declarations[1:]:
+            if primitive.portability is first_declaration.portability:
+                continue
+            diagnostics.append(
+                _mismatch(
+                    name,
+                    "portability contract",
+                    primitive,
+                    primitive.source,
+                    first_declaration,
+                    first_declaration.source,
+                )
+            )
         contracted = tuple(item for item in declarations if item.operation is not None)
-        if not contracted:
+        preconditioned = tuple(item for item in declarations if item.preconditions)
+        if not contracted and not preconditioned:
             continue
-        first = contracted[0]
+        first = contracted[0] if contracted else preconditioned[0]
         first_contract = first.operation
-        assert first_contract is not None
         for primitive in declarations:
             contract = primitive.operation
-            if contract is None:
-                diagnostics.append(
-                    _mismatch(
-                        name,
-                        "operation presence",
-                        primitive,
-                        primitive.source,
-                        first,
-                        first_contract.source,
+            if first_contract is not None:
+                if contract is None:
+                    diagnostics.append(
+                        _mismatch(
+                            name,
+                            "operation presence",
+                            primitive,
+                            primitive.source,
+                            first,
+                            first_contract.source,
+                        )
                     )
-                )
-                continue
-            if contract.kind is not first_contract.kind:
-                diagnostics.append(
-                    _mismatch(
-                        name,
-                        "operation identity",
-                        primitive,
-                        contract.operation_source or contract.source,
-                        first,
-                        first_contract.operation_source or first_contract.source,
+                elif contract.kind is not first_contract.kind:
+                    diagnostics.append(
+                        _mismatch(
+                            name,
+                            "operation identity",
+                            primitive,
+                            contract.operation_source or contract.source,
+                            first,
+                            first_contract.operation_source or first_contract.source,
+                        )
                     )
-                )
-                continue
-            _validate_operand_roles(
-                name,
-                primitive,
-                contract,
-                first,
-                first_contract,
-                diagnostics,
-            )
+                else:
+                    _validate_operand_roles(
+                        name,
+                        primitive,
+                        contract,
+                        first,
+                        first_contract,
+                        diagnostics,
+                    )
+            _validate_preconditions(name, primitive, first, diagnostics)
             _validate_domain_contract(name, primitive, first, "memory", diagnostics)
             _validate_domain_contract(name, primitive, first, "conversion", diagnostics)
             _validate_domain_contract(name, primitive, first, "shift", diagnostics)
@@ -116,12 +132,16 @@ def _logical_parameter_index(
     contract: PrimitiveSemanticContract,
     parameter_index: int,
 ) -> int:
-    control_indexes = {
-        binding.parameter_index
-        for binding in contract.operand_bindings
-        if binding.role is OperandRole.CONTROL_MASK
+    roles_by_index: dict[int, set[OperandRole]] = defaultdict(set)
+    for binding in contract.operand_bindings:
+        roles_by_index[binding.parameter_index].add(binding.role)
+    policy_roles = {OperandRole.CONTROL_MASK, OperandRole.PASS_THROUGH}
+    policy_indexes = {
+        index
+        for index, roles in roles_by_index.items()
+        if roles and roles.issubset(policy_roles)
     }
-    return sum(index not in control_indexes for index in range(parameter_index))
+    return sum(index not in policy_indexes for index in range(parameter_index))
 
 
 def _validate_domain_contract(
@@ -140,7 +160,12 @@ def _validate_domain_contract(
         if field == "memory" and (
             actual.access,
             actual.addressing,
-        ) == (expected.access, expected.addressing):
+            actual.indexed_lane_extent,
+        ) == (
+            expected.access,
+            expected.addressing,
+            expected.indexed_lane_extent,
+        ):
             return
         if field == "conversion" and (
             actual.kind,
@@ -166,6 +191,75 @@ def _validate_domain_contract(
             first,
             first.source if expected is None else expected.source,
         )
+    )
+
+
+def _validate_preconditions(
+    name: str,
+    primitive: Primitive,
+    first: Primitive,
+    diagnostics: list[Diagnostic],
+) -> None:
+    actual = {
+        item.kind: tuple(
+            sorted(
+                (
+                    _precondition_binding_identity(primitive, binding)
+                    for binding in item.operand_bindings
+                ),
+                key=lambda value: value,
+            )
+        )
+        for item in primitive.preconditions
+    }
+    expected = {
+        item.kind: tuple(
+            sorted(
+                (
+                    _precondition_binding_identity(first, binding)
+                    for binding in item.operand_bindings
+                ),
+                key=lambda value: value,
+            )
+        )
+        for item in first.preconditions
+    }
+    if actual == expected:
+        return
+    actual_source = next(
+        (item.source for item in primitive.preconditions if item.source is not None),
+        primitive.source,
+    )
+    expected_source = next(
+        (item.source for item in first.preconditions if item.source is not None),
+        first.source,
+    )
+    diagnostics.append(
+        _mismatch(
+            name,
+            "precondition contract",
+            primitive,
+            actual_source,
+            first,
+            expected_source,
+        )
+    )
+
+
+def _precondition_binding_identity(
+    primitive: Primitive,
+    binding: OperandBinding | ArithmeticOperandBinding,
+) -> tuple[str, str, int, str]:
+    if isinstance(binding, ArithmeticOperandBinding):
+        role, ordinal, kind = binding.family_identity
+        return ("arithmetic", role.value, ordinal, kind)
+    if primitive.operation is None:
+        raise ValueError("operation operand binding requires an operation contract")
+    return (
+        "operation",
+        binding.role.value,
+        _logical_parameter_index(primitive.operation, binding.parameter_index),
+        binding.parameter_kind,
     )
 
 

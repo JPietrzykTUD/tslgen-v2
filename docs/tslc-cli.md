@@ -32,7 +32,7 @@ output_root = "tslctmp/generated"
 
 [tslc.rust_package]
 name = "tsl"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 rust_version = "1.89"
 license = "Apache-2.0"
@@ -50,6 +50,14 @@ capabilities = ["elementwise_clzg"]
 qemu-aarch64 = "/usr/bin/qemu-aarch64"
 qemu-riscv64 = "/usr/bin/qemu-riscv64"
 ```
+
+The generated C++/Rust library, the Python compiler, and the VS Code extension
+are independently versioned components. In this repository configuration the
+generated library is `1.0.0`, while `tslc --version` reports the compiler's
+current `0.x` package version and the extension retains its own `0.x` version.
+Changing the generated Cargo version does not rename or imply a matching
+compiler/editor release. The exact current versions are projected into the
+[generated-library support contract](tsl-v1-support.md).
 
 The Rust package table is optional as a whole; when present, it supplies the
 complete release metadata rendered into the generated Cargo package. Toolchain
@@ -137,24 +145,39 @@ tslc analyze --primitive add --profile avx2 --extension avx2 --type si32 --backe
 The result is identified by the loaded input digest and labels the final state
 as native, composed, fallback, or unknown. Its tree includes only dependencies
 recorded by the lowered specialization, terminates cycles explicitly, and
-retains the compiler's reason for unresolved edges. This command is intended
-for explicit editor and terminal inspection; it does not render, write, build,
-or run a project.
+retains symbolic trait-constrained calls and the compiler's reason for
+unresolved edges. A name-only invocation conservatively aggregates every
+callable form in that family. Add the exact authored `--signature` and repeat
+`--attribute KEY=VALUE` for one callable identity; the VS Code explorer always
+supplies those filters. This command is intended for explicit editor and
+terminal inspection; it does not render, write, build, or run a project.
 
-Analyze the implementation state and active lowered dependency closure without
-rendering:
+Generated profiles expose the same final coarse state at compile time. The
+ordinary C++ and Rust query forms are:
 
-```bash
-tslc analyze --primitive add --profile avx2 --extension avx2 --type si32 --backend cpp
-tslc analyze --primitive add --profile avx2 --extension avx2 --type si32 --backend cpp --format json
+```cpp
+using Vec = tsl::simd<std::int32_t, tsl::avx2>;
+constexpr auto state =
+    tsl::implementation_state_v<tsl::primitive::add, Vec>;
 ```
 
-The result is identified by the loaded input digest and labels the final state
-as native, composed, fallback, or unknown. Its tree includes only dependencies
-recorded by the lowered specialization, terminates cycles explicitly, and
-retains the compiler's reason for unresolved edges. This command is intended
-for explicit editor and terminal inspection; it does not render, write, build,
-or run a project.
+```rust
+use tsl::primitive::Add;
+use tsl::profile::{Avx2, Profile};
+use tsl::tsl_core::{ImplementationStateOf, Simd};
+
+type Vec = Simd<i32, Avx2>;
+const STATE: tsl::tsl_core::ImplementationState =
+    <Profile as ImplementationStateOf<Add, Vec>>::VALUE;
+```
+
+Target types, overload argument types, Boolean axes, and immediate values are
+encoded in the query's remaining arguments; the generated API reference shows
+the exact order for each callable. The C++ primary template returns `unknown`
+for an unsupported query. Rust intentionally has no trait implementation for
+an unsupported query, so such a query fails to compile. These states describe
+typed implementation structure and transitive dependencies; `native` is not a
+promise of one instruction or of better performance.
 
 Use the focused catalog commands before writing selectors or invoking
 `explain`:
@@ -269,19 +292,73 @@ tslc analyze --primitive add --profile avx2 --extension avx2 --type si32 --backe
 tslc explain --primitive add --profile avx2 --type si32 --backend cpp
 tslc inspect --stage lowered --primitive add --profile avx2 --type si32 --backend cpp
 tslc audit metadata
+tslc audit call-preconditions
+tslc audit call-preconditions --format json
 tslc coverage ratchet
+tslc coverage target-ratchet
+tslc coverage implementation-ratchet
 tslc coverage inventory
 tslc coverage inventory --profiles scalar,avx2 --backends cpp,rust
 tslc coverage inventory --format json
 tslc coverage inventory --update
 tslc coverage inventory --check
+tslc release contract
+tslc release contract --format json
+tslc release contract --check
 ```
+
+`release contract` projects the generated-library v1 product boundary from the
+typed catalog, machine profiles, support policy, public-API baseline, package
+metadata, and the narrow policy in
+`supplementary/release/tsl-v1-policy.json`. The C++/Rust profile lists printed
+by `--format json` are also consumed by distributable-package generation; CI
+does not maintain a separate package profile list. `--check` compares both
+`coverage/tsl-v1-support.json` and `docs/tsl-v1-support.md` with that projection.
+Use `--update` only after reviewing an intentional support-contract change.
+
+`coverage target-ratchet` checks the exact v1 C++ SVE and RVV target-support
+projection in `coverage/tsl-v1-target-support.json`. Unlike the aggregate
+inventory, its denominator includes applicable declaration/type/conversion
+slots for which selection found no candidate. Each selected source selector,
+compiler-capability alternative, monomorphization, authored variant, final
+pipeline stage, and emitted `native | composed | fallback | unknown` state is
+preserved. Reviewed target-specific, target-neutral, and runtime-scalable
+fixed-shape exclusions carry stable reason IDs. Use `--update` only after
+reviewing the line-oriented exact diff.
+`--require-complete` additionally turns every current absent, selected-only,
+policy-deferred, or pruned stable slot into a failing release gate; the normal
+ratchet permits already-recorded gaps while rejecting new regressions.
+
+`coverage implementation-ratchet` classifies every exact selector-owned slot
+in all backend/profile scopes of the generated-library v1 contract as `native`,
+`composed`, `generic_fallback`, or `unsupported`. It covers the complete TSL
+corpus and stable scalar type set, including compiler-capability alternatives,
+conversion targets, monomorphizations, and authored variants. The projection
+consumes the final target-support trace; it never reads rendered source or
+interprets opaque target text. An emitted `unknown` therefore maps fail-closed
+to `unsupported` with reason `TSL-IMPLEMENTATION-UNCLASSIFIED`.
+
+The baseline groups byte-identical outcomes across profiles to remain compact,
+but deserialization restores and compares every exact profile identity. A
+native-to-composed, composed-to-generic-fallback, supported-to-unsupported, lost
+realization, or canonical-scope change fails. New non-emitted primitive slots
+and quality improvements do not block additive corpus work. Any emitted unknown
+implementation is an absolute quality failure, including during `--update`. Run
+`./dev.sh implementation-ratchet --update` only after reviewing the exact diff.
 
 `explain` and the selection/lowered `inspect` stages default to the same
 automatic compiler-capability frontier as ordinary generation. Pass
 `--compiler-capabilities elementwise_clzg` to inspect a known toolchain, or
 `--compiler-capabilities ''` to inspect the exact no-capabilities fallback.
 Target-feature selection remains profile-owned in every mode.
+The `lowered` stage is explicitly a `direct-lowering` snapshot: its state,
+safety, and requirements precede transitive call-graph propagation. Use
+`analyze` or `explain`'s final verdict for emitted, post-closure facts.
+
+`audit call-preconditions` validates the complete corpus and emits the exact,
+source-located `forward`/`discharge` inventory. A successful report always has
+zero unresolved obligations because missing, invalid, or stale dispositions
+are catalog errors; JSON output is deterministic and schema-versioned.
 
 
 `preview` normally renders every emitted callable matching the concrete name

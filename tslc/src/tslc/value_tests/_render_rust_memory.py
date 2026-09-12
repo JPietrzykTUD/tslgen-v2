@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.value_tests._render_rust_helpers import axis_args, rust_string_literal
-from tslc.value_tests.literals import rust_literal, rust_literal_list
+from tslc.value_tests.literals import rust_literal, rust_literal_list, token_truthy
 from tslc.value_tests.model import ValueTestCasePlan, ValueTestMemory
 
 
@@ -248,18 +248,24 @@ def _memory_copy(case: ValueTestCasePlan) -> str:
 def _pointer_lifetime(case: ValueTestCasePlan) -> str:
     args = ", ".join(f"{value}usize" for value in case.inputs.scalars)
     alignment = case.inputs.scalars[1] if len(case.inputs.scalars) > 1 else None
+    expect_nonnull = token_truthy(case.expectation.values[0])
     lines = [
         "    #[test]",
         f"    fn {case.function_name}() {{",
         f"        let ptr = {rust_raw_identifier(case.call_name)}({args});",
-        f'        assert!(!ptr.is_null(), "{case.case_name}: null pointer");',
     ]
-    if alignment is not None:
+    if expect_nonnull:
+        lines.append(f'        assert!(!ptr.is_null(), "{case.case_name}: null pointer");')
+    else:
+        lines.append(
+            f'        assert!(ptr.is_null(), "{case.case_name}: expected null pointer");'
+        )
+    if alignment is not None and expect_nonnull:
         lines.append(
             f"        assert_eq!((ptr as usize) % {alignment}usize, 0, "
             f'"{case.case_name}: pointer alignment");'
         )
-    lines.append("        unsafe { mem_free(ptr); }")
+    lines.append("        if !ptr.is_null() { unsafe { mem_free(ptr); } }")
     lines.append("    }")
     return "\n".join(lines)
 

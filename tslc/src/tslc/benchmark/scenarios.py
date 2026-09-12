@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from typing import TypeVar
+
 from tslc.benchmark.model import (
+    BenchmarkCrossLaneScenario,
     BenchmarkImmediateScenario,
     BenchmarkIndexedLoadScenario,
     BenchmarkMaskDensityScenario,
@@ -23,11 +26,37 @@ def register_scenarios(
     spec: LoweredSpecialization,
     seed: int,
 ) -> tuple[BenchmarkRegisterScenario, ...]:
+    return _vector_operand_scenarios(BenchmarkRegisterScenario, primitive, spec, seed)
+
+
+def cross_lane_scenarios(
+    primitive: Primitive,
+    spec: LoweredSpecialization,
+    seed: int,
+) -> tuple[BenchmarkCrossLaneScenario, ...]:
+    """Time whole-register semantics without changing vector call wiring."""
+
+    return _vector_operand_scenarios(BenchmarkCrossLaneScenario, primitive, spec, seed)
+
+
+_VectorOperandScenarioT = TypeVar(
+    "_VectorOperandScenarioT",
+    BenchmarkRegisterScenario,
+    BenchmarkCrossLaneScenario,
+)
+
+
+def _vector_operand_scenarios(
+    scenario_type: type[_VectorOperandScenarioT],
+    primitive: Primitive,
+    spec: LoweredSpecialization,
+    seed: int,
+) -> tuple[_VectorOperandScenarioT, ...]:
     generators = tuple(
         _operand_generator(primitive, parameter) for parameter in spec.param_names
     )
     scenarios = [
-        BenchmarkRegisterScenario(
+        scenario_type(
             scenario_id="throughput_independent",
             kind="throughput",
             timing=BenchmarkTiming(seed),
@@ -41,7 +70,7 @@ def register_scenarios(
         dependency = 0
     if dependency is not None:
         scenarios.append(
-            BenchmarkRegisterScenario(
+            scenario_type(
                 scenario_id="latency_dependency_chain",
                 kind="latency",
                 timing=BenchmarkTiming(seed ^ SEED_MIX_64),
@@ -190,6 +219,7 @@ def _operand_generator(
 
 
 __all__ = (
+    "cross_lane_scenarios",
     "immediate_scenarios",
     "indexed_load_scenarios",
     "mask_density_scenarios",

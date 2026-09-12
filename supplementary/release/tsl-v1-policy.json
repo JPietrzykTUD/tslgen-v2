@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "product": {
+    "id": "tsl-generated-library",
+    "name": "TSL generated C++/Rust library",
+    "version": "1.0.0",
+    "status": "release-candidate"
+  },
+  "components": [
+    {
+      "id": "tslc",
+      "compatibility": "independent",
+      "required_major": 0
+    },
+    {
+      "id": "vscode-tsl",
+      "compatibility": "independent",
+      "required_major": 0
+    }
+  ],
+  "backend_profiles": {
+    "cpp": {
+      "selection": "all_supported",
+      "profiles": []
+    },
+    "rust": {
+      "selection": "explicit",
+      "profiles": [
+        "sse",
+        "sse2",
+        "sse3",
+        "avx",
+        "avx2",
+        "knl"
+      ]
+    }
+  },
+  "target_scopes": [
+    {
+      "id": "arm-sve",
+      "backend": "cpp",
+      "profiles": [
+        "sve",
+        "sve128",
+        "sve256",
+        "sve512"
+      ],
+      "runtime_scalable_profiles": [
+        "sve"
+      ],
+      "profile_extensions": {
+        "sve": "sve",
+        "sve128": "sve128",
+        "sve256": "sve256",
+        "sve512": "sve512"
+      },
+      "excludes": [
+        "SVE2",
+        "stable Rust SVE"
+      ]
+    },
+    {
+      "id": "riscv-vector",
+      "backend": "cpp",
+      "profiles": [
+        "rvv"
+      ],
+      "runtime_scalable_profiles": [
+        "rvv"
+      ],
+      "profile_extensions": {
+        "rvv": "rvv"
+      },
+      "excludes": [
+        "optional RVV extensions",
+        "LMUL values other than the declared LMUL=1 profile",
+        "stable Rust RVV"
+      ]
+    }
+  ],
+  "target_specific_callables": [
+    {
+      "name": "random_step",
+      "reason": "x86 RDRAND operation with no portable fallback"
+    }
+  ],
+  "target_slot_exclusions": [
+    {
+      "profiles": ["sve", "rvv"],
+      "backend": "cpp",
+      "callable_identities": [
+        "concat#v:=(v,v)->extension:ToExtension",
+        "extract[cast=reinterpret]#v:=(v,sImm)->extension:ToExtension",
+        "extract_imask#im:=(im,usize)->base:ToBase",
+        "extract_imask#im:=(im,usize)->extension:ToExtension",
+        "insert[cast=reinterpret]#v:=(vt,v,sImm)->extension:ToExtension",
+        "insert_imask#im:=(imt,im,usize)->base:ToBase",
+        "insert_imask#im:=(imt,im,usize)->extension:ToExtension",
+        "resize_down#v:=v->extension:ToExtension",
+        "resize_up_undef[value=undef]#v:=v->extension:ToExtension",
+        "resize_up_zero[value=zero]#v:=v->extension:ToExtension"
+      ],
+      "type_tags": [],
+      "reason_id": "TSL-V1-RUNTIME-SCALABLE-FIXED-WIDTH-REPRESENTATION",
+      "reason": "The callable changes between statically ordered register widths or fixed mask windows and has no truthful meaning for one runtime-scalable register type."
+    },
+    {
+      "profiles": ["sve128", "sve256", "sve512"],
+      "backend": "cpp",
+      "callable_identities": [
+        "concat#v:=(v,v)->extension:ToExtension",
+        "extract[cast=reinterpret]#v:=(v,sImm)->extension:ToExtension",
+        "extract_imask#im:=(im,usize)->extension:ToExtension",
+        "insert[cast=reinterpret]#v:=(vt,v,sImm)->extension:ToExtension",
+        "insert_imask#im:=(imt,im,usize)->extension:ToExtension",
+        "resize_down#v:=v->extension:ToExtension",
+        "resize_up_undef[value=undef]#v:=v->extension:ToExtension",
+        "resize_up_zero[value=zero]#v:=v->extension:ToExtension"
+      ],
+      "type_tags": [],
+      "reason_id": "TSL-V1-FIXED-SVE-NO-COMPATIBLE-WIDTH",
+      "reason": "A fixed-SVE profile emits exactly one fixed-SVE register width, so no distinct same-family source or destination width exists for this representation-change callable."
+    },
+    {
+      "profiles": ["sve", "sve128", "sve256", "sve512", "rvv"],
+      "backend": "cpp",
+      "callable_identities": [
+        "convert_up[cast=convert,direction=up]#v:=(v,sImm)->base:ToBase",
+        "load_convert_up#v:=cptr+->base:ToBase"
+      ],
+      "type_tags": ["si64", "ui64", "f64"],
+      "reason_id": "TSL-V1-NO-WIDER-SCALAR-TYPE",
+      "reason": "The stable scalar domain has no wider target lane type for these source types."
+    },
+    {
+      "profiles": ["sve128", "sve256", "sve512"],
+      "backend": "cpp",
+      "callable_identities": [
+        "extract_imask#im:=(im,usize)->base:ToBase"
+      ],
+      "type_tags": ["si64", "ui64", "f64"],
+      "reason_id": "TSL-V1-NO-WIDER-SCALAR-TYPE",
+      "reason": "The stable scalar domain has no wider target lane type for these source types."
+    },
+    {
+      "profiles": ["sve", "sve128", "sve256", "sve512", "rvv"],
+      "backend": "cpp",
+      "callable_identities": [
+        "convert_down[cast=convert,direction=down]#v:=(v,sImm)->base:ToBase"
+      ],
+      "type_tags": ["si8", "ui8", "f32"],
+      "reason_id": "TSL-V1-NO-NARROWER-SCALAR-TYPE",
+      "reason": "The stable scalar domain has no supported narrower target lane type for these source types."
+    },
+    {
+      "profiles": ["sve128", "sve256", "sve512"],
+      "backend": "cpp",
+      "callable_identities": [
+        "insert_imask#im:=(imt,im,usize)->base:ToBase"
+      ],
+      "type_tags": ["si8", "ui8"],
+      "reason_id": "TSL-V1-NO-NARROWER-SCALAR-TYPE",
+      "reason": "The stable scalar domain has no supported narrower target lane type for these source types."
+    }
+  ],
+  "accelerated_core": {
+    "selection": "all_except_portable_and_target_specific",
+    "portable_callable_names": [
+      "allocate",
+      "allocate_aligned",
+      "custom_sequence",
+      "deallocate",
+      "memory_cp",
+      "sequence",
+      "to_ostream"
+    ],
+    "fallback_policy": "forbidden_without_reviewed_exception",
+    "fallback_exceptions": [
+      "abs#v:=(v)",
+      "align_right_lanes#v:=(v,v,sImm)",
+      "cast[cast=convert]#v:=v->base:ToBase",
+      "compress[mask=zero,op=pack]#v:=(m,v)",
+      "compress_store[aligned=true,op=pack]#void:=(m,ptr,v)",
+      "conflict#v:=v",
+      "conflict_free#m:=(m,v)",
+      "convert_down[cast=convert,direction=down]#v:=(v,sImm)->base:ToBase",
+      "convert_lanes#v:=v->vector:ToVec",
+      "convert_up[cast=convert,direction=up]#v:=(v,sImm)->base:ToBase",
+      "div#v:=(v,v)",
+      "div[mask=pass_through]#v:=(m,v,v)",
+      "div[mask=zero]#v:=(m,v,v)",
+      "expand[mask=pass_through,op=expand]#v:=(m,v,v)",
+      "expand_load[aligned=true,op=expand]#v:=(m,cptr)",
+      "extract[cast=reinterpret]#v:=(v,sImm)->extension:ToExtension",
+      "extract_imask#im:=(im,usize)->base:ToBase",
+      "gather#v:=(cptr,vidx,sImm)",
+      "gather[mask=pass_through]#v:=(m,cptr,vidx,v,sImm)",
+      "gather_narrow#v:=(cptr,cptr,sImm)",
+      "gather_narrow_partial#v:=(cptr,vidx,sImm)",
+      "hmax#s:=(m,v)",
+      "hmin#s:=(m,v)",
+      "insert_imask#im:=(imt,im,usize)->base:ToBase",
+      "interleave_lo#v:=(v,v)",
+      "load_convert_up#v:=cptr+->base:ToBase",
+      "lzc#v:=v",
+      "lzc_imask#usize:=m",
+      "mask_deinterleave_odd#m:=(m,m)",
+      "mask_interleave_lo#m:=(m,m)",
+      "mod#v:=(v,v)",
+      "mod[mask=pass_through]#v:=(m,v,v)",
+      "mod[mask=zero]#v:=(m,v,v)",
+      "mod_imm#v:=(v,sImm)",
+      "mod_imm[mask=pass_through]#v:=(m,v,sImm)",
+      "mod_imm[mask=zero]#v:=(m,v,sImm)",
+      "overlay_imask#im:=(im,im,usize)",
+      "permute_lanes#v:=(v,sImm)",
+      "permute_lanes#v:=(v,vidx)",
+      "permute_lanes[mask=pass_through]#v:=(m,v,v,vidx)",
+      "permute_lanes[mask=zero]#v:=(m,v,vidx)",
+      "popcnt#v:=v",
+      "reverse#v:=(v)",
+      "scatter#void:=(ptr,vidx,v,sImm)",
+      "scatter[mask=zero]#void:=(m,ptr,vidx,v,sImm)",
+      "set#v:=(lanes<s>)",
+      "shift_left_imask#im:=(im,usize)",
+      "shift_right_imask#im:=(im,usize)",
+      "table_lookup#v:=(v,vidx,v)",
+      "tzc#usize:=m"
+    ]
+  }
+}

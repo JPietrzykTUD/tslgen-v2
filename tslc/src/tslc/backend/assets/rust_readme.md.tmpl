@@ -1,9 +1,20 @@
 # @{package_name}
 
-Generated fixed-width SIMD primitives and an opaque, target-selected Rust facade.
+Generated fixed-width SIMD primitives, checked companions for catastrophic
+runtime preconditions, and an opaque target-selected Rust facade.
 
 The crate is pre-generated: consumers do not run `tslc` and may use it with
 `default-features = false` in `no_std` applications.
+
+The compilation target selects the best generated profile with
+`cfg(target_feature)` and falls back to the generated generic profile when no
+native profile matches. The optional `runtime-dispatch` feature is a distinct
+`std`-based mode.
+
+Unsuffixed lower-level calls perform no hidden validation. Calls whose
+preconditions can cause undefined behavior are `unsafe`; use the corresponding
+`*_checked` function when the generated API can validate the complete runtime
+condition. Checked functions return `Result<_, PreconditionError>`.
 
 See @{documentation_url} for the generated API documentation and
 @{repository_url} for the compiler and source corpus.

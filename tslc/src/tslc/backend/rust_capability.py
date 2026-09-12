@@ -15,6 +15,7 @@ from tslc.backend.capability import (
 )
 from tslc.backend.helper_requirements import RUST_HELPER_MANIFEST
 from tslc.backend.rust import RustBackend
+from tslc.backend.rust_algorithm_plan import plan_rust_algorithm
 from tslc.backend.rust_api_planner import (
     plan_rust_facade,
     rust_facade_closure_seed_primitives,
@@ -141,6 +142,7 @@ def rust_backend_artifacts(
         profiles, _rust_policy_manifest(policy_inputs)
     )
     static_selection_plan = plan_rust_static_selection(profiles)
+    algorithm_plan = plan_rust_algorithm(profiles, static_selection_plan)
     facade_plan = plan_rust_facade(profiles, static_selection_plan)
     dispatch_plan = plan_rust_dispatch(
         profiles,
@@ -161,6 +163,7 @@ def rust_backend_artifacts(
             media_type=media_type,
             selection_plan=selection_plan,
             static_selection_plan=static_selection_plan,
+            algorithm_plan=algorithm_plan,
             facade_plan=facade_plan,
             dispatch_plan=dispatch_plan,
             consumption_plan=consumption_plan,

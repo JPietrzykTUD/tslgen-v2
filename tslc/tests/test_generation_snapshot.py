@@ -6,12 +6,14 @@ from copy import deepcopy
 import dataclasses
 import json
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 from tslc.benchmark.model import (
     BenchmarkCandidate,
     BenchmarkCandidateSet,
     BenchmarkCoverageEntry,
+    BenchmarkCrossLaneCorrectnessCase,
+    BenchmarkCrossLaneScenario,
     BenchmarkImmediateCorrectnessCase,
     BenchmarkImmediateScenario,
     BenchmarkIndexedLoadCorrectnessCase,
@@ -32,6 +34,7 @@ from tslc.benchmark.model import (
     SpecializationKey,
 )
 from tslc.catalog.model import TestFailureReason as FailureReason
+from tslc.catalog.preconditions import PreconditionErrorKind, PreconditionKind
 from tslc.diagnostics import Diagnostic, SourceLocation, SourceSpan
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.maintenance import _generation_snapshot_semantics as semantics_module
@@ -40,6 +43,8 @@ from tslc.maintenance._generation_snapshot_semantics import (
     serialize_generation_semantics,
 )
 from tslc.maintenance.generation_snapshot import (
+    SNAPSHOT_CASES,
+    compare_public_api_manifests,
     compare_snapshot_directories,
     compare_snapshot_documents,
     serialize_snapshot,
@@ -54,12 +59,14 @@ from tslc.output.verify_model import (
 from tslc.pipeline import CoverageEntry, GenerationResult, SkippedEntry
 from tslc.render.project import RenderedProject
 from tslc.value_tests.case_components import (
+    ValueTestCheckedPrecondition,
     ValueTestDifferential,
     ValueTestExpectation,
     ValueTestFailure,
     ValueTestIndex,
     ValueTestInputs,
     ValueTestInvocation,
+    ValueTestInvalidPreconditionValue,
     ValueTestMemory,
     ValueTestRepresentation,
     ValueTestScalable,
@@ -247,6 +254,144 @@ def test_generated_artifact_content_mismatch_is_detected(tmp_path: Path) -> None
     assert any("generated_tree" in difference for difference in comparison.differences)
 
 
+def test_support_file_snapshot_freezes_scalar_avx2_cpp_and_rust() -> None:
+    case = SNAPSHOT_CASES["support-files"]
+
+    assert case.primitives is None
+    assert case.profiles == ("scalar", "avx2")
+    assert case.backends == ("cpp", "rust")
+    assert case.render_artifacts
+
+
+def test_public_api_comparison_ignores_physical_layout(tmp_path: Path) -> None:
+    baseline = tmp_path / "baseline"
+    candidate = tmp_path / "candidate"
+    manifest = {
+        "schema_version": 1,
+        "backend": "cpp",
+        "scope": ["scalar", "avx2"],
+        "declarations": [
+            {
+                "identity": "tsl::probe_checked#fixed",
+                "reachability": ["tsl.hpp", "tsl_algorithm_checked.hpp"],
+                "kind": "function",
+                "parameters": [{"name": "data", "type": "int *"}],
+                "checked_of": "tsl::probe#fixed",
+                "attributes": ["documented:probe"],
+            },
+            {
+                "identity": "tsl::probe_type",
+                "reachability": ["tsl.hpp", "tsl_core.hpp"],
+                "kind": "type",
+                "enumerators": ["first", "second"],
+            },
+            {
+                "identity": "tsl::probe_alias",
+                "reachability": ["tsl.hpp", "tsl_core.hpp"],
+                "kind": "type_alias",
+                "alias_target": "probe_type",
+            },
+        ],
+    }
+    for root in (baseline, candidate):
+        generated = root / "generated"
+        for backend in ("cpp", "rust", "future"):
+            backend_root = generated / backend
+            backend_root.mkdir(parents=True)
+            payload = deepcopy(manifest)
+            payload["backend"] = backend
+            (backend_root / "public-api.json").write_text(
+                json.dumps(payload),
+                encoding="utf-8",
+            )
+        physical = generated / "cpp/include/tsl/detail"
+        physical.mkdir(parents=True)
+        (physical / ("before.hpp" if root == baseline else "after.hpp")).write_text(
+            "layout-only difference\n",
+            encoding="utf-8",
+        )
+
+    assert compare_public_api_manifests(baseline, candidate).matches
+
+
+def test_public_api_comparison_detects_each_compatibility_dimension(
+    tmp_path: Path,
+) -> None:
+    baseline = tmp_path / "baseline"
+    candidate = tmp_path / "candidate"
+    for root in (baseline, candidate):
+        for backend in ("cpp", "rust"):
+            backend_root = root / backend
+            backend_root.mkdir(parents=True)
+            (backend_root / "public-api.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "backend": backend,
+                        "scope": ["scalar", "avx2"],
+                        "declarations": [
+                            {
+                                "identity": "probe_checked",
+                                "reachability": ["public", "profile:avx2"],
+                                "parameters": [{"type": "i32"}],
+                                "checked_of": "probe",
+                                "enumerators": ["one"],
+                                "alias_target": "Probe",
+                                "attributes": ["#[doc = \"stable\"]"],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+    candidate_manifest = candidate / "cpp/public-api.json"
+    original = json.loads(candidate_manifest.read_text(encoding="utf-8"))
+    mutations: tuple[tuple[tuple[str | int, ...], object], ...] = (
+        (("declarations", 0, "parameters", 0, "type"), "u32"),
+        (("declarations", 0, "checked_of"), "other"),
+        (("declarations", 0, "enumerators", 0), "two"),
+        (("declarations", 0, "alias_target"), "Other"),
+        (("declarations", 0, "reachability", 1), "profile:scalar"),
+        (("declarations", 0, "attributes", 0), "#[doc = \"changed\"]"),
+    )
+    for path, replacement in mutations:
+        payload = deepcopy(original)
+        target: Any = payload
+        for key in path[:-1]:
+            target = target[key]
+        target[path[-1]] = replacement
+        candidate_manifest.write_text(json.dumps(payload), encoding="utf-8")
+
+        comparison = compare_public_api_manifests(baseline, candidate)
+
+        assert not comparison.matches
+        assert comparison.differences[0].startswith("cpp.public_api")
+
+
+def test_public_api_comparison_detects_backend_inventory_changes(
+    tmp_path: Path,
+) -> None:
+    baseline = tmp_path / "baseline"
+    candidate = tmp_path / "candidate"
+    for root, backends in (
+        (baseline, ("cpp", "rust")),
+        (candidate, ("cpp", "future")),
+    ):
+        for backend in backends:
+            backend_root = root / backend
+            backend_root.mkdir(parents=True)
+            (backend_root / "public-api.json").write_text(
+                json.dumps({"backend": backend}),
+                encoding="utf-8",
+            )
+
+    comparison = compare_public_api_manifests(baseline, candidate)
+
+    assert len(comparison.differences) == 1
+    assert comparison.differences[0].startswith("public_api.paths[1]")
+
+
 # --- serializer completeness ------------------------------------------------
 #
 # Every dataclass field of a serialized domain type must appear as a key in
@@ -313,6 +458,12 @@ _BENCHMARK_SCENARIOS = (
         _BENCHMARK_TIMING,
         ("bounded_random", "bounded_random"),
     ),
+    BenchmarkCrossLaneScenario(
+        "cross_lane",
+        "throughput",
+        _BENCHMARK_TIMING,
+        ("bounded_random", "bounded_random"),
+    ),
     BenchmarkVectorScalarScenario(
         "vector_scalar",
         "throughput",
@@ -330,6 +481,9 @@ _BENCHMARK_SCENARIOS = (
 )
 _BENCHMARK_CORRECTNESS_CASES = (
     BenchmarkVectorCorrectnessCase(
+        "c", (("1",), ("1",)), ("1",), "from_array", "to_array"
+    ),
+    BenchmarkCrossLaneCorrectnessCase(
         "c", (("1",), ("1",)), ("1",), "from_array", "to_array"
     ),
     BenchmarkVectorScalarCorrectnessCase(
@@ -445,6 +599,22 @@ def _serialized_records() -> list[tuple[object, dict[str, object]]]:
             ValueTestFailure(FailureReason.INTEGER_ZERO_DIVISOR),
             semantics_module._serialize_value_test_failure(
                 ValueTestFailure(FailureReason.INTEGER_ZERO_DIVISOR)
+            ),
+        ),
+        (
+            ValueTestCheckedPrecondition(
+                PreconditionKind.LANE_INDEX_IN_RANGE,
+                PreconditionErrorKind.INDEX_OUT_OF_BOUNDS,
+                1,
+                ValueTestInvalidPreconditionValue.LANE_COUNT,
+            ),
+            semantics_module._serialize_value_test_checked_precondition(
+                ValueTestCheckedPrecondition(
+                    PreconditionKind.LANE_INDEX_IN_RANGE,
+                    PreconditionErrorKind.INDEX_OUT_OF_BOUNDS,
+                    1,
+                    ValueTestInvalidPreconditionValue.LANE_COUNT,
+                )
             ),
         ),
         (

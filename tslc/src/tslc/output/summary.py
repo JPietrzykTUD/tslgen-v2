@@ -59,7 +59,7 @@ def render_value_test_markdown_summary(
         "",
         (
             "Case pass/fail counts are assigned at profile test-command granularity; "
-            "the generated runner currently reports one command result per profile."
+            "every runner variant for a profile must pass before its planned cases pass."
         ),
         "",
         "| Backend | Profile | Planned primitive names | Planned cases | Passed cases | "

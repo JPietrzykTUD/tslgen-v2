@@ -77,23 +77,25 @@ fn main() {
 
     let mut fixed_output = vec![0i32; left.len()];
     let mut fixed = Add;
-    profile::algo::transform_binary(
+    profile::algo::transform_binary_checked(
         tsl::dataparallel::fixed::<1>(),
         &mut fixed,
         &left,
         &right,
         &mut fixed_output,
-    );
+    )
+    .expect("checked algorithm preconditions");
     verify(&left, &right, &fixed_output);
 
     let mut generic_output = vec![0i32; left.len()];
     let mut generic = Add;
-    profile::algo::transform_binary(
+    profile::algo::transform_binary_checked(
         tsl::dataparallel::generic::<8>(),
         &mut generic,
         &left,
         &right,
         &mut generic_output,
-    );
+    )
+    .expect("checked algorithm preconditions");
     verify(&left, &right, &generic_output);
 }

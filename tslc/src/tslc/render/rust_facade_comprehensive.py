@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from tslc.backend.checked_api import CheckedConditionPlan
 from tslc.backend.rust_api_arms import (
     RustComprehensivePrivateImplementationArm,
 )
@@ -18,7 +19,19 @@ from tslc.backend.rust_api_model import (
     RustFacadeShape,
 )
 from tslc.backend.rust_api_types import RUST_FACADE_SIGNATURE_TYPES
-from tslc.backend.rust_names import rust_primitive_tag_name
+from tslc.backend.rust_facade_checked import (
+    rust_checked_conditions_for_type,
+    rust_checked_error_names,
+    rust_checked_guards,
+    rust_checked_memory_alignment_condition,
+    rust_checked_memory_alignment_expression,
+    rust_checked_public_call_argument,
+)
+from tslc.backend.rust_facade_public_declarations import (
+    rust_facade_private_trait_name,
+    rust_public_free_declaration as _planned_public_free_declaration,
+    rust_public_inherent_declaration as _planned_public_inherent_declaration,
+)
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.documentation import documentation_block, render_rust_doc
 from tslc.render.rust_facade_common import (
@@ -90,12 +103,23 @@ def _private_trait(method: RustComprehensiveMethod) -> str:
         lanes="N",
     )
     return_suffix = "" if method.result_kind == "void" else f" -> {return_type}"
-    unsafe_prefix = "unsafe " if method.caller_unsafe else ""
+    unsafe_prefix = "unsafe " if method.lower_call_unsafe else ""
     return "\n".join(
         (
             f"pub trait {trait_name}<{', '.join(generic_parts)}>: Representation<N>"
             f"{where_clause}",
             "{",
+            *(
+                (
+                    "    #[doc(hidden)]",
+                    "    fn __tsl_checked_memory_alignment() -> usize;",
+                )
+                if rust_checked_memory_alignment_condition(
+                    method.checked_conditions
+                )
+                is not None
+                else ()
+            ),
             (
                 f"    {unsafe_prefix}fn call{const_generics}"
                 f"({parameters}){return_suffix};"
@@ -148,14 +172,33 @@ def _private_impl(
         arm.call,
         include_result_suffix=False,
     )
-    if method.caller_unsafe:
+    if method.lower_call_unsafe:
         call = f"unsafe {{ {call} }}"
     result = f"{call}{arm.call.result_suffix}"
-    unsafe_prefix = "unsafe " if method.caller_unsafe else ""
+    unsafe_prefix = "unsafe " if method.lower_call_unsafe else ""
+    memory_condition = rust_checked_memory_alignment_condition(
+        method.checked_conditions
+    )
+    memory_alignment = (
+        rust_checked_memory_alignment_expression(memory_condition, arm)
+        if memory_condition is not None
+        else None
+    )
+    memory_members = (
+        (
+            "    #[inline]",
+            "    fn __tsl_checked_memory_alignment() -> usize {",
+            f"        {memory_alignment}",
+            "    }",
+        )
+        if memory_alignment is not None
+        else ()
+    )
     body_lines = []
-    if method.caller_unsafe:
+    if method.lower_call_unsafe:
         body_lines.append(
-            "        // SAFETY: forwarded from the public facade caller contract."
+            "        // SAFETY: the private trait is callable only through a facade "
+            "shape that preserves the lower-level contract."
         )
     body_lines.append(f"        {result}")
     return "\n".join(
@@ -165,6 +208,7 @@ def _private_impl(
                 f"impl private::{trait_name}<{trait_arguments}> "
                 f"for {source_shape.base_spelling} {{"
             ),
+            *memory_members,
             (
                 f"    {unsafe_prefix}fn call{const_generics}"
                 f"({parameters}){return_suffix} {{"
@@ -181,49 +225,46 @@ def _public_items(
     method: RustComprehensiveMethod,
 ) -> tuple[str, ...]:
     if method.receiver_kind is RustFacadeReceiverKind.FREE:
-        return (_public_free_function(method),)
+        return (
+            _public_free_function(method),
+            *(
+                (_public_free_function(method, checked=True),)
+                if method.checked_conditions
+                else ()
+            ),
+        )
     return tuple(
-        _public_inherent_method(method, shape)
+        block
         for shape in method.public_shapes
+        for block in (
+            _public_inherent_method(method, shape),
+            *(
+                (_public_inherent_method(method, shape, checked=True),)
+                if rust_checked_conditions_for_type(
+                    method.checked_conditions, shape.type_tag
+                )
+                else ()
+            ),
+        )
     )
 
 
 def _public_inherent_method(
     method: RustComprehensiveMethod,
     shape: RustFacadeShape,
+    *,
+    checked: bool = False,
 ) -> str:
+    checked_conditions = rust_checked_conditions_for_type(
+        method.checked_conditions, shape.type_tag
+    )
+    shape_caller_unsafe = shape.type_tag in method.caller_unsafe_type_tags
     owner = (
         f"Simd<{shape.base_spelling}, {shape.lanes}>"
         if method.receiver_kind is RustFacadeReceiverKind.VECTOR
         else f"Mask<{shape.base_spelling}, {shape.lanes}>"
     )
-    runtime_parameters = tuple(
-        parameter
-        for parameter in _runtime_parameters(method)
-        if parameter.placement is not RustFacadeParameterPlacement.RECEIVER
-    )
-    parameter_declarations = ", ".join(
-        f"{_identifier(parameter.public_name)}: "
-        + RUST_FACADE_SIGNATURE_TYPES.public_type(
-            parameter.kind,
-            element=shape.base_spelling,
-            lanes=str(shape.lanes),
-            result_element=shape.base_spelling,
-        )
-        for parameter in runtime_parameters
-    )
-    signature_parameters = (
-        f"self, {parameter_declarations}" if parameter_declarations else "self"
-    )
     target = _target_type_parameter(method)
-    type_generics = [target] if target is not None else []
-    generic_declarations = _public_generic_declarations(method, type_generics)
-    return_type = RUST_FACADE_SIGNATURE_TYPES.public_type(
-        method.result_kind,
-        element=shape.base_spelling,
-        lanes=str(shape.lanes),
-        result_element="U" if target is not None else shape.base_spelling,
-    )
     trait_name = _private_trait_name(method)
     trait_arguments = ", ".join(
         (
@@ -235,25 +276,12 @@ def _public_inherent_method(
             ),
         )
     )
-    needs_private_bound = target is not None or bool(
-        _identity_const_parameters(method)
-    )
-    where_lines = (
-        (
-            *(
-                (f"        U: SupportedSimd<{shape.lanes}>,",)
-                if target is not None
-                else ()
-            ),
-            (
-                f"        {shape.base_spelling}: "
-                f"private::{trait_name}<{trait_arguments}>,"
-            ),
+    call_args = ", ".join(
+        _public_call_arguments(
+            method,
+            checked_conditions=checked_conditions if checked else (),
         )
-        if needs_private_bound
-        else ()
     )
-    call_args = ", ".join(_public_call_arguments(method))
     call = (
         f"<{shape.base_spelling} as private::{trait_name}<{trait_arguments}>>::"
         f"call{_const_generic_arguments(method)}({call_args})"
@@ -265,29 +293,60 @@ def _public_inherent_method(
         target_element="U" if target is not None else None,
     )
     body = [
-        *_bounds_checks(method, str(shape.lanes)),
+        *(
+            rust_checked_guards(
+                method,
+                checked_conditions,
+                shape.base_spelling,
+                str(shape.lanes),
+                trait_name=trait_name,
+                identity_const_names=tuple(
+                    parameter.public_name
+                    for parameter in _identity_const_parameters(method)
+                ),
+                indent="        ",
+            )
+            if checked
+            else ()
+        ),
         *((
-            "        // SAFETY: upheld by this method's caller contract.",
-        ) if method.caller_unsafe else ()),
-        f"        {result}",
+            (
+                "        // SAFETY: checked above before forwarding."
+                if checked
+                else (
+                    "        // SAFETY: upheld by this method's caller contract."
+                    if shape_caller_unsafe
+                    else "        // SAFETY: this facade specialization has no "
+                    "outstanding caller obligation."
+                )
+            ),
+        ) if method.lower_call_unsafe else ()),
+        *_public_success_lines(
+            result,
+            result_kind=method.result_kind,
+            checked=checked,
+            indent="        ",
+        ),
     ]
-    attributes = _public_attributes(
-        method, has_private_bound=needs_private_bound
-    )
-    signature = (
-        f"    pub {'unsafe ' if method.caller_unsafe else ''}fn "
-        f"{rust_raw_identifier(method.public_name)}{generic_declarations}"
-        f"({signature_parameters})"
-        f"{'' if method.result_kind == 'void' else f' -> {return_type}'}"
+    declaration = _planned_public_inherent_declaration(
+        method, shape, checked=checked
     )
     return "\n".join(
         (
             f"impl {owner} {{",
-            _indent(_method_docs(method, shape.base_spelling, str(shape.lanes)), 4),
-            *attributes,
-            signature,
-            *(("    where", *where_lines) if where_lines else ()),
-            "    {",
+            _indent(
+                _method_docs(
+                    method,
+                    shape.base_spelling,
+                    str(shape.lanes),
+                    checked=checked,
+                    caller_unsafe=shape_caller_unsafe,
+                    checked_conditions=checked_conditions,
+                ),
+                4,
+            ),
+            *(_indent(attribute, 4) for attribute in declaration.attributes),
+            _indent(declaration.render_definition_head(), 4),
             *body,
             "    }",
             "}",
@@ -295,29 +354,10 @@ def _public_inherent_method(
     )
 
 
-def _public_free_function(method: RustComprehensiveMethod) -> str:
-    runtime_parameters = _runtime_parameters(method)
-    parameter_declarations = ", ".join(
-        f"{_identifier(parameter.public_name)}: "
-        + RUST_FACADE_SIGNATURE_TYPES.public_type(
-            parameter.kind,
-            element="T",
-            lanes="N",
-            result_element="T",
-        )
-        for parameter in runtime_parameters
-    )
+def _public_free_function(
+    method: RustComprehensiveMethod, *, checked: bool = False
+) -> str:
     target = _target_type_parameter(method)
-    type_generics = ["T", *(("U",) if target is not None else ())]
-    generic_declarations = _public_generic_declarations(
-        method, [*type_generics, "const N: usize"]
-    )
-    return_type = RUST_FACADE_SIGNATURE_TYPES.public_type(
-        method.result_kind,
-        element="T",
-        lanes="N",
-        result_element="U" if target is not None else "T",
-    )
     trait_name = _private_trait_name(method)
     trait_arguments = ", ".join(
         (
@@ -329,16 +369,14 @@ def _public_free_function(method: RustComprehensiveMethod) -> str:
             ),
         )
     )
-    where_lines = [
-        "    T: SupportedSimd<N>",
-        f"        + private::{trait_name}<{trait_arguments}>,",
-    ]
-    if target is not None:
-        where_lines.append("    U: SupportedSimd<N>,")
+    call_arguments = _public_call_arguments(
+        method,
+        checked_conditions=method.checked_conditions if checked else (),
+    )
     call = (
         f"<T as private::{trait_name}<{trait_arguments}>>::"
         f"call{_const_generic_arguments(method)}"
-        f"({', '.join(_public_call_arguments(method))})"
+        f"({', '.join(call_arguments)})"
     )
     call = _unsafe_forward(method, call)
     result = RUST_FACADE_SIGNATURE_TYPES.adapt_public_result(
@@ -347,28 +385,47 @@ def _public_free_function(method: RustComprehensiveMethod) -> str:
         target_element="U" if target is not None else None,
     )
     body = [
-        *_bounds_checks(method, "N"),
+        *(
+            rust_checked_guards(
+                method,
+                method.checked_conditions,
+                "T",
+                "N",
+                trait_name=trait_name,
+                identity_const_names=tuple(
+                    parameter.public_name
+                    for parameter in _identity_const_parameters(method)
+                ),
+                indent="    ",
+            )
+            if checked
+            else ()
+        ),
         *((
-            "    // SAFETY: upheld by this function's caller contract.",
-        ) if method.caller_unsafe else ()),
-        f"    {result}",
+            (
+                "    // SAFETY: checked above before forwarding."
+                if checked
+                else (
+                    "    // SAFETY: upheld by this function's caller contract."
+                    if method.caller_unsafe
+                    else "    // SAFETY: this facade signature has no outstanding "
+                    "caller obligation."
+                )
+            ),
+        ) if method.lower_call_unsafe else ()),
+        *_public_success_lines(
+            result,
+            result_kind=method.result_kind,
+            checked=checked,
+            indent="    ",
+        ),
     ]
+    declaration = _planned_public_free_declaration(method, checked=checked)
     return "\n".join(
         (
-            _method_docs(method, "T", "N"),
-            *(
-                line.removeprefix("    ")
-                for line in _public_attributes(method, has_private_bound=True)
-            ),
-            (
-                f"pub {'unsafe ' if method.caller_unsafe else ''}fn "
-                f"{rust_raw_identifier(method.public_name)}{generic_declarations}"
-                f"({parameter_declarations})"
-                f"{'' if method.result_kind == 'void' else f' -> {return_type}'}"
-            ),
-            "where",
-            *where_lines,
-            "{",
+            _method_docs(method, "T", "N", checked=checked),
+            *declaration.attributes,
+            declaration.render_definition_head(),
             *body,
             "}",
         )
@@ -379,7 +436,15 @@ def _method_docs(
     method: RustComprehensiveMethod,
     element: str,
     lanes: str,
+    *,
+    checked: bool = False,
+    caller_unsafe: bool | None = None,
+    checked_conditions: tuple[CheckedConditionPlan, ...] | None = None,
 ) -> str:
+    if caller_unsafe is None:
+        caller_unsafe = method.caller_unsafe
+    if checked_conditions is None:
+        checked_conditions = method.checked_conditions
     receiver = {
         RustFacadeReceiverKind.VECTOR: f"`Simd<{element}, {lanes}>`",
         RustFacadeReceiverKind.MASK: f"`Mask<{element}, {lanes}>`",
@@ -412,20 +477,50 @@ def _method_docs(
     lines = rendered.splitlines() if rendered else [
         f"/// Calls the source `{method.source_primitive_name}` primitive."
     ]
-    call_form = _example_call(method)
-    lines.extend(("///", "/// # Examples", "/// ```ignore", f"/// {call_form}", "/// ```"))
+    call_form = _example_call(
+        method,
+        checked=checked,
+        caller_unsafe=caller_unsafe,
+    )
+    # This is intentionally a signature-shaped call illustration: its parameter
+    # identifiers are documented above and are not locally constructed values.
+    # Keep executable examples in the crate overview, where the compiler can run
+    # them as real doctests rather than silently ignoring thousands of fragments.
+    lines.extend(
+        ("///", "/// # Call form", "/// ```text", f"/// {call_form}", "/// ```")
+    )
     if method.panic_conditions:
         lines.extend(("///", "/// # Panics", "///"))
         lines.extend(f"/// {condition}" for condition in method.panic_conditions)
-    if method.caller_unsafe:
+    if checked:
+        lines.extend(("///", "/// # Errors", "///"))
+        lines.extend(
+            "/// Returns "
+            f"{rust_checked_error_names(condition.errors)} "
+            "when this precondition is violated: "
+            f"{condition.description}"
+            for condition in checked_conditions
+        )
+    elif caller_unsafe:
         lines.extend(("///", "/// # Safety", "///"))
         lines.extend(
             f"/// {requirement}" for requirement in method.safety_requirements
         )
+        lines.extend(
+            f"/// {condition.description}"
+            for condition in checked_conditions
+        )
     return "\n".join(lines)
 
 
-def _example_call(method: RustComprehensiveMethod) -> str:
+def _example_call(
+    method: RustComprehensiveMethod,
+    *,
+    checked: bool = False,
+    caller_unsafe: bool | None = None,
+) -> str:
+    if caller_unsafe is None:
+        caller_unsafe = method.caller_unsafe
     const_arguments = [
         "false" if parameter.type_spelling == "bool" else "0"
         for parameter in method.const_parameters
@@ -443,7 +538,7 @@ def _example_call(method: RustComprehensiveMethod) -> str:
             *const_arguments,
         ]
         call = (
-            f"tsl::{rust_raw_identifier(method.public_name)}"
+            f"tsl::{rust_raw_identifier(method.public_name + ('_checked' if checked else ''))}"
             f"::<{', '.join(generic_arguments)}>({arguments})"
         )
     else:
@@ -455,49 +550,17 @@ def _example_call(method: RustComprehensiveMethod) -> str:
             f"::<{', '.join(generic_arguments)}>" if generic_arguments else ""
         )
         call = (
-            f"value.{rust_raw_identifier(method.public_name)}"
+            f"value.{rust_raw_identifier(method.public_name + ('_checked' if checked else ''))}"
             f"{generic}({arguments})"
         )
-    if method.caller_unsafe:
+    if caller_unsafe and not checked:
         call = f"unsafe {{ {call} }}"
     prefix = "let result = " if method.must_use else ""
     return f"{prefix}{call};"
 
 
-def _public_attributes(
-    method: RustComprehensiveMethod,
-    *,
-    has_private_bound: bool,
-) -> tuple[str, ...]:
-    return (
-        "    #[inline]",
-        *(("    #[must_use]",) if method.must_use else ()),
-        *(("    #[track_caller]",) if method.panic_conditions else ()),
-        *(
-            ("    #[allow(clippy::should_implement_trait)]",)
-            if method.suppress_should_implement_trait_lint
-            else ()
-        ),
-        *(("    #[allow(private_bounds)]",) if has_private_bound else ()),
-    )
-
-
-def _bounds_checks(
-    method: RustComprehensiveMethod,
-    lanes: str,
-) -> tuple[str, ...]:
-    return tuple(
-        (
-            f'        assert!({_identifier(name)} < {lanes}, '
-            f'"lane index {{}} is out of bounds for {{}} lanes", '
-            f"{_identifier(name)}, {lanes});"
-        )
-        for name in method.bounds_checked_parameters
-    )
-
-
 def _unsafe_forward(method: RustComprehensiveMethod, call: str) -> str:
-    return f"unsafe {{ {call} }}" if method.caller_unsafe else call
+    return f"unsafe {{ {call} }}" if method.lower_call_unsafe else call
 
 
 def _runtime_parameters(
@@ -529,18 +592,6 @@ def _const_generic_declarations(method: RustComprehensiveMethod) -> str:
     return f"<{declarations}>"
 
 
-def _public_generic_declarations(
-    method: RustComprehensiveMethod,
-    leading: list[str],
-) -> str:
-    consts = [
-        f"const {parameter.public_name}: {parameter.type_spelling}"
-        for parameter in method.const_parameters
-    ]
-    parts = [*leading, *consts]
-    return f"<{', '.join(parts)}>" if parts else ""
-
-
 def _const_generic_arguments(method: RustComprehensiveMethod) -> str:
     parameters = _method_const_parameters(method)
     if not parameters:
@@ -568,9 +619,22 @@ def _method_const_parameters(
     )
 
 
-def _public_call_arguments(method: RustComprehensiveMethod) -> tuple[str, ...]:
+def _public_call_arguments(
+    method: RustComprehensiveMethod,
+    *,
+    checked_conditions: tuple[CheckedConditionPlan, ...] = (),
+) -> tuple[str, ...]:
     return tuple(
-        RUST_FACADE_SIGNATURE_TYPES.adapt_public_argument(
+        rust_checked_public_call_argument(
+            parameter,
+            checked_conditions,
+            (
+                "self"
+                if parameter.placement is RustFacadeParameterPlacement.RECEIVER
+                else _identifier(parameter.public_name)
+            ),
+        )
+        or RUST_FACADE_SIGNATURE_TYPES.adapt_public_argument(
             parameter.kind,
             (
                 "self"
@@ -582,16 +646,22 @@ def _public_call_arguments(method: RustComprehensiveMethod) -> tuple[str, ...]:
     )
 
 
+def _public_success_lines(
+    result: str,
+    *,
+    result_kind: str,
+    checked: bool,
+    indent: str,
+) -> tuple[str, ...]:
+    if not checked:
+        return (f"{indent}{result}",)
+    if result_kind == "void":
+        return (f"{indent}{result};", f"{indent}Ok(())")
+    return (f"{indent}Ok({result})",)
+
+
 def _private_trait_name(method: RustComprehensiveMethod) -> str:
-    receiver = {
-        RustFacadeReceiverKind.VECTOR: "Vector",
-        RustFacadeReceiverKind.MASK: "Mask",
-        RustFacadeReceiverKind.FREE: "Free",
-    }[method.receiver_kind]
-    return (
-        f"FacadePrimitive{receiver}"
-        f"{rust_primitive_tag_name(method.public_name)}"
-    )
+    return rust_facade_private_trait_name(method)
 
 
 def _identifier(name: str) -> str:

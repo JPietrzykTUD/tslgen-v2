@@ -65,17 +65,18 @@ impl Dispatcher {
         }
     }
 
-    /// Applies a binary vector operation to two equally sized slices.
+    /// Applies a binary vector operation without validating related extents.
     ///
     /// The selected whole-loop entry is invoked once. A stateful operation can
     /// be passed as `&mut operation`.
     ///
-    /// # Panics
+    /// # Safety
     ///
-    /// Panics when the input and output slice lengths differ.
-    #[track_caller]
+    /// `right` and `output` must each contain at least `left.len()` elements.
+    /// The operation and output must also satisfy the aliasing contract of the
+    /// selected whole-loop implementation.
     #[allow(private_bounds)]
-    pub fn transform_binary<Element, Operation>(
+    pub unsafe fn transform_binary<Element, Operation>(
         &self,
         operation: Operation,
         left: &[Element],
@@ -85,16 +86,6 @@ impl Dispatcher {
     where
         Element: private::DispatchBinary<Operation>,
     {
-        assert_eq!(
-            left.len(),
-            right.len(),
-            "runtime transform_binary requires equally sized inputs",
-        );
-        assert_eq!(
-            left.len(),
-            output.len(),
-            "runtime transform_binary requires equally sized input and output",
-        );
         <Element as private::DispatchBinary<Operation>>::dispatch(
             &self.table,
             operation,
@@ -102,6 +93,28 @@ impl Dispatcher {
             right,
             output,
         );
+    }
+
+    /// Applies a binary vector operation after validating every related extent.
+    ///
+    /// Longer secondary/output slices are accepted and their suffixes remain
+    /// untouched. On failure the operation is not invoked and `output` is unchanged.
+    #[allow(private_bounds)]
+    pub fn transform_binary_checked<Element, Operation>(
+        &self,
+        operation: Operation,
+        left: &[Element],
+        right: &[Element],
+        output: &mut [Element],
+    ) -> Result<(), crate::PreconditionError>
+    where
+        Element: private::DispatchBinary<Operation>,
+    {
+@{check_transform_binary}
+        unsafe {
+            self.transform_binary(operation, left, right, output);
+        }
+        Ok(())
     }
 }
 
@@ -121,10 +134,13 @@ pub mod algorithms {
         DISPATCHER.get_or_init(Dispatcher::new)
     }
 
-    /// Applies a binary vector operation using the process-global dispatcher.
-    #[track_caller]
+    /// Applies a binary vector operation without validating related extents.
+    ///
+    /// # Safety
+    ///
+    /// `right` and `output` must each contain at least `left.len()` elements.
     #[allow(private_bounds)]
-    pub fn transform_binary<Element, Operation>(
+    pub unsafe fn transform_binary<Element, Operation>(
         operation: Operation,
         left: &[Element],
         right: &[Element],
@@ -133,7 +149,24 @@ pub mod algorithms {
     where
         Element: private::DispatchBinary<Operation>,
     {
-        dispatcher().transform_binary(operation, left, right, output);
+        unsafe {
+            dispatcher().transform_binary(operation, left, right, output);
+        }
+    }
+
+    /// Applies a binary vector operation through the process-global dispatcher
+    /// after validating every related extent.
+    #[allow(private_bounds)]
+    pub fn transform_binary_checked<Element, Operation>(
+        operation: Operation,
+        left: &[Element],
+        right: &[Element],
+        output: &mut [Element],
+    ) -> Result<(), crate::PreconditionError>
+    where
+        Element: private::DispatchBinary<Operation>,
+    {
+        dispatcher().transform_binary_checked(operation, left, right, output)
     }
 }
 

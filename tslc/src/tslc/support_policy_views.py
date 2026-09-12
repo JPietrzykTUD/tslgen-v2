@@ -8,6 +8,7 @@ query facade.
 
 from __future__ import annotations
 
+from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import (
     RESULT_DIM_BASE,
     RESULT_DIM_EXTENSION,
@@ -132,8 +133,16 @@ def concrete_target_candidates(
     extension_name: str,
     type_tag: str,
     support: SupportPolicy = DEFAULT_SUPPORT_POLICY,
+    *,
+    profile: MachineProfile | None = None,
 ) -> tuple[str | None, ...]:
-    """The currently emit-ready second-axis targets for one source slot."""
+    """The currently emit-ready second-axis targets for one source slot.
+
+    When a machine profile is known, extension-valued targets must be active in
+    that same compilation mode. This matters for mutually exclusive physical
+    representations such as fixed-width SVE: a translation unit compiled for
+    ``sve256`` cannot also expose an ``sve128`` register warning-cleanly.
+    """
 
     if primitive.result_target is None:
         return (None,)
@@ -192,7 +201,20 @@ def concrete_target_candidates(
                     if candidate_name == candidate.isa_name
                     if constraint.matches(source_extension, candidate)
                 )
-        return tuple(sorted(t for t in targets if t in catalog.extensions))
+        return tuple(
+            sorted(
+                target
+                for target in targets
+                if (candidate := catalog.extensions.get(target)) is not None
+                and (
+                    profile is None
+                    or candidate.active_when.is_satisfied_by(
+                        profile.features,
+                        profile.compile_modes,
+                    )
+                )
+            )
+        )
     if (
         dim == RESULT_DIM_BASE
         and primitive.cast_mode is PrimitiveCastMode.REINTERPRET

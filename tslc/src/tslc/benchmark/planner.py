@@ -9,6 +9,7 @@ import json
 
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.benchmark.correctness import (
+    cross_lane_cases as _cross_lane_correctness_cases,
     immediate_cases as _immediate_correctness_cases,
     immediate_values as _immediate_values,
     indexed_load_bindings as _indexed_load_bindings,
@@ -37,6 +38,7 @@ from tslc.benchmark.model import (
     BenchmarkScenarioFamily,
 )
 from tslc.benchmark.scenarios import (
+    cross_lane_scenarios,
     immediate_scenarios,
     indexed_load_scenarios,
     mask_density_scenarios,
@@ -241,7 +243,7 @@ class BenchmarkPlanner:
         if key.lanes is None:
             return None, "extension width does not contain a complete scalar lane", False
         lanes = key.lanes
-        scenario_family = _scenario_family(spec)
+        scenario_family = _scenario_family(spec, primitive)
         if scenario_family is None:
             return (
                 None,
@@ -362,13 +364,7 @@ class BenchmarkPlanner:
                 to_array,
             )
             scenarios = vector_scalar_scenarios(primitive, spec, seed)
-        elif scenario_family == "register":
-            if not tiling_preserves_lane_semantics(primitive):
-                return (
-                    None,
-                    "cross-lane vector results require a dedicated benchmark scenario",
-                    False,
-                )
+        elif scenario_family in {"register", "cross_lane"}:
             harness, harness_reason = _require_harness(
                 by_primitive,
                 (self._harness.from_array, self._harness.to_array),
@@ -380,14 +376,28 @@ class BenchmarkPlanner:
             if harness is None:
                 return None, harness_reason, True
             from_array, to_array = harness
-            correctness = _vector_correctness_cases(
-                cases,
-                spec,
-                lanes,
-                from_array,
-                to_array,
+            correctness = (
+                _vector_correctness_cases(
+                    cases,
+                    spec,
+                    lanes,
+                    from_array,
+                    to_array,
+                )
+                if scenario_family == "register"
+                else _cross_lane_correctness_cases(
+                    cases,
+                    spec,
+                    lanes,
+                    from_array,
+                    to_array,
+                )
             )
-            scenarios = register_scenarios(primitive, spec, seed)
+            scenarios = (
+                register_scenarios(primitive, spec, seed)
+                if scenario_family == "register"
+                else cross_lane_scenarios(primitive, spec, seed)
+            )
         elif scenario_family == "mask_result":
             harness, harness_reason = _require_harness(
                 by_primitive,
@@ -534,6 +544,11 @@ def _common_unsupported_reason(
     if not tiling_preserves_lane_semantics(primitive) and not (
         (spec.result_kind == "s" and spec.param_kinds == ("v",))
         or (spec.result_kind == "v" and spec.param_kinds == ("v", "sImm"))
+        or (
+            spec.result_kind == "v"
+            and bool(spec.param_kinds)
+            and all(kind == "v" for kind in spec.param_kinds)
+        )
         or _is_indexed_load_shape(spec)
     ):
         return "cross-lane primitives require a dedicated benchmark scenario"
@@ -584,6 +599,7 @@ def _is_indexed_load_shape(spec: LoweredSpecialization) -> bool:
 
 def _scenario_family(
     spec: LoweredSpecialization,
+    primitive: Primitive,
 ) -> BenchmarkScenarioFamily | None:
     if _is_indexed_load_shape(spec):
         return "indexed_load"
@@ -596,7 +612,11 @@ def _scenario_family(
         and spec.param_kinds
         and all(kind == "v" for kind in spec.param_kinds)
     ):
-        return "register"
+        return (
+            "register"
+            if tiling_preserves_lane_semantics(primitive)
+            else "cross_lane"
+        )
     if (
         spec.result_kind == "m"
         and spec.param_kinds

@@ -1,10 +1,10 @@
-"""Backend-divergent operator region lowerer.
+"""Typed direct-operator region lowerer.
 
-``op<NAME>(args...)`` is the one keyword for lane operators whose spelling differs between
-backends (arithmetic that must wrap, bit-negate, …). The per-backend spelling lives in the
-corpus translate tables keyed ``op_<NAME>`` with positional fields ``{a0}``, ``{a1}``, … — so a
-new divergent operator is two corpus lines, not Python plumbing. (Compare ``mask<…>``, which uses
-the same template machinery.) A genuinely portable operator stays raw text (e.g. ``&``, ``==``).
+``op<NAME>(args...)`` identifies a direct target operator without asking the
+compiler to parse target-language text. The per-backend spelling lives in the
+corpus translate tables keyed ``op_<NAME>`` with positional fields ``{a0}``,
+``{a1}``, …, so adding an operator remains source-data work rather than Python
+plumbing. (Compare ``mask<…>``, which uses the same template machinery.)
 """
 
 from __future__ import annotations

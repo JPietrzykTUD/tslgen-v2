@@ -189,14 +189,22 @@ def _primitive(item: Primitive) -> dict[str, object]:
         ],
         "tests": len(item.tests),
         "brief": item.brief_description,
+        "portability": item.portability.value,
         "arithmetic": _arithmetic(item),
         "operation": _operation(item),
+        "preconditions": [condition.kind.value for condition in item.preconditions],
         "memory": (
             None
             if item.memory is None
             else {
                 "access": item.memory.access.value,
                 "addressing": item.memory.addressing.value,
+                "payload_extent": item.memory.payload_extent.value,
+                "indexed_lane_extent": (
+                    item.memory.indexed_lane_extent.value
+                    if item.memory.indexed_lane_extent is not None
+                    else None
+                ),
             }
         ),
         "conversion": (
@@ -286,8 +294,19 @@ def _profile(item: MachineProfile) -> dict[str, object]:
         "backend_flags": {key: list(value) for key, value in item.backend_flags.items()},
         "runner": None if item.runner is None else {
             "kind": item.runner.kind,
+            "name": item.runner.name,
             "profile": item.runner.profile,
             "args": list(item.runner.args),
+            "vector_bits": item.runner.vector_bits,
+            "variants": [
+                {
+                    "name": variant.name,
+                    "profile": variant.profile,
+                    "args": list(variant.args),
+                    "vector_bits": variant.vector_bits,
+                }
+                for variant in item.runner.variants
+            ],
         },
     }
 

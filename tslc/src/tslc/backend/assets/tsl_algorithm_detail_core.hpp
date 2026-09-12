@@ -240,7 +240,7 @@ inline constexpr bool integral_mask_can_represent_vec() noexcept {
 
 template <class Vec>
 inline constexpr bool native_mask_can_represent_vec() noexcept {
-    if constexpr (std::is_integral<typename Vec::mask_type>::value) {
+    if constexpr (Vec::mask_is_bitset) {
         return Vec::has_static_lane_count_v &&
                integral_mask_can_represent_vec<Vec>() &&
                (Vec::vector_element_count <= (sizeof(typename Vec::mask_type) * 8));

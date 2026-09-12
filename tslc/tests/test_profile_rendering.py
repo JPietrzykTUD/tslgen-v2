@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from hashlib import sha256
+import json
 from pathlib import Path
 
 import pytest
@@ -14,7 +15,11 @@ from tslc.benchmark.identity import (
     implementation_body_hash,
     implementation_choice_body_hash,
 )
-from tslc.backend.cpp_build_policy import cpp_profile_flags, cpp_profile_target
+from tslc.backend.cpp_build_policy import (
+    cpp_profile_compile_options,
+    cpp_profile_flags,
+    cpp_profile_target,
+)
 from tslc.backend.cpp_detection import x86_profile_detection_source
 from tslc.backend.rust_verification import (
     rust_linker,
@@ -82,6 +87,59 @@ def test_backend_selection_is_honored(data_root: Path, machine_profiles_path: Pa
     assert _roots(cpp_only) == {"cpp", "docs"}
     # verify description only covers the requested backend
     assert [b.backend_id for b in cpp_only.rendered.verify.backends] == ["cpp"]
+
+
+def test_cpp_consumer_respects_filtered_primitive_set(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=["conflict"],
+        profiles=["sse"],
+        backends=["cpp"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    consumer = next(
+        artifact.content
+        for artifact in result.artifacts.artifacts
+        if artifact.logical_path == "cpp/tests/consumer.cpp"
+    )
+
+    assert "#include <tsl.hpp>" in consumer
+    assert "int main() { return 0; }" in consumer
+    assert "tsl::add" not in consumer
+    assert "tsl::load" not in consumer
+    assert "tsl::store" not in consumer
+
+
+def test_cpp_profile_excludes_inactive_target_vector_registrations(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=["add", "insert_imask"],
+        profiles=["avx2"],
+        type_tags=["si32"],
+        backends=["cpp"],
+    )
+
+    assert not has_errors(result.diagnostics), result.diagnostics
+    cpp = next(
+        artifact.content
+        for artifact in result.artifacts.artifacts
+        if artifact.logical_path == "cpp/include/tsl_avx2.hpp"
+    )
+    assert "struct simd<T, avx512>" not in cpp
+    assert (
+        "struct simd_for<native, int32_t> {\n"
+        "    using type = ::tsl::simd<int32_t, ::tsl::avx2>;"
+        in cpp
+    )
+    assert "struct simd_for<fixed<16>, int32_t>" not in cpp
 
 
 def test_unknown_requested_compiler_capability_is_diagnosed(
@@ -197,6 +255,37 @@ def test_cpp_project_probes_and_retains_compiler_capability_alternatives(
     ) in cmake
 
 
+def test_x86_narrow_reductions_render_capability_fallbacks(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=["hadd", "hand", "hor", "hmax", "hmin"],
+        profiles=["skylake"],
+        type_tags=("ui8", "ui16"),
+        backends=["cpp"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    artifacts = {
+        artifact.logical_path: artifact.content
+        for artifact in result.artifacts.artifacts
+    }
+
+    profile_header = artifacts["cpp/include/tsl_skylake.hpp"]
+    assert "#if TSL_COMPILER_HAS_X86_NARROW_REDUCTIONS" in profile_header
+    assert "_mm256_reduce_add_epi16" in profile_header
+    assert "_mm_mask_reduce_min_epu8" in profile_header
+    assert "#else" in profile_header
+    assert "::tsl::extract<Vec" in profile_header
+    assert "::tsl::select<Vec>" in profile_header
+
+    primitive_tags = artifacts["cpp/include/tsl_primitives.hpp"]
+    assert "#  if !defined(_MSC_VER)" in primitive_tags
+    assert "TSL_COMPILER_HAS_X86_NARROW_REDUCTIONS" in primitive_tags
+
+
 def test_rust_profile_module_is_compiled_only_for_its_target_contract(
     data_root: Path,
     machine_profiles_path: Path,
@@ -272,16 +361,16 @@ def test_representative_project_shape_is_byte_stable(
         backends=["cpp", "rust"],
     )
     expected = {
-        "cpp/CMakeLists.txt": "a544ca7828628a83dcb9b6dcf22b1834a5d7f69cfce7184bfe6bcd0e4855b35e",
-        "cpp/docs/input/tsl_api_docs.hpp": "25c8a21fafad064c394b933b6c5d27b6dc07aaf4a509150d9da7e87ff9f8027d",
-        "cpp/include/tsl.hpp": "298cd47b4e1509cd59eb4100f7a0d82bcdbc6e5d9f4eedccb0a68ba0bf667e03",
-        "cpp/include/tsl_primitives.hpp": "11bd34e5b49a236979c11f696478ff627fae56fe113f95ef988b17f74e933d8b",
-        "cpp/include/tsl_scalar.hpp": "a3d1b9f8fd299e4710f39f7e887380668a9c666311440d0d6eae281e2ba5cef5",
+        "cpp/CMakeLists.txt": "8159716947d12e88565fd8eb907cae11ebdf99e2f6a00c46a24ec2bd2c916d64",
+        "cpp/docs/input/tsl_api_docs.hpp": "698b236f80bd4c8000fb1ace21a144ea61db887378ddf44d2568cdd2bc7c43de",
+        "cpp/include/tsl.hpp": "fdebd390b5777e6806b13f994ec33e3289bbf163cd91f9a3a6b183bbbc5ae5cb",
+        "cpp/include/tsl_primitives.hpp": "1ed6539e2285a7af59dbd5212e32e931b19620fa96387c833dacb882d986d743",
+        "cpp/include/tsl_scalar.hpp": "26374762f2baada045bb4a822ef2e8be5fd32fac8cfc98ed92314296a715bae9",
         "cpp/tests/smoke_scalar.cpp": "43046adfe06468b6eb75f351dc8883cb1e35635e66f40fc3f033d41651554a1e",
-        "rust/Cargo.toml": "ec632691434d5f98f5bb2035539e9df258ec7fb252f84e5b4cb21a0aa2a144cc",
-        "rust/src/lib.rs": "a92242407733aa553b68d0770f97b50e5e92bdee6232f1638a8d44f2121b9339",
-        "rust/src/tsl_documentation.rs": "41f2ff6e6cdcfb95751473db764e8d7e32fd2d7785a7fe5212b91d1d1771e07a",
-        "rust/src/tsl_scalar.rs": "bf203ab3fd628764b20a91c6ea83e548992190557490d02d4edc8e5a20dee8fd",
+        "rust/Cargo.toml": "994e9d912db23d0ba8d6f4763b54bdea83c838f6b8427af8e038be42b2f5f860",
+        "rust/src/lib.rs": "0a57fa83b8458be54a2313e7ffc3b77c798accc546089acfda6c41f1421e25ad",
+        "rust/src/tsl_documentation.rs": "9b67bf0a87556f23e8b0e4d4b5c1d6215c46367d4c1b6e1bbfa76ba8a27cf089",
+        "rust/src/tsl_scalar.rs": "dc897534295f08bc366eb4b0428e4f88316f1736a9ac67e91e001238cfd1285e",
         "rust/tests/smoke.rs": "a4d108f502689e7f29ba5259e22779e8ef0afa36ab83c239022e2772d68d6b44",
     }
     actual = {
@@ -299,7 +388,7 @@ def test_clang_vector_overlay_is_split_guarded_and_uses_hardware_facade(
     result = _gen(
         data_root,
         machine_profiles_path,
-        primitives=["add", "hadd"],
+        primitives=["add", "hadd", "load", "store"],
         profiles=["avx2"],
         backends=["cpp"],
     )
@@ -310,15 +399,52 @@ def test_clang_vector_overlay_is_split_guarded_and_uses_hardware_facade(
     overlay = by["cpp/include/tsl_avx2_clang.hpp"]
     dispatch = by["cpp/include/tsl.hpp"]
     cmake = by["cpp/CMakeLists.txt"]
+    consumer = by["cpp/tests/consumer.cpp"]
     base_smoke = by["cpp/tests/smoke_avx2.cpp"]
     overlay_smoke = by["cpp/tests/smoke_avx2_clang.cpp"]
+    manifest_records = json.loads(by["cpp/public-api.json"])["declarations"]
+    clang_policy = next(
+        record
+        for record in manifest_records
+        if record["identity"] == "tsl::dataparallel::clang_fixed#avx2"
+    )
 
+    assert "enable-macro:TSL_ENABLE_CLANG" in clang_policy["reachability"]
+    assert "compiler-ids:AppleClang,Clang" in clang_policy["reachability"]
+    assert any(
+        fact.startswith("guard:") for fact in clang_policy["reachability"]
+    )
     assert "clang_v128" not in base
     assert "clang_v256" not in base
     assert "clang_v512" not in base
     assert "clang_v128" not in base_smoke
     assert "clang_fixed" not in base
     assert "clang_v128" in overlay_smoke
+    assert "#include <tsl.hpp>" in consumer
+    assert "store_checked<Vec, false>" in consumer
+    assert "simd_for_t<tsl::dataparallel::native, float>" in consumer
+    assert "std::int32_t" not in consumer
+    assert "option(TSL_STRICT_WARNINGS" in cmake
+    assert "-Wall -Wextra -Werror" in cmake
+    assert "GNU|Clang|AppleClang|IntelLLVM" in cmake
+    assert "/W4 /WX" in cmake
+    assert (
+        "target_compile_options(tsl_smoke PRIVATE "
+        "$<$<CXX_COMPILER_ID:MSVC>:/bigobj>)"
+    ) in cmake
+    assert (
+        "target_compile_options(tsl_values PRIVATE "
+        "$<$<CXX_COMPILER_ID:MSVC>:/bigobj>)"
+    ) in cmake
+    assert (
+        "target_compile_options(tsl_consumer PRIVATE "
+        "$<$<CXX_COMPILER_ID:MSVC>:/bigobj>)"
+    ) not in cmake
+    assert "add_executable(tsl_consumer tests/consumer.cpp)" in cmake
+    assert "add_custom_target(tsl_quality DEPENDS tsl_smoke tsl_consumer)" in cmake
+    core = by["cpp/include/tsl_core_detail_scalar.hpp"]
+    assert "defined(__wasm32__)" in core
+    assert "defined(__wasm64__)" in core
     assert "struct clang_v128 {};" in overlay
     assert "struct clang_v256 {};" in overlay
     assert "struct clang_v512 {};" in overlay
@@ -438,6 +564,18 @@ def test_profile_name_sanitized_to_valid_identifiers(
     assert "pub mod tsl_icelake_rockerlake_oneapi;" in by["rust/src/lib.rs"]
     assert "icelake_rockerlake_oneapi = []" not in by["rust/Cargo.toml"]
     assert "default = []" in by["rust/Cargo.toml"]
+    cpp_manifest = json.loads(by["cpp/public-api.json"])
+    cpp_identities = {
+        record["identity"] for record in cpp_manifest["declarations"]
+    }
+    assert (
+        "tsl::profiles::icelake_rockerlake_oneapi#namespace"
+        in cpp_identities
+    )
+    assert (
+        "tsl::profiles::icelake_rockerlake-oneapi#namespace"
+        not in cpp_identities
+    )
 
 
 def test_oneapi_sized_vector_is_distinct_from_generic(
@@ -453,19 +591,61 @@ def test_oneapi_sized_vector_is_distinct_from_generic(
     by = {a.logical_path: a.content for a in result.artifacts.artifacts}
 
     cpp = by["cpp/include/tsl_cascadelake_oneapi.hpp"]
+    system_headers = by["cpp/include/tsl_system_headers_oneapi_fpga.hpp"]
     assert "template <std::size_t LANES>\nstruct oneapi_fpga" in cpp
-    assert "#include <sycl/ext/intel/ac_types/ac_int.hpp>" in cpp
+    system_include = cpp.index(
+        "#include <tsl_system_headers_oneapi_fpga.hpp>"
+    )
+    core = cpp.index('#include "tsl_core.hpp"')
+    generated = cpp.index("template <std::size_t LANES>\nstruct oneapi_fpga")
+    assert system_include < core < generated
+    assert "#  pragma clang system_header" in system_headers
+    assert "#  pragma GCC system_header" in system_headers
+    assert "#  pragma warning(push, 0)" in system_headers
+    assert "#  pragma warning(pop)" in system_headers
+    assert "#include <sycl/ext/intel/ac_types/ac_int.hpp>" in system_headers
     assert "using mask_type = ac_int<LANES, false>;" in cpp
     assert "using imask_type = ac_int<LANES, false>;" in cpp
     assert "struct add_impl<tsl::simd<int32_t, tsl::generic<LANES>>>" in cpp
     assert "struct add_impl<tsl::simd<int32_t, tsl::oneapi_fpga<LANES>>>" in cpp
     assert cpp.count("struct add_impl<tsl::simd<int32_t, tsl::generic<LANES>>>") == 1
     assert cpp.count("struct add_impl<tsl::simd<int32_t, tsl::oneapi_fpga<LANES>>>") == 1
+    cpp_records = json.loads(by["cpp/public-api.json"])["declarations"]
+    cpp_by_identity = {record["identity"]: record for record in cpp_records}
+    assert cpp_by_identity[
+        "tsl::reg_param#oneapi_fpga-registration"
+    ]["classification_scope"] == "descendants"
+    cpp_verify = next(
+        backend
+        for backend in result.rendered.verify.backends
+        if backend.backend_id == "cpp"
+    ).profiles[0]
+    assert cpp_verify.preflight_headers == (
+        "immintrin.h",
+        "sycl/ext/intel/ac_types/ac_int.hpp",
+    )
 
     rust = by["rust/src/tsl_cascadelake_oneapi.rs"]
     assert "pub struct OneapiFpga<const LANES: usize>;" in rust
     assert "impl<const LANES: usize> AddImpl for Simd<i32, Generic<LANES>>" in rust
     assert "impl<const LANES: usize> AddImpl for Simd<i32, OneapiFpga<LANES>>" in rust
+    rust_records = json.loads(by["rust/public-api.json"])["declarations"]
+    rust_tag = next(
+        record
+        for record in rust_records
+        if record["identity"]
+        == "crate::profile::OneapiFpga#cascadelake-oneapi"
+    )
+    assert rust_tag["generic_parameters"] == [
+        {
+            "name": "LANES",
+            "kind": "const",
+            "declaration": "const LANES: usize",
+            "bounds": [],
+            "type": "usize",
+            "default": None,
+        }
+    ]
     rust_fallback = by["rust/src/tsl_target_fallback.rs"]
     assert "OneapiFpga" not in rust_fallback
     assert "impl<const LANES: usize> AddImpl for Simd<i32, Generic<LANES>>" in (
@@ -653,6 +833,37 @@ def test_cpp_profile_flags_are_profile_family_owned() -> None:
     assert cpp_profile_target(profile, capability) == "aarch64-linux-gnu"
 
 
+@pytest.mark.parametrize(
+    ("features", "expected"),
+    [
+        ({"sse"}, "/arch:SSE2"),
+        ({"sse", "sse2", "sse4_2"}, "/arch:SSE4.2"),
+        ({"sse", "sse2", "avx"}, "/arch:AVX"),
+        ({"sse", "sse2", "avx", "avx2"}, "/arch:AVX2"),
+        ({"sse", "sse2", "avx", "avx2", "avx512f"}, "/arch:AVX512"),
+    ],
+)
+def test_cpp_x86_profiles_map_to_msvc_architecture_option(
+    features: set[str],
+    expected: str,
+) -> None:
+    profile = MachineProfile(
+        name="x86-test",
+        family="x86",
+        features=frozenset(features),
+        alternatives={},
+    )
+    capability = ProfileFamilyCapability(
+        "x86",
+        backends={"cpp": BackendProfileFamily(feature_flags=True)},
+    )
+
+    options = cpp_profile_compile_options(profile, capability)
+
+    assert options[-1].flag == expected
+    assert options[-1].compiler_ids == ("MSVC",)
+
+
 def test_rust_profile_toolchain_is_profile_family_owned() -> None:
     profile = MachineProfile(
         name="neon",
@@ -796,6 +1007,7 @@ def test_fixed_sve_profile_registers_guarded_static_cpp_simd_types(
     cpp = by_path[f"cpp/include/tsl_{profile}.hpp"]
     cmake = by_path["cpp/CMakeLists.txt"]
     dispatch = by_path["cpp/include/tsl.hpp"]
+    assert "#include <vector>" in cpp
     assert cpp.startswith(
         f"#if (defined(__ARM_FEATURE_SVE_BITS) && "
         f"(__ARM_FEATURE_SVE_BITS == {width}))\n"
@@ -821,7 +1033,7 @@ def test_fixed_sve_profile_registers_guarded_static_cpp_simd_types(
     assert f"#if defined(TSL_PROFILE_SVE{width})" in dispatch
     assert (
         f"target_compile_options(tsl_profile_sve{width} INTERFACE "
-        "$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang,IntelLLVM>:-mcpu=a64fx> "
+        "$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang,IntelLLVM>:-march=armv8.2-a+sve> "
         f"$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang,IntelLLVM>:-msve-vector-bits={width}>)"
     ) in cmake
     assert f"__ARM_FEATURE_SVE_BITS == {width}" in cmake
@@ -869,7 +1081,12 @@ def test_sve_profile_registers_scalable_cpp_simd_types(
         "target_compile_definitions(tsl_profile_sve INTERFACE TSL_PROFILE_SVE"
         in cmake
     )
-    assert "target_compile_options(tsl_profile_sve INTERFACE $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang,IntelLLVM>:-mcpu=a64fx>)" in cmake
+    assert (
+        "target_compile_options(tsl_profile_sve INTERFACE "
+        "$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang,IntelLLVM>:-march=armv8.2-a+sve> "
+        "$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang,IntelLLVM>:"
+        "-msve-vector-bits=scalable>)"
+    ) in cmake
     assert any(
         case.kind == "scalable_golden"
         and case.scalable is not None
@@ -1050,23 +1267,21 @@ def test_sve_profile_plans_scalable_mask_store_values(
     assert "tsl::store_mask_repr<Vec, false, false>(" in values
     assert "reinterpret_cast<typename Vec::base_type *>(actual.data() + 1), mask);" in values
 
-@pytest.fixture(scope="module")
-def rvv_project(data_root: Path, machine_profiles_path: Path):
+def _rvv_project(
+    data_root: Path,
+    machine_profiles_path: Path,
+    *,
+    primitives: list[str],
+    type_tags: list[str],
+    backends: list[str] | None = None,
+):
     return _gen(
         data_root,
         machine_profiles_path,
-        primitives=[
-            "set1", "set_zero", "load", "store", "add", "sub", "mul",
-            "binary_and", "binary_or", "binary_xor",
-            "inv", "binary_andnot",
-            "max", "min", "neg", "abs", "div", "mod", "mul_imm", "mod_imm",
-        ],
+        primitives=primitives,
         profiles=["rvv"],
-        type_tags=[
-            "si8", "ui8", "si16", "ui16", "si32",
-            "ui32", "si64", "ui64", "f32", "f64",
-        ],
-        backends=["cpp", "rust"],
+        type_tags=type_tags,
+        backends=["cpp"] if backends is None else backends,
     )
 
 
@@ -1124,14 +1339,9 @@ def test_rvv_catalog_is_scalable_lmul1_cpp_only(catalog, machine_profiles) -> No
 
 
 def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
-    rvv_project,
+    data_root: Path,
+    machine_profiles_path: Path,
 ) -> None:
-    assert not has_errors(rvv_project.diagnostics), rvv_project.diagnostics
-    artifacts = {
-        artifact.logical_path: artifact.content
-        for artifact in rvv_project.artifacts.artifacts
-    }
-    header = artifacts["cpp/include/tsl_rvv.hpp"]
     integer_types = {
         "i8m1": 8,
         "u8m1": 8,
@@ -1142,6 +1352,59 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
         "i64m1": 64,
         "u64m1": 64,
     }
+    integer_type_tags = [
+        "si8",
+        "ui8",
+        "si16",
+        "ui16",
+        "si32",
+        "ui32",
+        "si64",
+        "ui64",
+    ]
+    all_type_tags = [*integer_type_tags, "f32", "f64"]
+    # Bound peak memory by releasing each generated slice before starting the next.
+    slices = (
+        (
+            ["set1", "set_zero", "load", "store", "add", "sub", "mul"],
+            all_type_tags,
+        ),
+        (
+            ["binary_and", "binary_or", "binary_xor", "inv", "binary_andnot"],
+            integer_type_tags,
+        ),
+        (["max", "min", "neg", "abs"], all_type_tags),
+        (["div", "mod"], all_type_tags),
+        (["mul_imm", "mod_imm"], ["si32", "f32", "f64"]),
+    )
+    header_parts: list[str] = []
+    value_parts: list[str] = []
+    scalable_kinds: set[str] = set()
+    for primitives, type_tags in slices:
+        project = _rvv_project(
+            data_root,
+            machine_profiles_path,
+            primitives=primitives,
+            type_tags=type_tags,
+        )
+        assert not has_errors(project.diagnostics), project.diagnostics
+        assert project.rendered is not None
+        artifacts = {
+            artifact.logical_path: artifact.content
+            for artifact in project.artifacts.artifacts
+        }
+        header_parts.append(artifacts["cpp/include/tsl_rvv.hpp"])
+        value_parts.append(artifacts["cpp/tests/values_rvv.cpp"])
+        scalable_kinds.update(
+            case.kind
+            for profile in project.rendered.value_tests.profiles_for("cpp")
+            for case in profile.cases
+            if case.scalable is not None
+            and case.scalable.source_extension == "rvv"
+        )
+        del artifacts, project
+
+    header = "\n".join(header_parts)
     for suffix, width in integer_types.items():
         for stem in (
             "vmv_v_x",
@@ -1205,20 +1468,14 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
     assert "::tsl::less_than<Vec>(data, zero)" in header
     assert "::tsl::neg<Vec>(data),\n" in header
     assert "::tsl::set_zero<Vec>()" in header
+    assert "#include <vector>" in header
     assert "std::vector<float> dividends_storage" in header
     assert "std::vector<double> divisors_storage" in header
     assert "::tsl::mod<tsl::simd<float, tsl::scalar>>" in header
     assert "::tsl::mod<tsl::simd<double, tsl::scalar>>" in header
     assert header.count("return ::tsl::select<Vec>(") >= 40
 
-    values = artifacts["cpp/tests/values_rvv.cpp"]
-    scalable_kinds = {
-        case.kind
-        for profile in rvv_project.rendered.value_tests.profiles_for("cpp")
-        for case in profile.cases
-        if case.scalable is not None
-        and case.scalable.source_extension == "rvv"
-    }
+    values = "\n".join(value_parts)
     assert "scalable_masked_pointer_load" in scalable_kinds
     assert "scalable_masked_pointer_store" in scalable_kinds
     assert "test_scalable_rvv_load_maskz_load_ui32_mask_zero_alternating" in values
@@ -1264,16 +1521,28 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
     assert "test_scalable_rvv_div_f32_basic" in values
     assert "test_scalable_rvv_div_si32_basic" in values
     assert "test_scalable_rvv_div_si32_edge_overflow_signs" in values
-    assert "test_scalable_rvv_div_si32_failure_zero_divisor" in values
-    assert "test_scalable_rvv_div_si32_mask_failure_active_zero" in values
-    assert "test_scalable_rvv_div_si32_maskz_failure_active_zero" in values
+    assert "test_scalable_rvv_div_si32_basic__checked_active_zero" in values
+    assert (
+        "test_scalable_rvv_div_mask_div_si32_mask_inactive_zero"
+        "__checked_active_zero"
+    ) in values
+    assert (
+        "test_scalable_rvv_div_maskz_div_si32_maskz_inactive_zero"
+        "__checked_active_zero"
+    ) in values
     assert "test_scalable_rvv_div_maskz_div_si32_maskz_inactive_zero" in values
     assert "test_scalable_rvv_div_mask_div_si32_mask_inactive_zero" in values
     assert "test_scalable_rvv_mod_si32_basic" in values
     assert "test_scalable_rvv_mod_si32_edge_overflow" in values
-    assert "test_scalable_rvv_mod_si32_failure_zero_divisor" in values
-    assert "test_scalable_rvv_mod_si32_mask_failure_active_zero" in values
-    assert "test_scalable_rvv_mod_si32_maskz_failure_active_zero" in values
+    assert "test_scalable_rvv_mod_si32_basic__checked_active_zero" in values
+    assert (
+        "test_scalable_rvv_mod_mask_mod_si32_mask_inactive_zero"
+        "__checked_active_zero"
+    ) in values
+    assert (
+        "test_scalable_rvv_mod_maskz_mod_si32_maskz_inactive_zero"
+        "__checked_active_zero"
+    ) in values
     assert "test_scalable_rvv_mod_maskz_mod_si32_maskz_inactive_zero" in values
     assert "test_scalable_rvv_mod_mask_mod_si32_mask_inactive_zero" in values
     assert "test_scalable_rvv_mod_f32_basic_float" in values
@@ -1314,19 +1583,32 @@ def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
     assert "static constexpr bool has_static_lane_count_v = false;" in header
     assert "__riscv_vlenb() / sizeof(int32_t)" in header
     assert "__riscv_vlenb() / sizeof(uint32_t)" in header
-    assert "rust/src/tsl_rvv.rs" not in artifacts
-    assert rvv_project.emitted_profiles[0].supports_backend("cpp")
-    assert not rvv_project.emitted_profiles[0].supports_backend("rust")
+    backend_project = _rvv_project(
+        data_root,
+        machine_profiles_path,
+        primitives=["add"],
+        type_tags=["ui32"],
+        backends=["cpp", "rust"],
+    )
+    assert not has_errors(backend_project.diagnostics), backend_project.diagnostics
+    assert backend_project.rendered is not None
+    backend_paths = {
+        artifact.logical_path for artifact in backend_project.artifacts.artifacts
+    }
+    assert "rust/src/tsl_rvv.rs" not in backend_paths
+    assert backend_project.emitted_profiles[0].supports_backend("cpp")
+    assert not backend_project.emitted_profiles[0].supports_backend("rust")
 
     cpp_verify = next(
-        backend for backend in rvv_project.rendered.verify.backends
+        backend for backend in backend_project.rendered.verify.backends
         if backend.backend_id == "cpp"
     ).profiles[0]
     assert cpp_verify.compiler_role == "riscv-cpp"
     assert cpp_verify.cmake_system_name == "Linux"
     assert cpp_verify.cmake_system_processor == "riscv64"
     assert not cpp_verify.pass_target_to_compiler
-    assert cpp_verify.preflight_headers == ("riscv_vector.h",)
+    assert cpp_verify.preflight_headers == ("riscv_vector.h", "vector")
+
 
 @pytest.fixture(scope="module")
 def rvv_reinterpret_project(data_root: Path, machine_profiles_path: Path):

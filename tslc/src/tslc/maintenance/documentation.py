@@ -21,6 +21,7 @@ import os
 import shutil
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,6 +32,8 @@ from tslc.backend.capability import (
     GeneratedDocumentationBuilder,
     GeneratedDocumentationSpec,
 )
+from tslc.backend.algorithm_contracts import ALGORITHM_PUBLIC_FAMILIES
+from tslc.backend.cpp_algorithm_contracts import cpp_checked_algorithm_families
 from tslc.backend.registry import backend_capability
 from tslc.maintenance import _repo_context
 
@@ -38,6 +41,14 @@ CommandRunner = Callable[
     [Sequence[str], Path, Mapping[str, str] | None],
     subprocess.CompletedProcess[str],
 ]
+
+_CPP_PUBLIC_DOCUMENTATION_HEADERS = (
+    "tsl_core.hpp",
+    "tsl_dataparallel.hpp",
+    "tsl_algorithm_tags.hpp",
+    "tsl_algorithm.hpp",
+    "tsl_algorithm_checked.hpp",
+)
 
 
 def _required_repo_root(explicit: Path | None) -> Path:
@@ -234,6 +245,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="write assets and print commands without running external tools",
     )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="validate the generated C++ public identity/documentation boundary",
+    )
     args = parser.parse_args(argv)
 
     context = _repo_context.require_repo_context(parser)
@@ -250,6 +266,20 @@ def main(argv: list[str] | None = None) -> int:
         npm_ci=not args.skip_npm_ci,
         dry_run=args.dry_run,
     )
+    if (
+        args.strict
+        and not args.dry_run
+        and "cpp" in split_csv(args.backends)
+        and not report.errors
+    ):
+        strict_errors = validate_cpp_documentation(
+            Path(args.output_root) / "cpp/docs/doxygen/xml"
+        )
+        report = DocumentationReport(
+            report.commands,
+            report.outputs,
+            (*report.errors, *strict_errors),
+        )
     for command in report.commands:
         print(
             f"[document] {command.backend_id} {command.step}: "
@@ -260,6 +290,94 @@ def main(argv: list[str] | None = None) -> int:
     for error in report.errors:
         print(f"[document-error] {error}", file=sys.stderr)
     return 0 if report.ok else 1
+
+
+def validate_cpp_documentation(xml_root: Path) -> tuple[str, ...]:
+    """Validate Doxygen coverage against compiler-owned public family manifests."""
+
+    index_path = xml_root / "index.xml"
+    namespace_path = xml_root / "namespacetsl.xml"
+    try:
+        index = ET.parse(index_path).getroot()
+        namespace = ET.parse(namespace_path).getroot()
+    except (ET.ParseError, OSError) as error:
+        return (f"cannot read C++ documentation XML: {error}",)
+
+    compounds = {
+        compound.findtext("name", default="")
+        for compound in index.findall("compound")
+    }
+    required_compounds = {
+        "tsl::dataparallel::fixed",
+        "tsl::dataparallel::generic",
+        "tsl::dataparallel::native",
+        "tsl::simd",
+        "tsl::span",
+    }
+    errors: list[str] = []
+    missing_compounds = sorted(required_compounds - compounds)
+    if missing_compounds:
+        errors.append(
+            "C++ documentation omits public type identities: "
+            + ", ".join(missing_compounds)
+        )
+
+    algorithm_names = {
+        member.findtext("name", default="")
+        for compound in index.findall("compound")
+        if compound.findtext("name") == "tsl::algo"
+        for member in compound.findall("member")
+        if member.get("kind") == "function"
+    }
+    expected_algorithms = set(ALGORITHM_PUBLIC_FAMILIES) | {
+        f"{name}_checked" for name in cpp_checked_algorithm_families()
+    }
+    missing_algorithms = sorted(expected_algorithms - algorithm_names)
+    if missing_algorithms:
+        errors.append(
+            "C++ documentation omits public algorithm families: "
+            + ", ".join(missing_algorithms)
+        )
+
+    facade_members = tuple(
+        member
+        for member in namespace.findall(".//memberdef")
+        if (
+            (location := member.find("location")) is not None
+            and (location.get("declfile") or location.get("file") or "")
+            .replace("\\", "/")
+            .endswith("docs/input/tsl_api_docs.hpp")
+        )
+    )
+    if not facade_members:
+        errors.append("C++ documentation contains no primitive callable identities")
+        return tuple(errors)
+    identities: set[tuple[str, str, bytes]] = set()
+    names: set[str] = set()
+    for member in facade_members:
+        name = member.findtext("name", default="")
+        names.add(name)
+        template = member.find("templateparamlist")
+        identity = (
+            name,
+            member.findtext("argsstring", default=""),
+            b"" if template is None else ET.tostring(template),
+        )
+        if identity in identities:
+            errors.append(f"C++ documentation duplicates callable identity: {name}")
+        identities.add(identity)
+        prose_parts: list[str] = []
+        for element_name in ("briefdescription", "detaileddescription"):
+            element = member.find(element_name)
+            if element is not None:
+                prose_parts.extend(element.itertext())
+        prose = "".join(prose_parts)
+        if not prose.strip():
+            errors.append(f"C++ documentation has no prose for callable: {name}")
+    for name in sorted(item for item in names if item.endswith("_checked")):
+        if name.removesuffix("_checked") not in names:
+            errors.append(f"C++ checked callable has no ordinary twin: {name}")
+    return tuple(errors)
 
 
 def _document_cpp(
@@ -278,17 +396,28 @@ def _document_cpp(
 ) -> Path | None:
     cpp_root = root / project_path
     facade_header = cpp_root / "docs" / "input" / "tsl_api_docs.hpp"
+    public_headers = tuple(
+        cpp_root / "include" / name for name in _CPP_PUBLIC_DOCUMENTATION_HEADERS
+    )
     docs_root = cpp_root / "docs"
     doxygen_root = docs_root / "doxygen"
 
     if not facade_header.is_file():
         errors.append(f"C++ documentation facade not found: {facade_header}")
         return None
+    missing_headers = tuple(path for path in public_headers if not path.is_file())
+    if missing_headers:
+        errors.append(
+            "C++ public documentation input(s) not found: "
+            + ", ".join(str(path) for path in missing_headers)
+        )
+        return None
 
     doxygen_root.mkdir(parents=True, exist_ok=True)
     _render_cpp_assets(
         project_name=project_name,
         facade_header=facade_header,
+        public_headers=public_headers,
         doxygen_root=doxygen_root,
         repo_root=repo_root,
     )
@@ -570,6 +699,7 @@ def _render_cpp_assets(
     *,
     project_name: str,
     facade_header: Path,
+    public_headers: tuple[Path, ...],
     doxygen_root: Path,
     repo_root: Path | None,
 ) -> None:
@@ -579,6 +709,7 @@ def _render_cpp_assets(
         _cpp_asset_values(
             project_name=project_name,
             facade_header=facade_header,
+            public_headers=public_headers,
             doxygen_root=doxygen_root,
         ),
     )
@@ -609,6 +740,14 @@ def _render_site_assets(
         _template(asset_root / "index.rst.in", values),
         encoding="utf-8",
     )
+    (sphinx_source / "checked_api_contract.rst").write_text(
+        _template(asset_root / "checked_api_contract.rst.in", values),
+        encoding="utf-8",
+    )
+    shutil.copyfile(
+        asset_root / "checked_api_example.cpp",
+        sphinx_source / "checked_api_example.cpp",
+    )
     if doxygen_xml is not None:
         (sphinx_source / "cpp_api.rst").write_text(
             _template(asset_root / "cpp_api.rst.in", values),
@@ -637,12 +776,15 @@ def _cpp_asset_values(
     *,
     project_name: str,
     facade_header: Path,
+    public_headers: tuple[Path, ...],
     doxygen_root: Path,
 ) -> dict[str, str]:
     return {
         "PROJECT_NAME": project_name,
         "TITLE_UNDERLINE": "=" * len(project_name),
-        "INPUT_DIR": str(facade_header.resolve()),
+        "INPUTS": " \\\n                         ".join(
+            f'"{path.resolve()}"' for path in (facade_header, *public_headers)
+        ),
         "OUTPUT_DIR": str(doxygen_root.resolve()),
     }
 
@@ -654,7 +796,7 @@ def _site_asset_values(
     include_rust: bool,
     include_specializations: bool,
 ) -> dict[str, str]:
-    entries: list[str] = []
+    entries: list[str] = ["   checked_api_contract"]
     if doxygen_xml is not None:
         entries.append("   cpp_api")
     if include_rust:
@@ -838,4 +980,5 @@ __all__ = (
     "DocumentationReport",
     "document_generated",
     "main",
+    "validate_cpp_documentation",
 )

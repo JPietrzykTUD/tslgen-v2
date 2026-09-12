@@ -48,7 +48,7 @@ prim<v:=(v,v)> binary_and(left, right):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(left & right);"
+          tsil "complete(op<bit_and>(left, right));"
       f?:
         prefer_fixed_native true
         requires []
@@ -248,6 +248,22 @@ prim<v:=(v,v)> binary_and(left, right):
               )
             );
           """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
+            complete(call<primitive=reinterpret[BitVec, Vec]>(
+              call<primitive=@self[BitVec]>(
+                call<primitive=reinterpret[Vec, BitVec]>(left),
+                call<primitive=reinterpret[Vec, BitVec]>(right)
+              )
+            ));
+          """
 
 prim<v:=(v,v)> binary_andnot(left, right):
   operation bit_and_not
@@ -284,7 +300,7 @@ prim<v:=(v,v)> binary_andnot(left, right):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(op<bit_negate>(left) & right);"
+          tsil "complete(op<bit_and>(op<bit_negate>(left), right));"
       f?:
         prefer_fixed_native true
         requires []
@@ -477,6 +493,22 @@ prim<v:=(v,v)> binary_andnot(left, right):
               )
             );
           """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
+            complete(call<primitive=reinterpret[BitVec, Vec]>(
+              call<primitive=@self[BitVec]>(
+                call<primitive=reinterpret[Vec, BitVec]>(left),
+                call<primitive=reinterpret[Vec, BitVec]>(right)
+              )
+            ));
+          """
 
 prim<v:=(v,v)> binary_or(left, right):
   operation bit_or
@@ -527,7 +559,7 @@ prim<v:=(v,v)> binary_or(left, right):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(left | right);"
+          tsil "complete(op<bit_or>(left, right));"
       f?:
         prefer_fixed_native true
         requires []
@@ -727,6 +759,22 @@ prim<v:=(v,v)> binary_or(left, right):
               )
             );
           """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
+            complete(call<primitive=reinterpret[BitVec, Vec]>(
+              call<primitive=@self[BitVec]>(
+                call<primitive=reinterpret[Vec, BitVec]>(left),
+                call<primitive=reinterpret[Vec, BitVec]>(right)
+              )
+            ));
+          """
 
 prim<v:=(v,v)> binary_xor(left, right):
   operation bit_xor
@@ -777,7 +825,7 @@ prim<v:=(v,v)> binary_xor(left, right):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(left ^ right);"
+          tsil "complete(op<bit_xor>(left, right));"
       f?:
         prefer_fixed_native true
         requires []
@@ -977,6 +1025,22 @@ prim<v:=(v,v)> binary_xor(left, right):
               )
             );
           """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
+            complete(call<primitive=reinterpret[BitVec, Vec]>(
+              call<primitive=@self[BitVec]>(
+                call<primitive=reinterpret[Vec, BitVec]>(left),
+                call<primitive=reinterpret[Vec, BitVec]>(right)
+              )
+            ));
+          """
 
 prim<v:=v> inv(data):
   operation bit_not
@@ -1074,6 +1138,21 @@ prim<v:=v> inv(data):
                 value(vector::runtime_length)
               )
             );
+          """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
+            complete(call<primitive=reinterpret[BitVec, Vec]>(
+              call<primitive=@self[BitVec]>(
+                call<primitive=reinterpret[Vec, BitVec]>(data)
+              )
+            ));
           """
 
 prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
@@ -1267,6 +1346,23 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
                 call<primitive=set_zero[Vec]>()
               )
             );
+          """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
+            complete(call<primitive=reinterpret[BitVec, Vec]>(
+              call<primitive=@self[BitVec], attrs[mask=zero]>(
+                mask,
+                call<primitive=reinterpret[Vec, BitVec]>(left),
+                call<primitive=reinterpret[Vec, BitVec]>(right)
+              )
+            ));
           """
 
 prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
@@ -1464,6 +1560,23 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
               )
             );
           """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
+            complete(call<primitive=reinterpret[BitVec, Vec]>(
+              call<primitive=@self[BitVec], attrs[mask=pass_through]>(
+                mask,
+                call<primitive=reinterpret[Vec, BitVec]>(left),
+                call<primitive=reinterpret[Vec, BitVec]>(right)
+              )
+            ));
+          """
 
 prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
   operation bit_and_not
@@ -1658,6 +1771,23 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
               )
             );
           """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
+            complete(call<primitive=reinterpret[BitVec, Vec]>(
+              call<primitive=@self[BitVec], attrs[mask=zero]>(
+                mask,
+                call<primitive=reinterpret[Vec, BitVec]>(left),
+                call<primitive=reinterpret[Vec, BitVec]>(right)
+              )
+            ));
+          """
 
 prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
   operation bit_and_not
@@ -1823,6 +1953,23 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
                 left
               )
             );
+          """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
+            complete(call<primitive=reinterpret[BitVec, Vec]>(
+              call<primitive=@self[BitVec], attrs[mask=pass_through]>(
+                mask,
+                call<primitive=reinterpret[Vec, BitVec]>(left),
+                call<primitive=reinterpret[Vec, BitVec]>(right)
+              )
+            ));
           """
 
 prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
@@ -2016,6 +2163,23 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
                 call<primitive=set_zero[Vec]>()
               )
             );
+          """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
+            complete(call<primitive=reinterpret[BitVec, Vec]>(
+              call<primitive=@self[BitVec], attrs[mask=zero]>(
+                mask,
+                call<primitive=reinterpret[Vec, BitVec]>(left),
+                call<primitive=reinterpret[Vec, BitVec]>(right)
+              )
+            ));
           """
 
 prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
@@ -2213,6 +2377,23 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
               )
             );
           """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
+            complete(call<primitive=reinterpret[BitVec, Vec]>(
+              call<primitive=@self[BitVec], attrs[mask=pass_through]>(
+                mask,
+                call<primitive=reinterpret[Vec, BitVec]>(left),
+                call<primitive=reinterpret[Vec, BitVec]>(right)
+              )
+            ));
+          """
 
 prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
   operation bit_xor
@@ -2405,6 +2586,23 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
                 call<primitive=set_zero[Vec]>()
               )
             );
+          """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
+            complete(call<primitive=reinterpret[BitVec, Vec]>(
+              call<primitive=@self[BitVec], attrs[mask=zero]>(
+                mask,
+                call<primitive=reinterpret[Vec, BitVec]>(left),
+                call<primitive=reinterpret[Vec, BitVec]>(right)
+              )
+            ));
           """
 
 prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
@@ -2601,6 +2799,23 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
                 left
               )
             );
+          """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
+            complete(call<primitive=reinterpret[BitVec, Vec]>(
+              call<primitive=@self[BitVec], attrs[mask=pass_through]>(
+                mask,
+                call<primitive=reinterpret[Vec, BitVec]>(left),
+                call<primitive=reinterpret[Vec, BitVec]>(right)
+              )
+            ));
           """
 
 prim<v:=(m,v)>[mask=zero] inv(mask, data):
@@ -2810,6 +3025,22 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
                 call<primitive=set_zero[Vec]>()
               )
             );
+          """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
+            complete(call<primitive=reinterpret[BitVec, Vec]>(
+              call<primitive=@self[BitVec], attrs[mask=zero]>(
+                mask,
+                call<primitive=reinterpret[Vec, BitVec]>(data)
+              )
+            ));
           """
 
 prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
@@ -3022,4 +3253,20 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
                 data
               )
             );
+          """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(BitVec, vector::as_base(base::unsigned_of(base::in)));
+            complete(call<primitive=reinterpret[BitVec, Vec]>(
+              call<primitive=@self[BitVec], attrs[mask=pass_through]>(
+                mask,
+                call<primitive=reinterpret[Vec, BitVec]>(data)
+              )
+            ));
           """

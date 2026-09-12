@@ -4,21 +4,25 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from tslc.catalog.preconditions import PreconditionKind
 from tslc.value_tests.case_capabilities import DEFAULT_VALUE_TEST_CASE_REQUIREMENTS
 from tslc.value_tests.case_components import (
     InputArity,
     ValueTestCaseRequirements,
+    ValueTestCheckedPrecondition,
     ValueTestDifferential,
     ValueTestExpectation,
     ValueTestFailure,
     ValueTestFact,
     ValueTestIndex,
     ValueTestInputs,
+    ValueTestInvalidPreconditionValue,
     ValueTestInvocation,
     ValueTestMemory,
     ValueTestRepresentation,
     ValueTestScalable,
     ValueTestTarget,
+    ValueTestTargetImaskHarness,
 )
 
 
@@ -42,9 +46,11 @@ class ValueTestCasePlan:
     index: ValueTestIndex | None = None
     memory: ValueTestMemory | None = None
     representation: ValueTestRepresentation | None = None
+    target_imask_harness: ValueTestTargetImaskHarness | None = None
     scalable: ValueTestScalable | None = None
     differential: ValueTestDifferential | None = None
     failure: ValueTestFailure | None = None
+    checked_precondition: ValueTestCheckedPrecondition | None = None
     # Optional generated C++ header group needed by this case (for example
     # ``clang`` for compiler-builtin overlay extensions). The runner guards
     # such cases and the build emits a matching opt-in value-test target.
@@ -65,6 +71,8 @@ class ValueTestCasePlan:
         self._validate_inputs(requirements)
         self._validate_fuzz(requirements)
         self._validate_differential_helpers(requirements)
+        self._validate_target_imask_harness()
+        self._validate_checked_precondition()
 
     def _validate_common_fields(self) -> None:
         for field_name in (
@@ -98,6 +106,17 @@ class ValueTestCasePlan:
             raise ValueError(
                 f"value-test case {self.function_name!r} compiler capabilities must be "
                 "sorted and unique"
+            )
+
+    def _validate_target_imask_harness(self) -> None:
+        harness = self.target_imask_harness
+        if harness is None:
+            return
+        if self.kind != "target_imask":
+            raise ValueError("target-imask predicate harness requires target_imask kind")
+        if len(harness.mask_bits) != len(self.inputs.masks):
+            raise ValueError(
+                "target-imask predicate harness mask bits must match mask inputs"
             )
 
     def _validate_required_facts(
@@ -261,8 +280,85 @@ class ValueTestCasePlan:
             ),
             ValueTestFact.DIFFERENTIAL: self.differential is not None,
             ValueTestFact.FAILURE: self.failure is not None,
+            ValueTestFact.CHECKED_PRECONDITION: self.checked_precondition is not None,
         }
         return checks[fact]
+
+    def _validate_checked_precondition(self) -> None:
+        checked = self.checked_precondition
+        if checked is None:
+            return
+        allowed_invalid_values = {
+            PreconditionKind.LANE_INDEX_IN_RANGE: {
+                ValueTestInvalidPreconditionValue.LANE_COUNT,
+                ValueTestInvalidPreconditionValue.SIZE_MAX,
+            },
+            PreconditionKind.ACTIVE_DIVISOR_NONZERO: {
+                ValueTestInvalidPreconditionValue.ACTIVE_DIVISOR_ZERO,
+            },
+            PreconditionKind.EQUAL_LANE_COUNT: {
+                ValueTestInvalidPreconditionValue.LANE_COUNT_MISMATCH,
+            },
+            PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID: {
+                ValueTestInvalidPreconditionValue.INDEXED_ADDRESS_OUT_OF_RANGE,
+                ValueTestInvalidPreconditionValue.INDEXED_ADDRESS_MISALIGNED,
+            },
+        }
+        if checked.invalid_value not in allowed_invalid_values.get(
+            checked.kind, set()
+        ):
+            raise ValueError(
+                f"value-test case {self.function_name!r} has an invalid-value "
+                f"strategy incompatible with {checked.kind.value!r}"
+            )
+        if checked.parameter_index >= len(self.invocation.param_kinds):
+            raise ValueError(
+                f"value-test case {self.function_name!r} checked parameter "
+                "index is outside the invocation signature"
+            )
+        expected_kind = (
+            "usize"
+            if checked.kind is PreconditionKind.LANE_INDEX_IN_RANGE
+            else "v"
+            if checked.kind
+            in {
+                PreconditionKind.ACTIVE_DIVISOR_NONZERO,
+                PreconditionKind.EQUAL_LANE_COUNT,
+            }
+            else "cptr_or_ptr"
+            if checked.kind is PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID
+            else None
+        )
+        if expected_kind is None:
+            raise ValueError(
+                f"value-test case {self.function_name!r} has unsupported checked "
+                f"precondition {checked.kind.value!r}"
+            )
+        actual_kind = self.invocation.param_kinds[checked.parameter_index]
+        kind_matches = (
+            actual_kind in {"cptr", "ptr"}
+            if expected_kind == "cptr_or_ptr"
+            else actual_kind == expected_kind
+        )
+        if not kind_matches:
+            raise ValueError(
+                f"value-test case {self.function_name!r} checked precondition "
+                f"must bind a runtime {expected_kind} parameter"
+            )
+        if checked.kind is PreconditionKind.EQUAL_LANE_COUNT and self.target is None:
+            raise ValueError(
+                f"value-test case {self.function_name!r} equal-lane-count "
+                "precondition requires a target vector"
+            )
+        if checked.kind in {
+            PreconditionKind.LANE_INDEX_IN_RANGE,
+            PreconditionKind.ACTIVE_DIVISOR_NONZERO,
+            PreconditionKind.EQUAL_LANE_COUNT,
+        } and any(len(values) != self.lanes for values in self.inputs.vectors):
+            raise ValueError(
+                f"value-test case {self.function_name!r} checked vector inputs "
+                f"must contain {self.lanes} lane values"
+            )
 
     def _expected_error(self, expectation: str) -> str:
         return (

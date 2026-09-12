@@ -56,7 +56,10 @@ def test_body_envelopes_carry_selector_paths(
         if primitive.name == "add" and not primitive.attributes
     )
     by_path = {env.selector_path: env.payload_text for env in add.body_envelopes}
-    assert by_path[("scalar", "arith")].strip() == "complete(op<add>(left, right));"
+    assert (
+        by_path[("scalar", "arith")].strip()
+        == "complete(helper<arith_add>(left, right));"
+    )
     avx2_int = by_path[("avx2", "?i?")]
     assert "intrin<add, build[" in avx2_int
     assert "suffix=base::signed_of(base::in)" in avx2_int

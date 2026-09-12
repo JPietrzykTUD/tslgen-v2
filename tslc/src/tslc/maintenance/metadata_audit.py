@@ -21,13 +21,11 @@ from tslc.authoring import check_documents
 from tslc.backend.registry import registered_backend_ids
 from tslc.catalog.model import ImplementationSafety
 from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS
-from tslc.catalog.signatures import parse_signature
 from tslc.diagnostics import Diagnostic, SourceSpan, format_diagnostic, has_errors
 from tslc.ir.scan import scan
 from tslc.lower.region_safety import direct_implementation_safety
 from tslc.pipeline import GenerationRequest, generate
 from tslc.sources import SourceDocument, SourceLoader, expand_source_paths
-from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 from tslc.syntax.ast import (
     OuterTslParseResult,
     ParsedImplementationSelectorEntry,
@@ -100,12 +98,14 @@ def audit_metadata(
     profiles: Iterable[str] = _DEFAULT_PROFILES,
     primitives: Iterable[str] | None = None,
     type_tags: Iterable[str] = _DEFAULT_TYPES,
-    backends: Iterable[str] = registered_backend_ids(),
+    backends: Iterable[str] | None = None,
 ) -> MetadataAuditResult:
     """Return source metadata suggestions without writing files."""
 
     selected_checks = frozenset(checks)
-    backend_ids = tuple(backends)
+    backend_ids = (
+        tuple(backends) if backends is not None else registered_backend_ids()
+    )
     inputs, diagnostics = _load_inputs(source_paths, backend_ids)
     if inputs is None:
         return MetadataAuditResult(suggestions=(), diagnostics=diagnostics)
@@ -205,7 +205,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--profiles", default="scalar,sse2,avx,avx2,skylake")
     parser.add_argument("--primitives", default=None, help="comma-separated primitive names")
     parser.add_argument("--types", default=",".join(_DEFAULT_TYPES))
-    parser.add_argument("--backends", default="cpp,rust")
+    parser.add_argument("--backends", default=None)
     parser.add_argument(
         "--apply",
         choices=("safety", "requires", "all"),
@@ -232,7 +232,9 @@ def main(argv: list[str] | None = None) -> int:
         profiles=tuple(split_csv(args.profiles)),
         primitives=tuple(split_csv(args.primitives)) if args.primitives else None,
         type_tags=tuple(split_csv(args.types)),
-        backends=tuple(split_csv(args.backends)),
+        backends=(
+            tuple(split_csv(args.backends)) if args.backends is not None else None
+        ),
     )
     for diagnostic in result.diagnostics:
         print(format_diagnostic(diagnostic), file=sys.stderr)
@@ -308,7 +310,7 @@ def safety_metadata_suggestions(
             continue
         if not entry.body_envelopes:
             continue
-        required = _direct_safety_facts(primitive, entry)
+        required = _direct_safety_facts(entry)
         local = _entry_safety(entry)
         if _safety_contains(local, required):
             continue
@@ -321,7 +323,7 @@ def safety_metadata_suggestions(
                 path=entry.source.path,
                 line=entry.source.line,
                 subject=f"{primitive.name} {'/'.join(ref.selector_path)}",
-                reason="direct body/signature facts require safety metadata",
+                reason="typed implementation-body facts require safety metadata",
                 before=_render_safety_block(_child_indent(entry), local).rstrip(),
                 after=_render_safety_block(_child_indent(entry), after).rstrip(),
                 edit=edit,
@@ -332,22 +334,12 @@ def safety_metadata_suggestions(
 
 
 def _direct_safety_facts(
-    primitive: ParsedPrimitiveDeclaration,
     entry: ParsedImplementationSelectorEntry,
 ) -> ImplementationSafety:
     safety = ImplementationSafety()
     for envelope in entry.body_envelopes:
         safety = safety.merge(
             direct_implementation_safety(scan(envelope.payload_text))
-        )
-    shape = parse_signature(primitive.signature)
-    if shape is not None and DEFAULT_SUPPORT_POLICY.requires_unsafe_frame(shape):
-        safety = safety.merge(
-            ImplementationSafety(
-                internal_unsafe=True,
-                caller_unsafe=True,
-                reasons=frozenset({"raw_pointer"}),
-            )
         )
     return safety
 

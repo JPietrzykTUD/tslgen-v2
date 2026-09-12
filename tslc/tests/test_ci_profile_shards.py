@@ -11,10 +11,15 @@ from pathlib import Path
 import pytest
 
 _RUST_COEXISTENCE_NAME = "rust-x86-coexistence"
-_RUST_COEXISTENCE_PROFILES = ("sse", "sse2", "sse3", "avx", "avx2", "knl")
-_DISTRIBUTABLE_GENERATOR = (
-    "bash .github/scripts/generate_distributable_project.sh"
+_RELEASE_POLICY_PATH = Path("supplementary/release/tsl-v1-policy.json")
+_RELEASE_POLICY = json.loads(_RELEASE_POLICY_PATH.read_text(encoding="utf-8"))
+_RUST_COEXISTENCE_PROFILES = tuple(
+    _RELEASE_POLICY["backend_profiles"]["rust"]["profiles"]
 )
+_REFERENCE_GENERATOR = (
+    "bash .github/scripts/generate_release_reference_project.sh"
+)
+_BUNDLE_GENERATOR = "python .github/scripts/build_release_bundles.py"
 
 
 def test_generated_profile_shards_preserve_exhaustive_and_coexistence_lanes(
@@ -28,6 +33,9 @@ def test_generated_profile_shards_preserve_exhaustive_and_coexistence_lanes(
         (
             jq,
             "-c",
+            "--slurpfile",
+            "release_policy",
+            str(_RELEASE_POLICY_PATH),
             "-f",
             ".github/scripts/profile_shards.jq",
             str(machine_profiles_path),
@@ -146,40 +154,196 @@ def test_generated_profile_shards_preserve_exhaustive_and_coexistence_lanes(
             "profiles": "rvv",
         }
     ]
+    sve_profiles = {"sve", "sve128", "sve256", "sve512"}
+    assert not any(
+        sve_profiles & set(shard["profiles"].split(","))
+        for shard in exhaustive_shards
+        if shard["backend"] == "rust"
+    )
 
     values_workflow = Path(".github/workflows/generated-values.yml").read_text(
         encoding="utf-8"
     )
+    assert 'quality_args+=(--quality)' in values_workflow
     assert 'TSLC_QEMU_RISCV64="/usr/bin/qemu-riscv64"' in values_workflow
-    assert "vlen=256,elen=64" in values_workflow
-    assert "timeout --signal=KILL 60s /usr/bin/qemu-riscv64" in values_workflow
+    assert "vlen=256,elen=64" not in values_workflow
+    assert "timeout --signal=KILL 60s /usr/bin/qemu-riscv64" not in values_workflow
+    rvv = next(
+        profile
+        for family_profiles in source.values()
+        for profile in family_profiles
+        if profile["name"] == "rvv"
+    )
+    assert [
+        rvv["runner"]["vector_bits"],
+        *(variant["vector_bits"] for variant in rvv["runner"]["variants"]),
+    ] == [128, 256, 512]
 
 
-def test_package_and_docs_generate_a_supported_distributable_profile_set() -> None:
-    helper = Path(".github/scripts/generate_distributable_project.sh").read_text(
+def test_rust_release_quality_runs_msrv_and_current_stable() -> None:
+    workflow = Path(".github/workflows/generated-values.yml").read_text(
         encoding="utf-8"
     )
-    assert "-f .github/scripts/profile_shards.jq" in helper
-    assert '.purpose == "coexistence"' in helper
+    section = workflow.split("  generated-rust-release-quality:\n", 1)[1].split(
+        "\n  generated-", 1
+    )[0]
+    dockerfile = Path(".devcontainer/Dockerfile").read_text(encoding="utf-8")
+
+    assert "rust_release_profiles:" in workflow
+    assert ".backend_profiles.rust" in workflow
+    assert '.profiles | join(",")' in workflow
+    assert "name: stable" in section
+    assert "name: 1.89.0" in section
+    assert 'RUSTUP_TOOLCHAIN="${{ matrix.toolchain.name }}"' in section
+    assert '--profiles "${TSLC_RUST_RELEASE_PROFILES}"' in section
+    assert "--quality" in section
+    assert "./dev.sh test" in section
+    assert "ARG RUST_MSRV=1.89.0" in dockerfile
+    assert 'rustup toolchain install "${RUST_MSRV}"' in dockerfile
+
+
+def test_scalable_showcase_is_a_required_generated_profile_gate() -> None:
+    workflow = Path(".github/workflows/generated-values.yml").read_text(
+        encoding="utf-8"
+    )
+    section = workflow.split("  generated-scalable-showcase:\n", 1)[1].split(
+        "\n  generated-", 1
+    )[0]
+    required = workflow.split("  required-generated:\n", 1)[1]
+
+    assert "needs.scope.outputs.generated_profiles == 'true'" in section
+    assert "tslc/tests/test_scalable_release_showcase.py" in section
+    assert "tslc/tests/test_rvv_downstream_consumer.py" in section
+    assert "--run-generated-builds" in section
+    assert "generated-scalable-showcase" in required
+    assert "needs['generated-scalable-showcase'].result" in required
+
+
+def test_clang_and_msvc_quality_matrices_cover_non_oneapi_x86_profiles(
+    machine_profiles_path: Path,
+) -> None:
+    jq = shutil.which("jq")
+    if jq is None:
+        pytest.skip("jq is required to exercise the GitHub Actions profile shard script")
+    completed = subprocess.run(
+        (
+            jq,
+            "-c",
+            "--slurpfile",
+            "release_policy",
+            str(_RELEASE_POLICY_PATH),
+            "-f",
+            ".github/scripts/profile_shards.jq",
+            str(machine_profiles_path),
+        ),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    shards = json.loads(completed.stdout)
+    quality_shards = [
+        shard
+        for shard in shards
+        if shard["backend"] == "cpp"
+        and shard["name"].startswith("cpp-x86-")
+        and "oneapi-fpga" not in shard["name"]
+    ]
+    matrix_profiles = {
+        profile
+        for shard in quality_shards
+        for profile in shard["profiles"].split(",")
+    }
+    source = json.loads(machine_profiles_path.read_text(encoding="utf-8"))
+    expected = {
+        profile["name"]
+        for profile in source["x86"]
+        if profile.get("backend_compiler_roles", {}).get("cpp") is None
+        and _supports_backend(profile, "cpp")
+    }
+    assert matrix_profiles == expected
+
+    workflow = Path(".github/workflows/generated-values.yml").read_text(
+        encoding="utf-8"
+    )
+    assert 'x86_quality_shards="$(' in workflow
+    assert 'and ((.name | contains("oneapi-fpga")) | not)' in workflow
+    for job, runner, compiler in (
+        ("generated-msvc-quality", "windows-2022", "cl.exe"),
+        ("generated-clang-quality", "ubuntu-latest", "/usr/bin/clang++-21"),
+    ):
+        section = workflow.split(f"  {job}:\n", 1)[1].split("\n  generated-", 1)[0]
+        assert f"runs-on: {runner}" in section
+        assert "fromJson(needs['profile-shards'].outputs.x86_quality_shards)" in section
+        assert f"--compiler cpp={compiler}" in section
+        assert "--quality" in section
+
+
+def test_package_and_docs_generate_contract_owned_reference_and_bundles() -> None:
+    helper = Path(".github/scripts/generate_release_reference_project.sh").read_text(
+        encoding="utf-8"
+    )
+    assert "python -m tslc release contract --format json" in helper
     assert helper.count("./dev.sh generate") == 1
+    assert '--backend-profiles "cpp=$cpp_profiles"' in helper
     assert '--backend-profiles "rust=$rust_profiles"' in helper
+    assert '--profiles "$all_profiles"' in helper
     assert "--backends cpp,rust" in helper
+
+    values_workflow = Path(".github/workflows/generated-values.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "--slurpfile release_policy supplementary/release/tsl-v1-policy.json" in (
+        values_workflow
+    )
 
     package_workflow = Path(".github/workflows/generated-package.yml").read_text(
         encoding="utf-8"
     )
-    assert _DISTRIBUTABLE_GENERATOR in package_workflow
-    assert package_workflow.count(_DISTRIBUTABLE_GENERATOR) == 1
+    assert _REFERENCE_GENERATOR in package_workflow
+    assert package_workflow.count(_REFERENCE_GENERATOR) == 1
+    assert _BUNDLE_GENERATOR in package_workflow
+    assert package_workflow.count(_BUNDLE_GENERATOR) == 1
     assert not Path(".github/workflows/docs.yml").exists()
     assert "./dev.sh generate --backends cpp,rust" not in package_workflow
     assert "./dev.sh document" not in package_workflow
     assert "python -m tslc.maintenance.documentation" in package_workflow
-    assert "Download generated package" in package_workflow
+    assert "tsl-generated-reference-${{ github.sha }}" in package_workflow
 
     consumer_verifier = Path(
         "supplementary/ci/verify_generated_consumers.sh"
     ).read_text(encoding="utf-8")
     assert 'default-features = false, features = ["scalar"]' not in consumer_verifier
+    for profile in ("scalar", "avx2", "sve", "rvv"):
+        assert f"build_cpp_consumer {profile}" in consumer_verifier
+    assert "  wasm32-simd128 \\\n" in consumer_verifier
+    assert "load_checked<Vec, false>" in consumer_verifier
+    assert "store_checked<Vec, false>" in consumer_verifier
+    assert "supplementary/docs/site/checked_api_example.cpp" in consumer_verifier
+    assert "tsl_cpp_documented_checked_example" in consumer_verifier
+    assert "package_paths_before" in consumer_verifier
+    assert "package_paths_after" in consumer_verifier
+    assert "tsl-v1-package-probe.txt" in consumer_verifier
+
+    archive_verifier = Path(
+        "supplementary/ci/verify_release_archive_consumers.sh"
+    ).read_text(encoding="utf-8")
+    assert "tar -xzf" in archive_verifier
+    assert '"$archive_root/bundles/cpp-scalar"' in archive_verifier
+    assert '"$archive_root/bundles/rust-release"' in archive_verifier
+    assert ".tsl-release-bundles.json" in archive_verifier
+    assert "archive_cpp_consumer" in archive_verifier
+    assert "cargo new" in archive_verifier
+    assert 'cargo run --quiet --locked' in archive_verifier
+    assert "Consume the packaged archive from clean projects" in package_workflow
+    assert "verify_release_archive_consumers.sh" in package_workflow
+    assert "Run the scalable showcase from packaged target bundles" in package_workflow
+    assert "TSL_RELEASE_ARCHIVE" in Path(
+        "tslc/tests/test_scalable_release_showcase.py"
+    ).read_text(encoding="utf-8")
+    assert '-e TSLC_RELEASE_ARCHIVE="tslctmp/artifacts/tsl-generated-${GITHUB_SHA}.tar.gz"' in (
+        package_workflow
+    )
+    assert '"${TSLC_RELEASE_ARCHIVE}"' in package_workflow
 
 
 def test_rust_examples_use_static_profile_selection_api() -> None:

@@ -19,19 +19,29 @@ from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.rust_const_args import RUST_CONST_ARG_WRAPPERS
 from tslc.backend.rust_implementation_state import const_arg_type
 from tslc.backend.rust_validation import validate_rust_profiles
+from tslc.catalog.arithmetic import (
+    ArithmeticOperandBinding,
+    ArithmeticOperandRole,
+)
+from tslc.catalog.call_preconditions import CallPreconditionObligation
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import (
     BackendExtensionMetadata,
     Extension,
     ExtensionMetadata,
     MaskPolicy,
+    ImplementationSafety,
 )
+from tslc.catalog.preconditions import PreconditionKind, PrimitivePrecondition
+from tslc.catalog.semantics import OperandBinding, OperandRole
 from tslc.catalog.target_families import (
     BackendProfileFamily,
     ExtensionFamilyCapability,
     ProfileFamilyCapability,
 )
 from tslc.diagnostics import SourceSpan
+from tslc.lower.dependencies import CallDependencyOrigin
+from tslc.lower.primitive_semantics import LoweredPrimitiveSemantics
 
 
 @dataclass(frozen=True)
@@ -47,6 +57,138 @@ class _Specialization:
     immediate: tuple[str, str] | None = None
     generic_params: tuple[tuple[str, str, str], ...] = ()
     source: SourceSpan | None = None
+    safety: ImplementationSafety = ImplementationSafety()
+    primitive_semantics: LoweredPrimitiveSemantics = LoweredPrimitiveSemantics()
+    unavailable_checked_dependency_origins: tuple[CallDependencyOrigin, ...] = ()
+    unresolved_call_preconditions: tuple[CallPreconditionObligation, ...] = ()
+
+
+def test_cpp_checked_twin_rejects_an_authored_name_collision() -> None:
+    source = SourceSpan(Path("lane.tsl"), 6, 18, 6, 37)
+    precondition = PrimitivePrecondition(
+        PreconditionKind.LANE_INDEX_IN_RANGE,
+        (
+            OperandBinding(OperandRole.PRIMARY, "data", 0, "v"),
+            OperandBinding(OperandRole.INDEX, "index", 1, "usize"),
+        ),
+        source,
+    )
+    lane = _Specialization(
+        "scalar",
+        result_kind="s",
+        param_kinds=("v", "usize"),
+        primitive_semantics=LoweredPrimitiveSemantics(
+            preconditions=(precondition,)
+        ),
+    )
+    profile = _profile(
+        cpp={
+            "lane_at": (lane,),
+            "lane_at_checked": (_Specialization("scalar"),),
+        },
+        extensions={"scalar": _extension("scalar", cpp=True)},
+    )
+
+    diagnostic = next(
+        item
+        for item in validate_cpp_profiles((profile,))
+        if item.code == "TSL-BACKEND-CPP-CHECKED-NAME-COLLISION"
+    )
+    assert diagnostic.span == source
+
+
+def test_rust_checked_twin_rejects_an_authored_name_collision() -> None:
+    source = SourceSpan(Path("lane.tsl"), 6, 18, 6, 37)
+    precondition = PrimitivePrecondition(
+        PreconditionKind.LANE_INDEX_IN_RANGE,
+        (
+            OperandBinding(OperandRole.PRIMARY, "data", 0, "v"),
+            OperandBinding(OperandRole.INDEX, "index", 1, "usize"),
+        ),
+        source,
+    )
+    lane = _Specialization(
+        "scalar",
+        result_kind="s",
+        param_kinds=("v", "usize"),
+        primitive_semantics=LoweredPrimitiveSemantics(
+            preconditions=(precondition,)
+        ),
+    )
+    profile = _profile(
+        rust={
+            "lane_at": (lane,),
+            "lane_at_checked": (_Specialization("scalar"),),
+        },
+        extensions={"scalar": _extension("scalar", rust=True)},
+    )
+
+    diagnostic = next(
+        item
+        for item in validate_rust_profiles((profile,))
+        if item.code == "TSL-BACKEND-RUST-CHECKED-NAME-COLLISION"
+    )
+    assert diagnostic.span == source
+
+
+@pytest.mark.parametrize(
+    ("backend", "validate", "diagnostic_code"),
+    (
+        ("cpp", validate_cpp_profiles, "TSL-BACKEND-CPP-CHECKED-NAME-COLLISION"),
+        (
+            "rust",
+            validate_rust_profiles,
+            "TSL-BACKEND-RUST-CHECKED-NAME-COLLISION",
+        ),
+    ),
+)
+def test_inapplicable_checked_condition_does_not_create_a_name_collision(
+    backend: str,
+    validate,
+    diagnostic_code: str,
+) -> None:
+    precondition = PrimitivePrecondition(
+        PreconditionKind.ACTIVE_DIVISOR_NONZERO,
+        (
+            ArithmeticOperandBinding(
+                ArithmeticOperandRole.PRIMARY,
+                "dividend",
+                0,
+                0,
+                "v",
+            ),
+            ArithmeticOperandBinding(
+                ArithmeticOperandRole.DIVISOR,
+                "divisor",
+                1,
+                1,
+                "v",
+            ),
+        ),
+    )
+    division = _Specialization(
+        "scalar",
+        type_tag="f32",
+        base_type_spelling="f32",
+        result_kind="v",
+        param_kinds=("v", "v"),
+        primitive_semantics=LoweredPrimitiveSemantics(
+            preconditions=(precondition,)
+        ),
+    )
+    profile = _profile(
+        **{
+            backend: {
+                "div": (division,),
+                "div_checked": (_Specialization("scalar", type_tag="f32"),),
+            }
+        },
+        extensions={"scalar": _extension("scalar", **{backend: True})},
+    )
+
+    diagnostics = validate((profile,))
+
+    assert diagnostic_code not in {item.code for item in diagnostics}
 
 
 def test_cpp_unsupported_width_indexed_register_is_source_located() -> None:
@@ -148,6 +290,24 @@ def test_cpp_clang_builtin_capabilities_use_has_builtin_probes() -> None:
             f"TSL_COMPILER_HAS_{capability_id.upper()}"
         )
         assert capability.preprocessor_probe == f"__has_builtin({builtin})"
+
+
+def test_cpp_x86_narrow_reduction_capability_excludes_msvc_headers() -> None:
+    capability = cpp_compiler_capability("x86_narrow_reductions")
+
+    assert capability.condition_macro == (
+        "TSL_COMPILER_HAS_X86_NARROW_REDUCTIONS"
+    )
+    assert capability.preprocessor_probe == (
+        "!defined(_MSC_VER) && (defined(__GNUC__) || defined(__clang__))"
+    )
+    assert capability.compile_probe_source is None
+    assert capability.compiler_ids == (
+        "GNU",
+        "Clang",
+        "AppleClang",
+        "IntelLLVM",
+    )
 
 
 def test_cpp_capability_header_defaults_resolve_every_probe_to_boolean() -> None:

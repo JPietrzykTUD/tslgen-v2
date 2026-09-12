@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import replace
 
+from tslc.backend.checked_api import public_call_requires_unsafe
 from tslc.backend.primitive_facade import plan_dataparallel_primitive_facade
 from tslc.backend.rust_api_candidates import (
     _Candidate,
@@ -91,6 +92,7 @@ def _curated_methods(
                         source_primitive_name=candidate.key.source_name,
                         type_tags=method.type_tags,
                         shape_keys=(),
+                        lower_call_unsafe=method.lower_call_unsafe,
                         caller_unsafe=False,
                         invocation=invocation,
                         conversion_pairs=(),
@@ -123,6 +125,7 @@ def _curated_methods(
                         source_primitive_name=candidate.key.source_name,
                         type_tags=method.type_tags,
                         shape_keys=(),
+                        lower_call_unsafe=method.lower_call_unsafe,
                         caller_unsafe=False,
                         invocation=invocation,
                         conversion_pairs=(),
@@ -156,6 +159,7 @@ def _curated_methods(
                         source_primitive_name=candidate.key.source_name,
                         type_tags=method.type_tags,
                         shape_keys=(),
+                        lower_call_unsafe=method.lower_call_unsafe,
                         caller_unsafe=False,
                         invocation=invocation,
                         conversion_pairs=method.conversion_pairs,
@@ -184,7 +188,8 @@ def _bit_conversions(
         ):
             continue
         safety_values = {
-            spec.safety.caller_unsafe for _profile, spec in candidate.specs
+            public_call_requires_unsafe((spec,))
+            for _profile, spec in candidate.specs
         }
         if safety_values != {False}:
             continue
@@ -607,13 +612,11 @@ def _arithmetic_guarantees_admit(
         },
         ArithmeticOperation.DIVISION: {
             ArithmeticGuarantee.INTEGER_QUOTIENT_TOWARD_ZERO,
-            ArithmeticGuarantee.INTEGER_ZERO_DIVISOR_FAILS,
             ArithmeticGuarantee.SIGNED_MIN_DIV_NEG_ONE_RETURNS_MIN,
             ArithmeticGuarantee.FLOATING_DIVISION_IEEE754_VALUES,
         },
         ArithmeticOperation.REMAINDER: {
             ArithmeticGuarantee.INTEGER_REMAINDER_HAS_DIVIDEND_SIGN,
-            ArithmeticGuarantee.INTEGER_ZERO_DIVISOR_FAILS,
             ArithmeticGuarantee.SIGNED_MIN_REM_NEG_ONE_RETURNS_ZERO,
             ArithmeticGuarantee.FLOATING_REMAINDER_TRUNCATING,
         },
@@ -711,6 +714,7 @@ def _operation_bindings(
                 (
                     requirement.memory_access,
                     requirement.memory_addressing,
+                    requirement.memory_payload_extent,
                 )
                 if requirement.memory_access is not None
                 else None
@@ -746,6 +750,9 @@ def _operation_bindings(
                 memory_access=key.memory[0] if key.memory is not None else None,
                 memory_addressing=(
                     key.memory[1] if key.memory is not None else None
+                ),
+                memory_payload_extent=(
+                    key.memory[2] if key.memory is not None else None
                 ),
                 memory_alignment_axis_name=memory_alignment_axis_name,
                 memory_alignment_modes=memory_alignment_modes,

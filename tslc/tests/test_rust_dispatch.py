@@ -291,8 +291,9 @@ def test_generated_dispatch_preserves_public_and_whole_loop_boundaries(
     assert "Avx2" not in public_boundary
     assert "Sse" not in public_boundary
     assert "tsl_avx2" not in public_boundary
-    assert "Dispatcher::new().transform_binary" in external
-    assert "algorithms::transform_binary" in external
+    assert "transform_binary_checked" in external
+    assert "Dispatcher::new()" in external
+    assert "algorithms::transform_binary_checked" in external
     assert "impl<Vector> BinaryKernel<Vector> for StatefulAdd" in external
 
     entries = dispatch[

@@ -88,32 +88,35 @@ fn main() {
             let mut masks = vec![$init; mask_count];
 
             let mut less_than_for_mask = LessThan;
-            let produced = profile::algo::predicate_binary_mask_layout::<_, $layout, _, i32>(
-                policy,
-                &mut less_than_for_mask,
-                &left,
-                &right,
-                &mut masks,
-            );
+            let produced =
+                profile::algo::predicate_binary_mask_layout_checked::<_, $layout, _, i32>(
+                    policy,
+                    &mut less_than_for_mask,
+                    &left,
+                    &right,
+                    &mut masks,
+                )
+                .expect("checked algorithm preconditions");
             assert_eq!(produced, masks.len());
 
             let mut masked_negative = Negative;
-            let masked_unary = profile::algo::count_masked_unary_mask_layout::<_, $layout, _, i32>(
-                policy,
-                &mut masked_negative,
-                &left,
-                &masks,
-            );
+            let masked_unary = profile::algo::count_masked_unary_mask_layout_checked::<
+                _,
+                $layout,
+                _,
+                i32,
+            >(policy, &mut masked_negative, &left, &masks)
+            .expect("checked algorithm preconditions");
             assert_eq!(masked_unary, expected_masked);
 
             let mut masked_left_negative = LeftNegative;
-            let masked_binary = profile::algo::count_masked_binary_mask_layout::<_, $layout, _, i32>(
-                policy,
-                &mut masked_left_negative,
-                &left,
-                &right,
-                &masks,
-            );
+            let masked_binary = profile::algo::count_masked_binary_mask_layout_checked::<
+                _,
+                $layout,
+                _,
+                i32,
+            >(policy, &mut masked_left_negative, &left, &right, &masks)
+            .expect("checked algorithm preconditions");
             assert_eq!(masked_binary, expected_masked);
         }};
     }
@@ -127,7 +130,8 @@ fn main() {
             assert_eq!(unary, expected_unary);
 
             let mut less_than = LessThan;
-            let binary = profile::algo::count_binary(policy, &mut less_than, &left, &right);
+            let binary = profile::algo::count_binary_checked(policy, &mut less_than, &left, &right)
+                .expect("checked algorithm preconditions");
             assert_eq!(binary, expected_binary);
 
             run_mask_layout!(
@@ -156,22 +160,24 @@ fn main() {
             );
 
             let mut selected_negative = Negative;
-            let selected_unary = profile::algo::count_selected_unary(
+            let selected_unary = profile::algo::count_selected_unary_checked(
                 policy,
                 &mut selected_negative,
                 &left,
                 &indices,
-            );
+            )
+            .expect("checked algorithm preconditions");
             assert_eq!(selected_unary, expected_selected_unary);
 
             let mut selected_less_than = LessThan;
-            let selected_binary = profile::algo::count_selected_binary(
+            let selected_binary = profile::algo::count_selected_binary_checked(
                 policy,
                 &mut selected_less_than,
                 &left,
                 &right,
                 &indices,
-            );
+            )
+            .expect("checked algorithm preconditions");
             assert_eq!(selected_binary, expected_selected_binary);
 
             let mut scaled_less_than = LessThan;

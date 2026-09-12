@@ -147,6 +147,7 @@ def test_lowering_carries_resolved_overload_matrix(
             "conversion",
         ),
         ("shift_left_wrapping", "v:=(v,s)", {}, "shift"),
+        ("extract_value_at", "s:=(v,usize)", {}, "preconditions"),
     ),
 )
 def test_lowering_carries_promoted_contract_objects(

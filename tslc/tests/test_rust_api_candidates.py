@@ -50,6 +50,7 @@ def test_missing_generic_baseline_is_a_typed_exclusion() -> None:
                     RustTargetRequirement("x86_64", ()),
                     (),
                     (),
+                    (),
                 ),
             ),
             (),

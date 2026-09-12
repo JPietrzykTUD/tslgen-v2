@@ -20,16 +20,23 @@ from dataclasses import replace
 
 from tslc.backend import translation_common
 from tslc.backend.translation import BackendDialect
-from tslc.catalog.arithmetic import ArithmeticGuarantee, ArithmeticOperandRole
+from tslc.catalog.arithmetic import ArithmeticOperandRole, ArithmeticOperation
 from tslc.catalog.memory import resolve_memory_alignment
 from tslc.catalog.model import (
     BOOLEAN_WILDCARD_ATTRIBUTES,
     Catalog,
     ImmediateParam,
+    ImmediateRangeUpperKind,
+    ImmediateValueRange,
     Primitive,
     RESULT_DIM_VECTOR,
 )
 from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS, scalar_bit_width_or_default
+from tslc.catalog.preconditions import (
+    PRECONDITION_DESCRIPTORS,
+    PreconditionHazard,
+    precondition_applies_to_type,
+)
 from tslc.catalog.signatures import SignatureShape, parse_signature
 from tslc.diagnostics import Diagnostic, SourceSpan, sort_diagnostics
 from tslc.documentation import primitive_documentation
@@ -52,7 +59,15 @@ from tslc.lower._diagnostics import (
     lowering_skip_diagnostic,
     primitive_signature_source as _primitive_signature_source,
 )
-from tslc.lower.dependencies import origin_sort_key, symbolic_call_dependency_error
+from tslc.lower.dependencies import (
+    CallDependency,
+    CallDependencyOrigin,
+    CallDependencyOriginKind,
+    GenericVectorReference,
+    VectorIdentity,
+    origin_sort_key,
+    symbolic_call_dependency_error,
+)
 from tslc.lower.fixed_native import lower_preferred_fixed_native
 from tslc.lower.region_handlers import (
     DEFAULT_REGION_LOWERERS,
@@ -116,7 +131,7 @@ class Lowerer:
                 f"{backend.backend_id}",
                 source=_implementation_source(selected),
             )
-        deferred_kinds = self._support.deferred_signature_kinds_for_extension(
+        deferred_kinds = self._support.fixed_shape_kinds_for_extension(
             shape, selected.extension
         )
         unsupported_kinds = self._support.unsupported_signature_kinds_for_extension(
@@ -230,7 +245,12 @@ class Lowerer:
         resolved_immediate = _resolve_immediate(selected, shape, backend, self._support)
         if isinstance(resolved_immediate, LoweringResult):
             return resolved_immediate
-        immediate, immediate_dispatch, immediate_range = resolved_immediate
+        (
+            immediate,
+            immediate_dispatch,
+            immediate_range,
+            immediate_valid_range,
+        ) = resolved_immediate
         immediate_name = immediate[0] if immediate is not None else None
         arithmetic_preconditions = _arithmetic_preconditions(selected, immediate)
 
@@ -258,6 +278,8 @@ class Lowerer:
             ),
             immediate_split_names=catalog_facts.immediate_split_names,
             current_primitive=selected.primitive.name,
+            current_primitive_contract=selected.primitive,
+            current_parameters=parameters,
             immediate_name=immediate_name,
             immediate_dispatch=immediate_dispatch,
             immediate_range=immediate_range,
@@ -281,14 +303,12 @@ class Lowerer:
             ),
             concrete_lanes=selected.concrete_lanes,
         )
-        context = body_context(env, scope, shape, self._support)
+        context = body_context(env, scope)
 
         param_context = (
             body_context(
                 replace(env, simd_type_param_base_bindings={}),
                 scope,
-                shape,
-                self._support,
             )
             if selected.simd_type_base_bindings
             else context
@@ -347,6 +367,14 @@ class Lowerer:
         effective_safety = safety
         diagnostics = [*default_body.diagnostics]
         call_dependency_origins = set(context.effects.call_dependency_origins)
+        call_dependency_origins.update(
+            _checked_precondition_dependencies(
+                selected,
+                backend_id=backend.backend_id,
+                result_kind=shape.result_kind,
+                target=target,
+            )
+        )
         for variant, variant_segments in variant_sources:
             variant_context = body_context(
                 replace(
@@ -354,8 +382,6 @@ class Lowerer:
                     dependency_origin=f"implementation variant {variant.name!r}",
                 ),
                 scope,
-                shape,
-                self._support,
             )
             rendered_variant = render_body(
                 selected=selected,
@@ -464,10 +490,15 @@ class Lowerer:
             param_names=parameters,
             param_kinds=shape.param_kinds,
             body=body,
+            source_signature=selected.primitive.signature,
+            source_attributes=tuple(
+                sorted(selected.primitive.attributes.items())
+            ),
             primitive_semantics=LoweredPrimitiveSemantics(
                 overload=catalog.resolve_primitive_overload(selected.primitive),
                 arithmetic=selected.primitive.arithmetic,
                 operation=selected.primitive.operation,
+                preconditions=selected.primitive.preconditions,
                 memory=selected.primitive.memory,
                 memory_alignment=_lowered_memory_alignment(
                     selected.primitive
@@ -496,6 +527,8 @@ class Lowerer:
                 if key in BOOLEAN_WILDCARD_ATTRIBUTES
             ),
             immediate=immediate,
+            immediate_range=immediate_range,
+            immediate_valid_range=immediate_valid_range,
             arithmetic_preconditions=arithmetic_preconditions,
             # `generic_params` split by kind: `bool`/`int` are non-type (const) params; a
             # `simd_type` is a free type param (see `type_params`).
@@ -523,6 +556,11 @@ class Lowerer:
                 selected.required_compiler_capabilities
             ),
             call_dependency_origins=ordered_dependency_origins,
+            unresolved_call_preconditions=tuple(
+                obligation
+                for origin in ordered_dependency_origins
+                for obligation in origin.unresolved_preconditions
+            ),
             implementation_state=default_body.implementation_state,
             safety=effective_safety,
             variant_bodies=tuple(variant_bodies),
@@ -553,8 +591,8 @@ def _arithmetic_preconditions(
     info = SCALAR_TYPE_INFOS.get(selected.type_tag)
     if contract is None or info is None or info.floating or immediate is None:
         return ()
-    if not contract.has_guarantee(
-        ArithmeticGuarantee.INTEGER_ZERO_DIVISOR_FAILS
+    if not contract.operations.intersection(
+        {ArithmeticOperation.DIVISION, ArithmeticOperation.REMAINDER}
     ):
         return ()
     binding = contract.binding(ArithmeticOperandRole.DIVISOR)
@@ -573,24 +611,97 @@ def _arithmetic_preconditions(
     )
 
 
-def _resolve_immediate_range(
-    imm_param: ImmediateParam, type_tag: str
-) -> tuple[int, int, bool] | None:
-    """Resolve an `ImmediateParam.value_range` to concrete `(lo, hi, inclusive)` for the
-    selected type. `hi_expr` is an int literal or the symbolic `base_bit_width(data)` (the
-    selected type's bit width, from its tag's digits, e.g. `si32` -> 32). None when undeclared
-    or unresolvable — the literal-match bridge then has no range and falls back to positional."""
+def _checked_precondition_dependencies(
+    selected: SelectedImplementation,
+    *,
+    backend_id: str,
+    result_kind: str,
+    target: TargetVector | None,
+) -> tuple[CallDependencyOrigin, ...]:
+    current = VectorIdentity(selected.type_tag, selected.extension.isa_name)
+    dependencies: list[CallDependencyOrigin] = []
+    has_checked_condition = False
+    for precondition in selected.primitive.preconditions:
+        descriptor = PRECONDITION_DESCRIPTORS[precondition.kind]
+        if not precondition_applies_to_type(precondition, selected.type_tag):
+            continue
+        if descriptor.hazard is PreconditionHazard.CATASTROPHIC:
+            has_checked_condition = True
+        check_primitives = descriptor.check_primitives
+        if selected.primitive.mask_mode is not None:
+            check_primitives += descriptor.masked_check_primitives
+        dependencies.extend(
+            CallDependencyOrigin(
+                dependency=CallDependency(
+                    primitive=primitive.value,
+                    mask_policy=None,
+                    source=current,
+                ),
+                origin=f"checked precondition {precondition.kind.value!r}",
+                kind=CallDependencyOriginKind.CHECKED_GUARD,
+                source=precondition.source,
+            )
+            for primitive in check_primitives
+        )
+    if (
+        backend_id == "cpp"
+        and has_checked_condition
+        and result_kind in {"v", "vidx", "m"}
+    ):
+        result_vector: GenericVectorReference | VectorIdentity
+        result_target = selected.primitive.result_target
+        if result_target is not None and result_target[0] == RESULT_DIM_VECTOR:
+            base_binding = next(
+                (
+                    binding.base_tag
+                    for binding in selected.simd_type_base_bindings
+                    if binding.param_name == result_target[1]
+                ),
+                None,
+            )
+            result_vector = GenericVectorReference(result_target[1], base_binding)
+        elif target is not None:
+            result_vector = VectorIdentity(target.base_tag, target.extension_isa)
+        else:
+            result_vector = current
+        placeholder_primitive = "mask_false" if result_kind == "m" else "set_zero"
+        dependencies.append(
+            CallDependencyOrigin(
+                dependency=CallDependency(
+                    primitive=placeholder_primitive,
+                    mask_policy=None,
+                    source=result_vector,
+                ),
+                origin="C++ checked failure value",
+                kind=CallDependencyOriginKind.CHECKED_GUARD,
+                source=selected.primitive.source,
+            )
+        )
+    return tuple(dependencies)
 
-    if imm_param.value_range is None:
-        return None
-    lo, hi_expr, inclusive = imm_param.value_range
-    if hi_expr == "base_bit_width(data)":
-        hi = scalar_bit_width_or_default(type_tag)
-    elif hi_expr.lstrip("-").isdigit():
-        hi = int(hi_expr)
+
+def _resolve_immediate_range(
+    value_range: ImmediateValueRange,
+    selected: SelectedImplementation,
+) -> tuple[int, int, bool] | None:
+    """Resolve a typed source interval for one concrete source/target slot."""
+
+    upper = value_range.upper
+    if upper.kind is ImmediateRangeUpperKind.LITERAL:
+        assert upper.literal is not None
+        hi = upper.literal
+    elif upper.kind is ImmediateRangeUpperKind.SOURCE_BASE_BIT_WIDTH:
+        hi = scalar_bit_width_or_default(selected.type_tag)
     else:
-        return None
-    return (lo, hi, inclusive)
+        if selected.to_target is None:
+            return None
+        source_bits = scalar_bit_width_or_default(selected.type_tag)
+        target_bits = scalar_bit_width_or_default(selected.to_target)
+        narrower, wider = sorted((source_bits, target_bits))
+        if narrower <= 0 or wider % narrower:
+            return None
+        hi = wider // narrower
+    return (value_range.lower, hi, value_range.inclusive)
 
 
 def _lane_list_param_map(
@@ -628,19 +739,24 @@ def _resolve_immediate(
     shape: SignatureShape,
     backend: BackendDialect,
     support: SupportPolicy = DEFAULT_SUPPORT_POLICY,
-) -> tuple[tuple[str, str] | None, str | None, tuple[int, int, bool] | None] | LoweringResult:
-    """Resolve an `sImm` operand into ``(operand, dispatch, value_range)``.
+) -> tuple[
+    tuple[str, str] | None,
+    str | None,
+    tuple[int, int, bool] | None,
+    tuple[int, int, bool] | None,
+] | LoweringResult:
+    """Resolve an `sImm` operand and its dispatch/validity intervals.
 
     ``operand`` is the ``(name, backend type spelling)`` the backend emits as a
     template/const-generic param (NOT a runtime arg); ``dispatch``/``value_range`` are the
     per-backend forwarding facts. All come from the `params:` block (`immediate_param`);
-    absent metadata defaults to `ui32` with positional forwarding. Returns ``(None, None,
-    None)`` when the signature has no `sImm`, or a :class:`LoweringResult` error when the
-    immediate type has no backend spelling.
+    absent metadata defaults to `ui32` with positional forwarding. Returns four ``None``
+    values when the signature has no `sImm`, or a :class:`LoweringResult` error when the
+    immediate type or a declared static interval cannot be resolved.
     """
 
     if not support.has_immediate_operand(shape):
-        return (None, None, None)
+        return (None, None, None, None)
     imm_name = selected.primitive.parameters[
         shape.param_kinds.index(support.immediate_kind)
     ]
@@ -659,11 +775,29 @@ def _resolve_immediate(
             ),
         )
     if imm_param is None:
-        return ((imm_name, imm_spelling), None, None)
+        return ((imm_name, imm_spelling), None, None, None)
+    value_range = (
+        _resolve_immediate_range(imm_param.value_range, selected)
+        if imm_param.value_range is not None
+        else None
+    )
+    valid_range = (
+        _resolve_immediate_range(imm_param.valid_range, selected)
+        if imm_param.valid_range is not None
+        else None
+    )
+    if imm_param.valid_range is not None and valid_range is None:
+        return _error(
+            "TSL-LOWER-INVALID-IMMEDIATE-RANGE",
+            f"could not resolve the static immediate range of "
+            f"{selected.primitive.name!r} for {selected.type_tag!r}",
+            source=imm_param.source or _implementation_source(selected),
+        )
     return (
         (imm_name, imm_spelling),
         imm_param.dispatch_for(backend.backend_id),
-        _resolve_immediate_range(imm_param, selected.type_tag),
+        value_range,
+        valid_range,
     )
 
 

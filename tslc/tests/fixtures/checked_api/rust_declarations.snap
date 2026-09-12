@@ -1,0 +1,13 @@
+pub fn extract_value_at_checked<T, const N: usize>(
+    value: Simd<T, N>,
+    index: usize,
+) -> Result<T, PreconditionError>;
+
+pub fn div_checked<T, const N: usize>(
+    dividend: Simd<T, N>,
+    divisor: Simd<T, N>,
+) -> Result<Simd<T, N>, PreconditionError>;
+
+pub fn load_checked<T, const N: usize>(
+    source: &[T],
+) -> Result<Simd<T, N>, PreconditionError>;

@@ -14,6 +14,9 @@ from typing import Any, BinaryIO, Callable
 from tslc.version import package_version
 
 
+_INITIAL_INDEX_TIMEOUT_SECONDS = 60.0
+
+
 class _LspClient:
     def __init__(self, process: subprocess.Popen[bytes]) -> None:
         self.process = process
@@ -139,7 +142,10 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
                 "params": {"textDocument": {"uri": path.as_uri()}},
             }
         )
-        lenses = client.read_until(lambda item: item.get("id") == 20)["result"]
+        lenses = client.read_until(
+            lambda item: item.get("id") == 20,
+            timeout=_INITIAL_INDEX_TIMEOUT_SECONDS,
+        )["result"]
         assert lenses
         assert len(lenses) == len(
             {
@@ -238,7 +244,10 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
         add_entry = next(
             item for item in explorer["primitives"] if item["name"] == "add"
         )
-        assert 0 < add_entry["availableSlots"] < add_entry["totalSlots"]
+        assert add_entry["availableSlots"] == add_entry["totalSlots"]
+        assert add_entry["totalSlots"] > 0
+        assert add_entry["preconditions"] == []
+        assert add_entry["callPreconditions"] == []
         assert add_entry["definitions"][0]["uri"] == path.as_uri()
         assert "mov" in add_entry["calls"]
         assert any(
@@ -295,10 +304,12 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
             and slot["type"] == "si64"
             and slot["status"] == "selected"
         ]
-        assert {
+        targets = {
             (slot["target"]["dimension"], slot["target"]["value"])
             for slot in target_slots
-        } >= {("base", "ui8"), ("extension", "avx512")}
+        }
+        assert ("base", "ui8") in targets
+        assert ("extension", "avx512") not in targets
         assert all(len(slot["implementations"]) == 1 for slot in target_slots)
 
         client.send(

@@ -8,6 +8,7 @@ from tslc.catalog.arithmetic import ArithmeticContract
 from tslc.catalog.conversion import PrimitiveConversionContract
 from tslc.catalog.memory import MemoryAlignment, PrimitiveMemoryContract
 from tslc.catalog.overloads import ResolvedPrimitiveOverload
+from tslc.catalog.preconditions import PrimitivePrecondition
 from tslc.catalog.semantics import PrimitiveSemanticContract
 from tslc.catalog.shift import PrimitiveShiftContract
 
@@ -36,6 +37,7 @@ class LoweredPrimitiveSemantics:
     overload: ResolvedPrimitiveOverload | None = None
     arithmetic: ArithmeticContract | None = None
     operation: PrimitiveSemanticContract | None = None
+    preconditions: tuple[PrimitivePrecondition, ...] = ()
     memory: PrimitiveMemoryContract | None = None
     memory_alignment: LoweredMemoryAlignment | None = None
     conversion: PrimitiveConversionContract | None = None

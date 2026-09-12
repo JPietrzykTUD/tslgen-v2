@@ -74,25 +74,27 @@ fn main() {
 
             let mut output = vec![SENTINEL; COUNT];
             let mut square = Square;
-            profile::algo::transform_selected_unary(
+            profile::algo::transform_selected_unary_checked(
                 policy,
                 &mut square,
                 &left,
                 &indices,
                 &mut output,
-            );
+            )
+            .expect("checked algorithm preconditions");
             verify_unary(&left, &indices, &output, SENTINEL);
 
             output.fill(SENTINEL);
             let mut add = Add;
-            profile::algo::transform_selected_binary(
+            profile::algo::transform_selected_binary_checked(
                 policy,
                 &mut add,
                 &left,
                 &right,
                 &indices,
                 &mut output,
-            );
+            )
+            .expect("checked algorithm preconditions");
             verify_binary(&left, &right, &indices, &output, SENTINEL);
 
             output.fill(SENTINEL);

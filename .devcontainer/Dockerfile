@@ -5,6 +5,7 @@ ARG ZIG_ARCH=x86_64-linux
 ARG WASI_SDK_VERSION=33
 ARG WASMTIME_VERSION=45.0.2
 ARG LLVM_APT_VERSION=22
+ARG RUST_MSRV=1.89.0
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV ONEAPI_ROOT=/opt/intel/oneapi
@@ -78,6 +79,7 @@ RUN set -eux; \
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
       | sh -s -- -y --no-modify-path --profile minimal --default-toolchain stable; \
     rustup component add rustfmt clippy; \
+    rustup toolchain install "${RUST_MSRV}" --profile minimal --component clippy; \
     rustup target add \
       x86_64-unknown-linux-gnu \
       aarch64-unknown-linux-gnu \

@@ -3,30 +3,48 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from hashlib import sha256
+import json
 import re
 from pathlib import Path
 
 import pytest
 
 from tslc.api import generate_project
+from tslc.backend.algorithm_surface import AlgorithmSemanticFamily
 from tslc.backend.primitive_facade import (
     DataparallelPrimitiveFacadeKind,
     classify_dataparallel_primitive_facade,
     contiguous_memory_primitive_facades,
 )
 from tslc.backend.cpp import CppBackend
+from tslc.backend.cpp_algorithm_public_declarations import (
+    cpp_algorithm_public_declarations,
+)
+from tslc.backend.cpp_public_api import cpp_public_api_manifest
+from tslc.backend.public_declarations import PublicDeclarationStability
 from tslc.backend.rust import RustBackend
+from tslc.backend.rust_api_planner import plan_rust_facade
+from tslc.backend.rust_dispatch import plan_rust_dispatch
+from tslc.backend.rust_names import rust_profile_module_name
+from tslc.backend.rust_public_api import rust_public_api_manifest
+from tslc.backend.rust_static_selection import plan_rust_static_selection
+from tslc.backend.rust_algorithm_plan import (
+    RustAlgorithmImplTarget,
+    plan_rust_algorithm,
+)
 from tslc.backend.rust_algorithm import (
-    _RustAlgorithmImplTarget,
     _rust_algorithm_load_store_impl,
     _rust_algorithm_scalar_selected_load_impl,
 )
-from tslc.backend.rust_facades import rust_algorithm_primitive_facades
+from tslc.backend.rust_facades import (
+    plan_rust_algorithm_primitive_facades,
+    rust_algorithm_primitive_facades,
+)
 from tslc.catalog.memory import (
     MemoryAccess,
     MemoryAddressing,
     MemoryAlignment,
+    MemoryPayloadExtent,
     PrimitiveMemoryContract,
 )
 from tslc.catalog.overloads import ResolvedPrimitiveOverload
@@ -135,6 +153,11 @@ def _memory_semantics(
         memory=PrimitiveMemoryContract(
             access,
             MemoryAddressing.CONTIGUOUS,
+            (
+                MemoryPayloadExtent.SCALAR
+                if "s" in parameter_kinds
+                else MemoryPayloadExtent.VECTOR
+            ),
         ),
         memory_alignment=LoweredMemoryAlignment("aligned", alignment),
     )
@@ -246,6 +269,7 @@ def test_dataparallel_primitive_facade_descriptor_classifies_shared_policy_shape
     assert store is not None
     assert store.kind is DataparallelPrimitiveFacadeKind.CONTIGUOUS_MEMORY
     assert store.shape.param_kinds == ("ptr", "v")
+    assert store.memory_payload_extent is MemoryPayloadExtent.VECTOR
 
     cast = classify_dataparallel_primitive_facade(
         "cast",
@@ -345,19 +369,22 @@ def test_semantically_renamed_memory_primitives_retain_shared_facades() -> None:
     )
     assert read_facade is not None
     assert write_facade is not None
+    assert read_facade.memory_payload_extent is MemoryPayloadExtent.VECTOR
+    assert write_facade.memory_payload_extent is MemoryPayloadExtent.VECTOR
     assert contiguous_memory_primitive_facades(
         {
             "read_contiguous": read_specs,
             "write_contiguous": write_specs,
         }
     ) == (read_facade, write_facade)
-    rust = rust_algorithm_primitive_facades(
+    facade_records = plan_rust_algorithm_primitive_facades(
         {
             "read_contiguous": read_specs,
             "write_contiguous": write_specs,
         },
         reserved_names=frozenset(),
     )
+    rust = rust_algorithm_primitive_facades(facade_records)
     assert "pub unsafe fn read_contiguous<" in rust
     assert "Read_contiguousImpl<ALIGNED>" in rust
     assert "super::read_contiguous::<" in rust
@@ -365,18 +392,28 @@ def test_semantically_renamed_memory_primitives_retain_shared_facades() -> None:
     assert "Write_contiguousImplArg<" in rust
     assert "super::write_contiguous::<" in rust
 
+    rust_read_facade = next(
+        facade
+        for facade in facade_records
+        if facade.memory_access is MemoryAccess.READ
+    )
+    rust_write_facade = next(
+        facade
+        for facade in facade_records
+        if facade.memory_access is MemoryAccess.WRITE
+    )
     load_store = _rust_algorithm_load_store_impl(
-        _RustAlgorithmImplTarget("T", "Simd<T, Scalar>"),
-        read_facade,
-        write_facade,
+        RustAlgorithmImplTarget("T", "Simd<T, Scalar>"),
+        rust_read_facade,
+        rust_write_facade,
     )
     assert "Read_contiguousImpl<false>" in load_store
-    assert "super::read_contiguous::<Simd<T, Scalar>, false>" in load_store
+    assert "super::super::read_contiguous::<Simd<T, Scalar>, false>" in load_store
     assert "Write_contiguousImplArg<Simd<T, Scalar>, false>" in load_store
-    assert "super::write_contiguous::<Simd<T, Scalar>, false, _>" in load_store
-    selected_load = _rust_algorithm_scalar_selected_load_impl(read_facade)
+    assert "super::super::write_contiguous::<Simd<T, Scalar>, false, _>" in load_store
+    selected_load = _rust_algorithm_scalar_selected_load_impl(rust_read_facade)
     assert "Read_contiguousImpl<false>" in selected_load
-    assert "super::read_contiguous::<Simd<T, Scalar>, false>" in selected_load
+    assert "super::super::read_contiguous::<Simd<T, Scalar>, false>" in selected_load
 
     cpp = CppBackend().render_primitive("read_contiguous", read_specs)
     assert "read_contiguous(" in cpp
@@ -390,12 +427,31 @@ def test_artifact_layout(specialization_result) -> None:
     # static cores, per-profile headers, top-level dispatch, per-profile smokes.
     assert {
         "cpp/include/tsl_core.hpp",
+        "cpp/include/tsl_core_detail_types.hpp",
+        "cpp/include/tsl_core_detail_memory.hpp",
+        "cpp/include/tsl_core_detail_scalar.hpp",
+        "cpp/include/tsl_core_detail_mask.hpp",
+        "cpp/include/tsl_core_detail_io.hpp",
         "cpp/include/tsl_primitives.hpp",
         "cpp/include/tsl_dataparallel.hpp",
         "cpp/include/tsl_algorithm_tags.hpp",
         "cpp/include/tsl_algorithm_detail_core.hpp",
         "cpp/include/tsl_algorithm_detail_mask.hpp",
-        "cpp/include/tsl_algorithm_detail_loops.hpp",
+        "cpp/include/tsl_algorithm_detail_iteration.hpp",
+        "cpp/include/tsl_algorithm_detail_predicate.hpp",
+        "cpp/include/tsl_algorithm_detail_count.hpp",
+        "cpp/include/tsl_algorithm_detail_select.hpp",
+        "cpp/include/tsl_algorithm_detail_transform.hpp",
+        "cpp/include/tsl_algorithm_detail_consume.hpp",
+        "cpp/include/tsl_algorithm_detail_aggregate.hpp",
+        "cpp/include/tsl_algorithm_utility.hpp",
+        "cpp/include/tsl_algorithm_iteration.hpp",
+        "cpp/include/tsl_algorithm_predicate.hpp",
+        "cpp/include/tsl_algorithm_count.hpp",
+        "cpp/include/tsl_algorithm_select.hpp",
+        "cpp/include/tsl_algorithm_transform.hpp",
+        "cpp/include/tsl_algorithm_consume.hpp",
+        "cpp/include/tsl_algorithm_aggregate.hpp",
         "cpp/include/tsl_algorithm.hpp",
         "cpp/include/tsl_x86_traits.hpp",
         "cpp/include/tsl.hpp",
@@ -405,7 +461,23 @@ def test_artifact_layout(specialization_result) -> None:
         "docs/specializations/specializations.json",
         "cpp/tests/smoke_avx2.cpp",
         "rust/src/tsl_core.rs",
+        "rust/src/tsl_core/memory.rs",
+        "rust/src/tsl_core/scalar.rs",
+        "rust/src/tsl_core/mask.rs",
+        "rust/src/tsl_core/io.rs",
         "rust/src/tsl_algorithm.rs",
+        "rust/src/tsl_algorithm/representation.rs",
+        "rust/src/tsl_algorithm/masks.rs",
+        "rust/src/tsl_algorithm/kernel_traits.rs",
+        "rust/src/tsl_algorithm/validation.rs",
+        "rust/src/tsl_algorithm/utility.rs",
+        "rust/src/tsl_algorithm/iteration.rs",
+        "rust/src/tsl_algorithm/predicate.rs",
+        "rust/src/tsl_algorithm/count.rs",
+        "rust/src/tsl_algorithm/select.rs",
+        "rust/src/tsl_algorithm/transform.rs",
+        "rust/src/tsl_algorithm/consume.rs",
+        "rust/src/tsl_algorithm/aggregate.rs",
         "rust/src/tsl_avx2.rs",
         "rust/src/lib.rs",
     } <= paths
@@ -417,14 +489,17 @@ def test_artifact_layout(specialization_result) -> None:
 def test_cpp_core_vectors_expose_metadata_constants(
     specialization_artifacts: dict[str, str]
 ) -> None:
-    core = specialization_artifacts["cpp/include/tsl_core.hpp"]
+    core = specialization_artifacts["cpp/include/tsl_core_detail_types.hpp"]
 
     assert "enum class implementation_state" in core
+    assert "not an instruction-count or" in core
+    assert "An unsupported or unrecognized query remains" in core
     assert "template <auto Value>" in core
     assert "struct implementation_state_of" in core
     assert "inline constexpr implementation_state implementation_state_v" in core
     assert "static constexpr bool has_static_lane_count_v = true;" in core
     assert "using extension_type = scalar;" in core
+    assert "static constexpr bool mask_is_bitset = true;" in core
     assert "using with_base_type = simd<ToBase, scalar>;" in core
     assert "using with_extension = simd<T, ToExtension>;" in core
     assert "static constexpr std::size_t lane_count_v = 1;" in core
@@ -441,25 +516,41 @@ def test_cpp_core_vectors_expose_metadata_constants(
     )
 
 
-def test_cpp_zero_divisor_failure_traps_on_non_unwinding_targets(
+def test_cpp_algorithm_mask_layout_uses_typed_vector_metadata(
     specialization_artifacts: dict[str, str]
 ) -> None:
-    core = specialization_artifacts["cpp/include/tsl_core.hpp"]
+    detail = specialization_artifacts[
+        "cpp/include/tsl_algorithm_detail_core.hpp"
+    ]
+
+    assert "if constexpr (Vec::mask_is_bitset)" in detail
+    assert "std::is_integral<typename Vec::mask_type>" not in detail
+
+
+def test_cpp_static_lane_mismatch_traps_on_non_unwinding_targets(
+    specialization_artifacts: dict[str, str]
+) -> None:
+    core = specialization_artifacts["cpp/include/tsl_core_detail_scalar.hpp"]
 
     assert "defined(__SYCL_DEVICE_ONLY__) || defined(__wasm__)" in core
+    assert "!defined(__cpp_exceptions) && !defined(_CPPUNWIND)" in core
     assert (
         "if (source_lanes != target_lanes) {\n"
-        "#if defined(__SYCL_DEVICE_ONLY__) || defined(__wasm__)\n"
+            "#if defined(__SYCL_DEVICE_ONLY__) || defined(__wasm__) || defined(__wasm32__) || \\\n"
+            "    defined(__wasm64__) || \\\n"
+            "    (!defined(__cpp_exceptions) && !defined(_CPPUNWIND))\n"
         "        __builtin_trap();"
         in core
     )
-    assert '__builtin_trap();\n#else\n    throw std::domain_error(' in core
+    assert '__builtin_trap();\n#else\n        throw std::invalid_argument(' in core
+    assert "arith_zero_divisor_fail" not in core
+    assert "TSL_ARITH_INTEGER_ZERO_DIVISOR" not in core
 
 
 def test_cpp_core_base_dispatch_admits_explicit_scalar_types(
     specialization_artifacts: dict[str, str]
 ) -> None:
-    core = specialization_artifacts["cpp/include/tsl_core.hpp"]
+    core = specialization_artifacts["cpp/include/tsl_core_detail_scalar.hpp"]
 
     assert "template <class T, class Enable = void>\nstruct base_type_dispatch_key;" in core
     assert (
@@ -566,14 +657,91 @@ def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
             "tsl_algorithm_tags.hpp",
             "tsl_algorithm_detail_core.hpp",
             "tsl_algorithm_detail_mask.hpp",
-            "tsl_algorithm_detail_loops.hpp",
+            "tsl_algorithm_detail_iteration.hpp",
+            "tsl_algorithm_detail_predicate.hpp",
+            "tsl_algorithm_detail_count.hpp",
+            "tsl_algorithm_detail_select.hpp",
+            "tsl_algorithm_detail_transform.hpp",
+            "tsl_algorithm_detail_consume.hpp",
+            "tsl_algorithm_detail_aggregate.hpp",
+            "tsl_algorithm_utility.hpp",
+            "tsl_algorithm_iteration.hpp",
+            "tsl_algorithm_predicate.hpp",
+            "tsl_algorithm_count.hpp",
+            "tsl_algorithm_select.hpp",
+            "tsl_algorithm_transform.hpp",
+            "tsl_algorithm_consume.hpp",
+            "tsl_algorithm_aggregate.hpp",
             "tsl_algorithm.hpp",
         )
     )
     dispatch = specialization_artifacts["cpp/include/tsl.hpp"]
     avx2 = specialization_artifacts["cpp/include/tsl_avx2.hpp"]
+    select_public = specialization_artifacts[
+        "cpp/include/tsl_algorithm_select.hpp"
+    ]
+    select_detail = specialization_artifacts[
+        "cpp/include/tsl_algorithm_detail_select.hpp"
+    ]
+    transform_public = specialization_artifacts[
+        "cpp/include/tsl_algorithm_transform.hpp"
+    ]
+    transform_detail = specialization_artifacts[
+        "cpp/include/tsl_algorithm_detail_transform.hpp"
+    ]
+    consume_public = specialization_artifacts[
+        "cpp/include/tsl_algorithm_consume.hpp"
+    ]
+    consume_detail = specialization_artifacts[
+        "cpp/include/tsl_algorithm_detail_consume.hpp"
+    ]
+    aggregate_public = specialization_artifacts[
+        "cpp/include/tsl_algorithm_aggregate.hpp"
+    ]
+    aggregate_detail = specialization_artifacts[
+        "cpp/include/tsl_algorithm_detail_aggregate.hpp"
+    ]
 
-    assert '#include "tsl_algorithm_detail_loops.hpp"' in umbrella
+    family_headers = (
+        "tsl_algorithm_utility.hpp",
+        "tsl_algorithm_iteration.hpp",
+        "tsl_algorithm_predicate.hpp",
+        "tsl_algorithm_count.hpp",
+        "tsl_algorithm_select.hpp",
+        "tsl_algorithm_transform.hpp",
+        "tsl_algorithm_consume.hpp",
+        "tsl_algorithm_aggregate.hpp",
+    )
+    for header in family_headers:
+        assert f'#include "{header}"' in umbrella
+    assert tuple(umbrella.index(header) for header in family_headers) == tuple(
+        sorted(umbrella.index(header) for header in family_headers)
+    )
+    assert (
+        "cpp/include/tsl_algorithm_detail_loops.hpp"
+        not in specialization_artifacts
+    )
+    assert "cpp/include/tsl_algorithm_families.hpp" not in specialization_artifacts
+    assert "select_selected_indices_binary(" in select_public
+    assert "transform_selected_binary(" not in select_public
+    assert "select_selected_indices_binary_loop(" in select_detail
+    assert "transform_selected_binary_loop(" not in select_detail
+    assert "select_selected_indices_binary(" not in consume_public
+    assert "select_selected_indices_binary_loop(" not in consume_detail
+    assert "transform_selected_binary(" in transform_public
+    assert "aggregate_selected_binary(" not in transform_public
+    assert "transform_masked_binary_dispatch_detect(" in transform_detail
+    assert "aggregate_binary_dispatch_detect(" not in transform_detail
+    assert "transform_selected_binary(" not in aggregate_public
+    assert "transform_masked_binary_dispatch_detect(" not in aggregate_detail
+    assert "consume_selected_binary(" in consume_public
+    assert "aggregate_selected_binary(" not in consume_public
+    assert "consume_binary_dispatch_detect(" in consume_detail
+    assert "aggregate_binary_dispatch_detect(" not in consume_detail
+    assert "aggregate_selected_binary(" in aggregate_public
+    assert "consume_selected_binary(" not in aggregate_public
+    assert "aggregate_binary_dispatch_detect(" in aggregate_detail
+    assert "consume_binary_dispatch_detect(" not in aggregate_detail
     assert "namespace tsl::algo" in helper
     assert "#include <iterator>" in helper
     assert "template <class Vec>\nstruct vector_tag" in helper
@@ -591,58 +759,26 @@ def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
     assert "has_same_alignment_residue" in helper
     assert "range_data" in helper
     assert "std::size(range)" in helper
-    assert "void for_each_chunk(Op&& op" in helper
-    assert "void for_each_chunk(Op&& op, Range& data)" in helper
-    assert "void transform_unary(Op&& op" in helper
-    assert "void transform_unary(Op&& op, const InputRange& input" in helper
+    assert all(
+        declaration.render_head(multiline=True) in helper
+        for declaration in cpp_algorithm_public_declarations()
+    )
     assert "transform_unary_loop_peel_to_aligned" in helper
     assert "alignment::assume_inputs_aligned" in helper
     assert "alignment::assume_output_aligned" in helper
-    assert "std::size_t ParallelN" in helper
     assert "transform_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment>" in helper
-    assert "void transform_binary(" in helper
     assert "transform_binary_loop" in helper
     assert "transform_binary_loop_peel_to_aligned" in helper
     assert "transform_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment>" in helper
     assert "namespace mask_layout" in helper
-    assert (
-        "struct integral {};\nstruct native {};\nstruct bytes {};\nstruct bits {};"
-        in helper
-    )
-    assert "fixed_native_mask_type" in helper
-    assert "native_mask_chunk_count" in helper
-    assert "fixed_byte_mask_type" in helper
-    assert "byte_mask_count" in helper
-    assert "fixed_bit_mask_type" in helper
-    assert "bit_mask_count" in helper
-    assert "std::size_t predicate_unary(" in helper
-    assert "std::size_t predicate_binary(" in helper
-    assert "void transform_where_unary(" in helper
-    assert "void transform_where_binary(" in helper
-    assert "void transform_masked_unary(" in helper
-    assert "void transform_masked_binary(" in helper
-    assert "std::size_t select_unary(" in helper
-    assert "std::size_t select_binary(" in helper
-    assert "std::size_t select_masked_unary(" in helper
-    assert "std::size_t select_masked_binary(" in helper
-    assert "std::size_t select_indices_unary(" in helper
-    assert "std::size_t select_indices_binary(" in helper
-    assert "std::size_t select_masked_indices_unary(" in helper
-    assert "std::size_t select_masked_indices_binary(" in helper
+    for mask_layout in ("integral", "native", "bytes", "bits"):
+        assert f"struct {mask_layout} {{}};" in helper
     assert "is_selection_index" in helper
     assert (
         "selection-vector output indices must use an unsigned integral row-id type"
         in helper
     )
-    assert "std::size_t select_selected_indices_unary(" in helper
-    assert "std::size_t select_selected_indices_binary(" in helper
     assert "append_selected_indices_from_mask" in helper
-    assert "void transform_selected_unary(" in helper
-    assert "void transform_selected_binary(" in helper
-    assert "auto aggregate_selected_unary(" in helper
-    assert "auto aggregate_selected_binary(" in helper
-    assert "void consume_selected_unary(" in helper
-    assert "void consume_selected_binary(" in helper
     assert (
         "selection-vector input indices must use an unsigned integral row-id type"
         in helper
@@ -650,21 +786,6 @@ def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
     assert "vector_for_selected_rows" in helper
     assert "load_selected_vector" in helper
     assert "gather_narrow" in helper
-    assert "std::size_t Scale = 0" in helper
-    assert "std::size_t count_unary(" in helper
-    assert "std::size_t count_binary(" in helper
-    assert "std::size_t count_masked_unary(" in helper
-    assert "std::size_t count_masked_binary(" in helper
-    assert "std::size_t count_selected_unary(" in helper
-    assert "std::size_t count_selected_binary(" in helper
-    assert "auto aggregate_unary(" in helper
-    assert "auto aggregate_binary(" in helper
-    assert "auto aggregate_masked_unary(" in helper
-    assert "auto aggregate_masked_binary(" in helper
-    assert "void consume_unary(" in helper
-    assert "void consume_binary(" in helper
-    assert "void consume_masked_unary(" in helper
-    assert "void consume_masked_binary(" in helper
     assert '#include "tsl_algorithm.hpp"' in dispatch
     assert "inline typename Vec::register_type load(" in avx2
     assert "inline void store(" in avx2
@@ -681,22 +802,48 @@ def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
 def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     specialization_artifacts: dict[str, str]
 ) -> None:
-    helper = specialization_artifacts["rust/src/tsl_algorithm.rs"]
+    helper_root = specialization_artifacts["rust/src/tsl_algorithm.rs"]
+    helper = "\n".join(
+        (
+            helper_root,
+            *(
+                content
+                for path, content in sorted(specialization_artifacts.items())
+                if path.startswith("rust/src/tsl_algorithm/")
+            ),
+        )
+    )
     lib = specialization_artifacts["rust/src/lib.rs"]
     cargo = specialization_artifacts["rust/Cargo.toml"]
-    avx2 = specialization_artifacts["rust/src/tsl_avx2.rs"]
+    avx2_parent = specialization_artifacts["rust/src/tsl_avx2.rs"]
+    avx2_support = specialization_artifacts[
+        "rust/src/tsl_avx2/algo/support.rs"
+    ]
+    avx2 = "\n".join(
+        (
+            avx2_parent,
+            *(
+                content
+                for path, content in sorted(specialization_artifacts.items())
+                if path.startswith("rust/src/tsl_avx2/algo")
+            ),
+        )
+    ).replace("super::super::", "super::")
     facade = specialization_artifacts["rust/src/tsl_facade.rs"]
     documentation = specialization_artifacts["rust/src/tsl_documentation.rs"]
 
-    assert sha256(avx2.encode()).hexdigest() == (
-        "d7035db4a130785bba7e2141a6e26479b9a8796cd645530706e9770c84b9dca8"
-    )
-
     assert 'name = "tsl"' in cargo
+    assert '"backend": "rust"' in specialization_artifacts["rust/public-api.json"]
     assert "default = []" in cargo
     assert "avx2 = []" not in cargo
     assert "pub mod tsl_algorithm;" in lib
     assert "pub use tsl_algorithm::dataparallel;" in lib
+    assert "mod representation;" in helper_root
+    assert "pub mod representation;" not in helper_root
+    assert "pub use self::representation::{" in helper_root
+    for family in AlgorithmSemanticFamily:
+        assert f"pub use self::{family.value}::{{" in helper_root
+    assert "pub use self::families::{" not in helper_root
     assert "#[doc(hidden)]\npub mod tsl_test_core;" in lib
     assert "#[doc(hidden)]\npub mod primitive {" in lib
     assert "#[cfg(doc)]\n#[doc(hidden)]\npub mod tsl_documentation;" in lib
@@ -710,8 +857,23 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     assert 'target_feature = "avx2"' in lib
     assert "#[doc(inline)]\npub use crate::tsl_avx2 as profile;" in lib
     assert "pub use crate::tsl_avx2 as profile;" in lib
+    assert "let result = tsl::profile::extract_value_at_checked::<V>(7, 1);" in lib
     assert "pub fn hadd(self)" in facade
     assert "pub fn hadd_masked(self, mask:" in facade
+    assert (
+        "fn __tsl_checked_memory_alignment() -> usize {\n"
+        "        core::mem::align_of::<i32>()\n"
+        "    }"
+    ) in facade
+    assert (
+        "as crate::tsl_core::SimdVector>::ALIGN\n"
+        "    }"
+    ) in facade
+    store_checked = facade.split("pub fn store_checked", 1)[1].split("\n}", 1)[0]
+    assert "if ptr.is_empty()" in store_checked
+    assert ".is_multiple_of(" in store_checked
+    assert "Ok(())" in store_checked
+    assert "Ok(unsafe" not in store_checked
     assert "pub mod tsl_target_fallback;" in lib
     assert "pub use crate::tsl_target_fallback as profile;" in lib
     documented_functions = re.findall(
@@ -721,7 +883,23 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     )
     assert documented_functions.count("add") == 1
     assert len(documented_functions) == len(set(documented_functions))
-    assert len(documented_functions) == lib.count("    pub struct ")
+    checked_functions = {
+        name for name in documented_functions if name.endswith("_checked")
+    }
+    assert checked_functions == {
+        "compress_store_checked",
+        "extract_value_at_checked",
+        "insert_value_at_checked",
+        "load_checked",
+        "load_mask_checked",
+        "load_maskz_checked",
+        "set_mask_lane_checked",
+        "store_checked",
+        "store_mask_checked",
+    }
+    assert len(documented_functions) - len(checked_functions) == lib.count(
+        "    pub struct "
+    )
     assert "detail::primitives" not in documentation
     assert "unimplemented!()" in documentation
     assert "pub mod dataparallel" in helper
@@ -767,117 +945,118 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     assert "pub trait ChunkKernel<V: StaticSimdVector>" in helper
     assert "pub fn for_each_chunk<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn for_each_chunk_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn transform_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn transform_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn transform_unary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn transform_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn transform_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn transform_binary_raw<Profile, Policy, Op, T>" in helper
     assert "pub fn integral_mask_chunk_count<Profile, Policy, T>" in helper
     assert "pub fn mask_chunk_count<Profile, Policy, Layout, T>" in helper
     assert "pub fn native_mask_chunk_count<Profile, Policy, T>" in helper
     assert "pub fn byte_mask_count<Profile, Policy, T>" in helper
     assert "pub fn bit_mask_count<Profile, Policy, T>" in helper
-    assert "pub fn predicate_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn predicate_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn predicate_unary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn predicate_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn predicate_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn predicate_binary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn predicate_binary_mask_layout<Profile, Policy, Layout, Op, T>" in helper
+    assert "pub fn predicate_binary_mask_layout_checked<Profile, Policy, Layout, Op, T>" in helper
     assert "pub unsafe fn predicate_binary_mask_layout_raw<" in helper
     assert "pub fn count_unary<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn count_unary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn count_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn count_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn count_binary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn count_masked_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn count_masked_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn count_masked_unary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn count_masked_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn count_masked_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn count_masked_binary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn count_masked_unary_mask_layout<Profile, Policy, Layout, Op, T>" in helper
+    assert "pub fn count_masked_unary_mask_layout_checked<Profile, Policy, Layout, Op, T>" in helper
     assert "pub unsafe fn count_masked_unary_mask_layout_raw<" in helper
-    assert "pub fn count_masked_binary_mask_layout<Profile, Policy, Layout, Op, T>" in helper
+    assert "pub fn count_masked_binary_mask_layout_checked<Profile, Policy, Layout, Op, T>" in helper
     assert "pub unsafe fn count_masked_binary_mask_layout_raw<" in helper
-    assert "pub fn count_selected_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn count_selected_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn count_selected_unary_raw<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn count_selected_unary_scaled_raw<" in helper
-    assert "pub fn count_selected_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn count_selected_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn count_selected_binary_raw<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn count_selected_binary_scaled_raw<" in helper
-    assert "pub fn select_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn select_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn select_unary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn select_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn select_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn select_binary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn select_masked_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn select_masked_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn select_masked_unary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn select_masked_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn select_masked_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn select_masked_binary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn select_masked_unary_mask_layout<Profile, Policy, Layout, Op, T>" in helper
+    assert "pub fn select_masked_unary_mask_layout_checked<Profile, Policy, Layout, Op, T>" in helper
     assert "pub unsafe fn select_masked_unary_mask_layout_raw<" in helper
-    assert "pub fn select_masked_binary_mask_layout<Profile, Policy, Layout, Op, T>" in helper
+    assert "pub fn select_masked_binary_mask_layout_checked<Profile, Policy, Layout, Op, T>" in helper
     assert "pub unsafe fn select_masked_binary_mask_layout_raw<" in helper
-    assert "pub fn select_indices_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn select_indices_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn select_indices_unary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn select_indices_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn select_indices_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn select_indices_binary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn select_masked_indices_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn select_masked_indices_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn select_masked_indices_unary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn select_masked_indices_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn select_masked_indices_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn select_masked_indices_binary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn select_masked_indices_unary_mask_layout<Profile, Policy, Layout, Op, T>" in helper
+    assert "pub fn select_masked_indices_unary_mask_layout_checked<Profile, Policy, Layout, Op, T>" in helper
     assert "pub unsafe fn select_masked_indices_unary_mask_layout_raw<" in helper
-    assert "pub fn select_masked_indices_binary_mask_layout<Profile, Policy, Layout, Op, T>" in helper
+    assert "pub fn select_masked_indices_binary_mask_layout_checked<Profile, Policy, Layout, Op, T>" in helper
     assert "pub unsafe fn select_masked_indices_binary_mask_layout_raw<" in helper
-    assert "pub fn select_selected_indices_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn select_selected_indices_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn select_selected_indices_unary_raw<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn select_selected_indices_unary_scaled_raw<" in helper
-    assert "pub fn select_selected_indices_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn select_selected_indices_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn select_selected_indices_binary_raw<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn select_selected_indices_binary_scaled_raw<" in helper
-    assert "pub fn transform_selected_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn transform_selected_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn transform_selected_unary_raw<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn transform_selected_unary_scaled_raw<" in helper
-    assert "pub fn transform_selected_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn transform_selected_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn transform_selected_binary_raw<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn transform_selected_binary_scaled_raw<" in helper
-    assert "pub fn consume_selected_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn consume_selected_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn consume_selected_unary_raw<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn consume_selected_unary_scaled_raw<" in helper
-    assert "pub fn consume_selected_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn consume_selected_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn consume_selected_binary_raw<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn consume_selected_binary_scaled_raw<" in helper
-    assert "pub fn aggregate_selected_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn aggregate_selected_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn aggregate_selected_unary_raw<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn aggregate_selected_unary_scaled_raw<" in helper
-    assert "pub fn aggregate_selected_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn aggregate_selected_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn aggregate_selected_binary_raw<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn aggregate_selected_binary_scaled_raw<" in helper
-    assert "pub fn transform_where_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn transform_where_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn transform_where_unary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn transform_where_unary_mask_layout<Profile, Policy, Layout, Op, T>" in helper
+    assert "pub fn transform_where_unary_mask_layout_checked<Profile, Policy, Layout, Op, T>" in helper
     assert "pub unsafe fn transform_where_unary_mask_layout_raw<" in helper
-    assert "pub fn transform_where_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn transform_where_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn transform_where_binary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn transform_masked_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn transform_masked_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn transform_masked_unary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn transform_masked_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn transform_masked_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn transform_masked_binary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn transform_masked_binary_mask_layout<Profile, Policy, Layout, Op, T>" in helper
+    assert "pub fn transform_masked_binary_mask_layout_checked<Profile, Policy, Layout, Op, T>" in helper
     assert "pub unsafe fn transform_masked_binary_mask_layout_raw<" in helper
     assert "pub fn consume_unary<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn consume_unary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn consume_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn consume_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn consume_binary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn consume_masked_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn consume_masked_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn consume_masked_unary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn consume_masked_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn consume_masked_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn consume_masked_binary_raw<Profile, Policy, Op, T>" in helper
     assert "pub fn aggregate_unary<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn aggregate_unary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn aggregate_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn aggregate_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn aggregate_binary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn aggregate_masked_unary<Profile, Policy, Op, T>" in helper
+    assert "pub fn aggregate_masked_unary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn aggregate_masked_unary_raw<Profile, Policy, Op, T>" in helper
-    assert "pub fn aggregate_masked_binary<Profile, Policy, Op, T>" in helper
+    assert "pub fn aggregate_masked_binary_checked<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn aggregate_masked_binary_raw<Profile, Policy, Op, T>" in helper
 
     assert "pub mod algo" in avx2
+    assert "super::super::detail::primitives" in avx2_support
     assert "BinaryAggregateKernel" in avx2
     assert "BinaryConsumeKernel" in avx2
     assert "UnaryAggregateKernel" in avx2
@@ -895,58 +1074,59 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     assert "MaskLayout" in avx2
     assert "SelectedLoad" in avx2
     assert "pub fn for_each_chunk<Policy, Op, T>" in avx2
-    assert "pub fn transform_binary<Policy, Op, T>" in avx2
+    assert "pub fn transform_binary_checked<Policy, Op, T>" in avx2
     assert "pub fn integral_mask_chunk_count<Policy, T>" in avx2
     assert "pub fn native_mask_chunk_count<Policy, T>" in avx2
     assert "pub fn byte_mask_count<Policy, T>" in avx2
     assert "pub fn bit_mask_count<Policy, T>" in avx2
-    assert "pub fn predicate_unary<Policy, Op, T>" in avx2
-    assert "pub fn predicate_binary<Policy, Op, T>" in avx2
-    assert "pub fn predicate_binary_mask_layout<Policy, Layout, Op, T>" in avx2
+    assert "pub fn predicate_unary_checked<Policy, Op, T>" in avx2
+    assert "pub fn predicate_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn predicate_binary_mask_layout_checked<Policy, Layout, Op, T>" in avx2
     assert "pub fn count_unary<Policy, Op, T>" in avx2
-    assert "pub fn count_binary<Policy, Op, T>" in avx2
-    assert "pub fn count_masked_unary<Policy, Op, T>" in avx2
-    assert "pub fn count_masked_binary<Policy, Op, T>" in avx2
-    assert "pub fn count_masked_unary_mask_layout<Policy, Layout, Op, T>" in avx2
-    assert "pub fn count_masked_binary_mask_layout<Policy, Layout, Op, T>" in avx2
-    assert "pub fn count_selected_unary<Policy, Op, T>" in avx2
-    assert "pub fn count_selected_binary<Policy, Op, T>" in avx2
-    assert "pub fn select_unary<Policy, Op, T>" in avx2
-    assert "pub fn select_binary<Policy, Op, T>" in avx2
-    assert "pub fn select_masked_unary<Policy, Op, T>" in avx2
-    assert "pub fn select_masked_binary<Policy, Op, T>" in avx2
-    assert "pub fn select_masked_unary_mask_layout<Policy, Layout, Op, T>" in avx2
-    assert "pub fn select_masked_binary_mask_layout<Policy, Layout, Op, T>" in avx2
-    assert "pub fn select_indices_unary<Policy, Op, T>" in avx2
-    assert "pub fn select_indices_binary<Policy, Op, T>" in avx2
-    assert "pub fn select_masked_indices_unary<Policy, Op, T>" in avx2
-    assert "pub fn select_masked_indices_binary<Policy, Op, T>" in avx2
-    assert "pub fn select_masked_indices_unary_mask_layout<Policy, Layout, Op, T>" in avx2
-    assert "pub fn select_masked_indices_binary_mask_layout<Policy, Layout, Op, T>" in avx2
-    assert "pub fn select_selected_indices_unary<Policy, Op, T>" in avx2
-    assert "pub fn select_selected_indices_binary<Policy, Op, T>" in avx2
-    assert "pub fn transform_selected_unary<Policy, Op, T>" in avx2
-    assert "pub fn transform_selected_binary<Policy, Op, T>" in avx2
-    assert "pub fn consume_selected_unary<Policy, Op, T>" in avx2
-    assert "pub fn consume_selected_binary<Policy, Op, T>" in avx2
-    assert "pub fn aggregate_selected_unary<Policy, Op, T>" in avx2
-    assert "pub fn aggregate_selected_binary<Policy, Op, T>" in avx2
-    assert "pub fn transform_where_unary<Policy, Op, T>" in avx2
-    assert "pub fn transform_where_unary_mask_layout<Policy, Layout, Op, T>" in avx2
-    assert "pub fn transform_where_binary<Policy, Op, T>" in avx2
-    assert "pub fn transform_masked_unary<Policy, Op, T>" in avx2
-    assert "pub fn transform_masked_binary<Policy, Op, T>" in avx2
-    assert "pub fn transform_masked_binary_mask_layout<Policy, Layout, Op, T>" in avx2
+    assert "pub fn count_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn count_masked_unary_checked<Policy, Op, T>" in avx2
+    assert "pub fn count_masked_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn count_masked_unary_mask_layout_checked<Policy, Layout, Op, T>" in avx2
+    assert "pub fn count_masked_binary_mask_layout_checked<Policy, Layout, Op, T>" in avx2
+    assert "pub fn count_selected_unary_checked<Policy, Op, T>" in avx2
+    assert "pub fn count_selected_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn select_unary_checked<Policy, Op, T>" in avx2
+    assert "pub fn select_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn select_masked_unary_checked<Policy, Op, T>" in avx2
+    assert "pub fn select_masked_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn select_masked_unary_mask_layout_checked<Policy, Layout, Op, T>" in avx2
+    assert "pub fn select_masked_binary_mask_layout_checked<Policy, Layout, Op, T>" in avx2
+    assert "pub fn select_indices_unary_checked<Policy, Op, T>" in avx2
+    assert "pub fn select_indices_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn select_masked_indices_unary_checked<Policy, Op, T>" in avx2
+    assert "pub fn select_masked_indices_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn select_masked_indices_unary_mask_layout_checked<Policy, Layout, Op, T>" in avx2
+    assert "pub fn select_masked_indices_binary_mask_layout_checked<Policy, Layout, Op, T>" in avx2
+    assert "pub fn select_selected_indices_unary_checked<Policy, Op, T>" in avx2
+    assert "pub fn select_selected_indices_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn transform_selected_unary_checked<Policy, Op, T>" in avx2
+    assert "pub fn transform_selected_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn consume_selected_unary_checked<Policy, Op, T>" in avx2
+    assert "pub fn consume_selected_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn aggregate_selected_unary_checked<Policy, Op, T>" in avx2
+    assert "pub fn aggregate_selected_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn transform_where_unary_checked<Policy, Op, T>" in avx2
+    assert "pub fn transform_where_unary_mask_layout_checked<Policy, Layout, Op, T>" in avx2
+    assert "pub fn transform_where_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn transform_masked_unary_checked<Policy, Op, T>" in avx2
+    assert "pub fn transform_masked_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn transform_masked_binary_mask_layout_checked<Policy, Layout, Op, T>" in avx2
     assert "pub fn consume_unary<Policy, Op, T>" in avx2
-    assert "pub fn consume_binary<Policy, Op, T>" in avx2
-    assert "pub fn consume_masked_unary<Policy, Op, T>" in avx2
-    assert "pub fn consume_masked_binary<Policy, Op, T>" in avx2
+    assert "pub fn consume_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn consume_masked_unary_checked<Policy, Op, T>" in avx2
+    assert "pub fn consume_masked_binary_checked<Policy, Op, T>" in avx2
     assert "pub fn aggregate_unary<Policy, Op, T>" in avx2
-    assert "pub fn aggregate_binary<Policy, Op, T>" in avx2
-    assert "pub fn aggregate_masked_unary<Policy, Op, T>" in avx2
-    assert "pub fn aggregate_masked_binary<Policy, Op, T>" in avx2
-    assert "pub use crate::tsl_algorithm::{" in avx2
-    assert "mask_layout, BinaryAggregateKernel" in avx2
+    assert "pub fn aggregate_binary_checked<Policy, Op, T>" in avx2
+    assert "pub fn aggregate_masked_unary_checked<Policy, Op, T>" in avx2
+    assert "pub fn aggregate_masked_binary_checked<Policy, Op, T>" in avx2
+    assert "pub use crate::tsl_algorithm::BinaryKernel;" in avx2
+    assert "pub use crate::tsl_algorithm::mask_layout;" in avx2
+    assert "pub use crate::tsl_algorithm::BinaryAggregateKernel;" in avx2
     assert "parallelism" not in avx2
     assert "impl VectorFor<Profile, i32> for dataparallel::Fixed<1>" in avx2
     assert "type Vec = Simd<i32, Scalar>;" in avx2
@@ -1075,11 +1255,11 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
         in avx2
     )
     assert "pub unsafe fn store<Policy, T, const ALIGNED: bool>(" in avx2
-    assert (
-        "super::detail::primitives::StoreImplArg<\n"
-        "                <Policy as VectorFor<Profile, T>>::Vec,\n"
-        "                ALIGNED,"
-        in avx2
+    assert re.search(
+        r"super::detail::primitives::StoreImplArg<\n"
+        r"\s*<Policy as VectorFor<Profile, T>>::Vec,\n"
+        r"\s*ALIGNED,",
+        avx2,
     )
     assert (
         "unsafe { super::store::<<Policy as VectorFor<Profile, T>>::Vec, ALIGNED, _>(ptr, data) }"
@@ -1120,6 +1300,145 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     )
 
 
+def test_generated_public_manifests_match_the_finalized_backend_plans(
+    specialization_result,
+    specialization_artifacts: dict[str, str],
+) -> None:
+    profiles = specialization_result.emitted_profiles
+    static_selection = plan_rust_static_selection(profiles)
+    algorithm = plan_rust_algorithm(profiles, static_selection)
+    facade = plan_rust_facade(profiles, static_selection)
+    dispatch = plan_rust_dispatch(profiles, static_selection, facade)
+    cpp_manifest = cpp_public_api_manifest(profiles)
+    rust_manifest_plan = rust_public_api_manifest(
+        profiles, static_selection, algorithm, facade, dispatch
+    )
+
+    assert json.loads(specialization_artifacts["cpp/public-api.json"]) == (
+        cpp_manifest.payload()
+    )
+    assert json.loads(specialization_artifacts["rust/public-api.json"]) == (
+        rust_manifest_plan.payload()
+    )
+    assert all(
+        declaration.render_head()
+        for manifest in (cpp_manifest, rust_manifest_plan)
+        for declaration in manifest.declarations
+        if declaration.stability is PublicDeclarationStability.STABLE
+    )
+    reversed_profiles = tuple(reversed(profiles))
+    reversed_selection = plan_rust_static_selection(reversed_profiles)
+    reversed_algorithm = plan_rust_algorithm(reversed_profiles, reversed_selection)
+    reversed_facade = plan_rust_facade(reversed_profiles, reversed_selection)
+    reversed_dispatch = plan_rust_dispatch(
+        reversed_profiles,
+        reversed_selection,
+        reversed_facade,
+    )
+    assert cpp_public_api_manifest(reversed_profiles).serialize() == (
+        cpp_public_api_manifest(profiles).serialize()
+    )
+    assert rust_public_api_manifest(
+        reversed_profiles,
+        reversed_selection,
+        reversed_algorithm,
+        reversed_facade,
+        reversed_dispatch,
+    ).serialize() == rust_public_api_manifest(
+        profiles,
+        static_selection,
+        algorithm,
+        facade,
+        dispatch,
+    ).serialize()
+    rust_manifest = json.loads(
+        specialization_artifacts["rust/public-api.json"]
+    )
+    assert rust_manifest["scope"] == sorted(
+        [
+            *(selection.profile_name for selection in static_selection.profiles),
+            "fallback",
+        ]
+    )
+    assert "scalar" not in rust_manifest["scope"]
+    rust_records = {
+        (item["identity"], tuple(item["reachability"])): item
+        for item in rust_manifest["declarations"]
+    }
+    checked_export = rust_records[
+        ("crate::load_masked_checked#v:=(m,cptr,v)", ("crate",))
+    ]
+    assert checked_export["kind"] == "reexport"
+    assert checked_export["reexport_of"] == (
+        "crate::tsl_facade::load_masked_checked#v:=(m,cptr,v)"
+    )
+    assert checked_export["checked_of"] == "crate::load_masked#v:=(m,cptr,v)"
+    avx2_tags = [
+        item
+        for item in rust_manifest["declarations"]
+        if item["identity"] == "crate::profile::Avx2#avx2"
+    ]
+    assert len(avx2_tags) == 1
+    assert avx2_tags[0]["kind"] == "type"
+    assert avx2_tags[0]["stability"] == "unstable"
+    assert avx2_tags[0]["type_form"] == "struct"
+    assert "pub struct Avx2;" in specialization_artifacts["rust/src/tsl_avx2.rs"]
+    identities = {item["identity"] for item in rust_manifest["declarations"]}
+    assert "crate::runtime_dispatch#surface" not in identities
+    assert "crate::benchmark#modules" not in identities
+    assert {
+        "crate::Dispatcher#runtime-dispatch",
+        "crate::algorithms#runtime-dispatch",
+        "crate::ops#runtime-dispatch",
+        "crate::tsl_benchmark_core#module",
+        "crate::tsl_variant_bench_avx2#module",
+    } <= identities
+    profile_exports = [
+        item
+        for item in rust_manifest["declarations"]
+        if item["identity"] == "crate::profile"
+        and item["stability"] == "stable"
+    ]
+    expected_profile_targets = {
+        *(
+            f"crate::{rust_profile_module_name(selection.profile_name)}"
+            for selection in static_selection.profiles
+        ),
+        "crate::tsl_target_fallback",
+    }
+    assert len(profile_exports) == len(expected_profile_targets)
+    assert {item["kind"] for item in profile_exports} == {"reexport"}
+    assert {item["reexport_target"] for item in profile_exports} == (
+        expected_profile_targets
+    )
+    assert all(
+        item["reexport_of"] == f'{item["reexport_target"]}#module'
+        for item in profile_exports
+    )
+    assert all(
+        f"pub use {target} as profile;"
+        in specialization_artifacts["rust/src/lib.rs"]
+        for target in expected_profile_targets
+    )
+    algorithm_modules = [
+        item
+        for item in rust_manifest["declarations"]
+        if item["identity"] == "crate::profile::algo#module"
+    ]
+    assert len(algorithm_modules) == len(expected_profile_targets)
+    assert {item["kind"] for item in algorithm_modules} == {"module"}
+    assert {item["stability"] for item in algorithm_modules} == {"stable"}
+    assert all(
+        item["reachability"][-1] != "algo"
+        for item in algorithm_modules
+    )
+    assert "pub mod algo;" in specialization_artifacts["rust/src/tsl_avx2.rs"]
+    assert "rust/src/tsl_avx2/algo.rs" in specialization_artifacts
+    assert "pub use tsl_facade::load_masked_checked;" in specialization_artifacts[
+        "rust/src/lib.rs"
+    ]
+
+
 def test_cpp_specialization_structure(specialization_artifacts: dict[str, str]) -> None:
     avx2 = specialization_artifacts["cpp/include/tsl_avx2.hpp"]
     # primary template, the avx2 si32 specialization, an sse specialization in the
@@ -1133,6 +1452,7 @@ def test_cpp_specialization_structure(specialization_artifacts: dict[str, str]) 
     assert "static constexpr std::size_t vector_alignment = 32;" in avx2
     assert "static constexpr std::size_t simd_register_alignment_v = vector_alignment;" in avx2
     assert "using extension_type = avx2;" in avx2
+    assert "static constexpr bool mask_is_bitset = false;" in avx2
     assert "using with_base_type = simd<ToBase, avx2>;" in avx2
     assert "using with_extension = simd<T, ToExtension>;" in avx2
     assert "struct add_impl<tsl::simd<int32_t, tsl::avx2>>" in avx2
@@ -1285,9 +1605,12 @@ def test_cpp_profile_specializes_dataparallel_simd_for_registered_vectors(
 def test_rust_specialization_structure(specialization_artifacts: dict[str, str]) -> None:
     avx2 = specialization_artifacts["rust/src/tsl_avx2.rs"]
     core = specialization_artifacts["rust/src/tsl_core.rs"]
+    scalar = specialization_artifacts["rust/src/tsl_core/scalar.rs"]
     lib = specialization_artifacts["rust/src/lib.rs"]
 
     assert "pub enum ImplementationState" in core
+    assert "coarse structural classification" in core
+    assert "Unsupported query shapes intentionally have no impl" in core
     assert "pub trait ImplementationStateOf<Primitive, Vec, Args = ()>" in core
     assert "pub struct BoolArg<const VALUE: bool>;" in core
     assert "pub struct U32Arg<const VALUE: u32>;" in core
@@ -1295,15 +1618,15 @@ def test_rust_specialization_structure(specialization_artifacts: dict[str, str])
     assert "pub trait StaticSimdVector: SimdVector" in core
     assert "type RegisterType: Copy;" in core
     assert "pub(crate) mod representation_sealed" in core
-    assert "pub(crate) unsafe trait ValidBitPattern: Copy" in core
-    assert "pub(crate) fn bit_cast<From: Copy, To: ValidBitPattern>" in core
+    assert "pub(crate) unsafe trait ValidBitPattern: Copy" in scalar
+    assert "pub(crate) fn bit_cast<From: Copy, To: ValidBitPattern>" in scalar
     assert "pub fn bit_cast<" not in core
     assert (
         "pub(crate) unsafe fn reinterpret_unchecked<From: Copy, To: ValidBitPattern>"
-        in core
+        in scalar
     )
     assert (
-        "unsafe impl ValidBitPattern for core::arch::x86_64::__m256i {}" in core
+        "unsafe impl ValidBitPattern for core::arch::x86_64::__m256i {}" in scalar
     )
     assert "type Extension;" in core
     assert "type WithBaseType<ToBase>;" in core
@@ -1318,7 +1641,9 @@ def test_rust_specialization_structure(specialization_artifacts: dict[str, str])
     assert "const ELEMENT_COUNT: usize = 1;" in core
     assert "const ELEMENT_COUNT: usize = LANES;" in core
     assert "const ALIGN: usize;" in core
+    assert "const MASK_IS_BITSET: bool = false;" in core
     assert "const ALIGN: usize = core::mem::align_of::<T>();" in core
+    assert "const MASK_IS_BITSET: bool = true;" in core
     assert "impl<T: Copy> SimdVector for Simd<T, Scalar>" in core
     assert "impl<T: Copy, const LANES: usize> SimdVector" in core
     assert (
@@ -1341,6 +1666,7 @@ def test_rust_specialization_structure(specialization_artifacts: dict[str, str])
     assert "const ELEMENT_COUNT: usize = 8;" in avx2
     assert "fn lane_count() -> usize { 8 }" in avx2
     assert "const ALIGN: usize = 32;" in avx2
+    assert "const MASK_IS_BITSET: bool = false;" in avx2
     assert "unsafe { return core::arch::x86_64::_mm256_add_epi32(left, right); }" in avx2
     assert "impl AddImpl for Simd<i32, Sse> {" in avx2
     assert "#[doc(hidden)]\npub mod detail {\n    pub mod primitives {" in avx2
