@@ -515,17 +515,26 @@ def test_immediate_permute_lanes_prefers_native_operations(
         )
     )
 
-    lowered = Lowerer().lower(
-        slot, catalog, create_backend_dialect(catalog, "cpp")
-    ).specialization
+    backend_ids = (
+        ("cpp",)
+        if extension_name.startswith("clang_")
+        else ("cpp", "rust")
+    )
+    for backend_id in backend_ids:
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
 
-    assert lowered is not None
-    assert intrinsic in lowered.body_text
-    assert "to_array" not in lowered.body_text
-    assert [variant.name for variant in lowered.variant_bodies] == [
-        "scalar_lanes_fallback"
-    ]
-    _assert_generation_expanded(lowered.variant_bodies[0].body_text)
+        assert lowered is not None
+        assert intrinsic in lowered.body_text
+        assert "to_array" not in lowered.body_text
+        assert [variant.name for variant in lowered.variant_bodies] == [
+            "scalar_lanes_fallback"
+        ]
+        fallback_body = lowered.variant_bodies[0].body_text
+        _assert_generation_expanded(fallback_body)
+        if not extension_name.startswith("clang_"):
+            assert "group_length > 4" not in fallback_body
 
 
 def test_sse41_to_mask_fast_paths_win_over_portable_fallback(

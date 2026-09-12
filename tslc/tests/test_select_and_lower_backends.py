@@ -199,6 +199,32 @@ def test_lower_scalar_and_generic_division_use_normalized_lane_helper(
         assert helper_call in generic_body.body_text
 
 
+def test_lower_clang_integer_division_expands_fixed_lanes_without_a_runtime_loop(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    slot = next(
+        slot
+        for slot in Selector()
+        .select_profile(catalog, machine_profiles["avx2"], "div", ("si32",))
+        .selected
+        if slot.extension.name == "clang_v128"
+        and slot.primitive.mask_mode is None
+    )
+
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert lowered is not None
+    assert "for (" not in lowered.body_text
+    assert "while (" not in lowered.body_text
+    for lane in range(4):
+        assert f"result[{lane}]" in lowered.body_text
+        assert f"dividend[{lane}]" in lowered.body_text
+        assert f"divisor[{lane}]" in lowered.body_text
+
+
 def test_lower_generic_masked_division_sanitizes_inactive_operands(
     catalog: Catalog,
     machine_profiles,
@@ -331,6 +357,13 @@ def test_lower_scalar_generic_and_clang_integer_remainder_use_normalized_helper(
             ).specialization
             assert lowered is not None
             assert helper_call in lowered.body_text
+            if slot.extension.name == "clang_v128":
+                assert "for (" not in lowered.body_text
+                assert "while (" not in lowered.body_text
+                for lane in range(4):
+                    assert f"result[{lane}]" in lowered.body_text
+                    assert f"dividend[{lane}]" in lowered.body_text
+                    assert f"divisor[{lane}]" in lowered.body_text
             if backend_id == "rust":
                 assert f"unsafe {{ {helper_call}" in lowered.body_text
 
