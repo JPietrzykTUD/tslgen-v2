@@ -18,7 +18,7 @@ generated projects, and optionally verifies them with real toolchains.
 
 ```text
 CHARTER.md    Repository-wide design contract
-tslc/         Python compiler package, tests, compiler charter, and architecture docs
+tslc/         Python compiler package, tests, compiler manual, charter, and architecture docs
 tsldata/      TSL type/language/extension/primitive source corpus
 editors/      Editor clients; compiler semantics remain in tslc
 docs/         Human-authored maintainer guides
@@ -75,6 +75,7 @@ overlay.
 ## Where To Look
 
 - Package quick start: [tslc/README.md](tslc/README.md)
+- Published compiler manual sources: [tslc/docs/index.rst](tslc/docs/index.rst)
 - Standalone PIVOT exporter: [tools/pivot/README.md](tools/pivot/README.md)
 - TSL v1 release production: [docs/releasing-tsl-v1.md](docs/releasing-tsl-v1.md)
 - Command-line tools: [docs/tslc-cli.md](docs/tslc-cli.md)

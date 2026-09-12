@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build documentation for an already generated TSLc project.
+"""Build the combined generated-library and TSLc compiler documentation site.
 
 This is a maintenance/output tool, not a compiler stage. It consumes the
 written generated project, copies documentation assets, and invokes external
@@ -7,6 +7,7 @@ documentation tools:
 
 - C++: Doxygen XML consumed by Breathe inside Sphinx.
 - Rust: ``cargo doc --no-deps``, copied under the same Sphinx site.
+- TSLc: curated compiler pages plus the explicit ``tslc.api`` facade.
 
 Run from the repository with ``tslc/src`` on ``PYTHONPATH``:
 
@@ -121,7 +122,7 @@ def document_generated(
     documentation_tools: Mapping[str, str] | None = None,
     repo_root: Path | None = None,
 ) -> DocumentationReport:
-    """Build docs for selected backends in an already-written generated project.
+    """Build the combined site from selected backends and compiler docs.
 
     ``repo_root`` locates the checkout's documentation assets; when omitted,
     the enclosing checkout is discovered lazily at first use.
@@ -230,7 +231,7 @@ def document_generated(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="tslc.maintenance.documentation",
-        description="Build generated C++/Rust API documentation.",
+        description="Build generated-library and TSLc compiler documentation.",
     )
     parser.add_argument("--output-root", required=True, help="generated project root")
     parser.add_argument(
@@ -766,6 +767,7 @@ def _site_navigation_links(
     if include_rust:
         links.append(("Rust API", "./rust/"))
     links.append(("Safety contract", "./checked_api_contract.html"))
+    links.append(("Compiler", "./compiler/"))
     return tuple(links)
 
 
@@ -849,12 +851,14 @@ def _render_site_assets(
     include_specializations: bool,
     repo_root: Path | None,
 ) -> None:
-    asset_root = _required_repo_root(repo_root) / "supplementary" / "docs" / "site"
+    checkout_root = _required_repo_root(repo_root)
+    asset_root = checkout_root / "supplementary" / "docs" / "site"
     values = _site_asset_values(
         project_name=project_name,
         doxygen_xml=doxygen_xml,
         include_rust=include_rust,
         include_specializations=include_specializations,
+        tslc_source=checkout_root / "tslc" / "src",
     )
     (sphinx_source / "_templates").mkdir(parents=True, exist_ok=True)
     (sphinx_source / "conf.py").write_text(
@@ -892,6 +896,10 @@ def _render_site_assets(
             _template(asset_root / "specializations.rst.in", values),
             encoding="utf-8",
         )
+    compiler_docs = sphinx_source / "compiler"
+    if compiler_docs.exists():
+        shutil.rmtree(compiler_docs)
+    shutil.copytree(checkout_root / "tslc" / "docs", compiler_docs)
     _copy_static_assets(asset_root / "_static", sphinx_source / "_static")
 
 
@@ -924,6 +932,7 @@ def _site_asset_values(
     doxygen_xml: Path | None,
     include_rust: bool,
     include_specializations: bool,
+    tslc_source: Path,
 ) -> dict[str, str]:
     entries: list[str] = ["   checked_api_contract"]
     if doxygen_xml is not None:
@@ -936,7 +945,13 @@ def _site_asset_values(
     return {
         "PROJECT_NAME": project_name,
         "TITLE_UNDERLINE": "=" * len(project_name),
-        "SPHINX_EXTENSIONS": repr(["breathe"] if doxygen_xml is not None else []),
+        "SPHINX_EXTENSIONS": repr(
+            [
+                "sphinx.ext.autodoc",
+                *(["breathe"] if doxygen_xml is not None else []),
+            ]
+        ),
+        "TSLC_SOURCE_PATH": repr(str(tslc_source.resolve())),
         "BREATHE_PROJECTS": repr(
             {"TSL": str(doxygen_xml.resolve())} if doxygen_xml is not None else {}
         ),
@@ -946,19 +961,29 @@ def _site_asset_values(
 
 
 def _sphinx_navigation_html(site_links: tuple[tuple[str, str], ...]) -> str:
-    active_pages = {
-        "./": "index",
-        "./cpp_api.html": "cpp_api",
-        "./rust/": "rust_api",
-        "./checked_api_contract.html": "checked_api_contract",
+    targets = {
+        "./": "{{ pathto('index') }}",
+        "./cpp_api.html": "{{ pathto('cpp_api') }}",
+        "./rust/": "{{ pathto('rust/', 1) }}",
+        "./checked_api_contract.html": "{{ pathto('checked_api_contract') }}",
+        "./compiler/": "{{ pathto('compiler/index') }}",
+    }
+    active_conditions = {
+        "./": "pagename == 'index'",
+        "./cpp_api.html": "pagename == 'cpp_api'",
+        "./rust/": "pagename == 'rust_api'",
+        "./checked_api_contract.html": "pagename == 'checked_api_contract'",
+        "./compiler/": (
+            "pagename == 'compiler/index' or pagename.startswith('compiler/')"
+        ),
     }
     anchors = []
     for label, href in site_links:
-        page = active_pages[href]
+        condition = active_conditions[href]
         anchors.append(
-            f'<a href="{html.escape(href, quote=True)}"'
-            f' class="{{% if pagename == {page!r} %}}active{{% endif %}}"'
-            f'{{% if pagename == {page!r} %}} aria-current="page"{{% endif %}}>'
+            f'<a href="{targets[href]}"'
+            f' class="{{% if {condition} %}}active{{% endif %}}"'
+            f'{{% if {condition} %}} aria-current="page"{{% endif %}}>'
             f"{html.escape(label)}</a>"
         )
     return "\n        ".join(anchors)

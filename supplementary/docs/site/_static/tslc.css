@@ -97,6 +97,11 @@ pre {
   background: var(--code-bg);
 }
 
+dl.py dt.sig,
+dl.py dt.sig .pre {
+  overflow-wrap: anywhere;
+}
+
 dl.cpp,
 dl.rust {
   border-left: 4px solid var(--accent);

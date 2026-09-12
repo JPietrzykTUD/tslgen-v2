@@ -707,12 +707,17 @@ typed public type and algorithm manifests, primitive prose, unique callable
 identities, and ordinary twins for checked callables. Rustdoc treats the opaque
 root facade and selected `profile` API as the stable documented boundary; its
 public low-level substrate remains available for generated signatures but is
-hidden from the stable overview. Shared examples and the Sphinx contract page
+hidden from the stable overview. The source-controlled compiler manual under
+[docs/](docs/) is staged into the same Sphinx build and uses autodoc only for
+the explicit four-function [`tslc.api`](src/tslc/api.py) facade; importable
+internal modules are not promoted into a supported Python surface. Shared
+examples and the Sphinx contract page
 explain unchecked preconditions, checked errors, and residual language-level
 obligations. When specialization data is present, its filterable explorer is
 the generated site's landing page and receives navigation links only for the
-API references built into that site; the former `specializations/` URL remains
-a compatibility redirect. The same compact navigation is added through
+API references and compiler manual built into that site; the former
+`specializations/` URL remains a compatibility redirect. The same compact
+navigation is added through
 Sphinx's layout template and rustdoc's supported HTML/CSS hooks, so every API
 landing page links back without post-processing either renderer's output. The
 repository maintenance projections

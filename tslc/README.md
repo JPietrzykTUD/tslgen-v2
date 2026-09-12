@@ -30,6 +30,8 @@ sources -> parse -> catalog -> select -> scan body -> lower -> finalize/validate
 
 See the repository [charter](../CHARTER.md) and compiler
 [charter](CHARTER.md) for the design rules this project holds itself to.
+The curated compiler manual published with the generated TSL documentation is
+maintained under [`docs/`](docs/index.rst).
 
 ## Quick start
 

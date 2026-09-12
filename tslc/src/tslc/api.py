@@ -36,6 +36,13 @@ from tslc.pipeline import (
 from tslc.sources import expand_source_paths
 from tslc.project_render import ProjectRenderConfig
 
+__all__ = (
+    "generate_project",
+    "refresh_artifact_manifest",
+    "verify_project",
+    "write_artifacts",
+)
+
 _ARITH_TYPE_TAGS = DEFAULT_SCALAR_TYPE_TAGS
 
 
@@ -125,6 +132,12 @@ def write_artifacts(
     output_root: Path | str,
     mode: ArtifactWriteMode = "manifest-clean",
 ) -> ArtifactWriteReport:
+    """Write one in-memory artifact set beneath ``output_root``.
+
+    ``manifest-clean`` removes only stale files recorded by the previous TSLc
+    manifest. It never adopts or removes unrelated files in the output tree.
+    """
+
     return ArtifactWriter().write(artifacts, output_root, mode)
 
 
@@ -146,6 +159,13 @@ def verify_project(
     run_value_tests: bool = False,
     run_quality_checks: bool = False,
 ) -> BuildVerificationReport:
+    """Build and optionally test an already-written generated project.
+
+    ``verify`` is normally ``GenerationResult.rendered.verify`` from the same
+    generation request. Missing optional toolchains or runners are reported in
+    the returned verification report rather than hidden by this facade.
+    """
+
     return verify_generated_project(
         Path(output_root),
         verify,

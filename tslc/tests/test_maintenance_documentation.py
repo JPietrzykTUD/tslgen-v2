@@ -10,6 +10,7 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 
+from tslc import api
 from tslc.backend.capability import (
     DocumentationSiteInput,
     GeneratedDocumentationBuilder,
@@ -81,7 +82,10 @@ def test_document_generated_writes_assets_and_runs_tools(
 
     site_source = output_root / "docs/sphinx-src"
     assert (site_source / "conf.py").is_file()
-    assert "extensions = ['breathe']" in (site_source / "conf.py").read_text()
+    site_conf = (site_source / "conf.py").read_text()
+    assert "extensions = ['sphinx.ext.autodoc', 'breathe']" in site_conf
+    assert 'autodoc_preserve_defaults = True' in site_conf
+    assert str((Path("tslc/src").resolve())) in site_conf
     assert 'html_logo = "_static/tsl_repo_logo_wide.png"' in (
         site_source / "conf.py"
     ).read_text()
@@ -112,13 +116,30 @@ def test_document_generated_writes_assets_and_runs_tools(
     )
     assert (site_source / "checked_api_contract.rst").is_file()
     assert (site_source / "checked_api_example.cpp").is_file()
+    compiler_source = site_source / "compiler"
+    assert sorted(path.name for path in compiler_source.glob("*.rst")) == [
+        "architecture.rst",
+        "authoring.rst",
+        "cli.rst",
+        "getting_started.rst",
+        "index.rst",
+        "python_api.rst",
+    ]
+    python_api = (compiler_source / "python_api.rst").read_text()
+    assert ".. automodule:: tslc.api" in python_api
+    assert "tslc.pipeline" not in python_api
     site_layout = site_source / "_templates/layout.html"
     assert site_layout.is_file()
     assert 'class="tslcSiteHeader"' in site_layout.read_text()
-    assert 'href="./cpp_api.html"' in site_layout.read_text()
-    assert 'href="./rust/"' in site_layout.read_text()
-    assert 'href="./checked_api_contract.html"' in site_layout.read_text()
-    assert (site_source / "_static/tslc.css").is_file()
+    assert "pathto('index')" in site_layout.read_text()
+    assert "pathto('cpp_api')" in site_layout.read_text()
+    assert "pathto('rust/', 1)" in site_layout.read_text()
+    assert "pathto('checked_api_contract')" in site_layout.read_text()
+    assert "pathto('compiler/index')" in site_layout.read_text()
+    assert "pagename.startswith('compiler/')" in site_layout.read_text()
+    site_css = (site_source / "_static/tslc.css").read_text()
+    assert "dl.py dt.sig" in site_css
+    assert "overflow-wrap: anywhere" in site_css
     shared_header_css = site_source / "_static/site-header.css"
     assert shared_header_css.is_file()
     assert "var(--main-background-color" in shared_header_css.read_text()
@@ -154,6 +175,7 @@ def test_document_generated_writes_assets_and_runs_tools(
     assert 'data-tslc-site-path="checked_api_contract.html"' in (
         rustdoc_header.read_text()
     )
+    assert 'data-tslc-site-path="compiler/"' in rustdoc_header.read_text()
     assert ".tslcSiteNav" in rustdoc_css.read_text()
     assert "body.rustdoc" in rustdoc_css.read_text()
     assert (output_root / "docs/site/rust/index.html").is_file()
@@ -177,6 +199,7 @@ def test_document_generated_writes_assets_and_runs_tools(
         '"label":"Safety contract","href":"./checked_api_contract.html"'
         in log_text
     )
+    assert '"label":"Compiler","href":"./compiler/"' in log_text
 
 
 def test_runner_receives_command_environment_without_mutating_os_environ(
@@ -228,11 +251,23 @@ def test_runner_receives_command_environment_without_mutating_os_environ(
         {"label": "Specializations", "href": "./"},
         {"label": "C++ API", "href": "./cpp_api.html"},
         {"label": "Safety contract", "href": "./checked_api_contract.html"},
+        {"label": "Compiler", "href": "./compiler/"},
     ]
     assert all(not leaked for _, _, leaked in calls)
     assert "VITE_TSLC_GIT_BRANCH" not in os.environ
     assert "VITE_TSLC_GIT_HASH" not in os.environ
     assert "VITE_TSLC_SITE_LINKS" not in os.environ
+
+
+def test_documented_python_api_is_narrow_and_described() -> None:
+    assert api.__all__ == (
+        "generate_project",
+        "refresh_artifact_manifest",
+        "verify_project",
+        "write_artifacts",
+    )
+    for name in api.__all__:
+        assert getattr(api, name).__doc__
 
 
 def test_document_generated_site_only_skips_backend_docs_and_npm_ci(tmp_path) -> None:
