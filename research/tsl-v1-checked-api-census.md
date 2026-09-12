@@ -15,7 +15,7 @@ This generated maintenance report tracks reviewed evidence for the implemented d
 
 ## Inventory summary
 
-- Exact generated runtime-failure sites: 156
+- Exact generated runtime-failure sites: 153
 - Exact typed public callable identities with at least one `caller_unsafe` implementation: 33
 - Checked source-contract coverage gaps among those identities: 11
 - Applicable source safety-metadata gaps: 138 (26 require caller unsafety)
@@ -24,7 +24,7 @@ Runtime sites by classification:
 
 - dynamic precondition: 6
 - implementation hazard: 8
-- static well-formedness constraint: 23
+- static well-formedness constraint: 20
 - tooling-only validation: 119
 
 ## Reviewed semantic families
@@ -179,7 +179,7 @@ It is not part of a generated runtime API contract.
 - `tslc/src/tslc/value_tests/_render_rust_memory.py:70` — owner `_store` — `assert` — `f" for i in 0..{buflen} {{ assert!(buf[i].lane_eq(expected[i]), "`
 - `tslc/src/tslc/value_tests/_render_rust_memory.py:427` — owner `_stream` — `assert_eq` — `f" assert_eq!(result.as_str(), {expected}, \"{case.case_name}\");",`
 
-### `static_representation_or_lane_shape` (20)
+### `static_representation_or_lane_shape` (17)
 
 Sizes, lane counts, and mask-storage capacity are compiler-owned specialization facts.
 
@@ -198,11 +198,8 @@ Sizes, lane counts, and mask-storage capacity are compiler-owned specialization 
 - `tslc/src/tslc/backend/assets/tsl_algorithm_transform.rs:232` — owner `transform_selected_binary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_selected_binary requires a vector with at least one lane", );`
 - `tslc/src/tslc/backend/assets/tsl_algorithm_transform.rs:98` — owner `transform_selected_unary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_selected_unary requires a vector with at least one lane", );`
 - `tslc/src/tslc/backend/assets/tsl_algorithm_transform.rs:1332` — owner `transform_unary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_unary requires a vector with at least one lane", );`
-- `tslc/src/tslc/backend/assets/tsl_core_detail_scalar.hpp:178` — owner `require_same_lanes` — `throw` — `throw std::invalid_argument( "lane-preserving conversion requires equal source and target lane counts" );`
-- `tslc/src/tslc/backend/assets/tsl_core_detail_scalar.hpp:176` — owner `require_same_lanes` — `trap` — `__builtin_trap();`
 - `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:30` — owner `bit_cast` — `assert_eq` — `assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());`
 - `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:44` — owner `reinterpret_unchecked` — `assert_eq` — `assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());`
-- `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:142` — owner `require_same_lanes` — `assert_eq` — `assert_eq!( source_lanes, target_lanes, "lane-preserving conversion requires equal source and target lane counts" );`
 
 ### `static_immediate_nonzero` (2)
 
@@ -237,11 +234,11 @@ The checked signature must establish an addressable extent.
 
 This is a compiler/backend defect if reachable, not invalid caller data.
 
-- `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:474` — owner `saturating_cast_value` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:431` — owner `saturating_from_f64` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:346` — owner `saturating_from_i128` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:389` — owner `saturating_from_u128` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:303` — owner `scalar_as_cast_value` — `panic` — `panic!("unsupported scalar-as cast")`
+- `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:466` — owner `saturating_cast_value` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:423` — owner `saturating_from_f64` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:338` — owner `saturating_from_i128` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:381` — owner `saturating_from_u128` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:295` — owner `scalar_as_cast_value` — `panic` — `panic!("unsupported scalar-as cast")`
 
 ### `implementation_invariant` (3)
 

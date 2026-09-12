@@ -143,6 +143,13 @@ def test_rust_runtime_has_one_asset_owned_source(catalog: Catalog) -> None:
     assert "preamble" not in catalog.translations["rust"]
 
 
+def test_checked_lane_count_contract_has_no_inline_validation_helper(
+    catalog: Catalog,
+) -> None:
+    for backend_id in ("cpp", "rust"):
+        assert "helper_require_same_lanes" not in catalog.translations[backend_id]
+
+
 def test_to_integral_tests_default_to_unqualified_baseline(catalog: Catalog) -> None:
     primitive = catalog.primitive("to_integral")
     assert primitive is not None
