@@ -809,7 +809,10 @@ The optional [benchmark/](src/tslc/benchmark/) stage consumes finalized
 backend specializations and authored value-test facts through one
 backend-parameterized typed planner. It plans every explicitly coexisting named
 variant in the emitted primitive/dependency closure and emits structured skip
-coverage for unsupported signature shapes. C++ renders those facts as a
+coverage for unsupported signature shapes. An optional backend-owned slot
+identity projector adds policy-ratchet identity without making the shared
+planner recognize that backend; Rust supplies the current projector while C++
+retains its existing empty coverage identity. C++ renders those facts as a
 standalone native benchmark/policy tool. Rust admits scenario coverage through
 explicit named `profile × scenario-family` pairs while deriving profile family,
 features, spellings, modes, and flags from the live machine profile. It renders

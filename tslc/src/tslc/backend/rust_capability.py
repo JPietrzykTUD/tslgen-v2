@@ -40,6 +40,7 @@ from tslc.backend.rust_verification import (
     rust_verify_profiles,
 )
 from tslc.backend.rust_validation import validate_rust_profiles
+from tslc.benchmark.identity import benchmark_slot_identity_hash
 from tslc.benchmark.planner import BenchmarkPlanner
 from tslc.benchmark.render_rust import rust_benchmark_artifacts
 from tslc.catalog.model import Catalog
@@ -124,6 +125,7 @@ def rust_benchmark_plan(
         supported_admissions=(
             _rust_policy_manifest(policy_inputs).benchmark_admission_set
         ),
+        slot_identity=benchmark_slot_identity_hash,
     ).plan(profiles, value_tests)
 
 

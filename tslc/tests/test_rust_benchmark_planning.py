@@ -537,3 +537,18 @@ def test_unregistered_backend_can_reuse_planner_without_name_dispatch(
         "default",
         "generic_fallback",
     ]
+    assert all(entry.slot_hash == "" for entry in first.coverage)
+
+    identified = BenchmarkPlanner(
+        catalog,
+        backend_id="future",
+        slot_identity=lambda profile_name, spec: (
+            f"future:{profile_name}:{spec.primitive_name}"
+        ),
+    ).plan((fake_profile,), fake_value_tests)
+    assert identified.coverage
+    assert all(
+        entry.slot_hash
+        == f"future:{entry.profile_name}:{entry.primitive_name}"
+        for entry in identified.coverage
+    )

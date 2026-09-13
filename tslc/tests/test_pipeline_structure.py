@@ -492,6 +492,9 @@ def test_neutral_planners_do_not_branch_on_registered_backend_names() -> None:
     value_planner_tree = ast.parse(
         (_REPO_ROOT / "tslc/src/tslc/value_tests/planner.py").read_text()
     )
+    benchmark_planner_tree = ast.parse(
+        (_REPO_ROOT / "tslc/src/tslc/benchmark/planner.py").read_text()
+    )
 
     pipeline_literals = {
         node.value
@@ -503,9 +506,15 @@ def test_neutral_planners_do_not_branch_on_registered_backend_names() -> None:
         for node in ast.walk(value_planner_tree)
         if isinstance(node, ast.Constant) and isinstance(node.value, str)
     }
+    benchmark_planner_literals = {
+        node.value
+        for node in ast.walk(benchmark_planner_tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    }
 
     assert "cpp" not in pipeline_literals
     assert "rust" not in value_planner_literals
+    assert "rust" not in benchmark_planner_literals
 
 
 def test_generic_lowering_does_not_branch_on_registered_backend_names() -> None:

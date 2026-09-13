@@ -35,8 +35,10 @@ description: Add a backend or backend capability to tslc. Use when asked to intr
 6. Diagnose unsupported capability combinations before rendering or artifact writing.
 7. Add focused tests for registration, capability validation, signature/query
    projection, rendering, compiler assets, deterministic artifacts, and verifier
-   configuration. Use a fake third backend to prove generic pipeline, doctor,
-   authoring, and verification consumers dispatch through capabilities.
+   configuration. Inject any backend-specific benchmark coverage identity when
+   constructing that backend's typed planner; the shared planner must not
+   recognize backend names. Use a fake third backend to prove generic pipeline,
+   doctor, authoring, and verification consumers dispatch through capabilities.
 
 ## Checks
 
