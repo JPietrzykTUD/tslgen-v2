@@ -141,6 +141,7 @@ CPP_BACKEND = BackendCapability(
     backend_id="cpp",
     root_path="cpp",
     artifact_media_type="text/x-c++",
+    preview_file_suffix="hpp",
     dialect_factory=create_cpp_dialect,
     artifact_renderer=cpp_backend_artifacts,
     verify_profiles=cpp_profile_verification,

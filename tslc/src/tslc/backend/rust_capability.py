@@ -235,6 +235,7 @@ RUST_BACKEND = BackendCapability(
     backend_id="rust",
     root_path="rust",
     artifact_media_type="text/rust",
+    preview_file_suffix="rs",
     dialect_factory=create_rust_dialect,
     artifact_renderer=rust_backend_artifacts,
     verify_profiles=rust_profile_verification,

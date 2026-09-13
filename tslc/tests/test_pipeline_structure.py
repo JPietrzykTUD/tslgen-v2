@@ -167,6 +167,36 @@ def test_backend_defaults_are_resolved_at_request_construction(
     assert request.backends == ("future",)
 
 
+def test_backend_preview_presentation_is_capability_owned() -> None:
+    future = replace(
+        CPP_BACKEND,
+        backend_id="future",
+        root_path="future",
+        artifact_media_type="text/future",
+        preview_file_suffix="future",
+    )
+
+    assert CPP_BACKEND.preview_file_suffix == "hpp"
+    assert RUST_BACKEND.preview_file_suffix == "rs"
+    assert future.preview_file_suffix == "future"
+    with pytest.raises(ValueError, match="backend preview file suffix"):
+        replace(future, preview_file_suffix="")
+    with pytest.raises(ValueError, match="backend preview file suffix"):
+        replace(future, preview_file_suffix=".future")
+
+
+def test_registered_backend_ids_preserve_capability_order(monkeypatch) -> None:
+    from tslc.backend import registry
+
+    monkeypatch.setattr(
+        registry,
+        "BACKEND_CAPABILITIES",
+        (RUST_BACKEND, CPP_BACKEND),
+    )
+
+    assert registry.registered_backend_ids() == ("rust", "cpp")
+
+
 def test_full_backend_inventory_detection_rejects_focused_requests() -> None:
     request = pipeline.GenerationRequest(
         source_paths=(),
@@ -221,6 +251,7 @@ def test_compiler_capability_vocabulary_is_backend_generic(monkeypatch) -> None:
         backend_id="future",
         root_path="future",
         artifact_media_type="text/future",
+        preview_file_suffix="future",
         dialect_factory=lambda catalog: None,  # type: ignore[arg-type,return-value]
         artifact_renderer=_empty_backend_artifacts,
         verify_profiles=lambda profiles: (),
@@ -502,6 +533,7 @@ def test_backend_closure_seed_primitives_are_capability_owned() -> None:
         backend_id="fake",
         root_path="fake",
         artifact_media_type="text/fake",
+        preview_file_suffix="fake",
         dialect_factory=lambda catalog: None,  # type: ignore[arg-type,return-value]
         artifact_renderer=_empty_backend_artifacts,
         verify_profiles=lambda profiles: (),
@@ -541,6 +573,7 @@ def test_backend_capability_owns_optional_benchmark_planning(catalog) -> None:
         backend_id="future",
         root_path="future",
         artifact_media_type="text/future",
+        preview_file_suffix="future",
         dialect_factory=lambda catalog: None,  # type: ignore[arg-type,return-value]
         artifact_renderer=_empty_backend_artifacts,
         verify_profiles=lambda profiles: (),
@@ -635,6 +668,7 @@ def test_fake_backend_drives_config_documentation_and_artifact_media_type(
         backend_id="fake",
         root_path="fake",
         artifact_media_type="text/fake",
+        preview_file_suffix="fake",
         dialect_factory=lambda catalog: None,  # type: ignore[arg-type,return-value]
         artifact_renderer=artifact_renderer,
         verify_profiles=lambda profiles: (),
@@ -740,6 +774,7 @@ def test_render_project_filters_profiles_by_backend_membership(monkeypatch) -> N
         backend_id="fake",
         root_path="fake",
         artifact_media_type="text/fake",
+        preview_file_suffix="fake",
         dialect_factory=lambda catalog: None,  # type: ignore[arg-type,return-value]
         artifact_renderer=artifact_renderer,
         verify_profiles=verify_profiles,
@@ -852,6 +887,7 @@ prim<v:=v> id(data):
         backend_id="fake",
         root_path="fake",
         artifact_media_type="text/fake",
+        preview_file_suffix="fake",
         dialect_factory=lambda catalog: None,  # type: ignore[arg-type,return-value]
         artifact_renderer=_empty_backend_artifacts,
         verify_profiles=verify_profiles,

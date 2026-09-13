@@ -331,6 +331,7 @@ class BackendCapability:
     backend_id: str
     root_path: str
     artifact_media_type: str
+    preview_file_suffix: str
     dialect_factory: DialectFactory
     artifact_renderer: BackendArtifactRenderer
     verify_profiles: VerifyProfileRenderer
@@ -356,6 +357,16 @@ class BackendCapability:
     compiler_capabilities: CompilerCapabilityRegistry[CompilerCapability] = (
         EMPTY_COMPILER_CAPABILITY_REGISTRY
     )
+
+    def __post_init__(self) -> None:
+        if not self.preview_file_suffix or any(
+            not (character.isalnum() or character in {"_", "-"})
+            for character in self.preview_file_suffix
+        ):
+            raise ValueError(
+                "backend preview file suffix must contain only letters, digits, "
+                "underscores, or hyphens"
+            )
 
     def load_policy_input(self) -> BackendPolicyInput | None:
         if self.policy_input_loader is None:
