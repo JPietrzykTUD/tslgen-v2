@@ -229,6 +229,8 @@ class _JsonObject:
 def load_machine_profiles_checked(
     path: Path,
     target_families: TargetFamilyCatalog | None = None,
+    *,
+    known_backend_ids: frozenset[str] | None = None,
 ) -> MachineProfileLoadResult:
     """Load machine profiles with structural validation diagnostics."""
 
@@ -415,6 +417,7 @@ def load_machine_profiles_checked(
                 name,
                 fields.get("backend_selection_priority", _JsonObject(())),
                 target_families,
+                known_backend_ids,
                 path,
                 diagnostics,
             )
@@ -773,6 +776,7 @@ def _backend_selection_priority(
     profile_name: str,
     value: Any,
     target_families: TargetFamilyCatalog | None,
+    known_backend_ids: frozenset[str] | None,
     path: Path,
     diagnostics: list[Diagnostic],
 ) -> dict[str, int]:
@@ -788,7 +792,13 @@ def _backend_selection_priority(
         return {}
     fields = _object_fields(value, path, diagnostics)
     known_backends = (
-        target_families.backend_ids if target_families is not None else frozenset()
+        known_backend_ids
+        if known_backend_ids is not None
+        else (
+            target_families.backend_ids
+            if target_families is not None
+            else frozenset()
+        )
     )
     result: dict[str, int] = {}
     for backend_id, priority in fields.items():

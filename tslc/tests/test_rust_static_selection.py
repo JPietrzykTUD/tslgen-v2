@@ -383,6 +383,7 @@ def test_static_selection_requires_priority_for_incomparable_targets(
         emitted,
         name="alpha",
         features=frozenset((*emitted.profile.features, "alpha")),
+        backend_selection_priority={},
     )
     beta = _with_machine_profile(
         emitted,

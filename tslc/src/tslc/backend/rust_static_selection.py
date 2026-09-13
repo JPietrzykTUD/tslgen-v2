@@ -502,6 +502,25 @@ def _order_arch_candidates(
     ordered_by_name = tuple(
         sorted(candidates, key=lambda item: item.emitted_profile.profile.name)
     )
+    for index, left in enumerate(ordered_by_name):
+        for right in ordered_by_name[index + 1 :]:
+            if left.requirement != right.requirement:
+                continue
+            diagnostics.append(
+                _candidate_diagnostic(
+                    left,
+                    code="TSL-BACKEND-RUST-DUPLICATE-TARGET-PROFILES",
+                    message=(
+                        f"Rust profiles {left.emitted_profile.profile.name!r} and "
+                        f"{right.emitted_profile.profile.name!r} have identical "
+                        f"compile-target requirements for {target_arch!r}; place "
+                        "them in separate gated generation scopes"
+                    ),
+                )
+            )
+    if diagnostics:
+        return (), sort_diagnostics(diagnostics)
+
     priorities: dict[int, _RustStaticCandidate] = {}
     for candidate in ordered_by_name:
         priority = candidate.selection_priority
@@ -524,20 +543,6 @@ def _order_arch_candidates(
 
     for index, left in enumerate(ordered_by_name):
         for right in ordered_by_name[index + 1 :]:
-            if left.requirement == right.requirement:
-                diagnostics.append(
-                    _candidate_diagnostic(
-                        left,
-                        code="TSL-BACKEND-RUST-DUPLICATE-TARGET-PROFILES",
-                        message=(
-                            f"Rust profiles {left.emitted_profile.profile.name!r} and "
-                            f"{right.emitted_profile.profile.name!r} have identical "
-                            f"compile-target requirements for {target_arch!r}; place "
-                            "them in separate gated generation scopes"
-                        ),
-                    )
-                )
-                continue
             if left.requirement.strictly_contains(
                 right.requirement
             ) or right.requirement.strictly_contains(left.requirement):

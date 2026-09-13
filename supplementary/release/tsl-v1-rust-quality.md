@@ -1,14 +1,16 @@
 # TSL v1 Rust surface and quality evidence
 
-Date: 2026-09-09
+Date: 2026-09-13
 
 ## Result
 
 The stable Rust v1 surface is the generated opaque facade, root re-exports, and
-profile callables for `sse`, `sse2`, `sse3`, `avx`, `avx2`, and `knl`. The
-semantic public-API baseline freezes 7,201 exact declaration records for those
-six profiles and their shared fallback scope. The profile set is read from the
-release policy by CI rather than repeated in workflow code.
+profile callables for the scalar fallback and every ungated Rust-capable
+machine profile: 16 x86 profiles from `sse` through `zen5`, plus `neon` and
+`wasm32-simd128`. The semantic public-API baseline freezes 12,951 exact
+declaration records for those 19 profiles and their shared target fallback.
+The profile set is read from the release policy by CI rather than repeated in
+workflow code, and a release ratchet fails when any eligible profile is omitted.
 
 Stable Rust SVE and RVV are explicitly unsupported in v1. Their release target
 scopes are C++-only, the Rust release profile selection contains neither
@@ -16,6 +18,23 @@ family, and the release contract names `stable Rust SVE` and `stable Rust RVV`
 among its exclusions. This avoids a
 facade that appears portable but depends on private LLVM intrinsics or local
 inline assembly.
+
+## Compile-time profile selection
+
+Every machine profile remains a separate generated Rust module. The crate root
+guards each module declaration and its `profile` re-export with mutually
+exclusive `#[cfg(...)]` predicates; there is no runtime branch and no
+`build.rs` selector. Strict target-feature supersets precede their subsets.
+When two feature sets are incomparable, the planner uses the reviewed
+`backend_selection_priority.rust` value from the machine-profile data. Every
+consumer of profile order reuses this one typed plan.
+
+Input order is not selection policy: reversing the requested profiles produces
+the same plan and artifact digests. Generated tests cover exact Cannon Lake,
+exact Cascade Lake, their artificial feature union, stronger Ice Lake, the
+fallback, AArch64 Neon, and Wasm. Equal target predicates remain an error;
+auto-detect-gated normal/OneAPI pairs therefore stay in separate generated CI
+scopes rather than using priority to make one unreachable.
 
 ## API and safety boundary
 
@@ -58,11 +77,19 @@ every profile and executes doctests once with the least demanding host-capable
 profile (`sse` for the SDE-backed x86 release set). It schedules no host doctest
 for a pure cross-target profile.
 
-Local full-corpus runs generated 41,874 specializations and 126 artifacts. Both
-Rust 1.89.0 and current stable 1.98.0 completed the 93-command six-profile
-build/lint/Rustdoc/value matrix with no failed command. The full Rust 1.89 run
-used Intel SDE 10.8.0 and passed all generated suites, including 2,367 AVX,
-2,543 AVX2, 2,706 KNL, and 2,240 value cases for each of SSE, SSE2, and SSE3.
+Local full-corpus runs generated 162,830 specializations and 550 artifacts.
+Both Rust 1.89.0 and current stable 1.98.0 completed the same 284-command
+19-profile build/lint/Rustdoc/value matrix with no failed command, verifier
+diagnostic, or skip. Each run included 19 warning-denied checks, 19 Rustdoc
+builds, 19 Clippy checks, 114 expected-failure contracts, all generated value
+suites through Intel SDE 10.8.0, QEMU AArch64 10.2.1, and Wasmtime 45.0.2, one
+doctest command, and one Cargo package-content listing.
+
+The value-test planner still reports four explicit
+`TSL-VALUE-TEST-UNSUPPORTED-CASE` shapes for AVX-512 integral-mask insertion
+and extraction on applicable profiles. Those authored cases are not silently
+counted as executed; closing that typed test-shape gap remains separate from
+the profile-selection and release-scope change.
 
 The full generated facade's doctest gate succeeded on each toolchain: two
 complete crate examples executed. At the time, 3,524 context-free API call
@@ -86,8 +113,9 @@ Two MSRV defects were removed rather than suppressed globally:
 
 An external Cargo project successfully consumed the generated crate as a path
 dependency and exercised the facade, checked/unchecked arithmetic, masks,
-memory, conversions, operators, and runtime dispatch. `cargo package` produced
-one `.crate`; a second clean project consumed the unpacked archive successfully.
+memory, conversions, operators, and runtime dispatch. For the expanded release,
+both Cargo 1.89.0 and 1.98.0 packaged the combined crate successfully with
+`--no-verify`: 437 files, 924.6 MiB uncompressed and 18.3 MiB compressed.
 
 Cargo's package-owned file listing is identical before and after a local
 documentation artifact is added under the generated crate. The standalone
@@ -101,14 +129,14 @@ declared generated sources; it does not capture compiler sources or local docs.
 ```bash
 ./dev.sh test \
   --backends rust \
-  --profiles sse,sse2,sse3,avx,avx2,knl \
+  --profiles scalar,sse,sse2,sse3,avx,avx2,knl,kml,skylake,cannonlake,cascadelake,cooperlake,icelake_rockerlake,tigerlake,zen4,sapphire_emerald_granite_rapids,zen5,neon,wasm32-simd128 \
   --quality \
   --no-format \
   --output-root ./tslctmp/rust-release-stable
 
 RUSTUP_TOOLCHAIN=1.89.0 ./dev.sh test \
   --backends rust \
-  --profiles sse,sse2,sse3,avx,avx2,knl \
+  --profiles scalar,sse,sse2,sse3,avx,avx2,knl,kml,skylake,cannonlake,cascadelake,cooperlake,icelake_rockerlake,tigerlake,zen4,sapphire_emerald_granite_rapids,zen5,neon,wasm32-simd128 \
   --quality \
   --no-format \
   --output-root ./tslctmp/rust-release-msrv

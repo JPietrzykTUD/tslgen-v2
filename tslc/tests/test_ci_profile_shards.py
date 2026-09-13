@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-_RUST_COEXISTENCE_NAME = "rust-x86-coexistence"
+_RUST_COEXISTENCE_NAME = "rust-release-coexistence"
 _RELEASE_POLICY_PATH = Path("supplementary/release/tsl-v1-policy.json")
 _RELEASE_POLICY = json.loads(_RELEASE_POLICY_PATH.read_text(encoding="utf-8"))
 _RUST_COEXISTENCE_PROFILES = tuple(

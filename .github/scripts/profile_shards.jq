@@ -50,7 +50,7 @@ def rust_coexistence_shard($release_policy):
   | . as $profiles
   | {
     backend: "rust",
-    name: "rust-x86-coexistence",
+    name: "rust-release-coexistence",
     profiles: ($profiles | join(",")),
     purpose: "coexistence"
   };
