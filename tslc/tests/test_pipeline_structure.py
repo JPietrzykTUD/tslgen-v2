@@ -5,7 +5,7 @@ from __future__ import annotations
 import ast
 import json
 from collections.abc import Iterable
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -21,6 +21,7 @@ from tslc.backend import (
 )
 from tslc.backend.capability import (
     BackendCapability,
+    BackendProjectConfigSpec,
     CompilerCapability,
     CompilerCapabilityRegistry,
 )
@@ -56,6 +57,7 @@ from tslc.lower.lowerer import (
 )
 from tslc.output.artifacts import Artifact
 from tslc.output.verify_model import VerifyProfile
+from tslc.project_config import load_project_config
 from tslc.project_render import BackendRenderInput, ProjectRenderConfig
 from tslc.render import cpp_build, cpp_project, rust_project
 from tslc.render.project import render_project
@@ -69,8 +71,9 @@ from tslc.value_tests.model import ValueTestProjectPlan
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
+@dataclass(frozen=True, slots=True)
 class _FakeRenderInput(BackendRenderInput):
-    pass
+    label: str = "fake"
 
 
 class _OtherRenderInput(BackendRenderInput):
@@ -557,8 +560,18 @@ def test_generic_lowering_does_not_branch_on_registered_backend_names() -> None:
     assert offenders == []
 
 
-def test_fake_backend_drives_documentation_and_artifact_media_type(monkeypatch) -> None:
+def test_fake_backend_drives_config_documentation_and_artifact_media_type(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
     from tslc.backend import registry
+
+    received_config: list[_FakeRenderInput] = []
+
+    def parse_config(path: Path, value: object) -> _FakeRenderInput:
+        assert path == (tmp_path / "tslc.toml").resolve()
+        assert value == {"label": "configured"}
+        return _FakeRenderInput("configured")
 
     def artifact_renderer(
         profiles: tuple[EmittedProfile, ...],
@@ -566,10 +579,11 @@ def test_fake_backend_drives_documentation_and_artifact_media_type(monkeypatch) 
         benchmarks: object,
         assets: RenderAssets,
         media_type: str,
-        config: object,
+        config: ProjectRenderConfig,
         policy_inputs: object,
     ) -> list[Artifact]:
-        del profiles, value_tests, benchmarks, assets, config, policy_inputs
+        del profiles, value_tests, benchmarks, assets, policy_inputs
+        received_config.append(config.require("fake", _FakeRenderInput))
         return [Artifact("fake/lib.fake", "fake\n", media_type)]
 
     fake = BackendCapability(
@@ -584,9 +598,30 @@ def test_fake_backend_drives_documentation_and_artifact_media_type(monkeypatch) 
         verify_machine_profile=lambda profile, family: None,  # type: ignore[arg-type,return-value]
         toolchain_commands=lambda profile, config: None,  # type: ignore[arg-type,return-value]
         documentation_formatter_factory=_FakeDocumentationFormatter,
+        project_config=BackendProjectConfigSpec(
+            table_name="fake_package",
+            parse=parse_config,
+        ),
     )
     monkeypatch.setattr(registry, "BACKEND_CAPABILITIES", (fake,))
     monkeypatch.setattr(registry, "_BY_ID", {"fake": fake})
+    config_path = tmp_path / "tslc.toml"
+    config_path.write_text(
+        "\n".join(
+            (
+                "[tslc]",
+                'sources = ["data"]',
+                'machine_profiles = "profiles.json"',
+                'backends = ["fake"]',
+                "[tslc.fake_package]",
+                'label = "configured"',
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+    project_config = load_project_config(config_path)
+    assert project_config is not None
     profile = EmittedProfile(
         MachineProfile("fake-profile", "fake", frozenset(), {}),
         {
@@ -615,6 +650,7 @@ def test_fake_backend_drives_documentation_and_artifact_media_type(monkeypatch) 
         (profile,),
         ("fake",),
         assets=load_default_render_assets(),
+        config=project_config.render_config,
         input_digest="b" * 64,
     )
     artifacts = {
@@ -625,6 +661,7 @@ def test_fake_backend_drives_documentation_and_artifact_media_type(monkeypatch) 
     )
 
     assert artifacts["fake/lib.fake"].media_type == "text/fake"
+    assert received_config == [_FakeRenderInput("configured")]
     assert "fake-register" in documentation["strings"]
     assert "fake facade" in documentation["strings"]
     assert rendered.verify.input_digest == "b" * 64

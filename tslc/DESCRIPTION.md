@@ -65,6 +65,9 @@ drivers rather than maintaining parallel compiler knowledge.
 An omitted API/backend request resolves the live backend registry when the
 `GenerationRequest` is constructed; no import-time snapshot defines later
 requests. The project renderer consumes the request's explicit backend tuple.
+Optional backend project tables are parsed through registry-owned configuration
+specs into one immutable, typed `ProjectRenderConfig`; generic configuration and
+API surfaces do not acquire backend-specific fields.
 
 Compiler diagnostics carry one canonical, end-exclusive `SourceSpan`; producers
 must supply `span=` and may project its start only for point-oriented display
@@ -528,8 +531,9 @@ recognizes a backend ID to make either choice. The
 [backend registry](src/tslc/backend/registry.py) owns each backend's dialect
 factory, artifact media type, complete artifact renderer, documentation
 formatter, validation, helper manifest, value-test support, optional benchmark
-planner, verification adapter, and post-generation formatting/documentation
-specs. C++ and Rust machine-profile verification projections live in
+planner, optional project-configuration parser, verification adapter, and
+post-generation formatting/documentation specs. C++ and Rust machine-profile
+verification projections live in
 [backend/cpp_verification.py](src/tslc/backend/cpp_verification.py) and
 [backend/rust_verification.py](src/tslc/backend/rust_verification.py);
 render modules only format their already-decided project models. Signature type
@@ -707,8 +711,9 @@ source-backed generic representation; no profile or extension is a Cargo
 feature. The backend-neutral `ProjectRenderConfig` is an immutable keyed
 container of backend-owned typed render inputs; it contains no Rust fields or
 raw configuration dictionaries. Rust retrieves its `RustPackageConfig` input,
-or applies its own default, before invoking the package renderer, so templates
-format configured Cargo facts rather than owning repository release policy.
+which its registered parser creates from `[tslc.rust_package]`, or applies its
+own default before invoking the package renderer. Templates therefore format
+configured Cargo facts rather than owning repository release policy.
 The Cargo manifest uses an explicit source/test/benchmark include set:
 generated docs, research history, scratch trees, and unrelated checkout files
 cannot enter the published crate merely because documentation was built in

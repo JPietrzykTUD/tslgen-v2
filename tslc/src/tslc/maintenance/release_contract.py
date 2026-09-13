@@ -10,6 +10,7 @@ from pathlib import Path
 import tomllib
 from typing import Any
 
+from tslc.backend.rust_package import RustPackageConfig
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.model import Catalog
 from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS
@@ -134,12 +135,13 @@ def build_release_contract(context: RepoContext) -> ReleaseContract:
     project = load_project_config(context.root / "tslc.toml")
     if project is None:
         raise ValueError("repository tslc.toml was not found")
-    if project.rust_package.name != "tsl":
+    rust_package = project.render_config.require("rust", RustPackageConfig)
+    if rust_package.name != "tsl":
         raise ValueError("generated Rust package must be named 'tsl'")
-    if project.rust_package.version != policy.product.version:
+    if rust_package.version != policy.product.version:
         raise ValueError(
             "generated Rust package version does not match the v1 product: "
-            f"{project.rust_package.version!r} != {policy.product.version!r}"
+            f"{rust_package.version!r} != {policy.product.version!r}"
         )
 
     components = _component_contracts(context, policy)

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from tslc.backend.capability import (
     BackendCapability,
+    BackendProjectConfigSpec,
     BackendPolicyInputs,
     BackendDocumentationFormatter,
     DocumentationSiteInput,
@@ -32,6 +33,7 @@ from tslc.backend.rust_policy_manifest import (
 from tslc.backend.rust_package import (
     DEFAULT_RUST_PACKAGE_CONFIG,
     RustPackageConfig,
+    parse_rust_package_config,
 )
 from tslc.backend.rust_static_selection import (
     RustStaticSelectionPlan,
@@ -241,6 +243,10 @@ RUST_BACKEND = BackendCapability(
     verify_machine_profile=rust_verify_profile,
     toolchain_commands=rust_toolchain_commands,
     documentation_formatter_factory=rust_documentation_formatter,
+    project_config=BackendProjectConfigSpec(
+        table_name="rust_package",
+        parse=parse_rust_package_config,
+    ),
     benchmark_plan_builder=rust_benchmark_plan,
     helper_manifest=RUST_HELPER_MANIFEST,
     additional_closure_seeds=rust_facade_closure_seed_primitives,

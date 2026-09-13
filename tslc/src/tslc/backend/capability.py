@@ -6,6 +6,7 @@ from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field, replace
 from enum import Enum
 from hashlib import sha256
+from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Generic, Protocol, TypeVar
 
@@ -14,7 +15,11 @@ from tslc.backend.helper_requirements import (
     EMPTY_HELPER_MANIFEST,
 )
 from tslc.output.verify_model import VerifyBackend, VerifyCompileFailure
-from tslc.project_render import DEFAULT_PROJECT_RENDER_CONFIG, ProjectRenderConfig
+from tslc.project_render import (
+    DEFAULT_PROJECT_RENDER_CONFIG,
+    BackendRenderInput,
+    ProjectRenderConfig,
+)
 from tslc.value_tests.compile_failure import compile_failure_target_name
 
 if TYPE_CHECKING:
@@ -85,6 +90,19 @@ PrimitivePreviewRenderer = Callable[
     ],
     str,
 ]
+ProjectConfigInputParser = Callable[[Path, object], BackendRenderInput | None]
+
+
+@dataclass(frozen=True, slots=True)
+class BackendProjectConfigSpec:
+    """Backend-owned parser for one optional table below ``[tslc]``."""
+
+    table_name: str
+    parse: ProjectConfigInputParser
+
+    def __post_init__(self) -> None:
+        if not self.table_name:
+            raise ValueError("backend project configuration requires a table name")
 
 
 class BackendPolicyInput:
@@ -322,6 +340,7 @@ class BackendCapability:
     toolchain_commands: ToolchainCommandsResolver
     documentation_formatter_factory: DocumentationFormatterFactory
     benchmark_plan_builder: BenchmarkPlanBuilder | None = None
+    project_config: BackendProjectConfigSpec | None = None
     policy_input_loader: Callable[[], BackendPolicyInput] | None = None
     helper_manifest: BackendHelperManifest = EMPTY_HELPER_MANIFEST
     additional_closure_seeds: ClosureSeedProjector = _no_additional_closure_seeds
@@ -515,6 +534,7 @@ __all__ = [
     "BackendDocumentationFormatter",
     "BackendPolicyInput",
     "BackendPolicyInputs",
+    "BackendProjectConfigSpec",
     "EMPTY_BACKEND_POLICY_INPUTS",
     "DocumentationSiteInput",
     "DocumentationSpec",

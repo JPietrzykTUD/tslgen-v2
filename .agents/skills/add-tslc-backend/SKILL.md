@@ -24,7 +24,11 @@ description: Add a backend or backend capability to tslc. Use when asked to intr
    lowering policy when checked failure values need helper primitives or the
    backend can bridge opted-in compiler-vector bodies to exact-width native
    implementations; do not add backend-name tests to common lowering.
-4. Add typed translation/render values before templates. Templates may format decided values only.
+4. Add typed translation/render values before templates. If the backend needs
+   project configuration, register its table parser on the backend capability
+   and place only the resulting backend-owned typed value in
+   `ProjectRenderConfig`; do not add backend fields or raw dictionaries to the
+   generic project configuration/API. Templates may format decided values only.
 5. Place packaged backend static files, templates, and helpers under
    `tslc/src/tslc/backend/assets/`. Keep generated-documentation inputs under
    `supplementary/docs/` and machine-profile configuration under

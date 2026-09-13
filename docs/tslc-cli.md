@@ -59,9 +59,11 @@ Changing the generated Cargo version does not rename or imply a matching
 compiler/editor release. The exact current versions are projected into the
 [generated-library support contract](tsl-v1-support.md).
 
-The Rust package table is optional as a whole; when present, it supplies the
-complete release metadata rendered into the generated Cargo package. Toolchain
-and runner tables are optional. CLI `--compiler`, `--target`, `--linker`,
+The Rust backend registers and parses the optional Rust package table; when
+present, it supplies the complete release metadata rendered into the generated
+Cargo package. Other backends may register their own typed configuration tables
+without adding fields to the generic project configuration model. Toolchain and
+runner tables are optional. CLI `--compiler`, `--target`, `--linker`,
 `--compiler-capabilities cpp=elementwise_clzg`, and `--runner` assignments
 override configured values. Capability names are backend-owned facts, not
 compiler-version aliases.

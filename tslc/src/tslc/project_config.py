@@ -9,9 +9,9 @@ from types import MappingProxyType
 import tomllib
 
 from tslc.output.verify_model import BackendToolchain
-from tslc.backend.rust_package import (
-    DEFAULT_RUST_PACKAGE_CONFIG,
-    RustPackageConfig,
+from tslc.project_render import (
+    DEFAULT_PROJECT_RENDER_CONFIG,
+    ProjectRenderConfig,
 )
 
 CONFIG_NAME = "tslc.toml"
@@ -28,7 +28,7 @@ class ProjectConfig:
     toolchains: Mapping[str, BackendToolchain] = field(default_factory=dict)
     runner_paths: Mapping[str, str] = field(default_factory=dict)
     tool_paths: Mapping[str, str] = field(default_factory=dict)
-    rust_package: RustPackageConfig = DEFAULT_RUST_PACKAGE_CONFIG
+    render_config: ProjectRenderConfig = DEFAULT_PROJECT_RENDER_CONFIG
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -104,7 +104,7 @@ def load_project_config(path: Path | str | None = None) -> ProjectConfig | None:
         for key, value in tools.items()
     ):
         raise ValueError(f"{selected}: tslc.tools must map names to non-empty strings")
-    rust_package = _rust_package_config(selected, root.get("rust_package"))
+    render_config = _backend_render_config(selected, root)
     assert profiles is not None
     return ProjectConfig(
         path=selected,
@@ -116,43 +116,32 @@ def load_project_config(path: Path | str | None = None) -> ProjectConfig | None:
         toolchains=toolchains,
         runner_paths={str(key): str(value) for key, value in runners.items()},
         tool_paths={str(key): str(value) for key, value in tools.items()},
-        rust_package=rust_package,
+        render_config=render_config,
     )
 
 
-def _rust_package_config(path: Path, value: object) -> RustPackageConfig:
-    if value is None:
-        return DEFAULT_RUST_PACKAGE_CONFIG
-    if not isinstance(value, dict):
-        raise ValueError(f"{path}: tslc.rust_package must be a table")
-    keys = {
-        "name",
-        "version",
-        "description",
-        "edition",
-        "rust_version",
-        "license",
-        "repository",
-        "documentation",
-        "readme",
-    }
-    unknown = sorted(set(value) - keys)
-    if unknown:
-        raise ValueError(
-            f"{path}: unknown tslc.rust_package field(s): {', '.join(unknown)}"
-        )
-    fields = {}
-    for key in sorted(keys):
-        field_value = value.get(key)
-        if not isinstance(field_value, str) or not field_value.strip():
+def _backend_render_config(
+    path: Path, root: dict[str, object]
+) -> ProjectRenderConfig:
+    from tslc.backend import registry
+
+    entries = []
+    table_owners: dict[str, str] = {}
+    for capability in registry.BACKEND_CAPABILITIES:
+        spec = capability.project_config
+        if spec is None:
+            continue
+        previous = table_owners.get(spec.table_name)
+        if previous is not None:
             raise ValueError(
-                f"{path}: tslc.rust_package.{key} must be a non-empty string"
+                f"backend project configuration table {spec.table_name!r} "
+                f"is registered by both {previous!r} and {capability.backend_id!r}"
             )
-        fields[key] = field_value
-    try:
-        return RustPackageConfig(**fields)
-    except ValueError as error:
-        raise ValueError(f"{path}: {error}") from error
+        table_owners[spec.table_name] = capability.backend_id
+        value = spec.parse(path, root.get(spec.table_name))
+        if value is not None:
+            entries.append((capability.backend_id, value))
+    return ProjectRenderConfig.create(entries)
 
 
 def _resolve(base: Path, value: str) -> Path:
