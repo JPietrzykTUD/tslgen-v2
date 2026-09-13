@@ -935,6 +935,80 @@ def test_lowering_does_not_import_project_rendering() -> None:
     ) == []
 
 
+def test_shared_configuration_and_api_do_not_import_rust_modules() -> None:
+    package_root = _REPO_ROOT / "tslc" / "src" / "tslc"
+    paths = tuple(
+        package_root / name
+        for name in (
+            "api.py",
+            "cli.py",
+            "generation_command.py",
+            "project_config.py",
+            "project_render.py",
+        )
+    )
+
+    assert _forbidden_imports(paths, "tslc.backend.rust") == []
+
+
+def test_compiler_owned_packages_do_not_import_maintenance() -> None:
+    package_root = _REPO_ROOT / "tslc" / "src" / "tslc"
+    paths = [
+        path
+        for package_name in (
+            "backend",
+            "benchmark",
+            "catalog",
+            "ir",
+            "lower",
+            "lsp",
+            "output",
+            "render",
+            "select",
+            "syntax",
+            "value_tests",
+        )
+        for path in sorted((package_root / package_name).rglob("*.py"))
+    ]
+    paths.extend(
+        path
+        for pattern in (
+            "_pipeline*.py",
+            "api.py",
+            "authoring*.py",
+            "compiler_assets.py",
+            "generation_command.py",
+            "pipeline*.py",
+            "project*.py",
+            "sources.py",
+        )
+        for path in sorted(package_root.glob(pattern))
+    )
+
+    assert _forbidden_imports(paths, "tslc.maintenance") == []
+
+
+def test_generation_pipeline_does_not_discover_or_reopen_tsldata() -> None:
+    package_root = _REPO_ROOT / "tslc" / "src" / "tslc"
+    paths = (
+        package_root / "pipeline.py",
+        *sorted(package_root.glob("_pipeline*.py")),
+    )
+    offenders: list[str] = []
+    for path in paths:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        offenders.extend(
+            f"{path}:{node.lineno}"
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and "tsldata" in node.value.lower()
+        )
+
+    assert offenders == []
+    assert _forbidden_imports(paths, "tslc.maintenance._repo_context") == []
+
+
 def test_backend_semantics_do_not_import_project_rendering() -> None:
     """Only registry composition adapters may point from backend to render."""
 
