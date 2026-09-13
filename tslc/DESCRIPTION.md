@@ -466,7 +466,10 @@ The focused
 [ImplementationBodyLowerer](src/tslc/lower/implementation_bodies.py) scans and
 lowers the default and variant bodies, accumulating body safety, implementation
 state, diagnostics, and typed call-dependency origins without assembling the
-final specialization.
+final specialization. The pure
+[specialization assembler](src/tslc/lower/specialization_assembly.py) derives
+SIMD type-parameter bounds, validates symbolic dependencies, and constructs the
+frozen `LoweredSpecialization` from resolved signature/ABI and body facts.
 Region handlers
 ([lower/region_handlers/](src/tslc/lower/region_handlers/)) translate each
 keyword; a query evaluator ([lower/queries.py](src/tslc/lower/queries.py))

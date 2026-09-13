@@ -9,8 +9,8 @@ Pieces, each with one job:
 - :class:`ImplementationBodyLowerer` scans and lowers default/variant bodies,
   collecting their safety, diagnostics, implementation state, and dependencies.
 - :class:`Lowerer` orchestrates signature/type resolution, body lowering, and
-  :class:`LoweredSpecialization` assembly (a not-yet-lowerable construct skips
-  the specialization rather than failing).
+  delegates final validation/assembly to ``specialization_assembly`` (a
+  not-yet-lowerable construct skips the specialization rather than failing).
 
 Growth is by registering more region lowerers / query functions, not by editing
 this file.
@@ -23,44 +23,30 @@ from dataclasses import replace
 from tslc.backend import translation_common
 from tslc.backend.translation import BackendDialect
 from tslc.catalog.arithmetic import ArithmeticOperandRole, ArithmeticOperation
-from tslc.catalog.memory import resolve_memory_alignment
 from tslc.catalog.model import (
-    BOOLEAN_WILDCARD_ATTRIBUTES,
     Catalog,
     ImmediateParam,
     ImmediateRangeUpperKind,
     ImmediateValueRange,
-    Primitive,
-    RESULT_DIM_VECTOR,
 )
 from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS, scalar_bit_width_or_default
 from tslc.catalog.signatures import SignatureShape, parse_signature
-from tslc.diagnostics import Diagnostic, SourceSpan, sort_diagnostics
-from tslc.documentation import primitive_documentation
+from tslc.diagnostics import Diagnostic, SourceSpan
 from tslc.ir.segments import Segment
 from tslc.lower.body_rendering import body_context
 from tslc.lower.context import (
     LaneListParameter,
     LoweringEnv,
     LoweringScope,
-    LoweringSession,
 )
-from tslc.lower.catalog_facts import (
-    LowererCatalogFacts as _LowererCatalogFacts,
-    type_param_bounds as _type_param_bounds,
-)
+from tslc.lower.catalog_facts import LowererCatalogFacts as _LowererCatalogFacts
 from tslc.lower._diagnostics import (
     implementation_source as _implementation_source,
     lowering_error_diagnostic,
     lowering_skip_diagnostic,
     primitive_signature_source as _primitive_signature_source,
 )
-from tslc.lower.dependencies import symbolic_call_dependency_error
 from tslc.lower.implementation_bodies import ImplementationBodyLowerer
-from tslc.lower.region_handlers import (
-    DEFAULT_REGION_LOWERERS,
-    RegionLowerer,
-)
 from tslc.lower.model import (
     LoweredArithmeticPrecondition,
     LoweredArithmeticPreconditionKind,
@@ -68,13 +54,17 @@ from tslc.lower.model import (
     LoweredTypeParam,
     LoweringResult,
 )
-from tslc.lower.primitive_semantics import (
-    LoweredMemoryAlignment,
-    LoweredPrimitiveSemantics,
-)
 from tslc.lower.param_types import (
     effective_param_types,
     param_type_overrides as _param_type_overrides,
+)
+from tslc.lower.region_handlers import (
+    DEFAULT_REGION_LOWERERS,
+    RegionLowerer,
+)
+from tslc.lower.specialization_assembly import (
+    ResolvedSpecializationSignature,
+    assemble_specialization,
 )
 from tslc.lower.target_vectors import TargetVector, resolve_target_vector
 from tslc.select.selector import SelectedImplementation
@@ -320,157 +310,31 @@ class Lowerer:
                 specialization=None,
                 diagnostics=body_diagnostics,
             )
-        type_params = tuple(
-            LoweredTypeParam(
-                name=gp.name,
-                bounds=tuple(
-                    sorted(
-                        {
-                            bound
-                            for body in bodies.source_segment_groups
-                            for bound in _type_param_bounds(
-                                body,
-                                gp.name,
-                                catalog_facts.primitive_type_param_bounds,
-                                selected.extension.name,
-                            )
-                        }
-                    )
-                ),
-                base_type_constraints=gp.base_type_constraints,
-                specialize_base=gp.specialize_base,
-                base_type_binding=context.env.simd_type_param_base_bindings.get(
-                    gp.name
-                ),
-                base_type_binding_spelling=(
-                    backend.types.scalar_spelling(binding)
-                    if (
-                        binding := context.env.simd_type_param_base_bindings.get(
-                            gp.name
-                        )
-                    )
-                    is not None
-                    else None
-                ),
-            )
-            for gp in selected.primitive.generic_params
-            if gp.kind == "simd_type"
-        )
-        type_param_bounds = {
-            type_param.name: type_param.bounds for type_param in type_params
-        }
-        ordered_dependency_origins = bodies.call_dependency_origins
-        for origin in ordered_dependency_origins:
-            if (
-                message := symbolic_call_dependency_error(
-                    origin.dependency,
-                    type_param_bounds,
-                )
-            ) is not None:
-                return _error(
-                    "TSL-LOWER-INVALID-SYMBOLIC-CALL-DEPENDENCY",
-                    message,
-                    source=_implementation_source(selected),
-                )
-
-        specialization = LoweredSpecialization(
-            backend_id=backend.backend_id,
-            primitive_name=selected.primitive.name,
-            source_primitive_name=selected.primitive.name,
-            # Emit the ISA name (avx2), not the internal block name (avx2_vl):
-            # the `_vl` distinction only steers selection, never the generated type.
-            extension_name=context.env.extension.isa_name,
-            type_tag=context.env.type_tag,
+        resolved_signature = ResolvedSpecializationSignature(
+            shape=shape,
+            parameters=parameters,
             base_type_spelling=base_type_spelling,
             register_spelling=register_spelling,
-            result_kind=shape.result_kind,
-            param_names=parameters,
-            param_kinds=shape.param_kinds,
-            body=bodies.body,
-            source_signature=selected.primitive.signature,
-            source_attributes=tuple(
-                sorted(selected.primitive.attributes.items())
-            ),
-            primitive_semantics=LoweredPrimitiveSemantics(
-                overload=catalog.resolve_primitive_overload(selected.primitive),
-                arithmetic=selected.primitive.arithmetic,
-                operation=selected.primitive.operation,
-                preconditions=selected.primitive.preconditions,
-                memory=selected.primitive.memory,
-                memory_alignment=_lowered_memory_alignment(
-                    selected.primitive
-                ),
-                conversion=selected.primitive.conversion,
-                shift=selected.primitive.shift,
-            ),
-            param_identity_tokens=tuple(
-                self._support.overload_identity_token(
-                    kind,
-                    register_is_base=self._support.register_is_base(
-                        context.env.extension
-                    ),
-                )
-                for kind in shape.param_kinds
-            ),
             param_type_overrides=param_type_overrides,
             vector_spelling=vector_spelling,
             index_register_spelling=index_register_spelling,
             native_register_spelling=native_register_spelling,
             uses_sized_vector=uses_sized_vector,
             lane_parameter=lane_parameter,
-            axis=tuple(
-                (key, selected.primitive.attributes[key])
-                for key in sorted(selected.primitive.attributes)
-                if key in BOOLEAN_WILDCARD_ATTRIBUTES
-            ),
+            target=target,
             immediate=immediate,
             immediate_range=immediate_range,
             immediate_valid_range=immediate_valid_range,
             arithmetic_preconditions=arithmetic_preconditions,
-            # `generic_params` split by kind: `bool`/`int` are non-type (const) params; a
-            # `simd_type` is a free type param (see `type_params`).
-            generic_params=tuple(
-                (gp.name, backend.types.const_param_type(gp.kind), gp.default)
-                for gp in selected.primitive.generic_params
-                if gp.kind != "simd_type"
-            ),
-            type_params=type_params,
-            result_vector_param=(
-                selected.primitive.result_target[1]
-                if selected.primitive.result_target is not None
-                and selected.primitive.result_target[0] == RESULT_DIM_VECTOR
-                else None
-            ),
-            # True only when the extension declares its register type as the base type.
-            # Other zero-width/sized vectors may still use array-backed registers, so this is
-            # a source capability, not a vector_bits shortcut.
-            register_is_base=self._support.register_is_base(context.env.extension),
-            target=target,
-            mask_policy=selected.primitive.mask_mode,
-            lane_list_params=tuple(context.env.lane_list_params.values()),
-            required_features=selected.required_features,
-            required_compiler_capabilities=(
-                selected.required_compiler_capabilities
-            ),
-            call_dependency_origins=ordered_dependency_origins,
-            unresolved_call_preconditions=tuple(
-                obligation
-                for origin in ordered_dependency_origins
-                for obligation in origin.unresolved_preconditions
-            ),
-            implementation_state=bodies.implementation_state,
-            safety=bodies.safety,
-            variant_bodies=bodies.variants,
-            documentation=primitive_documentation(
-                brief=selected.primitive.brief_description,
-                detailed=selected.primitive.detailed_description,
-                semantics=selected.primitive.semantics,
-            ),
-            source=_implementation_source(selected),
         )
-        return LoweringResult(
-            specialization=specialization,
-            diagnostics=sort_diagnostics(bodies.diagnostics),
+        return assemble_specialization(
+            selected=selected,
+            env=context.env,
+            resolved=resolved_signature,
+            bodies=bodies,
+            primitive_type_param_bounds=(
+                catalog_facts.primitive_type_param_bounds
+            ),
         )
 
     def _facts_for(self, catalog: Catalog) -> _LowererCatalogFacts:
@@ -639,19 +503,6 @@ def varying_positions(specs: tuple[LoweredSpecialization, ...]) -> tuple[int, ..
     arity = len(specs[0].param_kinds)
     return tuple(
         i for i in range(arity) if len({spec.param_kinds[i] for spec in specs}) > 1
-    )
-
-
-def _lowered_memory_alignment(
-    primitive: Primitive,
-) -> LoweredMemoryAlignment | None:
-    if primitive.memory is None:
-        return None
-    resolved = resolve_memory_alignment(primitive.attributes)
-    return (
-        None
-        if resolved is None
-        else LoweredMemoryAlignment(axis_name=resolved[0], mode=resolved[1])
     )
 
 
