@@ -588,6 +588,11 @@ count. Neutral lowering never constructs a C++ or Rust lane-count expression.
   [backend/rust_direct_calls.py](src/tslc/backend/rust_direct_calls.py), and
   [backend/rust_documentation_api.py](src/tslc/backend/rust_documentation_api.py)
   own signature projection, direct-call rendering, and documentation API text.
+  Checked primitive precondition methods and wrapper bodies are rendered from
+  typed lowered and checked-plan facts by
+  [backend/rust_checked_primitives.py](src/tslc/backend/rust_checked_primitives.py);
+  typed ordinary/checked wrapper declarations are finalized separately in
+  [backend/rust_primitive_declarations.py](src/tslc/backend/rust_primitive_declarations.py).
   Generated rustdoc uses a `cfg(doc)` profile-neutral facade containing one
   public signature per emitted Rust primitive; concrete profile availability
   stays in the specialization explorer, while normal builds select their

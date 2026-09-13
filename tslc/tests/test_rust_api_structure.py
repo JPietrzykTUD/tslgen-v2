@@ -133,6 +133,39 @@ def test_checked_facade_semantic_translation_is_backend_owned() -> None:
     assert "rust_checked_api_examples" in documentation_functions
 
 
+def test_rust_backend_delegates_checked_primitive_rendering() -> None:
+    backend_path = _BACKEND_ROOT / "rust.py"
+    backend_tree = ast.parse(backend_path.read_text(encoding="utf-8"))
+    backend_class = next(
+        node
+        for node in backend_tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "RustBackend"
+    )
+    backend_methods = {
+        node.name
+        for node in backend_class.body
+        if isinstance(node, ast.FunctionDef)
+    }
+    assert "_checked_wrapper" not in backend_methods
+    assert "_render_overloaded_checked_wrapper" not in backend_methods
+
+    checked_path = _BACKEND_ROOT / "rust_checked_primitives.py"
+    checked_source = checked_path.read_text(encoding="utf-8")
+    checked_tree = ast.parse(checked_source)
+    checked_functions = {
+        node.name
+        for node in checked_tree.body
+        if isinstance(node, ast.FunctionDef)
+    }
+    assert {
+        "impl_precondition_method",
+        "render_checked_wrapper",
+        "render_overloaded_checked_wrapper",
+        "trait_precondition_declaration",
+    } <= checked_functions
+    assert "from tslc.backend.rust import" not in checked_source
+
+
 def test_rust_facade_orchestrator_contains_only_public_api_and_pipeline() -> None:
     source = (_BACKEND_ROOT / "rust_api_planner.py").read_text(
         encoding="utf-8"

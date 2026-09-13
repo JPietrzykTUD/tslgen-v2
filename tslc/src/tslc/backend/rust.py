@@ -3,20 +3,24 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, replace
+from dataclasses import replace
 
 from tslc.backend.primitive_rendering import body_for as _body_for
 from tslc.backend.checked_api import (
-    CheckedApiPlan,
     CheckedConditionPlan,
-    applicable_checked_condition,
-    applicable_checked_api_plan,
-    checked_api_plan,
-    checked_memory_condition,
     public_call_requires_unsafe,
 )
 from tslc.backend.primitive_rendering import variant_names as _variant_names
-from tslc.backend.precondition_error_rendering import rust_precondition_error
+from tslc.backend.rust_checked_primitives import (
+    forwarded_precondition_method as _rust_forwarded_precondition_method,
+    impl_precondition_method as _rust_impl_precondition_method,
+    overloaded_memory_impl_members as _rust_overloaded_memory_impl_members,
+    overloaded_memory_trait_members as _rust_overloaded_memory_trait_members,
+    render_checked_wrapper as _render_checked_wrapper,
+    render_overloaded_checked_wrapper as _render_overloaded_checked_wrapper,
+    trait_precondition_condition as _rust_trait_precondition_condition,
+    trait_precondition_declaration as _rust_trait_precondition_declaration,
+)
 from tslc.backend.rust_direct_calls import (
     checked_free_function as _checked_free_function,
     checked_free_function_declaration as _checked_free_function_declaration,
@@ -46,13 +50,14 @@ from tslc.backend.rust_policy_selection import (
     RustPolicySelectionProfile,
     rust_policy_selection_shape_reason,
 )
+from tslc.backend.rust_primitive_declarations import (
+    rust_checked_wrapper_declaration as _rust_checked_wrapper_declaration,
+    rust_overloaded_wrapper_declaration as _rust_overloaded_wrapper_declaration,
+    rust_wrapper_declaration as _rust_wrapper_declaration,
+)
 from tslc.backend.rust_signatures import (
     arithmetic_preconditions as _rust_arithmetic_preconditions,
     axis_name as _axis_name,
-    checked_parameter_types as _checked_parameter_types,
-    checked_runtime_names as _checked_runtime_names,
-    checked_type_where as _checked_type_where,
-    checked_type_where_predicates as _checked_type_where_predicates,
     concrete_param_type as _rust_concrete_param,
     concrete_result_type as _rust_concrete_result,
     concrete_type as _rust_concrete,
@@ -62,7 +67,6 @@ from tslc.backend.rust_signatures import (
     kind_type as _kind_type,
     param_kind_type as _param_kind_type,
     params as _params,
-    parameter_types as _parameter_types,
     runtime_names as _runtime_names,
     trait_args_by_name as _trait_args_by_name,
     trait_args_by_value as _trait_args_by_value,
@@ -71,42 +75,19 @@ from tslc.backend.rust_signatures import (
     vector_type as _vector_type,
 )
 from tslc.backend.rust_public_declarations import (
-    RustGenericParameter,
     RustPublicDeclaration,
-    RustPublicParameter,
-    rust_const_parameter,
-    rust_parameter_role,
-    rust_type_parameter,
-)
-from tslc.backend.public_declarations import (
-    PublicDeclarationKind,
-    PublicDeclarationStability,
 )
 from tslc.backend.rust_documentation import rust_doc as _rust_doc
 from tslc.backend.rust_names import rust_primitive_trait_name
 from tslc.backend.rust_type_params import (
     index_where as _index_where,
-    type_param_where_clauses as _type_param_where_clauses,
-    rust_base_dispatch_key_tag as _rust_base_dispatch_key_tag,
     type_param_base_key_args as _type_param_base_key_args,
     type_param_base_key_decls as _type_param_base_key_decls,
     type_param_decls as _type_param_decls,
     type_param_names as _type_param_names,
     with_consistent_type_param_bounds as _with_consistent_type_param_bounds,
 )
-from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.benchmark.model import SpecializationKey
-from tslc.catalog.preconditions import (
-    PreconditionCheckPrimitive,
-    PreconditionErrorKind,
-    PreconditionKind,
-)
-from tslc.catalog.memory import (
-    MemoryAccess,
-    MemoryAddressing,
-    MemoryIndexedLaneExtent,
-    MemoryPayloadExtent,
-)
 from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS
 from tslc.lower.lowerer import (
     LoweredSpecialization,
@@ -117,9 +98,6 @@ from tslc.target_text import LoweredBody, RenderContext
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 _PRIMITIVE_TRAIT_PREFIX = "detail::primitives::"
-_PRECONDITION_METHOD = "__tsl_precondition_error"
-_CHECKED_MEMORY_EXTENT_METHOD = "__tsl_checked_memory_extent"
-_CHECKED_MEMORY_ALIGNMENT_METHOD = "__tsl_checked_memory_alignment"
 
 
 def _qualified_primitive_trait_prefix(module_prefix: str) -> str:
@@ -127,545 +105,6 @@ def _qualified_primitive_trait_prefix(module_prefix: str) -> str:
     if not module:
         return _PRIMITIVE_TRAIT_PREFIX
     return f"{module}::{_PRIMITIVE_TRAIT_PREFIX}"
-
-
-def _rust_precondition_error(error: PreconditionErrorKind) -> str:
-    return rust_precondition_error(error)
-
-
-def _rust_trait_precondition_condition(
-    specializations: tuple[LoweredSpecialization, ...],
-) -> CheckedConditionPlan | None:
-    return applicable_checked_condition(
-        specializations,
-        PreconditionKind.ACTIVE_DIVISOR_NONZERO,
-    )
-
-
-def _rust_precondition_method_parameters(
-    spec: LoweredSpecialization,
-    condition: CheckedConditionPlan,
-    *,
-    owner: str,
-    arguments: bool = False,
-) -> str:
-    indexes = {condition.parameter_index}
-    if condition.mask_parameter_index is not None:
-        indexes.add(condition.mask_parameter_index)
-    parts = []
-    for index, (name, kind) in enumerate(zip(spec.param_names, spec.param_kinds)):
-        if index not in indexes:
-            continue
-        parts.append(
-            f"&{name}" if arguments else f"{name}: &{_param_kind_type(kind, owner)}"
-        )
-    return ", ".join(parts)
-
-
-def _rust_trait_precondition_declaration(
-    spec: LoweredSpecialization,
-    condition: CheckedConditionPlan | None,
-) -> str:
-    if condition is None:
-        return ""
-    params = _rust_precondition_method_parameters(spec, condition, owner="Self")
-    return f"    fn {_PRECONDITION_METHOD}({params}) -> Option<PreconditionError>;\n"
-
-
-def _rust_impl_precondition_method(
-    spec: LoweredSpecialization,
-    condition: CheckedConditionPlan | None,
-) -> str:
-    if condition is None:
-        return ""
-    params = _rust_precondition_method_parameters(spec, condition, owner="Self")
-    info = SCALAR_TYPE_INFOS.get(spec.type_tag)
-    if info is None:
-        raise ValueError(f"checked precondition has unknown type {spec.type_tag!r}")
-    if info.floating:
-        body = "None"
-    else:
-        required = {
-            PreconditionCheckPrimitive.ZERO_VECTOR,
-            PreconditionCheckPrimitive.EQUAL,
-            PreconditionCheckPrimitive.MASK_POPULATION_COUNT,
-        }
-        if not required.issubset(condition.check_primitives):
-            raise ValueError("zero-divisor check plan is missing support primitives")
-        zero = rust_raw_identifier(PreconditionCheckPrimitive.ZERO_VECTOR.value)
-        equal = rust_raw_identifier(PreconditionCheckPrimitive.EQUAL.value)
-        population = rust_raw_identifier(
-            PreconditionCheckPrimitive.MASK_POPULATION_COUNT.value
-        )
-        lines = [
-            f"let zero_divisors = {equal}::<Self>(",
-            f"    *{condition.parameter_name}, {zero}::<Self>());",
-        ]
-        checked_mask = "zero_divisors"
-        if condition.mask_parameter_name is not None:
-            if PreconditionCheckPrimitive.MASK_AND not in condition.check_primitives:
-                raise ValueError("masked zero-divisor check has no mask-and primitive")
-            mask_and = rust_raw_identifier(PreconditionCheckPrimitive.MASK_AND.value)
-            lines.extend(
-                (
-                    f"let active_zero_divisors = {mask_and}::<Self>(",
-                    f"    *{condition.mask_parameter_name}, zero_divisors);",
-                )
-            )
-            checked_mask = "active_zero_divisors"
-        lines.extend(
-            (
-                f"if {population}::<Self>({checked_mask}) != 0 {{",
-                f"    Some({_rust_precondition_error(condition.error)})",
-                "} else {",
-                "    None",
-                "}",
-            )
-        )
-        body = "\n".join(lines)
-    return (
-        f"    #[inline]\n"
-        f"    #[allow(unused_variables)]\n"
-        f"    fn {_PRECONDITION_METHOD}({params}) -> Option<PreconditionError> {{\n"
-        f"{_indent(body, 8)}\n"
-        "    }\n"
-    )
-
-
-def _rust_forwarded_precondition_method(
-    spec: LoweredSpecialization,
-    selected_trait_name: str,
-    condition: CheckedConditionPlan | None,
-) -> str:
-    if condition is None:
-        return ""
-    params = _rust_precondition_method_parameters(spec, condition, owner="Self")
-    args = _rust_precondition_method_parameters(
-        spec, condition, owner="Self", arguments=True
-    )
-    return (
-        f"    #[inline(always)]\n"
-        f"    fn {_PRECONDITION_METHOD}({params}) -> Option<PreconditionError> {{\n"
-        f"        <Self as {selected_trait_name}>::{_PRECONDITION_METHOD}({args})\n"
-        "    }\n"
-    )
-
-
-def _rust_checked_memory_extent(
-    condition: CheckedConditionPlan,
-    owner: str,
-    *,
-    target_owner: str | None = None,
-) -> str:
-    payload_extents = condition.memory_payload_extents
-    if payload_extents == (MemoryPayloadExtent.SCALAR,):
-        return "1"
-    if payload_extents == (MemoryPayloadExtent.VECTOR,):
-        return f"{owner}::lane_count()"
-    if payload_extents == (MemoryPayloadExtent.TARGET_VECTOR,):
-        if target_owner is None:
-            raise ValueError(
-                "target-vector checked memory requires a target owner"
-            )
-        return f"{target_owner}::lane_count()"
-    raise ValueError(
-        "non-overloaded Rust checked memory API requires one static payload extent"
-    )
-
-
-def _rust_checked_memory_alignment(
-    condition: CheckedConditionPlan,
-    owner: str,
-) -> tuple[str, str]:
-    payload_extents = condition.memory_payload_extents
-    if payload_extents in {
-        (MemoryPayloadExtent.SCALAR,),
-        (MemoryPayloadExtent.TARGET_VECTOR,),
-    }:
-        alignment = f"core::mem::align_of::<{owner}::BaseType>()"
-    elif payload_extents in {
-        (MemoryPayloadExtent.VECTOR,),
-        (MemoryPayloadExtent.ACTIVE_LANES,),
-    }:
-        alignment = f"{owner}::ALIGN"
-    else:
-        raise ValueError(
-            "non-overloaded Rust checked memory API requires one payload extent"
-        )
-    axis = (
-        None
-        if condition.memory_alignment_axis_name is None
-        else _axis_name(condition.memory_alignment_axis_name)
-    )
-    if axis is None:
-        raise ValueError("Rust checked alignment condition has no alignment axis")
-    return alignment, axis
-
-
-def _rust_overloaded_memory_trait_members(
-    specializations: tuple[LoweredSpecialization, ...],
-) -> str:
-    plan = applicable_checked_api_plan(specializations)
-    if plan is None or not any(
-        condition.memory_access is not None for condition in plan.conditions
-    ):
-        return ""
-    return (
-        "    #[doc(hidden)]\n"
-        f"    fn {_CHECKED_MEMORY_EXTENT_METHOD}() -> usize;\n"
-        "    #[doc(hidden)]\n"
-        f"    fn {_CHECKED_MEMORY_ALIGNMENT_METHOD}() -> usize;\n"
-    )
-
-
-def _rust_overloaded_memory_impl_members(
-    specialization: LoweredSpecialization,
-    vector_type: str,
-) -> str:
-    plan = applicable_checked_api_plan((specialization,))
-    if plan is None or not any(
-        condition.memory_access is not None for condition in plan.conditions
-    ):
-        return ""
-    memory = specialization.primitive_semantics.memory
-    if memory is None:
-        raise ValueError("checked Rust memory overload has no memory contract")
-    if memory.payload_extent is MemoryPayloadExtent.SCALAR:
-        extent = "1"
-        alignment = "core::mem::align_of::<Self>()"
-    else:
-        extent = f"<{vector_type} as SimdVector>::lane_count()"
-        alignment = f"<{vector_type} as SimdVector>::ALIGN"
-    return (
-        "    #[inline]\n"
-        f"    fn {_CHECKED_MEMORY_EXTENT_METHOD}() -> usize {{ {extent} }}\n"
-        "    #[inline]\n"
-        f"    fn {_CHECKED_MEMORY_ALIGNMENT_METHOD}() -> usize {{ {alignment} }}\n"
-    )
-
-
-@dataclass(frozen=True, slots=True)
-class _RustPublicWrapperFacts:
-    trait_args: tuple[str, ...]
-    public_trait_args: tuple[str, ...]
-    generic_parameters: tuple[RustGenericParameter, ...]
-    target_owner: str | None
-    result_owner: str
-    index_type: str | None
-    vector_bound: str
-
-
-def _rust_const_generic_parameters(
-    shape: LoweredSpecialization,
-) -> tuple[RustGenericParameter, ...]:
-    parameters = [
-        rust_const_parameter(_axis_name(key), "bool") for key, _ in shape.axis
-    ]
-    if shape.immediate is not None:
-        parameters.append(
-            rust_const_parameter(shape.immediate[0], shape.immediate[1])
-        )
-    parameters.extend(
-        rust_const_parameter(name, typ)
-        for name, typ, _default in shape.generic_params
-    )
-    return tuple(parameters)
-
-
-def _rust_type_generic_parameters(
-    shape: LoweredSpecialization,
-) -> tuple[RustGenericParameter, ...]:
-    return tuple(
-        rust_type_parameter(
-            parameter.name,
-            "StaticSimdVector",
-            *(
-                f"{_PRIMITIVE_TRAIT_PREFIX}{rust_primitive_trait_name(bound)}"
-                for bound in parameter.bounds
-            ),
-        )
-        for parameter in shape.type_params
-    )
-
-
-def _rust_public_wrapper_facts(
-    primitive_name: str,
-    shape: LoweredSpecialization,
-) -> _RustPublicWrapperFacts:
-    public_trait_args = list(_trait_args_by_name(shape))
-    trait_args = list(public_trait_args)
-    generic_parameters: list[RustGenericParameter] = list(
-        _rust_const_generic_parameters(shape)
-    )
-    target_owner: str | None = None
-    result_owner = "S"
-    if shape.target is not None:
-        trait_args.insert(0, "T")
-        public_trait_args.insert(0, "T")
-        generic_parameters.insert(0, rust_type_parameter("T", "StaticSimdVector"))
-        target_owner = "T"
-        result_owner = "T"
-    index_type: str | None = None
-    if shape.type_params:
-        type_names = _type_param_names(shape)
-        trait_args = [
-            *type_names,
-            *_type_param_base_key_args(shape, mode="projection"),
-            *trait_args,
-        ]
-        public_trait_args = [*type_names, *public_trait_args]
-        generic_parameters = [
-            *_rust_type_generic_parameters(shape),
-            *generic_parameters,
-        ]
-        index_type = f"{shape.type_params[0].name}::RegisterType"
-        if shape.result_vector_param is not None:
-            result_owner = shape.result_vector_param
-    rendered_trait_args = (
-        f"<{', '.join(trait_args)}>" if trait_args else ""
-    )
-    vector_bound = (
-        f"{_PRIMITIVE_TRAIT_PREFIX}"
-        f"{rust_primitive_trait_name(primitive_name)}{rendered_trait_args}"
-    )
-    return _RustPublicWrapperFacts(
-        trait_args=tuple(trait_args),
-        public_trait_args=tuple(public_trait_args),
-        generic_parameters=tuple(generic_parameters),
-        target_owner=target_owner,
-        result_owner=result_owner,
-        index_type=index_type,
-        vector_bound=vector_bound,
-    )
-
-
-def _rust_checked_generic_parameters(
-    shape: LoweredSpecialization,
-    facts: _RustPublicWrapperFacts,
-    plan: CheckedApiPlan,
-) -> tuple[RustGenericParameter, ...]:
-    """Add checked-guard dependencies owned by a free SIMD type parameter."""
-
-    if not shape.type_params:
-        return facts.generic_parameters
-    index_owner = shape.type_params[0].name
-    index_bounds: list[str] = []
-    for condition in plan.conditions:
-        if condition.kind is not PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID:
-            continue
-        if (
-            PreconditionCheckPrimitive.VECTOR_EXTRACT_LANE
-            in condition.check_primitives
-        ):
-            primitive = PreconditionCheckPrimitive.VECTOR_EXTRACT_LANE
-            index_bounds.append(
-                f"{_PRIMITIVE_TRAIT_PREFIX}"
-                f"{rust_primitive_trait_name(primitive.value)}"
-            )
-    if not index_bounds:
-        return facts.generic_parameters
-    return tuple(
-        rust_type_parameter(
-            parameter.name,
-            *parameter.bounds,
-            *(bound for bound in index_bounds if bound not in parameter.bounds),
-        )
-        if parameter.name == index_owner
-        else parameter
-        for parameter in facts.generic_parameters
-    )
-
-
-def _rust_overload_identity(
-    specializations: tuple[LoweredSpecialization, ...], surface: str
-) -> str:
-    shapes = sorted(
-        {
-            f"{spec.result_kind}=({','.join(spec.param_kinds)})"
-            for spec in specializations
-        }
-    )
-    return f"{surface}:" + "|".join(shapes)
-
-
-def _rust_wrapper_declaration(
-    primitive_name: str,
-    shape: LoweredSpecialization,
-    *,
-    caller_unsafe: bool,
-    reachability: tuple[str, ...],
-) -> RustPublicDeclaration:
-    facts = _rust_public_wrapper_facts(primitive_name, shape)
-    parameters = tuple(
-        RustPublicParameter(
-            name,
-            typ,
-            rust_parameter_role(shape, index, shape.param_kinds[index]),
-        )
-        for index, name, typ in _parameter_types(
-            shape,
-            "S",
-            target_owner=facts.target_owner,
-            vidx_type=facts.index_type,
-        )
-    )
-    return RustPublicDeclaration(
-        identity=f"crate::profile::{primitive_name}#vector",
-        name=rust_raw_identifier(primitive_name),
-        owner="crate::profile",
-        reachability=reachability,
-        stability=PublicDeclarationStability.STABLE,
-        kind=PublicDeclarationKind.FUNCTION,
-        overload=_rust_overload_identity((shape,), "vector"),
-        visibility="pub",
-        generic_parameters=(
-            rust_type_parameter("S", facts.vector_bound),
-            *facts.generic_parameters,
-        ),
-        parameters=parameters,
-        where_predicates=tuple(
-            _type_param_where_clauses(shape, base_dispatch="projection")
-        ),
-        where_inline=True,
-        result_type=_kind_type(shape.result_kind, facts.result_owner),
-        result_form="direct",
-        unsafe=caller_unsafe,
-    )
-
-
-def _rust_checked_wrapper_declaration(
-    primitive_name: str,
-    specializations: tuple[LoweredSpecialization, ...],
-    *,
-    reachability: tuple[str, ...],
-) -> RustPublicDeclaration | None:
-    plan = applicable_checked_api_plan(specializations)
-    if plan is None:
-        return None
-    shape = specializations[0]
-    facts = _rust_public_wrapper_facts(primitive_name, shape)
-    checked_where = _checked_type_where_predicates(plan, "S")
-    index_where = tuple(
-        _type_param_where_clauses(shape, base_dispatch="projection")
-    )
-    if checked_where and index_where:
-        raise ValueError(
-            "checked wrapper cannot combine numeric-domain and index-vector bounds"
-        )
-    parameters = tuple(
-        RustPublicParameter(
-            name,
-            typ,
-            rust_parameter_role(shape, index, shape.param_kinds[index]),
-        )
-        for index, name, typ in _checked_parameter_types(
-            shape,
-            "S",
-            plan,
-            target_owner=facts.target_owner,
-            vidx_type=facts.index_type,
-        )
-    )
-    ordinary_identity = f"crate::profile::{primitive_name}#vector"
-    return RustPublicDeclaration(
-        identity=f"crate::profile::{primitive_name}_checked#vector",
-        name=rust_raw_identifier(f"{primitive_name}_checked"),
-        owner="crate::profile",
-        reachability=reachability,
-        stability=PublicDeclarationStability.STABLE,
-        kind=PublicDeclarationKind.FUNCTION,
-        overload=_rust_overload_identity(specializations, "checked-vector"),
-        visibility="pub",
-        generic_parameters=(
-            rust_type_parameter("S", facts.vector_bound),
-            *_rust_checked_generic_parameters(shape, facts, plan),
-        ),
-        parameters=parameters,
-        where_predicates=checked_where or index_where,
-        result_type=(
-            f"Result<{_kind_type(shape.result_kind, facts.result_owner)}, "
-            "PreconditionError>"
-        ),
-        result_form="result",
-        attributes=("#[inline]",),
-        checked_of=ordinary_identity,
-        error_form="result",
-    )
-
-
-def _rust_overloaded_wrapper_declaration(
-    primitive_name: str,
-    specializations: tuple[LoweredSpecialization, ...],
-    *,
-    checked: bool,
-    caller_unsafe: bool,
-    reachability: tuple[str, ...],
-) -> RustPublicDeclaration | None:
-    shape = specializations[0]
-    varying = varying_positions(specializations)
-    if len(varying) != 1:
-        raise ValueError("Rust public overload requires one varying parameter")
-    varying_index = varying[0]
-    axis_args = "".join(f", {_axis_name(key)}" for key, _ in shape.axis)
-    generic_args = "".join(
-        f", {name}" for name, _typ, _default in shape.generic_params
-    )
-    arg_trait = (
-        f"{_PRIMITIVE_TRAIT_PREFIX}{rust_primitive_trait_name(primitive_name)}Arg"
-    )
-    generics: tuple[RustGenericParameter, ...] = (
-        rust_type_parameter("S", "StaticSimdVector"),
-        *_rust_const_generic_parameters(shape),
-        rust_type_parameter("V", f"{arg_trait}<S{axis_args}{generic_args}>")
-    )
-    plan = applicable_checked_api_plan(specializations) if checked else None
-    if checked and plan is None:
-        return None
-    memory = checked_memory_condition(plan.conditions) if plan is not None else None
-    parameters: list[RustPublicParameter] = []
-    for index, (name, kind) in enumerate(zip(shape.param_names, shape.param_kinds)):
-        if index == varying_index:
-            typ = "V"
-        elif memory is not None and index == memory.parameter_index:
-            typ = (
-                "&[S::BaseType]"
-                if memory.memory_access is MemoryAccess.READ
-                else "&mut [S::BaseType]"
-            )
-        else:
-            typ = _param_kind_type(kind, "S")
-        parameters.append(
-            RustPublicParameter(
-                name,
-                typ,
-                rust_parameter_role(shape, index, kind),
-            )
-        )
-    suffix = "_checked" if checked else ""
-    ordinary_identity = f"crate::profile::{primitive_name}#overload"
-    result = _kind_type(shape.result_kind, "S")
-    return RustPublicDeclaration(
-        identity=f"crate::profile::{primitive_name}{suffix}#overload",
-        name=rust_raw_identifier(f"{primitive_name}{suffix}"),
-        owner="crate::profile",
-        reachability=reachability,
-        stability=PublicDeclarationStability.STABLE,
-        kind=PublicDeclarationKind.FUNCTION,
-        overload=_rust_overload_identity(
-            specializations, "checked-overload" if checked else "overload"
-        ),
-        visibility="pub",
-        generic_parameters=generics,
-        parameters=tuple(parameters),
-        result_type=(
-            f"Result<{result}, PreconditionError>" if checked else result
-        ),
-        result_form="result" if checked else "direct",
-        attributes=("#[inline]",) if checked else (),
-        unsafe=caller_unsafe and not checked,
-        checked_of=ordinary_identity if checked else None,
-        error_form="result" if checked else None,
-    )
 
 
 class RustBackend:
@@ -870,12 +309,12 @@ class RustBackend:
             ordinary = self._render_overloaded_wrapper(
                 primitive_name, specializations, caller_unsafe=caller_unsafe
             )
-            checked = self._render_overloaded_checked_wrapper(
+            checked = _render_overloaded_checked_wrapper(
                 primitive_name, specializations
             )
             return "\n\n".join(part for part in (ordinary, checked) if part)
         ordinary = self._wrapper(primitive_name, shape, caller_unsafe=caller_unsafe)
-        checked = self._checked_wrapper(primitive_name, specializations)
+        checked = _render_checked_wrapper(primitive_name, specializations)
         return "\n\n".join(part for part in (ordinary, checked) if part)
 
     def public_declarations(
@@ -1322,110 +761,6 @@ class RustBackend:
             f"}}"
         )
 
-    def _render_overloaded_checked_wrapper(
-        self,
-        primitive_name: str,
-        specs: tuple[LoweredSpecialization, ...],
-    ) -> str:
-        plan = applicable_checked_api_plan(specs)
-        if plan is None:
-            return ""
-        memory = checked_memory_condition(plan.conditions)
-        if memory is None:
-            raise ValueError("checked Rust overload has no supported memory plan")
-        shape = specs[0]
-        varying = varying_positions(specs)
-        if len(varying) != 1:
-            raise ValueError("checked Rust overload requires one varying parameter")
-        varying_index = varying[0]
-        memory_index, memory_name, memory_access, alignment_axis = (
-            memory.parameter_index,
-            memory.parameter_name,
-            memory.memory_access,
-            memory.memory_alignment_axis_name,
-        )
-        if memory_access is not MemoryAccess.WRITE:
-            raise ValueError("checked Rust memory overload currently requires writable memory")
-        if alignment_axis is None:
-            raise ValueError("checked Rust memory overload has no alignment axis")
-        arg_trait = (
-            f"{_PRIMITIVE_TRAIT_PREFIX}{rust_primitive_trait_name(primitive_name)}Arg"
-        )
-        axis_args = "".join(f", {_axis_name(key)}" for key, _ in shape.axis)
-        generic_args = "".join(
-            f", {name}" for name, _typ, _default in shape.generic_params
-        )
-        fixed_arguments = tuple(
-            (
-                f"{name}.as_mut_ptr()" if index == memory_index else name
-            )
-            for index, name in enumerate(shape.param_names)
-            if index != varying_index
-        )
-        trait_application = f"<V as {arg_trait}<S{axis_args}{generic_args}>>"
-        call = (
-            f"unsafe {{ {trait_application}::apply("
-            f"{shape.param_names[varying_index]}"
-            f"{''.join(f', {argument}' for argument in fixed_arguments)}) }}"
-        )
-        checks: list[str] = []
-        for condition in plan.conditions:
-            error = _rust_precondition_error(condition.error)
-            if condition.kind is PreconditionKind.CONTIGUOUS_MEMORY_EXTENT:
-                checks.extend(
-                    (
-                        f"    if {memory_name}.len() < "
-                        f"{trait_application}::{_CHECKED_MEMORY_EXTENT_METHOD}() {{",
-                        f"        return Err({error});",
-                        "    }",
-                    )
-                )
-                continue
-            if condition.kind is PreconditionKind.SELECTED_MEMORY_ALIGNMENT:
-                checks.extend(
-                    (
-                        f"    if {_axis_name(alignment_axis)} && "
-                        f"!({memory_name}.as_ptr() as usize).is_multiple_of("
-                        f"{trait_application}::{_CHECKED_MEMORY_ALIGNMENT_METHOD}()) {{",
-                        f"        return Err({error});",
-                        "    }",
-                    )
-                )
-                continue
-            raise ValueError(
-                f"unsupported checked Rust overload condition {condition.kind.value!r}"
-            )
-        success = (
-            f"    {call};\n    Ok(())"
-            if shape.result_kind == "void"
-            else f"    Ok({call})"
-        )
-        body = "\n".join((*checks, success))
-        doc = _rust_doc(
-            shape,
-            context="Rust checked wrapper",
-            concrete=False,
-            checked_conditions=plan.conditions,
-            specializations=specs,
-        )
-        declaration = _rust_overloaded_wrapper_declaration(
-            primitive_name,
-            specs,
-            checked=True,
-            caller_unsafe=False,
-            reachability=("profile",),
-        )
-        assert declaration is not None
-        return (
-            (f"{doc}\n" if doc else "")
-            + declaration.render_attributes()
-            + "\n"
-            + declaration.render_definition_head()
-            + "\n"
-            f"{body}\n"
-            "}"
-        )
-
     def _trait(
         self,
         primitive_name: str,
@@ -1693,231 +1028,6 @@ class RustBackend:
             + "\n"
             f"    {call}\n"
             f"}}"
-        )
-
-    def _checked_wrapper(
-        self,
-        primitive_name: str,
-        specializations: tuple[LoweredSpecialization, ...],
-    ) -> str:
-        plan = applicable_checked_api_plan(specializations)
-        if plan is None:
-            return ""
-        shape = specializations[0]
-        public_trait_args = _trait_args_by_name(shape)
-        trait_args = list(public_trait_args)
-        target_owner: str | None = shape.result_vector_param
-        if shape.target is not None:
-            trait_args = ["T", *trait_args]
-            public_trait_args = ["T", *public_trait_args]
-            target_owner = "T"
-        if shape.type_params:
-            type_names = _type_param_names(shape)
-            trait_args = [
-                *type_names,
-                *_type_param_base_key_args(shape, mode="projection"),
-                *trait_args,
-            ]
-            public_trait_args = [*type_names, *public_trait_args]
-        rendered_trait_args = f"<{', '.join(trait_args)}>" if trait_args else ""
-        vector_bound = (
-            f"{_PRIMITIVE_TRAIT_PREFIX}"
-            f"{rust_primitive_trait_name(primitive_name)}{rendered_trait_args}"
-        )
-        doc = _rust_doc(
-            shape,
-            context="Rust checked wrapper",
-            concrete=False,
-            checked_conditions=plan.conditions,
-        )
-        call = (
-            f"unsafe {{ {rust_raw_identifier(primitive_name)}"
-            f"::<{', '.join(('S', *public_trait_args))}>"
-            f"({_checked_runtime_names(shape, plan)}) }}"
-        )
-        checks: list[str] = []
-        for condition in plan.conditions:
-            if condition.kind is PreconditionKind.LANE_INDEX_IN_RANGE:
-                checks.extend(
-                    (
-                        f"    if {condition.parameter_name} >= S::lane_count() {{",
-                        f"        return Err({_rust_precondition_error(condition.error)});",
-                        "    }",
-                    )
-                )
-                continue
-            if condition.kind is PreconditionKind.EQUAL_LANE_COUNT:
-                if target_owner is None:
-                    raise ValueError(
-                        "Rust equal-lane-count check has no target vector type"
-                    )
-                checks.extend(
-                    (
-                        f"    if S::lane_count() != {target_owner}::lane_count() {{",
-                        f"        return Err({_rust_precondition_error(condition.error)});",
-                        "    }",
-                    )
-                )
-                continue
-            if condition.kind is PreconditionKind.ACTIVE_DIVISOR_NONZERO:
-                args = _rust_precondition_method_parameters(
-                    shape, condition, owner="S", arguments=True
-                )
-                checks.extend(
-                    (
-                        f"    if let Some(error) = <S as {vector_bound}>::"
-                        f"{_PRECONDITION_METHOD}({args}) {{",
-                        "        return Err(error);",
-                        "    }",
-                    )
-                )
-                continue
-            if condition.kind is PreconditionKind.CONTIGUOUS_MEMORY_EXTENT:
-                extent = _rust_checked_memory_extent(
-                    condition, "S", target_owner=target_owner
-                )
-                checks.extend(
-                    (
-                        f"    if {condition.parameter_name}.len() < {extent} {{",
-                        f"        return Err({_rust_precondition_error(condition.error)});",
-                        "    }",
-                    )
-                )
-                continue
-            if condition.kind is PreconditionKind.SELECTED_MEMORY_ALIGNMENT:
-                alignment, axis = _rust_checked_memory_alignment(condition, "S")
-                active_guard = ""
-                if condition.memory_addressing is MemoryAddressing.COMPACTED:
-                    if condition.mask_parameter_name is None:
-                        raise ValueError(
-                            "Rust checked compacted alignment has no mask binding"
-                        )
-                    active_guard = (
-                        f"(0..S::lane_count()).any(|__tsl_lane| "
-                        f"S::mask_lane_test({condition.mask_parameter_name}, "
-                        "__tsl_lane)) && "
-                    )
-                checks.extend(
-                    (
-                        f"    if {axis} && {active_guard}!({condition.parameter_name}.as_ptr() as usize)"
-                        f".is_multiple_of({alignment}) {{",
-                        f"        return Err({_rust_precondition_error(condition.error)});",
-                        "    }",
-                    )
-                )
-                continue
-            if condition.kind is PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID:
-                if (
-                    condition.index_parameter_name is None
-                    or condition.scale_parameter_name is None
-                    or condition.memory_indexed_lane_extent is None
-                ):
-                    raise ValueError("Rust checked indexed memory plan is incomplete")
-                if (
-                    PreconditionCheckPrimitive.VECTOR_EXTRACT_LANE
-                    not in condition.check_primitives
-                ):
-                    raise ValueError(
-                        "indexed-memory check plan has no lane-extraction primitive"
-                    )
-                if len(shape.type_params) != 1:
-                    raise ValueError(
-                        "Rust checked indexed memory requires exactly one index vector type"
-                    )
-                index_owner = shape.type_params[0].name
-                if (
-                    condition.memory_indexed_lane_extent
-                    is MemoryIndexedLaneExtent.VECTOR
-                ):
-                    invalid_lane_extent = (
-                        f"{index_owner}::lane_count() < S::lane_count()"
-                    )
-                    accessed_lanes = "S::lane_count()"
-                elif (
-                    condition.memory_indexed_lane_extent
-                    is MemoryIndexedLaneExtent.INDEX_VECTOR
-                ):
-                    invalid_lane_extent = (
-                        f"{index_owner}::lane_count() > S::lane_count()"
-                    )
-                    accessed_lanes = f"{index_owner}::lane_count()"
-                else:  # pragma: no cover - closed enum, guarded above
-                    raise AssertionError("unknown indexed memory lane extent")
-                active = (
-                    "true"
-                    if condition.mask_parameter_name is None
-                    else f"S::mask_lane_test({condition.mask_parameter_name}, __tsl_lane)"
-                )
-                checks.extend(
-                    (
-                        f"    if {invalid_lane_extent} {{",
-                        f"        return Err({_rust_precondition_error(condition.error)});",
-                        "    }",
-                        f"    for __tsl_lane in 0..{accessed_lanes} {{",
-                        f"        if {active} {{",
-                        f"            let __tsl_index = unsafe {{ "
-                        f"extract_value_at::<{index_owner}>("
-                        f"{condition.index_parameter_name}, __tsl_lane) }};",
-                        "            if let Some(error) = "
-                        "indexed_memory_address_error::<_, S::BaseType>(",
-                        "                __tsl_index, "
-                        f"{condition.scale_parameter_name}, "
-                        f"{condition.parameter_name}.len(),",
-                        "            ) {",
-                        "                return Err(error);",
-                        "            }",
-                        "        }",
-                        "    }",
-                    )
-                )
-                continue
-            if condition.kind is PreconditionKind.COMPACTED_MEMORY_EXTENT:
-                if condition.mask_parameter_name is None:
-                    raise ValueError("Rust checked compacted memory plan has no mask")
-                if (
-                    PreconditionCheckPrimitive.MASK_POPULATION_COUNT
-                    not in condition.check_primitives
-                ):
-                    raise ValueError(
-                        "compacted-memory check plan has no mask population primitive"
-                    )
-                checks.extend(
-                    (
-                        "    let mut __tsl_required = 0usize;",
-                        "    for __tsl_lane in 0..S::lane_count() {",
-                        f"        if S::mask_lane_test({condition.mask_parameter_name}, __tsl_lane) {{",
-                        "            __tsl_required += 1;",
-                        "        }",
-                        "    }",
-                        f"    if {condition.parameter_name}.len() < __tsl_required {{",
-                        f"        return Err({_rust_precondition_error(condition.error)});",
-                        "    }",
-                    )
-                )
-                continue
-            raise ValueError(
-                f"unsupported Rust checked condition {condition.kind.value!r}"
-            )
-        success = (
-            f"    {call};\n    Ok(())"
-            if shape.result_kind == "void"
-            else f"    Ok({call})"
-        )
-        body = "\n".join((*checks, success))
-        declaration = _rust_checked_wrapper_declaration(
-            primitive_name,
-            specializations,
-            reachability=("profile",),
-        )
-        assert declaration is not None
-        return (
-            (f"{doc}\n" if doc else "")
-            + declaration.render_attributes()
-            + "\n"
-            + declaration.render_definition_head()
-            + "\n"
-            f"{body}\n"
-            "}"
         )
 
     def _target_feature_body(
