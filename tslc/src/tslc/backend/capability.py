@@ -51,12 +51,14 @@ VerifyMachineProfileProjector = Callable[
 ToolchainCommandsResolver = Callable[
     ["VerifyProfile", "BuildVerifierConfig"], "ToolchainCommands"
 ]
+ExtensionHeaderGroupProjector = Callable[["Extension | None"], str | None]
 BenchmarkPlanBuilder = Callable[
     [
         "Catalog",
         tuple["EmittedProfile", ...],
         "ValueTestProjectPlan",
         "BackendPolicyInputs",
+        ExtensionHeaderGroupProjector,
     ],
     "BenchmarkProjectPlan",
 ]
@@ -447,7 +449,11 @@ class BackendCapability:
         if self.benchmark_plan_builder is None:
             return None
         return self.benchmark_plan_builder(
-            catalog, profiles, value_tests, policy_inputs
+            catalog,
+            profiles,
+            value_tests,
+            policy_inputs,
+            self.extension_header_group,
         )
 
     def documentation_formatter(self) -> BackendDocumentationFormatter:
@@ -549,6 +555,7 @@ __all__ = [
     "EMPTY_BACKEND_POLICY_INPUTS",
     "DocumentationSiteInput",
     "DocumentationSpec",
+    "ExtensionHeaderGroupProjector",
     "GeneratedDocumentationBuilder",
     "GeneratedDocumentationSpec",
     "GeneratedFormatSpec",

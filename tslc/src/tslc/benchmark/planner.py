@@ -57,6 +57,7 @@ from tslc.value_tests.model import ValueTestCasePlan, ValueTestProjectPlan
 
 BENCHMARK_PROTOCOL_VERSION = 1
 BenchmarkSlotIdentity = Callable[[str, LoweredSpecialization], str]
+ExtensionHeaderGroup = Callable[[Extension | None], str | None]
 
 
 def _no_slot_identity(
@@ -64,6 +65,11 @@ def _no_slot_identity(
 ) -> str:
     del profile_name, specialization
     return ""
+
+
+def _no_extension_header_group(extension: Extension | None) -> str | None:
+    del extension
+    return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,6 +99,7 @@ class BenchmarkPlanner:
         backend_id: str,
         supported_admissions: frozenset[BenchmarkScenarioAdmission] | None = None,
         slot_identity: BenchmarkSlotIdentity | None = None,
+        extension_header_group: ExtensionHeaderGroup | None = None,
     ) -> None:
         if not backend_id:
             raise ValueError("benchmark planner requires a backend ID")
@@ -100,6 +107,9 @@ class BenchmarkPlanner:
         self._backend_id = backend_id
         self._supported_admissions = supported_admissions
         self._slot_identity = slot_identity or _no_slot_identity
+        self._extension_header_group = (
+            extension_header_group or _no_extension_header_group
+        )
         self._harness = discover_harness_primitives(catalog)
 
     def plan(
@@ -243,8 +253,9 @@ class BenchmarkPlanner:
     ) -> tuple[BenchmarkCandidateSet | None, str, bool]:
         primitive = _source_primitive(self._catalog, spec)
         extension = profile.extensions.get(spec.extension_name)
+        header_group = self._extension_header_group(extension)
         reason = _common_unsupported_reason(
-            spec, primitive, extension, self._backend_id
+            spec, primitive, extension, header_group
         )
         if reason is not None:
             return None, reason, False
@@ -256,6 +267,7 @@ class BenchmarkPlanner:
             profile=profile,
             specialization=spec,
             primitive_specializations=by_primitive[spec.primitive_name],
+            header_group=header_group,
             immediate_value=immediate_value,
             simd_type_base_bindings=simd_type_base_bindings,
         )
@@ -556,7 +568,7 @@ def _common_unsupported_reason(
     spec: LoweredSpecialization,
     primitive: Primitive | None,
     extension: Extension | None,
-    backend_id: str,
+    header_group: str | None,
 ) -> str | None:
     if primitive is None:
         return "source primitive is not present in the catalog"
@@ -592,16 +604,7 @@ def _common_unsupported_reason(
         return "only fixed-width hardware vectors are benchmarked"
     if not extension.default_test_target:
         return "extension is not enabled as a native value-test target"
-    from tslc.backend.registry import backend_capability
-
-    try:
-        capability = backend_capability(backend_id)
-    except ValueError:
-        capability = None
-    if (
-        capability is not None
-        and capability.extension_header_group(extension) is not None
-    ):
+    if header_group is not None:
         return "opt-in header-group extensions are not supported by benchmark planning"
     return None
 

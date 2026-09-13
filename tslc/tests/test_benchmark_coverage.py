@@ -789,9 +789,14 @@ def test_rust_benchmark_audit_generates_unordered_profiles_independently(
     )
     policy_inputs: dict[str, object] = {}
 
-    def fake_policy_selection(emitted_profiles, manifest):
+    def fake_policy_selection(
+        emitted_profiles,
+        manifest,
+        extension_header_group,
+    ):
         policy_inputs["emitted"] = emitted_profiles
         policy_inputs["manifest"] = manifest
+        policy_inputs["extension_header_group"] = extension_header_group
         return "selection"
 
     def fake_policy_coverage(benchmarks, selection):
@@ -846,6 +851,9 @@ def test_rust_benchmark_audit_generates_unordered_profiles_independently(
     emitted = audit_inputs["emitted_profiles"]
     assert tuple(item.profile.name for item in emitted) == ("left", "right")
     assert policy_inputs["selection"] == "selection"
+    extension_header_group = policy_inputs["extension_header_group"]
+    assert callable(extension_header_group)
+    assert extension_header_group(None) is None
     assert policy_inputs["benchmarks"] is merged
 
 

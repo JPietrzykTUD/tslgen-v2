@@ -10,6 +10,7 @@ from tslc.backend.capability import (
     BackendPolicyInputs,
     BackendDocumentationFormatter,
     DocumentationSiteInput,
+    ExtensionHeaderGroupProjector,
     GeneratedDocumentationBuilder,
     GeneratedDocumentationSpec,
     GeneratedFormatSpec,
@@ -87,7 +88,9 @@ def rust_policy_inventory_validation(
     policy_inputs: BackendPolicyInputs,
 ) -> tuple[Diagnostic, ...]:
     return validate_rust_policy_manifest_profiles(
-        profiles, _rust_policy_manifest(policy_inputs)
+        profiles,
+        _rust_policy_manifest(policy_inputs),
+        RUST_BACKEND.extension_header_group,
     )
 
 
@@ -124,6 +127,7 @@ def rust_benchmark_plan(
     profiles: tuple[EmittedProfile, ...],
     value_tests: ValueTestProjectPlan,
     policy_inputs: BackendPolicyInputs,
+    extension_header_group: ExtensionHeaderGroupProjector,
 ) -> BenchmarkProjectPlan:
     return BenchmarkPlanner(
         catalog,
@@ -132,6 +136,7 @@ def rust_benchmark_plan(
             _rust_policy_manifest(policy_inputs).benchmark_admission_set
         ),
         slot_identity=benchmark_slot_identity_hash,
+        extension_header_group=extension_header_group,
     ).plan(profiles, value_tests)
 
 
@@ -151,7 +156,9 @@ def rust_backend_artifacts(
         or DEFAULT_RUST_PACKAGE_CONFIG
     )
     selection_plan = plan_rust_policy_selection(
-        profiles, _rust_policy_manifest(policy_inputs)
+        profiles,
+        _rust_policy_manifest(policy_inputs),
+        RUST_BACKEND.extension_header_group,
     )
     static_selection_plan = plan_rust_static_selection(profiles)
     algorithm_plan = plan_rust_algorithm(profiles, static_selection_plan)
@@ -217,6 +224,7 @@ def rust_primitive_preview(
     policy_selection = plan_rust_policy_selection(
         (profile,),
         _rust_policy_manifest(policy_inputs),
+        RUST_BACKEND.extension_header_group,
     ).profile(
         profile.profile.name
     )

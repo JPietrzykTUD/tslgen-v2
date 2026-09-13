@@ -564,8 +564,15 @@ def test_backend_closure_seed_primitives_are_capability_owned() -> None:
 def test_backend_capability_owns_optional_benchmark_planning(catalog) -> None:
     calls: list[str] = []
 
-    def plan_benchmarks(catalog, profiles, value_tests, policy_inputs):  # noqa: ANN001
+    def plan_benchmarks(  # noqa: ANN001
+        catalog,
+        profiles,
+        value_tests,
+        policy_inputs,
+        extension_header_group,
+    ):
         del catalog, profiles, value_tests, policy_inputs
+        assert extension_header_group(None) is None
         calls.append("future")
         return EMPTY_BENCHMARK_PROJECT_PLAN
 
