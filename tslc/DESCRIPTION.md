@@ -454,6 +454,12 @@ The [Selector](src/tslc/select/selector.py) enumerates the literal
 free-function primitive follows a separate path and returns the first usable
 declaration-owning extension slot in established profile order, because its
 rendered declaration has no SIMD axis.
+Candidate eligibility, applicable target/compiler requirements, exact ranking,
+capability-frontier winners, ambiguity diagnostics, and fixed-width fallback
+selection are one pure typed projection in
+[select/candidates.py](src/tslc/select/candidates.py). The `Selector` façade
+retains the public candidate-explanation entry point but does not implement the
+ranking algorithm.
 
 The [Lowerer](src/tslc/lower/lowerer.py) orchestrates one
 `(primitive, extension, type, backend)` slot → a `LoweredSpecialization`
