@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Literal, Protocol
 
 from tslc.catalog.model import Extension
+from tslc.catalog.preconditions import PreconditionCheckPrimitive
 from tslc.catalog.scalar_types import (
     is_signed,
     is_type_tag,
@@ -31,6 +32,27 @@ class PointerCastOperand:
     kind: Literal["address_of", "pointer"]
     target: RenderField
     mutable_borrow: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class BackendLoweringPolicy:
+    """Backend-owned choices needed while lowering shared semantics."""
+
+    checked_vector_failure_primitive: PreconditionCheckPrimitive | None = None
+    checked_mask_failure_primitive: PreconditionCheckPrimitive | None = None
+    fixed_native_abi_bridge: bool = False
+
+    def checked_failure_primitive(
+        self, result_kind: str
+    ) -> PreconditionCheckPrimitive | None:
+        if result_kind == "m":
+            return self.checked_mask_failure_primitive
+        if result_kind in {"v", "vidx"}:
+            return self.checked_vector_failure_primitive
+        return None
+
+
+DEFAULT_BACKEND_LOWERING_POLICY = BackendLoweringPolicy()
 
 
 class BackendTypeDialect(Protocol):
@@ -146,6 +168,9 @@ class BackendDialect(Protocol):
     def backend_id(self) -> str: ...
 
     @property
+    def lowering_policy(self) -> BackendLoweringPolicy: ...
+
+    @property
     def types(self) -> BackendTypeDialect: ...
 
     @property
@@ -161,9 +186,11 @@ class BackendDialect(Protocol):
 __all__ = [
     "BackendDialect",
     "BackendIntrinsicDialect",
+    "BackendLoweringPolicy",
     "BackendSyntaxDialect",
     "BackendTemplateDialect",
     "BackendTypeDialect",
+    "DEFAULT_BACKEND_LOWERING_POLICY",
     "is_signed",
     "is_type_tag",
     "normalize_scalar_tag",

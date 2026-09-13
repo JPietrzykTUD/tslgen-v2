@@ -30,6 +30,7 @@ from tslc.backend.rust_static_public_declarations import (
     rust_static_declaration_holes,
 )
 from tslc.backend.registry import create_backend_dialect
+from tslc.backend.translation import BackendLoweringPolicy
 from tslc.catalog.call_preconditions import (
     CallPreconditionObligation,
     CallPreconditionObligationStatus,
@@ -242,7 +243,7 @@ def test_convert_lanes_checked_uses_typed_lane_count_and_scalable_placeholder(
     assert "error = ::tsl::precondition_error::lane_count_mismatch;" in cpp
     assert "return ::tsl::set_zero<ToVec>();" in cpp
     assert any(
-        origin.origin == "C++ checked failure value"
+        origin.origin == "checked failure value"
         and origin.dependency.primitive == "set_zero"
         and getattr(origin.dependency.source, "parameter_name", None) == "ToVec"
         for origin in cpp_spec.call_dependency_origins
@@ -278,6 +279,54 @@ def test_total_integral_mask_test_gets_no_checked_twin_or_unsafe_surface(
     assert "test_imask_checked" not in rendered
     assert "pub unsafe fn test_imask" not in rendered
     assert "pub fn test_imask" in rendered
+
+
+def test_checked_failure_dependencies_follow_backend_policy_not_backend_name(
+    catalog: Catalog,
+    machine_profiles: Mapping[str, MachineProfile],
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["scalar"],
+            "div",
+            ("si32",),
+            backend_id="rust",
+        )
+        .selected
+        if len(selected.primitive.parameters) == 2
+    )
+    rust = create_backend_dialect(catalog, "rust")
+    ordinary = Lowerer().lower(slot, catalog, rust).specialization
+    assert ordinary is not None
+    assert not any(
+        origin.origin == "checked failure value"
+        for origin in ordinary.call_dependency_origins
+    )
+
+    policy = BackendLoweringPolicy(
+        checked_vector_failure_primitive=PreconditionCheckPrimitive.ZERO_VECTOR,
+        checked_mask_failure_primitive=PreconditionCheckPrimitive.MASK_FALSE,
+    )
+    opted_in = Lowerer().lower(
+        slot,
+        catalog,
+        replace(rust, lowering_policy=policy),
+    ).specialization
+
+    assert opted_in is not None
+    assert any(
+        origin.origin == "checked failure value"
+        and origin.dependency.primitive == "set_zero"
+        for origin in opted_in.call_dependency_origins
+    )
+    assert (
+        policy.checked_failure_primitive("m")
+        is PreconditionCheckPrimitive.MASK_FALSE
+    )
+    assert policy.checked_failure_primitive("void") is None
 
 
 def test_empty_specialization_group_has_no_checked_or_unsafe_api() -> None:
@@ -318,7 +367,7 @@ def test_insert_and_mask_set_follow_the_same_declared_lane_contract(
         )
         assert f"return {placeholder};" in cpp
         assert any(
-            origin.origin == "C++ checked failure value"
+            origin.origin == "checked failure value"
             and origin.dependency.primitive in {"set_zero", "mask_false"}
             for origin in cpp_spec.call_dependency_origins
         )

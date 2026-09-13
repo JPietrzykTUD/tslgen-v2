@@ -12,6 +12,7 @@ from _select_lower_core_support import (
 )
 from tslc.catalog.memory import MemoryAccess
 from tslc.catalog.semantics import PrimitiveOperation
+from tslc.backend.translation import DEFAULT_BACKEND_LOWERING_POLICY
 
 
 @pytest.mark.parametrize("profile", ("scalar", "skylake"))
@@ -582,9 +583,8 @@ def test_clang_runtime_permute_delegates_to_fixed_native_leaf(
     assert slot.fixed_native_fallback_extension.isa_name == fixed_isa
     assert slot.required_features == frozenset()
 
-    lowered = Lowerer().lower(
-        slot, catalog, create_backend_dialect(catalog, "cpp")
-    ).specialization
+    backend = create_backend_dialect(catalog, "cpp")
+    lowered = Lowerer().lower(slot, catalog, backend).specialization
 
     assert lowered is not None
     assert lowered.body_text.count(f"fixed<{width // lane_bits}>") >= 2
@@ -595,6 +595,19 @@ def test_clang_runtime_permute_delegates_to_fixed_native_leaf(
         (origin.dependency.primitive, origin.dependency.source.extension_isa)
         for origin in lowered.call_dependency_origins
     } == {("permute_lanes", fixed_isa)}
+
+    policy_disabled = Lowerer().lower(
+        slot,
+        catalog,
+        replace(backend, lowering_policy=DEFAULT_BACKEND_LOWERING_POLICY),
+    ).specialization
+    assert policy_disabled is not None
+    assert "fixed<" not in policy_disabled.body_text
+    assert not any(
+        origin.dependency.primitive == "permute_lanes"
+        and origin.dependency.source.extension_isa == fixed_isa
+        for origin in policy_disabled.call_dependency_origins
+    )
 
 
 @pytest.mark.parametrize(

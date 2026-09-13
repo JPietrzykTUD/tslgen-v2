@@ -20,7 +20,10 @@ description: Add a backend or backend capability to tslc. Use when asked to intr
    diagnostics, and header groups belong to one immutable backend registry row;
    source data names only the semantic capability. Keep default backend choice
    explicit in requests/configuration and do not scatter hardcoded backend ID
-   lists or import-time registry snapshots.
+   lists or import-time registry snapshots. Configure the dialect's immutable
+   lowering policy when checked failure values need helper primitives or the
+   backend can bridge opted-in compiler-vector bodies to exact-width native
+   implementations; do not add backend-name tests to common lowering.
 4. Add typed translation/render values before templates. Templates may format decided values only.
 5. Place packaged backend static files, templates, and helpers under
    `tslc/src/tslc/backend/assets/`. Keep generated-documentation inputs under

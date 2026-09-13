@@ -508,6 +508,21 @@ def test_neutral_planners_do_not_branch_on_registered_backend_names() -> None:
     assert "rust" not in value_planner_literals
 
 
+def test_generic_lowering_does_not_branch_on_registered_backend_names() -> None:
+    lower_root = _REPO_ROOT / "tslc/src/tslc/lower"
+    offenders: list[str] = []
+    for path in sorted(lower_root.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        offenders.extend(
+            f"{path}:{node.lineno}:{node.value}"
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Constant)
+            and node.value in {"cpp", "rust"}
+        )
+
+    assert offenders == []
+
+
 def test_fake_backend_drives_documentation_and_artifact_media_type(monkeypatch) -> None:
     from tslc.backend import registry
 

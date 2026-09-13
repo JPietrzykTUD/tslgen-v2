@@ -19,7 +19,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from tslc.backend import translation_common
-from tslc.backend.translation import BackendDialect
+from tslc.backend.translation import BackendDialect, BackendLoweringPolicy
 from tslc.catalog.arithmetic import ArithmeticOperandRole, ArithmeticOperation
 from tslc.catalog.memory import resolve_memory_alignment
 from tslc.catalog.model import (
@@ -370,7 +370,7 @@ class Lowerer:
         call_dependency_origins.update(
             _checked_precondition_dependencies(
                 selected,
-                backend_id=backend.backend_id,
+                lowering_policy=backend.lowering_policy,
                 result_kind=shape.result_kind,
                 target=target,
             )
@@ -614,7 +614,7 @@ def _arithmetic_preconditions(
 def _checked_precondition_dependencies(
     selected: SelectedImplementation,
     *,
-    backend_id: str,
+    lowering_policy: BackendLoweringPolicy,
     result_kind: str,
     target: TargetVector | None,
 ) -> tuple[CallDependencyOrigin, ...]:
@@ -643,11 +643,8 @@ def _checked_precondition_dependencies(
             )
             for primitive in check_primitives
         )
-    if (
-        backend_id == "cpp"
-        and has_checked_condition
-        and result_kind in {"v", "vidx", "m"}
-    ):
+    failure_primitive = lowering_policy.checked_failure_primitive(result_kind)
+    if has_checked_condition and failure_primitive is not None:
         result_vector: GenericVectorReference | VectorIdentity
         result_target = selected.primitive.result_target
         if result_target is not None and result_target[0] == RESULT_DIM_VECTOR:
@@ -664,15 +661,14 @@ def _checked_precondition_dependencies(
             result_vector = VectorIdentity(target.base_tag, target.extension_isa)
         else:
             result_vector = current
-        placeholder_primitive = "mask_false" if result_kind == "m" else "set_zero"
         dependencies.append(
             CallDependencyOrigin(
                 dependency=CallDependency(
-                    primitive=placeholder_primitive,
+                    primitive=failure_primitive.value,
                     mask_policy=None,
                     source=result_vector,
                 ),
-                origin="C++ checked failure value",
+                origin="checked failure value",
                 kind=CallDependencyOriginKind.CHECKED_GUARD,
                 source=selected.primitive.source,
             )

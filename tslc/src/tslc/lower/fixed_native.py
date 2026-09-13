@@ -81,7 +81,7 @@ def lower_preferred_fixed_native(
     if (
         not selected.implementation.prefer_fixed_native
         or fixed is None
-        or context.env.backend.backend_id != "cpp"
+        or not context.env.backend.lowering_policy.fixed_native_abi_bridge
     ):
         return None
 

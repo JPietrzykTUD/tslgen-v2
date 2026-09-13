@@ -520,7 +520,11 @@ load/store foundation.
 
 Backends differ idiomatically (a `BackendDialect`,
 [backend/translation.py](src/tslc/backend/translation.py), abstracts type
-spellings, intrinsic composition, call syntax, and unsafe framing). The
+spellings, intrinsic composition, call syntax, unsafe framing, and a small
+immutable lowering policy. That policy owns whether checked failure paths need
+vector/mask placeholder primitives and whether an opted-in compiler-vector
+implementation may bridge to an exact-width native ABI; common lowering never
+recognizes a backend ID to make either choice. The
 [backend registry](src/tslc/backend/registry.py) owns each backend's dialect
 factory, artifact media type, complete artifact renderer, documentation
 formatter, validation, helper manifest, value-test support, optional benchmark
