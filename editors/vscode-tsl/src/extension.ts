@@ -297,7 +297,7 @@ async function previewSpecialization(value?: unknown): Promise<void> {
   }
   const backend = vscode.workspace
     .getConfiguration("tsl", document.uri)
-    .get<string>("preview.backend", "cpp");
+    .get<string>("preview.backend", "");
   const position = target
     ? new vscode.Position(target.position.line, target.position.character)
     : editor!.selection.active;
@@ -330,7 +330,7 @@ async function checkSlot(): Promise<void> {
   }
   const backend = vscode.workspace
     .getConfiguration("tsl", editor.document.uri)
-    .get<string>("preview.backend", "cpp");
+    .get<string>("preview.backend", "");
   const context = await requestSpecializationContext(
     editor.document,
     editor.selection.active,
@@ -362,7 +362,7 @@ async function doctor(): Promise<void> {
     return;
   }
   const configuration = vscode.workspace.getConfiguration("tsl", uri);
-  const backend = configuration.get<string>("preview.backend", "cpp");
+  const backend = configuration.get<string>("preview.backend", "");
   const contextualEditor =
     editor?.document.languageId === "tsl" ? editor : undefined;
   const context = await requestSpecializationContext(
@@ -394,7 +394,7 @@ async function doctor(): Promise<void> {
   if (!cwd) {
     return;
   }
-  await previewManager.doctor(compiler, cwd, profile, backend, slot);
+  await previewManager.doctor(compiler, cwd, profile, context.backend, slot);
 }
 
 interface PrimitiveShapeChoice {

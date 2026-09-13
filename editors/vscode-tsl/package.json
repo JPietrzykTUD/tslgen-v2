@@ -317,8 +317,8 @@
         },
         "tsl.preview.backend": {
           "type": "string",
-          "default": "cpp",
-          "description": "Backend for concrete Preview, Check, and Doctor commands."
+          "default": "",
+          "description": "Backend for concrete Preview, Check, and Doctor commands. When empty, use the project/compiler default."
         }
       }
     }

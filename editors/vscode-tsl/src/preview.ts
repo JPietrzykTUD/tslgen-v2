@@ -2,7 +2,7 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 
 import type { CommandSpec } from "./discovery";
-import { profileChoices } from "./previewModel";
+import { previewDocumentPath, profileChoices } from "./previewModel";
 import { runCommand, type CancellableProcess } from "./subprocess";
 
 export interface ConcreteSlot {
@@ -10,6 +10,7 @@ export interface ConcreteSlot {
   readonly profile: string;
   readonly type: string;
   readonly backend: string;
+  readonly previewFileSuffix: string;
   readonly extension: string;
   readonly toTarget?: string | null;
   readonly implementation?: SpecializationLocation | null;
@@ -34,6 +35,8 @@ export interface SpecializationSlotChoice {
 
 export interface SpecializationContext {
   readonly primitive: string | null;
+  readonly backend: string;
+  readonly previewFileSuffix: string;
   readonly extension: string | null;
   readonly type: string | null;
   readonly contextualExtensions: readonly string[];
@@ -99,7 +102,7 @@ export class PreviewManager implements vscode.Disposable {
       `TSL Preview: ${slot.primitive}<${slot.type}${target}> ` +
         `(${slot.profile}/${slot.extension}/${slot.backend})`,
       "preview",
-      slot.backend === "rust" ? "rs" : "hpp",
+      slot.previewFileSuffix,
     );
   }
 
@@ -215,7 +218,7 @@ export class PreviewManager implements vscode.Disposable {
     }
     const uri = vscode.Uri.from({
       scheme: "tsl-preview",
-      path: `/${kind}/${encodeURIComponent(title)}.${suffix}`,
+      path: previewDocumentPath(kind, title, suffix),
       query: `generation=${generation}`,
     });
     this.provider.set(
@@ -252,7 +255,7 @@ export async function selectConcreteSlot(
   );
   if (!candidates.length) {
     void vscode.window.showErrorMessage(
-      `No ${configuration.get<string>("preview.backend", "cpp")} specialization ` +
+      `No ${context.backend} specialization ` +
         "matches the implementation scope at the cursor.",
     );
     return undefined;
@@ -296,12 +299,12 @@ export async function selectConcreteSlot(
     }
     toTarget = selectedTarget;
   }
-  const backend = configuration.get<string>("preview.backend", "cpp");
   return {
     primitive,
     profile,
     type,
-    backend,
+    backend: context.backend,
+    previewFileSuffix: context.previewFileSuffix,
     extension,
     toTarget,
     implementation: context.implementation ?? null,
