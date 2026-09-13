@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 from tslc.authoring_fixes import authoring_actions, validated_edit
 from tslc.catalog.validation.schema_validation import validate_parsed_documents
+from tslc.maintenance.metadata_audit import (
+    safety_metadata_suggestions as maintenance_safety_metadata_suggestions,
+)
 from tslc.sources import SourceDocument
 from tslc.syntax.authoring import AuthoringTextRange
 from tslc.syntax.parser import TslParser
@@ -44,6 +48,75 @@ def test_direct_metadata_suggestion_becomes_one_exact_preserving_edit(
         "        implementation:\n"
     ) in changed
     assert changed.replace(edit.replacement, "", 1) == text
+
+
+def test_maintenance_and_authoring_share_the_exact_safety_edit(
+    tmp_path: Path,
+    tsl_grammar: str,
+) -> None:
+    path = tmp_path / "shared_metadata_action.tsl"
+    text = _primitive_source(
+        "        implementation:\n"
+        '          tsil "complete(intrin<add>(left, right));"\n'
+    )
+    parsed = _parse(path, text, tsl_grammar)
+    document = SourceDocument(path, text, "digest", "tsl")
+    suggestion = maintenance_safety_metadata_suggestions(
+        parsed,
+        {path: document},
+        path=path,
+    )[0]
+    cursor = text.index("implementation")
+    action = next(
+        item
+        for item in authoring_actions(
+            parsed=parsed,
+            diagnostics=(),
+            path=path,
+            text=text,
+            version=4,
+            request_range=AuthoringTextRange(cursor, cursor),
+        )
+        if "safety metadata" in item.title
+    )
+
+    assert suggestion.edit is not None
+    assert action.edit is not None
+    assert (
+        action.edit.range.start,
+        action.edit.range.end,
+        action.edit.replacement,
+    ) == (
+        suggestion.edit.start,
+        suggestion.edit.end,
+        suggestion.edit.replacement,
+    )
+
+
+def test_authoring_dependency_graph_excludes_maintenance_implementations() -> None:
+    package = Path(__file__).resolve().parents[1] / "src/tslc"
+    paths = (
+        package / "authoring.py",
+        package / "authoring_fixes.py",
+        package / "authoring_metadata.py",
+        *sorted((package / "lsp").rglob("*.py")),
+    )
+    offenders: list[str] = []
+    for path in paths:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and (
+                node.module or ""
+            ).startswith("tslc.maintenance"):
+                offenders.append(f"{path}:{node.lineno}")
+            if isinstance(node, ast.Import):
+                offenders.extend(
+                    f"{path}:{node.lineno}"
+                    for alias in node.names
+                    if alias.name.startswith("tslc.maintenance")
+                )
+
+    assert offenders == []
 
 
 def test_edit_is_rejected_for_stale_version_digest_or_original_text(

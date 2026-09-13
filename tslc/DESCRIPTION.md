@@ -152,13 +152,17 @@ placement, never compiler semantics.
 catalog-backed primitive-shape discovery, default parameter-name selection,
 name validation, and source scaffolding; the client only presents choices and
 applies the returned edit. The TypeScript VS Code client contains no compiler
-semantics. Exact diagnostic and metadata-audit repairs are represented by the
-typed, editor-neutral records in
+semantics. Direct implementation-safety facts, selector-entry traversal, and
+exact source edits live in the compiler-owned
+[authoring_metadata.py](src/tslc/authoring_metadata.py); both maintenance audits
+and editor actions project those same immutable suggestions. Exact diagnostic
+and metadata repairs are represented by the typed, editor-neutral records in
 [authoring_fixes.py](src/tslc/authoring_fixes.py). They bind an edit to its
 diagnostic or suggestion identity, source path, document version and digest,
 replacement range, and expected original text. The LSP adapter revalidates the
 record and returns a versioned `WorkspaceEdit`; compiler and server code never
-write the document. Ambiguous diagnostics yield non-editing guide actions.
+write the document or import maintenance command implementations. Ambiguous
+diagnostics yield non-editing guide actions.
 [lsp/primitive_explorer.py](src/tslc/lsp/primitive_explorer.py)
 projects File/Corpus primitive lists in either authored-source or concrete
 profile mode. It owns authored, selected, profile-rejected, missing, and

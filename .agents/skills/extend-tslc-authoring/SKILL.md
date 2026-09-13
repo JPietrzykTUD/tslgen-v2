@@ -21,7 +21,10 @@ description: Add or change compiler-owned authoring and LSP capabilities in tslc
    recreating it in authoring or TypeScript code. Keep catalog-index records and
    queries in `catalog_index_model.py`, semantic occurrence construction in
    `catalog_occurrences.py`, hover presentation in `catalog_hover.py`, and the
-   `catalog_index.py` façade focused on building/caching snapshots.
+   `catalog_index.py` façade focused on building/caching snapshots. Put reusable
+   pure source-analysis and edit projections in a compiler-owned authoring
+   module; authoring/LSP code must not import a maintenance command to obtain
+   compiler facts.
 4. Keep ordinary live features pure and snapshot-based. They may parse and
    validate overlays but must not load render assets, lower specializations,
    write projects, or invoke toolchains. Profile-aware views consume the
