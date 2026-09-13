@@ -11,8 +11,13 @@ from _select_lower_core_support import (
     Selector,
 )
 from tslc.catalog.memory import MemoryAccess
-from tslc.catalog.semantics import PrimitiveOperation
+from tslc.catalog.semantics import (
+    MASK_FROM_INTEGRAL_REQUIREMENT,
+    MASK_TO_INTEGRAL_REQUIREMENT,
+    PrimitiveOperation,
+)
 from tslc.backend.translation import DEFAULT_BACKEND_LOWERING_POLICY
+from tslc.diagnostics import Diagnostic
 
 
 @pytest.mark.parametrize("profile", ("scalar", "skylake"))
@@ -807,6 +812,101 @@ def test_clang_compress_expand_delegate_to_fixed_native_avx512_leaf(
         ("to_integral", extension),
         ("to_mask", fixed_isa),
     }
+
+
+def test_fixed_native_mask_bridge_uses_resolved_provider_names(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    to_integral = catalog.resolve_primitive_provider(
+        MASK_TO_INTEGRAL_REQUIREMENT
+    )
+    from_integral = catalog.resolve_primitive_provider(
+        MASK_FROM_INTEGRAL_REQUIREMENT
+    )
+    assert not isinstance(to_integral, Diagnostic)
+    assert not isinstance(from_integral, Diagnostic)
+    renamed = replace(
+        catalog,
+        primitives=tuple(
+            replace(primitive, name="renamed_mask_to_integral")
+            if primitive is to_integral
+            else replace(primitive, name="renamed_mask_from_integral")
+            if primitive is from_integral
+            else primitive
+            for primitive in catalog.primitives
+        ),
+    )
+    slot = _fixed_native_mask_slot(renamed, machine_profiles)
+
+    result = Lowerer().lower(
+        slot,
+        renamed,
+        create_backend_dialect(renamed, "cpp"),
+    )
+
+    assert result.diagnostics == ()
+    assert result.specialization is not None
+    assert "::tsl::renamed_mask_to_integral<" in result.specialization.body_text
+    assert "::tsl::renamed_mask_from_integral<" in result.specialization.body_text
+    dependencies = {
+        origin.dependency.primitive
+        for origin in result.specialization.call_dependency_origins
+    }
+    assert dependencies == {
+        "compress",
+        "renamed_mask_to_integral",
+        "renamed_mask_from_integral",
+    }
+
+
+@pytest.mark.parametrize("ambiguous", [False, True])
+def test_fixed_native_mask_bridge_reports_invalid_provider_catalogs(
+    catalog: Catalog,
+    machine_profiles,
+    ambiguous: bool,
+) -> None:
+    provider = catalog.resolve_primitive_provider(MASK_TO_INTEGRAL_REQUIREMENT)
+    assert not isinstance(provider, Diagnostic)
+    if ambiguous:
+        primitives = (*catalog.primitives, replace(provider, name="second_provider"))
+        code = "TSL-CATALOG-AMBIGUOUS-PRIMITIVE-PROVIDER"
+    else:
+        primitives = tuple(
+            replace(primitive, operation=None)
+            if primitive is provider
+            else primitive
+            for primitive in catalog.primitives
+        )
+        code = "TSL-CATALOG-MISSING-PRIMITIVE-PROVIDER"
+    invalid = replace(catalog, primitives=primitives)
+    slot = _fixed_native_mask_slot(invalid, machine_profiles)
+
+    result = Lowerer().lower(
+        slot,
+        invalid,
+        create_backend_dialect(invalid, "cpp"),
+    )
+
+    assert result.specialization is None
+    assert [diagnostic.code for diagnostic in result.diagnostics] == [code]
+    assert result.diagnostics[0].span == slot.implementation.selector_source
+
+
+def _fixed_native_mask_slot(catalog: Catalog, machine_profiles):
+    return next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["skylake"],
+            "compress",
+            ("ui32",),
+            backend_id="cpp",
+        )
+        .selected
+        if selected.extension.name == "clang_v256"
+    )
 
 
 @pytest.mark.parametrize("primitive", ["compress", "expand"])

@@ -952,6 +952,18 @@ def test_lowerer_imports_region_handlers_directly() -> None:
     assert _forbidden_imports(paths, forbidden) == []
 
 
+def test_fixed_native_lowering_has_no_concrete_mask_bridge_names() -> None:
+    path = _REPO_ROOT / "tslc" / "src" / "tslc" / "lower" / "fixed_native.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    string_literals = {
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    }
+
+    assert {"to_integral", "to_mask"}.isdisjoint(string_literals)
+
+
 def test_pre_lowering_packages_do_not_import_lowering() -> None:
     package_root = _REPO_ROOT / "tslc" / "src" / "tslc"
     paths = (

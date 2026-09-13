@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 
 from tslc.catalog.call_preconditions import (
     CallPreconditionDisposition,
@@ -22,8 +23,14 @@ from tslc.catalog.preconditions import (
     PreconditionKind,
     precondition_applies_to_type,
 )
-from tslc.catalog.semantics import PrimitiveOperation
+from tslc.catalog.semantics import (
+    MASK_FROM_INTEGRAL_REQUIREMENT,
+    MASK_TO_INTEGRAL_REQUIREMENT,
+    PrimitiveOperation,
+)
 from tslc.catalog.signatures import SignatureShape
+from tslc.diagnostics import Diagnostic
+from tslc.lower._diagnostics import implementation_source
 from tslc.lower.body_rendering import RenderedBodyResult
 from tslc.lower.context import LoweringSession
 from tslc.lower.dependencies import (
@@ -58,6 +65,12 @@ _PASSTHROUGH_PARAM_KINDS = frozenset(
     }
 )
 _PASSTHROUGH_RESULT_KINDS = frozenset({"im", "o", "s", "usize", "void"})
+
+
+@dataclass(frozen=True, slots=True)
+class _MaskBridgeProviders:
+    to_integral: str
+    from_integral: str
 
 
 def lower_preferred_fixed_native(
@@ -132,6 +145,10 @@ def lower_preferred_fixed_native(
         ) = resolved_index
         fixed_generic_spellings[index_param_name] = fixed_index_spelling
 
+    mask_bridge = _resolve_mask_bridge(selected, shape, context)
+    if isinstance(mask_bridge, RenderedBodyResult):
+        return mask_bridge
+
     args: list[RenderField] = []
     for name, kind in zip(
         selected.primitive.parameters,
@@ -148,6 +165,7 @@ def lower_preferred_fixed_native(
             fixed_index_register=fixed_index_register,
             fixed_target=fixed_target,
             fixed_target_register=fixed_target_register,
+            mask_bridge=mask_bridge,
             context=context,
         )
         if isinstance(adapted, _Unsupported):
@@ -178,6 +196,7 @@ def lower_preferred_fixed_native(
         current_register_spelling=(
             target.register_spelling if target is not None else current_register_spelling
         ),
+        mask_bridge=mask_bridge,
         context=context,
     )
     if isinstance(result, _Unsupported):
@@ -211,6 +230,42 @@ def _supports_shape(shape: SignatureShape, has_target: bool) -> bool:
         supported_params = supported_params | {"vt"}
     return set(shape.param_kinds) <= supported_params and (
         shape.result_kind in _PASSTHROUGH_RESULT_KINDS | {"m", "v", "void"}
+    )
+
+
+def _resolve_mask_bridge(
+    selected: SelectedImplementation,
+    shape: SignatureShape,
+    context: LoweringSession,
+) -> _MaskBridgeProviders | RenderedBodyResult | None:
+    if shape.result_kind != "m" and "m" not in shape.param_kinds:
+        return None
+    source = implementation_source(selected)
+    to_integral = context.env.catalog.resolve_primitive_provider(
+        MASK_TO_INTEGRAL_REQUIREMENT,
+        source=source,
+    )
+    if isinstance(to_integral, Diagnostic):
+        return _provider_error(selected, context, to_integral)
+    from_integral = context.env.catalog.resolve_primitive_provider(
+        MASK_FROM_INTEGRAL_REQUIREMENT,
+        source=source,
+    )
+    if isinstance(from_integral, Diagnostic):
+        return _provider_error(selected, context, from_integral)
+    return _MaskBridgeProviders(to_integral.name, from_integral.name)
+
+
+def _provider_error(
+    selected: SelectedImplementation,
+    context: LoweringSession,
+    diagnostic: Diagnostic,
+) -> RenderedBodyResult:
+    return RenderedBodyResult(
+        rendered=None,
+        safety=context.effects.safety,
+        implementation_state=context.effects.implementation_state(selected),
+        diagnostics=(diagnostic,),
     )
 
 
@@ -304,6 +359,7 @@ def _adapt_parameter(
     fixed_index_register: str | None,
     fixed_target: VectorIdentity | None,
     fixed_target_register: str | None,
+    mask_bridge: _MaskBridgeProviders | None,
     context: LoweringSession,
 ) -> RenderField | _Unsupported | None:
     value = literal_text(name)
@@ -312,11 +368,13 @@ def _adapt_parameter(
     if kind == "v":
         return _bitcast(fixed_source_register, value, context)
     if kind == "m":
+        assert mask_bridge is not None
         return _convert_mask(
             value,
             source,
             fixed_source,
             context,
+            mask_bridge,
             target_spelling=fixed_source_spelling,
         )
     if kind == "vidx":
@@ -342,16 +400,19 @@ def _adapt_result(
     fixed_source: VectorIdentity,
     fixed_source_spelling: str,
     current_register_spelling: str,
+    mask_bridge: _MaskBridgeProviders | None,
     context: LoweringSession,
 ) -> RenderField | _Unsupported:
     if kind == "v":
         return _bitcast(current_register_spelling, value, context)
     if kind == "m":
+        assert mask_bridge is not None
         return _convert_mask(
             value,
             fixed_source,
             source,
             context,
+            mask_bridge,
             source_spelling=fixed_source_spelling,
         )
     if kind in _PASSTHROUGH_RESULT_KINDS:
@@ -364,19 +425,20 @@ def _convert_mask(
     source: VectorIdentity,
     target: VectorIdentity,
     context: LoweringSession,
+    providers: _MaskBridgeProviders,
     *,
     source_spelling: str | None = None,
     target_spelling: str | None = None,
 ) -> RenderField:
     packed = _render_primitive_call(
-        "to_integral",
+        providers.to_integral,
         source,
         (value,),
         context,
         vector_spelling=source_spelling,
     )
     return _render_primitive_call(
-        "to_mask",
+        providers.from_integral,
         target,
         (packed,),
         context,
