@@ -512,6 +512,13 @@ unsafe-ness, required target features, and implementation-state joins through
 the live call graph
 ([_pipeline_closure.py](src/tslc/_pipeline_closure.py),
 `_propagate_transitive_call_facts`).
+One stateful
+[ProfileGenerator](src/tslc/_pipeline_profile_generation.py) owns that complete
+per-profile worklist, active-backend filtering, harness expansion, cache use,
+pruning, coverage/skips, trace contributions, and emitted profile. The retained
+`_GenerationSession` coordinates request validation, profile results, backend
+validation, test/benchmark planning, rendering, and the final result; internal
+performance tooling continues to observe its shared lowering cache.
 
 After closure, constructing an
 [backend/emitted_profile.py](src/tslc/backend/emitted_profile.py) profile uses

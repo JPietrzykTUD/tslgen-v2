@@ -101,6 +101,10 @@ def test_pipeline_facade_keeps_input_and_closure_boundaries() -> None:
     assert pipeline.GenerationRequest.__module__ == "tslc.pipeline_request"
     assert pipeline._load_inputs.__module__ == "tslc._pipeline_inputs"
     assert pipeline._LoweringCache.__module__ == "tslc._pipeline_lowering_cache"
+    assert (
+        pipeline.ProfileGenerator.__module__
+        == "tslc._pipeline_profile_generation"
+    )
     assert TargetSupportRecorder.__module__ == "tslc._pipeline_target_support"
     assert pipeline._LoweredSlot.__module__ == "tslc._pipeline_closure"
     assert pipeline._prune_unresolved.__module__ == "tslc._pipeline_closure"

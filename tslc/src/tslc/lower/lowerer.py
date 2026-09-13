@@ -39,7 +39,10 @@ from tslc.lower.context import (
     LoweringEnv,
     LoweringScope,
 )
-from tslc.lower.catalog_facts import LowererCatalogFacts as _LowererCatalogFacts
+from tslc.lower.catalog_facts import (
+    LowererCatalogFacts as _LowererCatalogFacts,
+    type_param_bounds as _type_param_bounds,
+)
 from tslc.lower._diagnostics import (
     implementation_source as _implementation_source,
     lowering_error_diagnostic,
@@ -50,6 +53,7 @@ from tslc.lower.implementation_bodies import ImplementationBodyLowerer
 from tslc.lower.model import (
     LoweredArithmeticPrecondition,
     LoweredArithmeticPreconditionKind,
+    LoweredImplementationVariant,
     LoweredSpecialization,
     LoweredTypeParam,
     LoweringResult,
