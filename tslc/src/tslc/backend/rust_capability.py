@@ -29,6 +29,10 @@ from tslc.backend.rust_policy_manifest import (
     RustPolicyManifest,
     load_rust_policy_manifest,
 )
+from tslc.backend.rust_package import (
+    DEFAULT_RUST_PACKAGE_CONFIG,
+    RustPackageConfig,
+)
 from tslc.backend.rust_static_selection import (
     RustStaticSelectionPlan,
     plan_rust_static_selection,
@@ -140,6 +144,10 @@ def rust_backend_artifacts(
 ) -> list[Artifact]:
     """Render Rust from one frozen selection/consumption projection."""
 
+    package_config = (
+        config.get(_BACKEND_ID, RustPackageConfig)
+        or DEFAULT_RUST_PACKAGE_CONFIG
+    )
     selection_plan = plan_rust_policy_selection(
         profiles, _rust_policy_manifest(policy_inputs)
     )
@@ -170,14 +178,14 @@ def rust_backend_artifacts(
             dispatch_plan=dispatch_plan,
             consumption_plan=consumption_plan,
             benchmark_layout_plan=benchmark_layout_plan,
-            package_config=config.rust_package,
+            package_config=package_config,
         ),
         *rust_test_artifacts(
             value_tests,
             assets,
             media_type=media_type,
             static_selection_plan=static_selection_plan,
-            package_config=config.rust_package,
+            package_config=package_config,
         ),
         *rust_benchmark_artifacts(
             benchmarks,

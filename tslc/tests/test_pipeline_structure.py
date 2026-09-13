@@ -9,6 +9,8 @@ from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from tslc import api, pipeline
 from tslc import pipeline_request
 from tslc.backend import (
@@ -54,6 +56,7 @@ from tslc.lower.lowerer import (
 )
 from tslc.output.artifacts import Artifact
 from tslc.output.verify_model import VerifyProfile
+from tslc.project_render import BackendRenderInput, ProjectRenderConfig
 from tslc.render import cpp_build, cpp_project, rust_project
 from tslc.render.project import render_project
 from tslc.select.selector import Selector
@@ -64,6 +67,28 @@ from tslc.target_text import LoweredBody
 from tslc.value_tests.model import ValueTestProjectPlan
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+class _FakeRenderInput(BackendRenderInput):
+    pass
+
+
+class _OtherRenderInput(BackendRenderInput):
+    pass
+
+
+def test_backend_render_inputs_are_typed_frozen_and_duplicate_safe() -> None:
+    value = _FakeRenderInput()
+    config = ProjectRenderConfig.create((("future", value),))
+
+    assert config.get("future", _FakeRenderInput) is value
+    assert config.require("future", _FakeRenderInput) is value
+    with pytest.raises(TypeError, match="must be _OtherRenderInput"):
+        config.require("future", _OtherRenderInput)
+    with pytest.raises(ValueError, match="requires a _FakeRenderInput"):
+        config.require("missing", _FakeRenderInput)
+    with pytest.raises(ValueError, match="duplicate backend render input 'future'"):
+        ProjectRenderConfig.create((("future", value), ("future", value)))
 
 
 def test_pipeline_facade_keeps_input_and_closure_boundaries() -> None:

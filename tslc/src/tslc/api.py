@@ -116,7 +116,7 @@ def generate_project(
         value_test_fuzz=value_test_fuzz,
         render_artifacts=render_artifacts,
         collect_target_support=collect_target_support,
-        render_config=ProjectRenderConfig(rust_package=rust_package),
+        render_config=ProjectRenderConfig({"rust": rust_package}),
     )
     return generate(request)
 

@@ -704,12 +704,15 @@ The focused renderer in
 shape records into sealed, opaque `Simd<T, N>` and `Mask<T, N>` values. A
 compile target selects one exact private hardware representation or the
 source-backed generic representation; no profile or extension is a Cargo
-feature. Complete release metadata is carried through the backend-neutral
-`ProjectRenderConfig` into the Rust package renderer, so templates format
-configured Cargo facts rather than owning repository release policy. The Cargo
-manifest uses an explicit source/test/benchmark include set: generated docs,
-research history, scratch trees, and unrelated checkout files cannot enter the
-published crate merely because documentation was built in place.
+feature. The backend-neutral `ProjectRenderConfig` is an immutable keyed
+container of backend-owned typed render inputs; it contains no Rust fields or
+raw configuration dictionaries. Rust retrieves its `RustPackageConfig` input,
+or applies its own default, before invoking the package renderer, so templates
+format configured Cargo facts rather than owning repository release policy.
+The Cargo manifest uses an explicit source/test/benchmark include set:
+generated docs, research history, scratch trees, and unrelated checkout files
+cannot enter the published crate merely because documentation was built in
+place.
 
 Generated documentation is assembled by
 [maintenance/documentation.py](src/tslc/maintenance/documentation.py). Doxygen

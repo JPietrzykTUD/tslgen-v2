@@ -7,6 +7,8 @@ from pathlib import PurePosixPath
 import re
 from urllib.parse import urlsplit
 
+from tslc.project_render import BackendRenderInput
+
 _PACKAGE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
 _VERSION = re.compile(
     r"^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
@@ -17,7 +19,7 @@ _RUST_VERSION = re.compile(r"^1\.[0-9]+(?:\.[0-9]+)?$")
 
 
 @dataclass(frozen=True, slots=True)
-class RustPackageConfig:
+class RustPackageConfig(BackendRenderInput):
     name: str
     version: str
     description: str
