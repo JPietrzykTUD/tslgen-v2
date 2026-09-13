@@ -13,6 +13,7 @@ import pytest
 
 from tslc import api, pipeline
 from tslc import pipeline_request
+from tslc._pipeline_target_support import TargetSupportRecorder
 from tslc.backend import (
     cpp_build_policy,
     cpp_profile,
@@ -66,6 +67,7 @@ from tslc.sources import SourceDocument
 from tslc.syntax.parser import TslParser
 from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.target_text import LoweredBody
+from tslc.target_support import TargetSupportKey, TargetSupportRealizationKey
 from tslc.value_tests.model import ValueTestProjectPlan
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -99,9 +101,48 @@ def test_pipeline_facade_keeps_input_and_closure_boundaries() -> None:
     assert pipeline.GenerationRequest.__module__ == "tslc.pipeline_request"
     assert pipeline._load_inputs.__module__ == "tslc._pipeline_inputs"
     assert pipeline._LoweringCache.__module__ == "tslc._pipeline_lowering_cache"
+    assert TargetSupportRecorder.__module__ == "tslc._pipeline_target_support"
     assert pipeline._LoweredSlot.__module__ == "tslc._pipeline_closure"
     assert pipeline._prune_unresolved.__module__ == "tslc._pipeline_closure"
-    assert pipeline._profile_with_required_features.__module__ == "tslc._pipeline_closure"
+    assert (
+        pipeline._profile_with_required_features.__module__
+        == "tslc._pipeline_closure"
+    )
+
+
+def test_target_support_recorder_is_inert_when_disabled_and_rejects_missing_state(
+) -> None:
+    disabled = TargetSupportRecorder(enabled=False)
+    assert not disabled.enabled
+    assert disabled.trace() is None
+    disabled.mark_lowered(None)
+
+    enabled = TargetSupportRecorder(enabled=True)
+    identity = (
+        TargetSupportKey(
+            profile="profile",
+            backend="backend",
+            primitive="primitive",
+            signature="v:=v",
+            attributes=(),
+            result_target=None,
+            overload=None,
+            type_tag="si32",
+            target_extension="extension",
+            conversion_target=None,
+        ),
+        TargetSupportRealizationKey(
+            source_extension="extension",
+            selector_path=("extension", "type"),
+            required_features=(),
+            required_compiler_capabilities=(),
+            concrete_lanes=None,
+            simd_type_base_bindings=(),
+            variant_names=(),
+        ),
+    )
+    with pytest.raises(ValueError, match="no selected realization"):
+        enabled.mark_lowered(identity)
 
 
 def test_backend_defaults_are_resolved_at_request_construction(

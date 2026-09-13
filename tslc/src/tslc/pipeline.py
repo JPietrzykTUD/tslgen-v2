@@ -22,6 +22,10 @@ from tslc._pipeline_closure import (
 )
 from tslc._pipeline_inputs import _PipelineInputs, _load_inputs
 from tslc._pipeline_lowering_cache import _LoweringCache
+from tslc._pipeline_target_support import (
+    TargetSupportIdentity,
+    TargetSupportRecorder,
+)
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.registry import backend_capabilities
 from tslc.benchmark.model import BenchmarkProjectPlan
@@ -52,7 +56,6 @@ from tslc.lower.dependencies import (
     dependency_sort_key,
     is_concrete_call_dependency,
 )
-from tslc.lower.implementation_facts import ImplementationState
 from tslc.lower.lowerer import (
     POLICY_DEFERRED_SIGNATURE_CODE,
     LoweredSpecialization,
@@ -75,15 +78,7 @@ from tslc.select.selector import (
     SelectedImplementation,
     Selector,
 )
-from tslc.target_support import (
-    TargetSupportEntry,
-    TargetSupportKey,
-    TargetSupportRealizationKey,
-    TargetSupportStatus,
-    TargetSupportTrace,
-    realization_key,
-    target_support_key,
-)
+from tslc.target_support import TargetSupportTrace
 from tslc.value_tests import (
     ValueTestBackendProfileInput,
     ValueTestPlanner,
@@ -205,13 +200,9 @@ class _GenerationSession:
             for item in request.backend_compiler_capabilities
         }
         self.lowering_trace_slots: list[LoweringTraceSlot] = []
-        self.target_support_entries: dict[
-            tuple[TargetSupportKey, TargetSupportRealizationKey | None],
-            TargetSupportEntry,
-        ] = {}
-        self.lowered_target_support: dict[
-            int, tuple[TargetSupportKey, TargetSupportRealizationKey]
-        ] = {}
+        self.target_support = TargetSupportRecorder(
+            enabled=request.collect_target_support
+        )
 
     def run(self) -> GenerationResult:
         request_diagnostics = (
@@ -253,7 +244,7 @@ class _GenerationSession:
             if self.request.collect_lowering_trace
             else None
         )
-        target_support = self._target_support_trace()
+        target_support = self.target_support.trace()
         backend_diagnostics: list[Diagnostic] = []
         for capability in self.backends:
             profiles_for_backend = self._profiles_for_backend(
@@ -369,18 +360,6 @@ class _GenerationSession:
             emitted_profiles,
             lowering_trace,
             target_support,
-        )
-
-    def _target_support_trace(self) -> TargetSupportTrace | None:
-        if not self.request.collect_target_support:
-            return None
-        return TargetSupportTrace(
-            entries=tuple(
-                sorted(
-                    self.target_support_entries.values(),
-                    key=TargetSupportEntry.sort_key,
-                )
-            )
         )
 
     def _plan_value_tests(
@@ -647,7 +626,7 @@ class _GenerationSession:
                 selection.slots,
                 extensions,
             )
-            self._record_target_selection(
+            self.target_support.record_selection(
                 profile_name,
                 backend,
                 selection.slots,
@@ -670,7 +649,7 @@ class _GenerationSession:
                     backend,
                     body_segments=body_segments,
                 )
-                support_identity = self._target_support_identity(
+                support_identity = self.target_support.identity(
                     profile_name, backend, slot
                 )
                 self._record_lowering_diagnostics(
@@ -683,10 +662,7 @@ class _GenerationSession:
                 )
                 if lowered.specialization is None:
                     continue
-                self._advance_target_support(
-                    support_identity,
-                    TargetSupportStatus.LOWERED,
-                )
+                self.target_support.mark_lowered(support_identity)
                 all_callee_origins = (
                     lowered.specialization.call_dependency_origins
                 )
@@ -709,8 +685,10 @@ class _GenerationSession:
                     selector_source=slot.implementation.selector_source,
                 )
                 lowered_slots.append(lowered_slot)
-                if support_identity is not None:
-                    self.lowered_target_support[id(lowered_slot)] = support_identity
+                self.target_support.remember_lowered(
+                    lowered_slot,
+                    support_identity,
+                )
                 discovered_dependencies.update(
                     _dependency_discovery_requests(
                         frozenset(
@@ -736,9 +714,7 @@ class _GenerationSession:
         primitive: str,
         slot: SelectedImplementation,
         lowered: LoweringResult,
-        support_identity: tuple[
-            TargetSupportKey, TargetSupportRealizationKey
-        ] | None,
+        support_identity: TargetSupportIdentity | None,
     ) -> None:
         # In partial mode, lowerer "info" diagnostics are coverage gaps. Strict mode promotes
         # them below, scoped to the selected profile/backend slot.
@@ -747,13 +723,9 @@ class _GenerationSession:
             return
         entry = _lowering_skipped_entry(profile_name, backend, primitive, slot, lowered)
         self.skipped.append(entry)
-        self._advance_target_support(
+        self.target_support.mark_lowering_failed(
             support_identity,
-            (
-                TargetSupportStatus.POLICY_DEFERRED
-                if entry.status == "policy_deferred"
-                else TargetSupportStatus.SELECTED
-            ),
+            policy_deferred=entry.status == "policy_deferred",
             reason_id=next(
                 (diagnostic.code for diagnostic in lowered.diagnostics),
                 "TSL-LOWER-UNSUPPORTED-BODY",
@@ -786,9 +758,8 @@ class _GenerationSession:
             variant_names=slot.spec.variant_names,
         )
         self.skipped.append(entry)
-        self._advance_target_support(
-            self.lowered_target_support.get(id(slot)),
-            TargetSupportStatus.PRUNED,
+        self.target_support.mark_pruned(
+            slot,
             reason_id="TSL-PIPELINE-PRUNED-SPECIALIZATION",
         )
         if self.request.mode == "strict":
@@ -805,9 +776,8 @@ class _GenerationSession:
         for slot in lowered_specs:
             if id(slot) in pruned_ids:
                 continue
-            self._advance_target_support(
-                self.lowered_target_support.get(id(slot)),
-                TargetSupportStatus.EMITTED,
+            self.target_support.mark_emitted(
+                slot,
                 implementation_state=slot.spec.implementation_state,
             )
             if slot.compiler_alternative_rank is not None:
@@ -842,65 +812,6 @@ class _GenerationSession:
                     variant_names=slot.spec.variant_names,
                 )
             )
-
-    def _record_target_selection(
-        self,
-        profile: str,
-        backend: str,
-        slots: tuple[SelectionSlotResult, ...],
-        extensions: tuple[str, ...] | None,
-    ) -> None:
-        if not self.request.collect_target_support:
-            return
-        for slot in slots:
-            if (
-                extensions is not None
-                and slot.extension.name not in extensions
-                and slot.extension.isa_name not in extensions
-            ):
-                continue
-            key = target_support_key(
-                profile,
-                backend,
-                slot.primitive,
-                slot.extension.name,
-                slot.type_tag,
-                slot.to_target,
-            )
-            if slot.disposition is SelectionSlotDisposition.FIXED_SHAPE_ONLY:
-                self.target_support_entries[(key, None)] = TargetSupportEntry(
-                    key=key,
-                    realization=None,
-                    status=TargetSupportStatus.POLICY_DEFERRED,
-                    reason_id="TSL-SELECT-FIXED-SHAPE-ONLY",
-                )
-                continue
-            if slot.disposition is SelectionSlotDisposition.NOT_APPLICABLE:
-                assert slot.inapplicability_reason is not None
-                self.target_support_entries[(key, None)] = TargetSupportEntry(
-                    key=key,
-                    realization=None,
-                    status=TargetSupportStatus.NOT_APPLICABLE,
-                    reason_id=slot.inapplicability_reason.value,
-                )
-                continue
-            if not slot.selected:
-                self.target_support_entries[(key, None)] = TargetSupportEntry(
-                    key=key,
-                    realization=None,
-                    status=TargetSupportStatus.ABSENT,
-                    reason_id="TSL-SELECT-NO-CANDIDATE",
-                )
-                continue
-            self.target_support_entries.pop((key, None), None)
-            for selected in slot.selected:
-                realization = realization_key(selected)
-                identity = (key, realization)
-                self.target_support_entries[identity] = TargetSupportEntry(
-                    key=key,
-                    realization=realization,
-                    status=TargetSupportStatus.SELECTED,
-                )
 
     def _record_selection_deferrals(
         self,
@@ -952,48 +863,6 @@ class _GenerationSession:
                     variant_names=(),
                 )
             )
-
-    def _target_support_identity(
-        self,
-        profile: str,
-        backend: str,
-        selected: SelectedImplementation,
-    ) -> tuple[TargetSupportKey, TargetSupportRealizationKey] | None:
-        if not self.request.collect_target_support:
-            return None
-        return (
-            target_support_key(
-                profile,
-                backend,
-                selected.primitive,
-                selected.extension.name,
-                selected.type_tag,
-                selected.to_target,
-            ),
-            realization_key(selected),
-        )
-
-    def _advance_target_support(
-        self,
-        identity: tuple[
-            TargetSupportKey, TargetSupportRealizationKey
-        ] | None,
-        status: TargetSupportStatus,
-        *,
-        reason_id: str | None = None,
-        implementation_state: ImplementationState | None = None,
-    ) -> None:
-        if identity is None:
-            return
-        key, realization = identity
-        self.target_support_entries[identity] = TargetSupportEntry(
-            key=key,
-            realization=realization,
-            status=status,
-            reason_id=reason_id,
-            implementation_state=implementation_state,
-        )
-
 
 def _dependency_discovery_requests(
     dependencies: frozenset[CallDependency],

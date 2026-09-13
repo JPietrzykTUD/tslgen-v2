@@ -1010,9 +1010,12 @@ verification, so the attestation identifies the bytes that were compiled.
   The opt-in exact target-support trace in
   [target_support.py](src/tslc/target_support.py) is different: selection owns
   its complete declaration/type/target universe, including slots with no
-  candidate, and the pipeline advances each selected realization through
-  `selected`, `lowered`, `pruned`, `policy_deferred`, or `emitted`. Emitted
-  realizations retain the propagated implementation state. The release-only
+  candidate, while the stateful
+  [TargetSupportRecorder](src/tslc/_pipeline_target_support.py) owns identities,
+  transition invariants, ordering, and advancement through `selected`,
+  `lowered`, `pruned`, `policy_deferred`, or `emitted`. It allocates no trace
+  maps when the projection is disabled. Emitted realizations retain the
+  propagated implementation state. The release-only
   [target_support_ratchet.py](src/tslc/maintenance/target_support_ratchet.py)
   filters those facts through the typed v1 support contract and serializes the
   exact SVE/SVE128/SVE256/SVE512/RVV baseline; it never selects or infers a
