@@ -367,6 +367,8 @@ def create_server(
         if workspace is None or workspace.latest.catalog is None:
             return {
                 "primitive": None,
+                "backend": "",
+                "previewFileSuffix": "",
                 "extension": None,
                 "type": None,
                 "contextualExtensions": [],
@@ -385,13 +387,13 @@ def create_server(
             else (None, None)
         )
         backend = _field(params, "backend")
-        selected_backend = backend if isinstance(backend, str) else "cpp"
         context = await asyncio.to_thread(
             specialization_context,
             workspace.latest.catalog,
             workspace.latest.parsed,
             workspace.config.profiles,
-            backend=selected_backend,
+            backend=backend if isinstance(backend, str) else None,
+            backends=workspace.config.backends,
             path=path,
             line=line,
             column=column,
@@ -664,6 +666,7 @@ def _empty_primitive_explorer() -> dict[str, object]:
         "mode": "authored",
         "profile": "",
         "backend": "",
+        "previewFileSuffix": "",
         "profiles": [],
         "backends": [],
         "generation": 0,
@@ -682,6 +685,7 @@ def _primitive_explorer_payload(
         "mode": explorer.mode,
         "profile": explorer.profile,
         "backend": explorer.backend,
+        "previewFileSuffix": explorer.preview_file_suffix,
         "profiles": list(explorer.profiles),
         "backends": list(explorer.backends),
         "generation": workspace.generation,
