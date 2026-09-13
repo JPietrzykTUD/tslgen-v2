@@ -15,6 +15,7 @@ import pytest
 
 from rust_project_test_support import render_rust_artifacts_for_test
 from tslc.api import generate_project, write_artifacts
+from tslc.backend.rust_capability import rust_policy_mapping_renderer
 from tslc.backend.rust_policy_manifest import load_rust_policy_manifest
 from tslc.backend.rust_policy_consumption import plan_rust_policy_consumption
 from tslc.backend.rust_policy_selection import (
@@ -139,6 +140,7 @@ def test_rust_policy_plan_and_default_rendering_are_typed_and_deterministic(
         plan_rust_policy_consumption(
             rust_policy_result.rendered.benchmarks,
             plan,
+            mapping_renderer=rust_policy_mapping_renderer,
         ),
         plan_rust_static_selection(rust_policy_result.emitted_profiles),
     )

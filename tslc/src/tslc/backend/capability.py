@@ -20,7 +20,7 @@ from tslc.project_render import (
     BackendRenderInput,
     ProjectRenderConfig,
 )
-from tslc.value_tests.compile_failure import compile_failure_target_name
+from tslc.value_tests.identity import compile_failure_target_name
 
 if TYPE_CHECKING:
     from tslc.backend.emitted_profile import EmittedProfile

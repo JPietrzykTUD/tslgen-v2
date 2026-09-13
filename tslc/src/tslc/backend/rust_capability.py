@@ -24,6 +24,7 @@ from tslc.backend.rust_api_planner import (
 )
 from tslc.backend.rust_dispatch import plan_rust_dispatch
 from tslc.backend.rust_policy_selection import (
+    RustPolicySelectionProfile,
     plan_rust_policy_selection,
     validate_rust_policy_manifest_profiles,
 )
@@ -40,7 +41,10 @@ from tslc.backend.rust_static_selection import (
     RustStaticSelectionPlan,
     plan_rust_static_selection,
 )
-from tslc.backend.rust_policy_consumption import plan_rust_policy_consumption
+from tslc.backend.rust_policy_consumption import (
+    RustPolicyMappingRenderer,
+    plan_rust_policy_consumption,
+)
 from tslc.backend.rust_translation import RustBackendDialect
 from tslc.backend.rust_verification import (
     rust_verify_profile,
@@ -140,6 +144,14 @@ def rust_benchmark_plan(
     ).plan(profiles, value_tests)
 
 
+def rust_policy_mapping_renderer(
+    profile: RustPolicySelectionProfile,
+) -> RustPolicyMappingRenderer:
+    """Create the profile-bound renderer for Rust policy mappings."""
+
+    return RustBackend(policy_selection=profile).render_policy_selection_impl
+
+
 def rust_backend_artifacts(
     profiles: tuple[EmittedProfile, ...],
     value_tests: ValueTestProjectPlan,
@@ -169,7 +181,11 @@ def rust_backend_artifacts(
         facade_plan,
     )
     consumption_plan = plan_rust_policy_consumption_render(
-        plan_rust_policy_consumption(benchmarks, selection_plan),
+        plan_rust_policy_consumption(
+            benchmarks,
+            selection_plan,
+            mapping_renderer=rust_policy_mapping_renderer,
+        ),
         static_selection_plan,
     )
     benchmark_layout_plan = plan_rust_benchmark_layout(
@@ -284,6 +300,7 @@ __all__ = [
     "create_rust_dialect",
     "create_rust_verify_driver",
     "rust_profile_verification",
+    "rust_policy_mapping_renderer",
     "rust_benchmark_plan",
     "rust_documentation_formatter",
     "rust_value_test_artifacts",

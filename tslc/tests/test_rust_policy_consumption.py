@@ -19,6 +19,7 @@ import pytest
 from tslc.api import generate_project, write_artifacts
 from tslc.backend.rust_benchmark_context import RUST_BENCHMARK_CODEGEN_CONTRACT
 from tslc.backend.rust_policy_consumption import (
+    RustPolicyMappingRenderer,
     RustPolicyConsumptionPlan,
     RustPolicyConsumptionProfile,
     join_rust_policy_consumption_profile,
@@ -191,6 +192,46 @@ def test_join_preserves_ordered_policy_and_benchmark_facts(
     ]
 
 
+def test_policy_coverage_uses_an_injected_profile_mapping_renderer(
+    rust_policy_inputs: tuple[BenchmarkProfilePlan, RustPolicySelectionProfile],
+) -> None:
+    benchmark, selection = rust_policy_inputs
+    calls: list[tuple[str, str]] = []
+    profiles: list[str] = []
+
+    def mapping_renderer(
+        profile: RustPolicySelectionProfile,
+    ) -> RustPolicyMappingRenderer:
+        profiles.append(profile.profile_name)
+
+        def render(choice: RustPolicySelection) -> str:
+            calls.append((profile.profile_name, choice.selected_candidate))
+            return f"injected:{profile.profile_name}:{choice.selected_candidate}"
+
+        return render
+
+    coverage = plan_rust_policy_coverage(
+        BenchmarkProjectPlan(profiles=(benchmark,)),
+        RustPolicySelectionPlan(profiles=(selection,)),
+        mapping_renderer=mapping_renderer,
+    )
+
+    profile = coverage.profile("sse2")
+    assert profile is not None
+    supported = next(
+        decision for decision in profile.decisions if decision.status == "supported"
+    )
+    assert [choice.source for choice in supported.mapping_choices] == [
+        "injected:sse2:default",
+        "injected:sse2:generic_fallback",
+    ]
+    assert calls == [
+        ("sse2", "default"),
+        ("sse2", "generic_fallback"),
+    ]
+    assert profiles == ["sse2"]
+
+
 def test_policy_coverage_retains_a_report_only_only_profile(
     rust_policy_inputs: tuple[BenchmarkProfilePlan, RustPolicySelectionProfile],
 ) -> None:
@@ -216,7 +257,11 @@ def test_policy_coverage_retains_a_report_only_only_profile(
     )
     benchmarks = BenchmarkProjectPlan(profiles=(benchmark,))
 
-    coverage = plan_rust_policy_coverage(benchmarks, selection_plan)
+    coverage = plan_rust_policy_coverage(
+        benchmarks,
+        selection_plan,
+        mapping_renderer=_profile_mapping_renderer,
+    )
     coverage_profile = coverage.profile("sse2")
     assert coverage_profile is not None
     assert len(coverage_profile.decisions) == len(benchmark.candidate_sets)
@@ -225,7 +270,11 @@ def test_policy_coverage_retains_a_report_only_only_profile(
     }
     assert coverage.gaps == ()
 
-    consumption = plan_rust_policy_consumption(benchmarks, selection_plan)
+    consumption = plan_rust_policy_consumption(
+        benchmarks,
+        selection_plan,
+        mapping_renderer=_profile_mapping_renderer,
+    )
     assert consumption.profiles == ()
     assert consumption.gaps == ()
 
@@ -256,6 +305,7 @@ def test_policy_coverage_rejects_a_foreign_report_only_profile(
         plan_rust_policy_coverage(
             BenchmarkProjectPlan(profiles=(benchmark,)),
             RustPolicySelectionPlan(profiles=(selection, foreign)),
+            mapping_renderer=_profile_mapping_renderer,
         )
 
 
@@ -376,6 +426,7 @@ def test_consumption_plan_keeps_missing_benchmark_evidence_default_only(
     plan = plan_rust_policy_consumption(
         BenchmarkProjectPlan(profiles=(without_supported,)),
         RustPolicySelectionPlan(profiles=(selection,)),
+        mapping_renderer=_profile_mapping_renderer,
     )
 
     assert not plan.profiles
@@ -398,6 +449,7 @@ def test_consumption_plan_rejects_foreign_rust_benchmark_profile(
                 profiles=(benchmark, replace(benchmark, profile_name="foreign"))
             ),
             RustPolicySelectionPlan(profiles=(selection,)),
+            mapping_renderer=_profile_mapping_renderer,
         )
 
 
@@ -505,6 +557,15 @@ def test_generated_policy_descriptor_and_static_seam_are_complete(
 
 def _mapping_source(selection: RustPolicySelection) -> str:
     return f"mapping:{selection.selected_candidate}"
+
+
+def _profile_mapping_renderer(
+    profile: RustPolicySelectionProfile,
+) -> RustPolicyMappingRenderer:
+    def render(selection: RustPolicySelection) -> str:
+        return f"mapping:{profile.profile_name}:{selection.selected_candidate}"
+
+    return render
 
 
 _CONSUMER_SOURCE = textwrap.dedent(
