@@ -593,6 +593,12 @@ count. Neutral lowering never constructs a C++ or Rust lane-count expression.
   [backend/rust_checked_primitives.py](src/tslc/backend/rust_checked_primitives.py);
   typed ordinary/checked wrapper declarations are finalized separately in
   [backend/rust_primitive_declarations.py](src/tslc/backend/rust_primitive_declarations.py).
+  The stateful
+  [backend/rust_primitive_implementations.py](src/tslc/backend/rust_primitive_implementations.py)
+  renderer owns overloaded internal traits, concrete impls, policy mappings,
+  direct implementation calls, and target-feature body wrapping. Ordinary
+  public wrapper bodies are the focused pure projection in
+  [backend/rust_primitive_wrappers.py](src/tslc/backend/rust_primitive_wrappers.py).
   Generated rustdoc uses a `cfg(doc)` profile-neutral facade containing one
   public signature per emitted Rust primitive; concrete profile availability
   stays in the specialization explorer, while normal builds select their
