@@ -23,25 +23,19 @@ explicit `supersedes`; base extension bodies self-gate via `requires`.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import StrEnum
-from itertools import product
-from typing import assert_never
 
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import (
-    BaseWidthRelation,
     Catalog,
     Extension,
-    GenericParam,
     Implementation,
     Primitive,
     PrimitivePortability,
     RESULT_DIM_BASE,
     RESULT_DIM_EXTENSION,
 )
-from tslc.catalog.scalar_types import scalar_bit_width
 from tslc.catalog.signatures import parse_signature
 from tslc.catalog.target_families import ExtensionFamilyCapability
 from tslc.diagnostics import Diagnostic
@@ -55,19 +49,15 @@ from tslc.select.candidates import (
     evaluate_candidates,
     fixed_width_fallback,
 )
-from tslc.support_policy import DEFAULT_SUPPORT_POLICY, SupportPolicy
-from tslc.support_policy_views import (
-    concrete_target_candidates,
-    selectable_variants,
+from tslc.select.slots import (
+    SelectionSlot as _SelectionSlot,
+    SimdTypeBaseBinding,
+    monomorphized_lanes,
+    selection_slots,
+    simd_type_base_binding_sets,
 )
-
-
-@dataclass(frozen=True, slots=True)
-class SimdTypeBaseBinding:
-    """A selected associated-base case for a free ``kind simd_type`` parameter."""
-
-    param_name: str
-    base_tag: str
+from tslc.support_policy import DEFAULT_SUPPORT_POLICY, SupportPolicy
+from tslc.support_policy_views import selectable_variants
 
 
 @dataclass(frozen=True, slots=True)
@@ -171,14 +161,6 @@ class SelectionSlotResult:
             )
 
 
-@dataclass(frozen=True, slots=True)
-class _SelectionSlot:
-    extension_name: str
-    type_tag: str
-    to_target: str | None
-    target_resolved: bool = True
-
-
 class Selector:
     def __init__(self, support: SupportPolicy = DEFAULT_SUPPORT_POLICY) -> None:
         self.support = support
@@ -239,8 +221,13 @@ class Selector:
                 if collect_slots:
                     evaluated_slots.extend(free_slots)
                 continue
-            for slot in self._selection_slots(
-                catalog, profile, primitive, emitted_extensions, type_tags
+            for slot in selection_slots(
+                catalog,
+                profile,
+                primitive,
+                emitted_extensions,
+                type_tags,
+                self.support,
             ):
                 extension = catalog.extensions[slot.extension_name]
                 fixed_shape_kinds = (
@@ -333,8 +320,13 @@ class Selector:
             ).free_function_owner
         ]
         evaluated: list[SelectionSlotResult] = []
-        for slot in self._selection_slots(
-            catalog, profile, primitive, owner_extensions, type_tags
+        for slot in selection_slots(
+            catalog,
+            profile,
+            primitive,
+            owner_extensions,
+            type_tags,
+            self.support,
         ):
             slot_selected = (
                 self._select_slot(
@@ -372,42 +364,6 @@ class Selector:
                 return slot_selected, tuple(evaluated)
         return (), tuple(evaluated)
 
-    def _selection_slots(
-        self,
-        catalog: Catalog,
-        profile: MachineProfile,
-        primitive: Primitive,
-        extension_names: list[str],
-        type_tags: tuple[str, ...],
-    ) -> Iterator[_SelectionSlot]:
-        """Enumerate the literal extension/type/representation target axis."""
-
-        for extension_name in extension_names:
-            for type_tag in type_tags:
-                if not any(
-                    catalog.type_group_contains(
-                        implementation.type_group, type_tag
-                    )
-                    for implementation in primitive.implementations
-                ):
-                    continue
-                targets = concrete_target_candidates(
-                    catalog,
-                    primitive,
-                    extension_name,
-                    type_tag,
-                    self.support,
-                    profile=profile,
-                )
-                for to_target in targets:
-                    yield _SelectionSlot(extension_name, type_tag, to_target)
-                if primitive.result_target is not None and not targets:
-                    yield _SelectionSlot(
-                        extension_name,
-                        type_tag,
-                        None,
-                        target_resolved=False,
-                    )
 
     def _select_slot(
         self,
@@ -489,14 +445,16 @@ class Selector:
                 extension_family_capability=family,
             )
             for rank, best in enumerate(selected_bodies)
-            for lanes in self._monomorphized_lanes(
-                extension, best.implementation, slot.type_tag
+            for lanes in monomorphized_lanes(
+                self.support,
+                extension,
+                best.implementation,
+                slot.type_tag,
             )
-            for bindings in _simd_type_base_binding_sets(
+            for bindings in simd_type_base_binding_sets(
                 catalog, primitive, slot.type_tag
             )
         )
-
 
     def _emit_extensions(self, catalog: Catalog, profile: MachineProfile) -> list[str]:
         """Extensions to emit for a profile.
@@ -589,33 +547,6 @@ class Selector:
             compiler_capabilities,
         )
 
-
-    def _monomorphized_lanes(
-        self, extension: Extension, implementation: Implementation, type_tag: str
-    ) -> tuple[int | None, ...]:
-        """The concrete lane counts to monomorphize this body at, or ``(None,)`` for the
-        ordinary single ``LANES``-parametric slot.
-
-        A sized-vector body with ``unroll_variants`` effective-true and a non-empty
-        ``size_bits`` emits one slot per size, lanes = size // type-bit-width — so a
-        size-changing body is concrete per size (stable Rust can spell the changed-width
-        output) rather than a const-generic-expression template. Everything else (fixed-width
-        extensions, non-unrolled sized bodies) keeps the single ``None`` slot, byte-identical
-        to before."""
-
-        if not self.support.uses_sized_vector(extension) or not extension.size_bits:
-            return (None,)
-        unroll = (
-            implementation.unroll_variants
-            if implementation.unroll_variants is not None
-            else extension.unroll_variants
-        )
-        if not unroll:
-            return (None,)
-        type_bits = self.support.type_bit_width_or_default(type_tag)
-        return tuple(size // type_bits for size in extension.size_bits if size >= type_bits)
-
-
 def _slot_disposition(
     primitive: Primitive,
     slot: _SelectionSlot,
@@ -642,83 +573,3 @@ def _slot_disposition(
             SelectionSlotInapplicability.TARGET_SPECIFIC_UNAVAILABLE,
         )
     return SelectionSlotDisposition.ABSENT, None
-
-
-
-
-
-
-
-
-def _simd_type_base_binding_sets(
-    catalog: Catalog, primitive: Primitive, type_tag: str
-) -> tuple[tuple[SimdTypeBaseBinding, ...], ...]:
-    params = tuple(
-        generic_param
-        for generic_param in primitive.generic_params
-        if generic_param.kind == "simd_type" and generic_param.specialize_base
-    )
-    if not params:
-        return ((),)
-
-    choices: list[tuple[SimdTypeBaseBinding, ...]] = []
-    for param in params:
-        base_tags = tuple(
-            base_tag
-            for base_tag in _concrete_base_tags(catalog, param.base_type_constraints)
-            if _base_width_constraints_match(param, base_tag, type_tag)
-        )
-        if not base_tags:
-            return ()
-        choices.append(
-            tuple(
-                SimdTypeBaseBinding(param.name, base_tag)
-                for base_tag in base_tags
-            )
-        )
-    return tuple(tuple(item for item in combination) for combination in product(*choices))
-
-
-def _concrete_base_tags(
-    catalog: Catalog, constraints: tuple[str, ...]
-) -> tuple[str, ...]:
-    seen: set[str] = set()
-    members: list[str] = []
-    for constraint in constraints:
-        for member in catalog.type_group_members(constraint):
-            if member in seen:
-                continue
-            seen.add(member)
-            members.append(member)
-    return tuple(members)
-
-
-def _base_width_constraints_match(
-    param: GenericParam,
-    base_tag: str,
-    type_tag: str,
-) -> bool:
-    if not param.base_width_constraints:
-        return True
-    base_width = scalar_bit_width(base_tag)
-    input_width = scalar_bit_width(type_tag)
-    if base_width is None or input_width is None:
-        return False
-    return all(
-        _compare_widths(base_width, constraint.relation, input_width)
-        for constraint in param.base_width_constraints
-    )
-
-
-def _compare_widths(left: int, relation: BaseWidthRelation, right: int) -> bool:
-    """Exhaustive over BaseWidthRelation: catalog promotion diagnoses unknown
-    relations, so an unhandled member here is a programming error, not a
-    silently-empty selection."""
-
-    if relation == ">=":
-        return left >= right
-    if relation == ">":
-        return left > right
-    if relation == "==":
-        return left == right
-    assert_never(relation)

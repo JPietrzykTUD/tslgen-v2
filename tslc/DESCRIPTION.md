@@ -460,6 +460,11 @@ selection are one pure typed projection in
 [select/candidates.py](src/tslc/select/candidates.py). The `Selector` façade
 retains the public candidate-explanation entry point but does not implement the
 ranking algorithm.
+Literal extension/type/representation-target expansion, associated SIMD-base
+combinations and width constraints, and sized-vector lane monomorphization are
+deterministic functions in [select/slots.py](src/tslc/select/slots.py). They
+produce typed planning axes without choosing implementations or diagnosing
+selection outcomes; the façade owns those result and diagnostic decisions.
 
 The [Lowerer](src/tslc/lower/lowerer.py) orchestrates one
 `(primitive, extension, type, backend)` slot → a `LoweredSpecialization`
