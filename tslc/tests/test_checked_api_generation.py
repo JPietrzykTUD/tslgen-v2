@@ -44,16 +44,55 @@ from tslc.catalog.memory import (
 )
 from tslc.catalog.model import Catalog, ImplementationSafety, PrimitiveMaskMode
 from tslc.catalog.preconditions import (
-    PreconditionCheckPrimitive,
     PreconditionErrorKind,
     PreconditionKind,
 )
-from tslc.diagnostics import has_errors
+from tslc.catalog.semantics import (
+    COMPARE_EQUAL_REQUIREMENT,
+    MASK_ALL_FALSE_REQUIREMENT,
+    MASK_AND_REQUIREMENT,
+    MASK_POPULATION_COUNT_REQUIREMENT,
+    MASK_SET_LANE_REQUIREMENT,
+    RUNTIME_LANE_EXTRACT_REQUIREMENT,
+    VECTOR_ZERO_REQUIREMENT,
+    PrimitiveProviderRequirement,
+    ResolvedPrimitiveProvider,
+)
+from tslc.diagnostics import Diagnostic, has_errors
 from tslc.lower.lowerer import LoweredSpecialization, LoweredTypeParam, Lowerer
 from tslc.select.selector import Selector
 
 
 _FIXTURES = Path(__file__).parent / "fixtures" / "checked_api"
+
+_CHECKED_PROVIDER_RENAMES: tuple[
+    tuple[PrimitiveProviderRequirement, str], ...
+] = (
+    (VECTOR_ZERO_REQUIREMENT, "semantic_zero"),
+    (COMPARE_EQUAL_REQUIREMENT, "semantic_equal"),
+    (MASK_AND_REQUIREMENT, "semantic_mask_and"),
+    (MASK_ALL_FALSE_REQUIREMENT, "semantic_mask_false"),
+    (MASK_POPULATION_COUNT_REQUIREMENT, "semantic_mask_population"),
+    (MASK_SET_LANE_REQUIREMENT, "semantic_mask_set_lane"),
+    (RUNTIME_LANE_EXTRACT_REQUIREMENT, "semantic_runtime_extract"),
+)
+
+
+def _renamed_checked_provider_catalog(catalog: Catalog) -> Catalog:
+    names_by_identity: dict[int, str] = {}
+    for requirement, name in _CHECKED_PROVIDER_RENAMES:
+        provider = catalog.resolve_primitive_provider(requirement)
+        assert not isinstance(provider, Diagnostic), provider
+        names_by_identity[id(provider)] = name
+    return replace(
+        catalog,
+        primitives=tuple(
+            replace(primitive, name=names_by_identity[id(primitive)])
+            if id(primitive) in names_by_identity
+            else primitive
+            for primitive in catalog.primitives
+        ),
+    )
 
 
 def test_checked_memory_conditions_require_one_complete_shared_binding() -> None:
@@ -66,7 +105,12 @@ def test_checked_memory_conditions_require_one_complete_shared_binding() -> None
         parameter_name="memory",
         parameter_index=1,
         applicable_type_tags=("si32",),
-        check_primitives=(PreconditionCheckPrimitive.MASK_POPULATION_COUNT,),
+        check_primitives=(
+            ResolvedPrimitiveProvider(
+                MASK_POPULATION_COUNT_REQUIREMENT,
+                "mask_population_count",
+            ),
+        ),
         mask_parameter_name="mask",
         mask_parameter_index=0,
         memory_access=MemoryAccess.WRITE,
@@ -307,8 +351,8 @@ def test_checked_failure_dependencies_follow_backend_policy_not_backend_name(
     )
 
     policy = BackendLoweringPolicy(
-        checked_vector_failure_primitive=PreconditionCheckPrimitive.ZERO_VECTOR,
-        checked_mask_failure_primitive=PreconditionCheckPrimitive.MASK_FALSE,
+        checked_vector_failure_requirement=VECTOR_ZERO_REQUIREMENT,
+        checked_mask_failure_requirement=MASK_ALL_FALSE_REQUIREMENT,
     )
     opted_in = Lowerer().lower(
         slot,
@@ -323,10 +367,10 @@ def test_checked_failure_dependencies_follow_backend_policy_not_backend_name(
         for origin in opted_in.call_dependency_origins
     )
     assert (
-        policy.checked_failure_primitive("m")
-        is PreconditionCheckPrimitive.MASK_FALSE
+        policy.checked_failure_requirement("m")
+        == MASK_ALL_FALSE_REQUIREMENT
     )
-    assert policy.checked_failure_primitive("void") is None
+    assert policy.checked_failure_requirement("void") is None
 
 
 def test_empty_specialization_group_has_no_checked_or_unsafe_api() -> None:
@@ -486,6 +530,123 @@ def test_checked_divisor_dependencies_are_typed_and_domain_specific(
     assert "pub fn div<" in floating_public
     assert "pub unsafe fn div<" not in floating_public
     assert "div_checked" not in floating_public
+
+
+def test_checked_helpers_use_semantically_resolved_provider_names(
+    catalog: Catalog,
+    machine_profiles: Mapping[str, MachineProfile],
+) -> None:
+    renamed = _renamed_checked_provider_catalog(catalog)
+    cpp_div = _lowered(
+        renamed,
+        machine_profiles,
+        "div",
+        "cpp",
+        mask_mode=PrimitiveMaskMode.ZERO,
+        extension_name="generic",
+    )
+    cpp_gather = _lowered(
+        renamed,
+        machine_profiles,
+        "gather",
+        "cpp",
+        mask_mode=PrimitiveMaskMode.PASS_THROUGH,
+    )
+    rust_div = _lowered(
+        renamed,
+        machine_profiles,
+        "div",
+        "rust",
+        mask_mode=PrimitiveMaskMode.ZERO,
+        extension_name="generic",
+    )
+    rust_gather = _lowered(
+        renamed,
+        machine_profiles,
+        "gather",
+        "rust",
+        mask_mode=PrimitiveMaskMode.PASS_THROUGH,
+    )
+
+    cpp = "\n".join(
+        (
+            CppBackend().render_checked_wrappers("div_maskz", (cpp_div,)),
+            CppBackend().render_checked_wrappers("gather_mask", (cpp_gather,)),
+        )
+    )
+    rust = "\n".join(
+        (
+            RustBackend().render_primitive("div_maskz", (rust_div,)),
+            RustBackend().render_primitive("gather_mask", (rust_gather,)),
+        )
+    )
+
+    for _requirement, name in _CHECKED_PROVIDER_RENAMES:
+        assert name in cpp
+    for name in (
+        "semantic_zero",
+        "semantic_equal",
+        "semantic_mask_and",
+        "semantic_mask_population",
+        "semantic_runtime_extract",
+    ):
+        assert name in rust
+    assert "semantic_runtime_extract::<IndicesType>" in rust
+    assert "extract_value::<IndicesType>" not in rust
+    checked_dependencies = {
+        origin.dependency.primitive
+        for spec in (cpp_div, cpp_gather, rust_div, rust_gather)
+        for origin in spec.call_dependency_origins
+        if origin.kind.value == "checked_guard"
+    }
+    assert {name for _requirement, name in _CHECKED_PROVIDER_RENAMES} <= (
+        checked_dependencies
+    )
+
+
+@pytest.mark.parametrize("ambiguous", (False, True))
+def test_checked_lowering_reports_invalid_semantic_provider_catalogs(
+    catalog: Catalog,
+    machine_profiles: Mapping[str, MachineProfile],
+    ambiguous: bool,
+) -> None:
+    provider = catalog.resolve_primitive_provider(COMPARE_EQUAL_REQUIREMENT)
+    assert not isinstance(provider, Diagnostic), provider
+    if ambiguous:
+        primitives = (*catalog.primitives, replace(provider, name="other_equal"))
+        expected_code = "TSL-CATALOG-AMBIGUOUS-PRIMITIVE-PROVIDER"
+    else:
+        primitives = tuple(
+            replace(primitive, operation=None)
+            if primitive is provider
+            else primitive
+            for primitive in catalog.primitives
+        )
+        expected_code = "TSL-CATALOG-MISSING-PRIMITIVE-PROVIDER"
+    invalid = replace(catalog, primitives=primitives)
+    selected = Selector().select_profile(
+        invalid,
+        machine_profiles["avx2"],
+        "div",
+        ("si32",),
+        backend_id="cpp",
+    )
+    assert selected.diagnostics == ()
+    slot = next(
+        item
+        for item in selected.selected
+        if item.extension.name == "avx2" and item.primitive.mask_mode is None
+    )
+
+    result = Lowerer().lower(
+        slot,
+        invalid,
+        create_backend_dialect(invalid, "cpp"),
+    )
+
+    assert result.specialization is None
+    assert [diagnostic.code for diagnostic in result.diagnostics] == [expected_code]
+    assert result.diagnostics[0].span == slot.primitive.preconditions[0].source
 
 
 @pytest.mark.parametrize("primitive_name", ("div", "mod"))
@@ -741,7 +902,10 @@ def test_indexed_memory_checked_twins_use_typed_address_facts(
         PreconditionErrorKind.MISALIGNED,
     )
     assert condition.check_primitives == (
-        PreconditionCheckPrimitive.VECTOR_EXTRACT_LANE,
+        ResolvedPrimitiveProvider(
+            RUNTIME_LANE_EXTRACT_REQUIREMENT,
+            "extract_value_at",
+        ),
     )
 
     cpp = CppBackend().render_checked_wrappers("gather", (gather,))

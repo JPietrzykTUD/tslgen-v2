@@ -105,6 +105,18 @@ class PrimitiveProviderRequirement:
 
 
 @dataclass(frozen=True, slots=True)
+class ResolvedPrimitiveProvider:
+    """A semantic requirement bound to its source-owned primitive name."""
+
+    requirement: PrimitiveProviderRequirement
+    primitive_name: str
+
+    def __post_init__(self) -> None:
+        if not self.primitive_name:
+            raise ValueError("resolved primitive provider name must not be empty")
+
+
+@dataclass(frozen=True, slots=True)
 class OperandBinding:
     role: OperandRole
     parameter_name: str
@@ -309,6 +321,7 @@ __all__ = (
     "PrimitiveOperation",
     "PrimitiveProviderRequirement",
     "PrimitiveSemanticContract",
+    "ResolvedPrimitiveProvider",
     "RUNTIME_LANE_EXTRACT_REQUIREMENT",
     "VECTOR_ZERO_REQUIREMENT",
     "operand_role_values",

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Literal, Protocol
 
 from tslc.catalog.model import Extension
-from tslc.catalog.preconditions import PreconditionCheckPrimitive
+from tslc.catalog.semantics import PrimitiveProviderRequirement
 from tslc.catalog.scalar_types import (
     is_signed,
     is_type_tag,
@@ -38,17 +38,17 @@ class PointerCastOperand:
 class BackendLoweringPolicy:
     """Backend-owned choices needed while lowering shared semantics."""
 
-    checked_vector_failure_primitive: PreconditionCheckPrimitive | None = None
-    checked_mask_failure_primitive: PreconditionCheckPrimitive | None = None
+    checked_vector_failure_requirement: PrimitiveProviderRequirement | None = None
+    checked_mask_failure_requirement: PrimitiveProviderRequirement | None = None
     fixed_native_abi_bridge: bool = False
 
-    def checked_failure_primitive(
+    def checked_failure_requirement(
         self, result_kind: str
-    ) -> PreconditionCheckPrimitive | None:
+    ) -> PrimitiveProviderRequirement | None:
         if result_kind == "m":
-            return self.checked_mask_failure_primitive
+            return self.checked_mask_failure_requirement
         if result_kind in {"v", "vidx"}:
-            return self.checked_vector_failure_primitive
+            return self.checked_vector_failure_requirement
         return None
 
 

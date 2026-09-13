@@ -11,7 +11,11 @@ from tslc.backend.checked_api import (
 )
 from tslc.catalog.arithmetic import ArithmeticNumericDomain
 from tslc.catalog.memory import MemoryAccess, MemoryAddressing, MemoryPayloadExtent
-from tslc.catalog.semantics import OperandRole
+from tslc.catalog.semantics import (
+    OperandRole,
+    PrimitiveProviderRequirement,
+    ResolvedPrimitiveProvider,
+)
 from tslc.lower.lowerer import LoweredSpecialization, varying_positions
 
 
@@ -38,6 +42,21 @@ class CppCheckedApiPlan:
     required_alignment_expression: str | None
     alignment_parameter_name: str | None
     index_type_parameter_name: str | None
+    primitive_providers: tuple[ResolvedPrimitiveProvider, ...]
+
+    def provider_name(
+        self,
+        requirement: PrimitiveProviderRequirement,
+    ) -> str | None:
+        provider = next(
+            (
+                provider
+                for provider in self.primitive_providers
+                if provider.requirement == requirement
+            ),
+            None,
+        )
+        return None if provider is None else provider.primitive_name
 
 
 def _template_constraint(
@@ -82,11 +101,18 @@ def plan_cpp_checked_api(
         specializations[0].result_vector_param
         or ("ToVec" if specializations[0].target is not None else "Vec")
     )
+    failure_provider_name = (
+        None
+        if plan.failure_provider is None
+        else plan.failure_provider.primitive_name
+    )
+    if result_kind in {"v", "vidx", "m"} and failure_provider_name is None:
+        return None
     failure_placeholder = (
-        f"::tsl::set_zero<{result_owner}>()"
+        f"::tsl::{failure_provider_name}<{result_owner}>()"
         if result_kind in {"v", "vidx"}
         else (
-            f"::tsl::mask_false<{result_owner}>()"
+            f"::tsl::{failure_provider_name}<{result_owner}>()"
             if result_kind == "m"
             else f"{result_type}{{}}"
         )
@@ -215,6 +241,7 @@ def plan_cpp_checked_api(
         required_alignment_expression=required_alignment_expression,
         alignment_parameter_name=alignment_parameter_name,
         index_type_parameter_name=index_type_parameter_name,
+        primitive_providers=plan.primitive_providers,
     )
 
 

@@ -11,8 +11,12 @@ from tslc.catalog.preconditions import (
     PreconditionHazard,
     precondition_applies_to_type,
 )
+from tslc.catalog.semantics import (
+    PrimitiveProviderRequirement,
+    ResolvedPrimitiveProvider,
+)
 from tslc.catalog.signatures import SignatureShape
-from tslc.diagnostics import Diagnostic, sort_diagnostics
+from tslc.diagnostics import Diagnostic, SourceSpan, sort_diagnostics
 from tslc.ir.scan import scan
 from tslc.ir.segments import Segment
 from tslc.lower.body_rendering import body_context, render_body
@@ -44,7 +48,16 @@ class LoweredImplementationBodies:
     variants: tuple[LoweredImplementationVariant, ...]
     source_segment_groups: tuple[tuple[Segment, ...], ...]
     call_dependency_origins: tuple[CallDependencyOrigin, ...]
+    checked_primitive_providers: tuple[ResolvedPrimitiveProvider, ...]
+    checked_failure_provider: ResolvedPrimitiveProvider | None
     diagnostics: tuple[Diagnostic, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _CheckedDependencies:
+    origins: tuple[CallDependencyOrigin, ...]
+    providers: tuple[ResolvedPrimitiveProvider, ...]
+    failure_provider: ResolvedPrimitiveProvider | None
 
 
 class ImplementationBodyLowerer:
@@ -107,14 +120,16 @@ class ImplementationBodyLowerer:
         effective_safety = safety
         diagnostics = [*default_body.diagnostics]
         call_dependency_origins = set(context.effects.call_dependency_origins)
-        call_dependency_origins.update(
-            _checked_precondition_dependencies(
-                selected,
-                lowering_policy=context.env.backend.lowering_policy,
-                result_kind=shape.result_kind,
-                target=target,
-            )
+        checked_dependencies = _checked_precondition_dependencies(
+            selected,
+            context=context,
+            lowering_policy=context.env.backend.lowering_policy,
+            result_kind=shape.result_kind,
+            target=target,
         )
+        if isinstance(checked_dependencies, Diagnostic):
+            return None, (checked_dependencies,)
+        call_dependency_origins.update(checked_dependencies.origins)
         for variant, variant_segments in variant_sources:
             variant_context = body_context(
                 replace(
@@ -172,6 +187,8 @@ class ImplementationBodyLowerer:
                 call_dependency_origins=tuple(
                     sorted(call_dependency_origins, key=origin_sort_key)
                 ),
+                checked_primitive_providers=checked_dependencies.providers,
+                checked_failure_provider=checked_dependencies.failure_provider,
                 diagnostics=tuple(diagnostics),
             ),
             (),
@@ -181,13 +198,33 @@ class ImplementationBodyLowerer:
 def _checked_precondition_dependencies(
     selected: SelectedImplementation,
     *,
+    context: LoweringSession,
     lowering_policy: BackendLoweringPolicy,
     result_kind: str,
     target: TargetVector | None,
-) -> tuple[CallDependencyOrigin, ...]:
+) -> _CheckedDependencies | Diagnostic:
     current = VectorIdentity(selected.type_tag, selected.extension.isa_name)
     dependencies: list[CallDependencyOrigin] = []
+    providers: dict[PrimitiveProviderRequirement, ResolvedPrimitiveProvider] = {}
     has_checked_condition = False
+
+    def resolve(
+        requirement: PrimitiveProviderRequirement,
+        source: SourceSpan | None,
+    ) -> ResolvedPrimitiveProvider | Diagnostic:
+        cached = providers.get(requirement)
+        if cached is not None:
+            return cached
+        primitive = context.env.catalog.resolve_primitive_provider(
+            requirement,
+            source=source,
+        )
+        if isinstance(primitive, Diagnostic):
+            return primitive
+        resolved = ResolvedPrimitiveProvider(requirement, primitive.name)
+        providers[requirement] = resolved
+        return resolved
+
     for precondition in selected.primitive.preconditions:
         descriptor = PRECONDITION_DESCRIPTORS[precondition.kind]
         if not precondition_applies_to_type(precondition, selected.type_tag):
@@ -197,21 +234,29 @@ def _checked_precondition_dependencies(
         check_primitives = descriptor.check_primitives
         if selected.primitive.mask_mode is not None:
             check_primitives += descriptor.masked_check_primitives
-        dependencies.extend(
-            CallDependencyOrigin(
-                dependency=CallDependency(
-                    primitive=primitive.value,
-                    mask_policy=None,
-                    source=current,
-                ),
-                origin=f"checked precondition {precondition.kind.value!r}",
-                kind=CallDependencyOriginKind.CHECKED_GUARD,
-                source=precondition.source,
+        for requirement in check_primitives:
+            provider = resolve(requirement, precondition.source)
+            if isinstance(provider, Diagnostic):
+                return provider
+            dependencies.append(
+                CallDependencyOrigin(
+                    dependency=CallDependency(
+                        primitive=provider.primitive_name,
+                        mask_policy=None,
+                        source=current,
+                    ),
+                    origin=f"checked precondition {precondition.kind.value!r}",
+                    kind=CallDependencyOriginKind.CHECKED_GUARD,
+                    source=precondition.source,
+                )
             )
-            for primitive in check_primitives
-        )
-    failure_primitive = lowering_policy.checked_failure_primitive(result_kind)
-    if has_checked_condition and failure_primitive is not None:
+    failure_requirement = lowering_policy.checked_failure_requirement(result_kind)
+    failure_provider: ResolvedPrimitiveProvider | None = None
+    if has_checked_condition and failure_requirement is not None:
+        resolved_failure = resolve(failure_requirement, selected.primitive.source)
+        if isinstance(resolved_failure, Diagnostic):
+            return resolved_failure
+        failure_provider = resolved_failure
         result_vector: GenericVectorReference | VectorIdentity
         result_target = selected.primitive.result_target
         if result_target is not None and result_target[0] == RESULT_DIM_VECTOR:
@@ -231,7 +276,7 @@ def _checked_precondition_dependencies(
         dependencies.append(
             CallDependencyOrigin(
                 dependency=CallDependency(
-                    primitive=failure_primitive.value,
+                    primitive=failure_provider.primitive_name,
                     mask_policy=None,
                     source=result_vector,
                 ),
@@ -240,7 +285,11 @@ def _checked_precondition_dependencies(
                 source=selected.primitive.source,
             )
         )
-    return tuple(dependencies)
+    return _CheckedDependencies(
+        origins=tuple(dependencies),
+        providers=tuple(providers.values()),
+        failure_provider=failure_provider,
+    )
 
 
 __all__ = ("ImplementationBodyLowerer", "LoweredImplementationBodies")

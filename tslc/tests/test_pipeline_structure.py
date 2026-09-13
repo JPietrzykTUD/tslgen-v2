@@ -964,6 +964,40 @@ def test_fixed_native_lowering_has_no_concrete_mask_bridge_names() -> None:
     assert {"to_integral", "to_mask"}.isdisjoint(string_literals)
 
 
+def test_checked_lowering_and_rendering_have_no_concrete_helper_names() -> None:
+    package_root = _REPO_ROOT / "tslc" / "src" / "tslc"
+    paths = (
+        package_root / "catalog" / "preconditions.py",
+        package_root / "lower" / "implementation_bodies.py",
+        package_root / "backend" / "translation.py",
+        package_root / "backend" / "cpp_translation.py",
+        package_root / "backend" / "checked_api.py",
+        package_root / "backend" / "cpp_checked_api.py",
+        package_root / "backend" / "cpp.py",
+        package_root / "backend" / "rust_checked_primitives.py",
+        package_root / "backend" / "rust_primitive_declarations.py",
+    )
+    concrete_names = {
+        "equal",
+        "mask_binary_and",
+        "mask_false",
+        "mask_population_count",
+        "set_mask_lane",
+        "extract_value_at",
+        "set_zero",
+    }
+    offenders: list[str] = []
+    for path in paths:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        offenders.extend(
+            f"{path}:{node.lineno}: {node.value}"
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Constant) and node.value in concrete_names
+        )
+
+    assert offenders == []
+
+
 def test_pre_lowering_packages_do_not_import_lowering() -> None:
     package_root = _REPO_ROOT / "tslc" / "src" / "tslc"
     paths = (

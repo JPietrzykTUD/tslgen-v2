@@ -154,6 +154,8 @@ def assemble_specialization(
         required_features=selected.required_features,
         required_compiler_capabilities=selected.required_compiler_capabilities,
         call_dependency_origins=bodies.call_dependency_origins,
+        checked_primitive_providers=bodies.checked_primitive_providers,
+        checked_failure_provider=bodies.checked_failure_provider,
         unresolved_call_preconditions=tuple(
             obligation
             for origin in bodies.call_dependency_origins

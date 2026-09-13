@@ -34,16 +34,33 @@ from tslc.catalog.memory import (
     MemoryIndexedLaneExtent,
     MemoryPayloadExtent,
 )
-from tslc.catalog.preconditions import (
-    PreconditionCheckPrimitive,
-    PreconditionKind,
-)
+from tslc.catalog.preconditions import PreconditionKind
 from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS
+from tslc.catalog.semantics import (
+    COMPARE_EQUAL_REQUIREMENT,
+    MASK_AND_REQUIREMENT,
+    MASK_POPULATION_COUNT_REQUIREMENT,
+    RUNTIME_LANE_EXTRACT_REQUIREMENT,
+    VECTOR_ZERO_REQUIREMENT,
+    PrimitiveProviderRequirement,
+)
 from tslc.lower.lowerer import LoweredSpecialization, varying_positions
 
 PRECONDITION_METHOD = "__tsl_precondition_error"
 CHECKED_MEMORY_EXTENT_METHOD = "__tsl_checked_memory_extent"
 CHECKED_MEMORY_ALIGNMENT_METHOD = "__tsl_checked_memory_alignment"
+
+
+def _rust_provider_name(
+    condition: CheckedConditionPlan,
+    requirement: PrimitiveProviderRequirement,
+) -> str:
+    name = condition.provider_name(requirement)
+    if name is None:
+        raise ValueError(
+            f"Rust checked plan has no provider for {requirement.operation.value!r}"
+        )
+    return rust_raw_identifier(name)
 
 
 def trait_precondition_condition(
@@ -98,17 +115,10 @@ def impl_precondition_method(
     if info.floating:
         body = "None"
     else:
-        required = {
-            PreconditionCheckPrimitive.ZERO_VECTOR,
-            PreconditionCheckPrimitive.EQUAL,
-            PreconditionCheckPrimitive.MASK_POPULATION_COUNT,
-        }
-        if not required.issubset(condition.check_primitives):
-            raise ValueError("zero-divisor check plan is missing support primitives")
-        zero = rust_raw_identifier(PreconditionCheckPrimitive.ZERO_VECTOR.value)
-        equal = rust_raw_identifier(PreconditionCheckPrimitive.EQUAL.value)
-        population = rust_raw_identifier(
-            PreconditionCheckPrimitive.MASK_POPULATION_COUNT.value
+        zero = _rust_provider_name(condition, VECTOR_ZERO_REQUIREMENT)
+        equal = _rust_provider_name(condition, COMPARE_EQUAL_REQUIREMENT)
+        population = _rust_provider_name(
+            condition, MASK_POPULATION_COUNT_REQUIREMENT
         )
         lines = [
             f"let zero_divisors = {equal}::<Self>(",
@@ -116,9 +126,7 @@ def impl_precondition_method(
         ]
         checked_mask = "zero_divisors"
         if condition.mask_parameter_name is not None:
-            if PreconditionCheckPrimitive.MASK_AND not in condition.check_primitives:
-                raise ValueError("masked zero-divisor check has no mask-and primitive")
-            mask_and = rust_raw_identifier(PreconditionCheckPrimitive.MASK_AND.value)
+            mask_and = _rust_provider_name(condition, MASK_AND_REQUIREMENT)
             lines.extend(
                 (
                     f"let active_zero_divisors = {mask_and}::<Self>(",
@@ -474,13 +482,9 @@ def render_checked_wrapper(
                 or condition.memory_indexed_lane_extent is None
             ):
                 raise ValueError("Rust checked indexed memory plan is incomplete")
-            if (
-                PreconditionCheckPrimitive.VECTOR_EXTRACT_LANE
-                not in condition.check_primitives
-            ):
-                raise ValueError(
-                    "indexed-memory check plan has no lane-extraction primitive"
-                )
+            extract_lane = _rust_provider_name(
+                condition, RUNTIME_LANE_EXTRACT_REQUIREMENT
+            )
             if len(shape.type_params) != 1:
                 raise ValueError(
                     "Rust checked indexed memory requires exactly one index vector type"
@@ -513,7 +517,7 @@ def render_checked_wrapper(
                     f"    for __tsl_lane in 0..{accessed_lanes} {{",
                     f"        if {active} {{",
                     "            let __tsl_index = unsafe { "
-                    f"extract_value_at::<{index_owner}>("
+                    f"{extract_lane}::<{index_owner}>("
                     f"{condition.index_parameter_name}, __tsl_lane) }};",
                     "            if let Some(error) = "
                     "indexed_memory_address_error::<_, S::BaseType>(",
@@ -531,13 +535,7 @@ def render_checked_wrapper(
         if condition.kind is PreconditionKind.COMPACTED_MEMORY_EXTENT:
             if condition.mask_parameter_name is None:
                 raise ValueError("Rust checked compacted memory plan has no mask")
-            if (
-                PreconditionCheckPrimitive.MASK_POPULATION_COUNT
-                not in condition.check_primitives
-            ):
-                raise ValueError(
-                    "compacted-memory check plan has no mask population primitive"
-                )
+            _rust_provider_name(condition, MASK_POPULATION_COUNT_REQUIREMENT)
             checks.extend(
                 (
                     "    let mut __tsl_required = 0usize;",

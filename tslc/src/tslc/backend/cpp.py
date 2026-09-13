@@ -37,10 +37,16 @@ from tslc.backend.public_declarations import (
     PublicDeclarationStability,
 )
 from tslc.backend.signature_types import CPP_SIGNATURE_TYPES
-from tslc.catalog.preconditions import (
-    PreconditionCheckPrimitive,
-    PreconditionErrorKind,
-    PreconditionKind,
+from tslc.catalog.preconditions import PreconditionErrorKind, PreconditionKind
+from tslc.catalog.semantics import (
+    COMPARE_EQUAL_REQUIREMENT,
+    MASK_ALL_FALSE_REQUIREMENT,
+    MASK_AND_REQUIREMENT,
+    MASK_POPULATION_COUNT_REQUIREMENT,
+    MASK_SET_LANE_REQUIREMENT,
+    RUNTIME_LANE_EXTRACT_REQUIREMENT,
+    VECTOR_ZERO_REQUIREMENT,
+    PrimitiveProviderRequirement,
 )
 from tslc.catalog.memory import (
     MemoryAccess,
@@ -126,6 +132,18 @@ def _cpp_checked_failure(
     )
 
 
+def _cpp_provider_name(
+    owner: CheckedConditionPlan | CppCheckedApiPlan,
+    requirement: PrimitiveProviderRequirement,
+) -> str:
+    name = owner.provider_name(requirement)
+    if name is None:
+        raise ValueError(
+            f"C++ checked plan has no provider for {requirement.operation.value!r}"
+        )
+    return name
+
+
 def _cpp_checked_condition(
     condition: CheckedConditionPlan,
     plan: CppCheckedApiPlan,
@@ -169,7 +187,7 @@ def _cpp_checked_condition(
                 ""
                 if condition.memory_addressing is not MemoryAddressing.COMPACTED
                 else (
-                    f"(::tsl::mask_population_count<Vec>("
+                    f"(::tsl::{_cpp_provider_name(plan, MASK_POPULATION_COUNT_REQUIREMENT)}<Vec>("
                     f"{condition.mask_parameter_name}) != 0) && "
                 )
             )
@@ -198,13 +216,9 @@ def _cpp_checked_condition(
                 or condition.memory_indexed_lane_extent is None
             ):
                 raise ValueError("C++ checked indexed memory plan is incomplete")
-            if (
-                PreconditionCheckPrimitive.VECTOR_EXTRACT_LANE
-                not in condition.check_primitives
-            ):
-                raise ValueError(
-                    "indexed-memory check plan has no lane-extraction primitive"
-                )
+            extract_lane = _cpp_provider_name(
+                condition, RUNTIME_LANE_EXTRACT_REQUIREMENT
+            )
             index_type = plan.index_type_parameter_name
             if (
                 condition.memory_indexed_lane_extent
@@ -227,25 +241,23 @@ def _cpp_checked_condition(
             active = "true"
             active_setup: tuple[str, ...] = ()
             if condition.mask_parameter_name is not None:
-                required_mask_primitives = {
-                    PreconditionCheckPrimitive.MASK_FALSE,
-                    PreconditionCheckPrimitive.MASK_SET_LANE,
-                    PreconditionCheckPrimitive.MASK_AND,
-                    PreconditionCheckPrimitive.MASK_POPULATION_COUNT,
-                }
-                if not required_mask_primitives.issubset(
-                    condition.check_primitives
-                ):
-                    raise ValueError(
-                        "masked indexed-memory check plan lacks mask primitives"
-                    )
+                mask_false = _cpp_provider_name(
+                    condition, MASK_ALL_FALSE_REQUIREMENT
+                )
+                set_mask_lane = _cpp_provider_name(
+                    condition, MASK_SET_LANE_REQUIREMENT
+                )
+                mask_and = _cpp_provider_name(condition, MASK_AND_REQUIREMENT)
+                population = _cpp_provider_name(
+                    condition, MASK_POPULATION_COUNT_REQUIREMENT
+                )
                 active_setup = (
                     "            auto const __tsl_lane_mask = "
-                    "::tsl::set_mask_lane<Vec>(",
-                    "                ::tsl::mask_false<Vec>(), __tsl_lane, 1);",
+                    f"::tsl::{set_mask_lane}<Vec>(",
+                    f"                ::tsl::{mask_false}<Vec>(), __tsl_lane, 1);",
                     "            auto const __tsl_active = "
-                    "::tsl::mask_population_count<Vec>(",
-                    "                ::tsl::mask_binary_and<Vec>("
+                    f"::tsl::{population}<Vec>(",
+                    f"                ::tsl::{mask_and}<Vec>("
                     f"{condition.mask_parameter_name}, __tsl_lane_mask)) != 0;",
                 )
                 active = "__tsl_active"
@@ -264,7 +276,7 @@ def _cpp_checked_condition(
                     *active_setup,
                     f"            if ({active}) {{",
                     "                auto const __tsl_index = "
-                    f"::tsl::extract_value_at<{index_type}>("
+                    f"::tsl::{extract_lane}<{index_type}>("
                     f"{condition.index_parameter_name}, __tsl_lane);",
                     "                auto const __tsl_error = "
                     "::tsl::detail::indexed_memory_address_error<"
@@ -292,47 +304,40 @@ def _cpp_checked_condition(
                 or condition.mask_parameter_name is None
             ):
                 raise ValueError("C++ checked compacted memory plan is incomplete")
-            if (
-                PreconditionCheckPrimitive.MASK_POPULATION_COUNT
-                not in condition.check_primitives
-            ):
-                raise ValueError(
-                    "compacted-memory check plan has no mask population primitive"
-                )
+            population = _cpp_provider_name(
+                condition, MASK_POPULATION_COUNT_REQUIREMENT
+            )
             return (
                 f"    if ({plan.memory_parameter_name}.size() < "
-                f"::tsl::mask_population_count<Vec>("
+                f"::tsl::{population}<Vec>("
                 f"{condition.mask_parameter_name})) {{\n"
                 f"{_cpp_checked_failure(condition, plan, indent='        ')}\n"
                 "    }"
             )
         raise ValueError(f"unsupported C++ checked condition {condition.kind.value!r}")
-    required = {
-        PreconditionCheckPrimitive.ZERO_VECTOR,
-        PreconditionCheckPrimitive.EQUAL,
-        PreconditionCheckPrimitive.MASK_POPULATION_COUNT,
-    }
-    if not required.issubset(condition.check_primitives):
-        raise ValueError("zero-divisor check plan is missing support primitives")
+    zero = _cpp_provider_name(condition, VECTOR_ZERO_REQUIREMENT)
+    equal = _cpp_provider_name(condition, COMPARE_EQUAL_REQUIREMENT)
+    population = _cpp_provider_name(
+        condition, MASK_POPULATION_COUNT_REQUIREMENT
+    )
     lines = [
         "    if constexpr (std::is_integral_v<typename Vec::base_type>) {",
-        "        auto zero_divisors = ::tsl::equal<Vec>(",
-        f"            {condition.parameter_name}, ::tsl::set_zero<Vec>());",
+        f"        auto zero_divisors = ::tsl::{equal}<Vec>(",
+        f"            {condition.parameter_name}, ::tsl::{zero}<Vec>());",
     ]
     checked_mask = "zero_divisors"
     if condition.mask_parameter_name is not None:
-        if PreconditionCheckPrimitive.MASK_AND not in condition.check_primitives:
-            raise ValueError("masked zero-divisor check plan has no mask-and primitive")
+        mask_and = _cpp_provider_name(condition, MASK_AND_REQUIREMENT)
         lines.extend(
             (
-                "        auto active_zero_divisors = ::tsl::mask_binary_and<Vec>(",
+                f"        auto active_zero_divisors = ::tsl::{mask_and}<Vec>(",
                 f"            {condition.mask_parameter_name}, zero_divisors);",
             )
         )
         checked_mask = "active_zero_divisors"
     lines.extend(
         (
-            f"        if (::tsl::mask_population_count<Vec>({checked_mask}) != 0) {{",
+            f"        if (::tsl::{population}<Vec>({checked_mask}) != 0) {{",
             _cpp_checked_failure(condition, plan, indent="            "),
             "        }",
             "    }",

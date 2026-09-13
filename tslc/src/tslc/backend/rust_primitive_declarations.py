@@ -38,7 +38,8 @@ from tslc.backend.rust_type_params import (
     type_param_where_clauses,
 )
 from tslc.catalog.memory import MemoryAccess
-from tslc.catalog.preconditions import PreconditionCheckPrimitive, PreconditionKind
+from tslc.catalog.preconditions import PreconditionKind
+from tslc.catalog.semantics import RUNTIME_LANE_EXTRACT_REQUIREMENT
 from tslc.lower.lowerer import LoweredSpecialization, varying_positions
 
 PRIMITIVE_TRAIT_PREFIX = "detail::primitives::"
@@ -151,14 +152,13 @@ def rust_checked_generic_parameters(
     for condition in plan.conditions:
         if condition.kind is not PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID:
             continue
-        if (
-            PreconditionCheckPrimitive.VECTOR_EXTRACT_LANE
-            in condition.check_primitives
-        ):
-            primitive = PreconditionCheckPrimitive.VECTOR_EXTRACT_LANE
+        primitive_name = condition.provider_name(
+            RUNTIME_LANE_EXTRACT_REQUIREMENT
+        )
+        if primitive_name is not None:
             index_bounds.append(
                 f"{PRIMITIVE_TRAIT_PREFIX}"
-                f"{rust_primitive_trait_name(primitive.value)}"
+                f"{rust_primitive_trait_name(primitive_name)}"
             )
     if not index_bounds:
         return facts.generic_parameters
