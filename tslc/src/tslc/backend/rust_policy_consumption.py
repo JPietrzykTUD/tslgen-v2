@@ -25,6 +25,9 @@ from tslc.benchmark.model import (
 )
 
 RustPolicyMappingRenderer = Callable[[RustPolicySelection], str]
+RustPolicyMappingRendererFactory = Callable[
+    [RustPolicySelectionProfile], RustPolicyMappingRenderer
+]
 _Value = TypeVar("_Value")
 
 
@@ -240,12 +243,10 @@ EMPTY_RUST_POLICY_CONSUMPTION_PLAN = RustPolicyConsumptionPlan(profiles=())
 def plan_rust_policy_coverage(
     benchmarks: BenchmarkProjectPlan,
     selections: RustPolicySelectionPlan,
+    *,
+    mapping_renderer: RustPolicyMappingRendererFactory,
 ) -> RustPolicyCoveragePlan:
     """Join every Rust report to canonical policy eligibility exactly once."""
-
-    # Keep the renderer import local: the typed plan owns mapping facts, while
-    # the Rust backend remains their only spelling authority.
-    from tslc.backend.rust import RustBackend
 
     selection_profile_names = {
         selection_profile.profile_name for selection_profile in selections.profiles
@@ -279,11 +280,10 @@ def plan_rust_policy_coverage(
     profiles: list[RustPolicyConsumptionProfile] = []
     for benchmark_profile in benchmarks.profiles_for("rust"):
         selection_profile = selection_by_name[benchmark_profile.profile_name]
-        backend = RustBackend(policy_selection=selection_profile)
         joined = join_rust_policy_consumption_profile(
             benchmark_profile,
             selection_profile,
-            render_mapping=backend.render_policy_selection_impl,
+            render_mapping=mapping_renderer(selection_profile),
             require_supported_reports=False,
         )
         profiles.append(joined)
@@ -309,10 +309,16 @@ def plan_rust_policy_coverage(
 def plan_rust_policy_consumption(
     benchmarks: BenchmarkProjectPlan,
     selections: RustPolicySelectionPlan,
+    *,
+    mapping_renderer: RustPolicyMappingRendererFactory,
 ) -> RustPolicyConsumptionPlan:
     """Restrict exact policy coverage to profiles with complete mappings."""
 
-    coverage = plan_rust_policy_coverage(benchmarks, selections)
+    coverage = plan_rust_policy_coverage(
+        benchmarks,
+        selections,
+        mapping_renderer=mapping_renderer,
+    )
     gaps_by_profile = {
         gap.key.profile_name for gap in coverage.gaps
     }
@@ -511,6 +517,7 @@ __all__ = (
     "RustPolicyCoverageGap",
     "RustPolicyCoveragePlan",
     "RustPolicyMappingChoice",
+    "RustPolicyMappingRendererFactory",
     "RustPolicyMappingRenderer",
     "RustPolicyScenarioFact",
     "join_rust_policy_consumption_profile",

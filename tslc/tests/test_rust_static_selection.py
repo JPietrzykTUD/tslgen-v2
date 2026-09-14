@@ -17,6 +17,11 @@ from tslc.backend.rust_static_selection import (
     validate_rust_static_selection,
 )
 from tslc.diagnostics import has_errors
+from tslc.render.rust_static_selection import (
+    rust_static_fallback_cfg,
+    rust_static_profile_cfg,
+    rust_target_requirement_cfg,
+)
 
 
 @pytest.fixture(scope="module")
@@ -49,12 +54,25 @@ def _mapping(
     )
 
 
+def _with_machine_profile(
+    emitted: EmittedProfile,
+    **changes: object,
+) -> EmittedProfile:
+    return EmittedProfile(
+        profile=replace(emitted.profile, **changes),
+        specializations_by_backend=emitted.specializations_by_backend,
+        extensions=emitted.extensions,
+        profile_family=emitted.profile_family,
+        immediate_split_names=frozenset(),
+    )
+
+
 def test_static_selection_uses_source_target_requirements(
     rust_static_plan: RustStaticSelectionPlan,
 ) -> None:
     assert tuple(profile.profile_name for profile in rust_static_plan.profiles) == (
-        "sse2",
         "avx2",
+        "sse2",
     )
     sse2 = rust_static_plan.profile("sse2")
     avx2 = rust_static_plan.profile("avx2")
@@ -72,8 +90,8 @@ def test_static_selection_uses_source_target_requirements(
         "sse4.2",
         "ssse3",
     )
-    assert sse2.stronger_requirements == (avx2.requirement,)
-    assert avx2.stronger_requirements == ()
+    assert sse2.higher_priority_requirements == (avx2.requirement,)
+    assert avx2.higher_priority_requirements == ()
 
 
 def test_static_selection_uses_only_exact_width_available_hardware(
@@ -224,7 +242,189 @@ def test_static_selection_rejects_ambiguous_compile_targets(
     diagnostics = validate_rust_static_selection((emitted, alias))
 
     assert {diagnostic.code for diagnostic in diagnostics} == {
-        "TSL-BACKEND-RUST-AMBIGUOUS-TARGET-PROFILES"
+        "TSL-BACKEND-RUST-DUPLICATE-TARGET-PROFILES"
+    }
+
+
+def test_static_selection_orders_incomparable_targets_by_typed_priority(
+    rust_static_result,
+) -> None:
+    emitted = next(
+        profile
+        for profile in rust_static_result.emitted_profiles
+        if profile.profile.name == "sse2"
+    )
+    alpha = _with_machine_profile(
+        emitted,
+        name="alpha",
+        features=frozenset((*emitted.profile.features, "alpha")),
+        backend_selection_priority={"rust": 10},
+    )
+    beta = _with_machine_profile(
+        emitted,
+        name="beta",
+        features=frozenset((*emitted.profile.features, "beta")),
+        backend_selection_priority={"rust": 20},
+    )
+
+    plan = plan_rust_static_selection((alpha, beta))
+    reversed_plan = plan_rust_static_selection((beta, alpha))
+
+    assert plan == reversed_plan
+    assert tuple(profile.profile_name for profile in plan.profiles) == (
+        "beta",
+        "alpha",
+    )
+    beta_selection, alpha_selection = plan.profiles
+    assert beta_selection.selection_priority == 20
+    assert beta_selection.higher_priority_requirements == ()
+    assert alpha_selection.selection_priority == 10
+    assert alpha_selection.higher_priority_requirements == (
+        beta_selection.requirement,
+    )
+    assert rust_static_profile_cfg(beta_selection) == rust_target_requirement_cfg(
+        beta_selection.requirement
+    )
+    assert rust_static_profile_cfg(alpha_selection) == (
+        "all("
+        + rust_target_requirement_cfg(alpha_selection.requirement)
+        + ", not(any("
+        + rust_target_requirement_cfg(beta_selection.requirement)
+        + ")))"
+    )
+    assert rust_static_fallback_cfg(plan) == (
+        "not(any("
+        + ", ".join(
+            rust_target_requirement_cfg(selection.requirement)
+            for selection in plan.profiles
+        )
+        + "))"
+    )
+
+
+def test_static_selection_accepts_an_additive_superset_profile(
+    rust_static_result,
+) -> None:
+    emitted = next(
+        profile
+        for profile in rust_static_result.emitted_profiles
+        if profile.profile.name == "sse2"
+    )
+    alpha = _with_machine_profile(
+        emitted,
+        name="alpha",
+        features=frozenset((*emitted.profile.features, "alpha")),
+        backend_selection_priority={"rust": 10},
+    )
+    beta = _with_machine_profile(
+        emitted,
+        name="beta",
+        features=frozenset((*emitted.profile.features, "beta")),
+        backend_selection_priority={"rust": 20},
+    )
+    future = _with_machine_profile(
+        emitted,
+        name="future",
+        features=frozenset((*emitted.profile.features, "alpha", "beta")),
+        backend_selection_priority={"rust": 30},
+    )
+
+    plan = plan_rust_static_selection((alpha, beta, future))
+    reversed_plan = plan_rust_static_selection((future, beta, alpha))
+
+    assert plan == reversed_plan
+    assert tuple(selection.profile_name for selection in plan.profiles) == (
+        "future",
+        "beta",
+        "alpha",
+    )
+
+
+def test_static_selection_feature_superset_precedes_higher_numeric_priority(
+    rust_static_result,
+) -> None:
+    emitted = next(
+        profile
+        for profile in rust_static_result.emitted_profiles
+        if profile.profile.name == "sse2"
+    )
+    subset = _with_machine_profile(
+        emitted,
+        name="subset",
+        backend_selection_priority={"rust": 100},
+    )
+    superset = _with_machine_profile(
+        emitted,
+        name="superset",
+        features=frozenset((*emitted.profile.features, "extra")),
+        backend_selection_priority={"rust": 1},
+    )
+
+    plan = plan_rust_static_selection((subset, superset))
+
+    assert tuple(profile.profile_name for profile in plan.profiles) == (
+        "superset",
+        "subset",
+    )
+    assert plan.profile("subset").higher_priority_requirements == (
+        plan.profile("superset").requirement,
+    )
+
+
+def test_static_selection_requires_priority_for_incomparable_targets(
+    rust_static_result,
+) -> None:
+    emitted = next(
+        profile
+        for profile in rust_static_result.emitted_profiles
+        if profile.profile.name == "sse2"
+    )
+    alpha = _with_machine_profile(
+        emitted,
+        name="alpha",
+        features=frozenset((*emitted.profile.features, "alpha")),
+        backend_selection_priority={},
+    )
+    beta = _with_machine_profile(
+        emitted,
+        name="beta",
+        features=frozenset((*emitted.profile.features, "beta")),
+        backend_selection_priority={"rust": 20},
+    )
+
+    diagnostics = validate_rust_static_selection((alpha, beta))
+
+    assert {diagnostic.code for diagnostic in diagnostics} == {
+        "TSL-BACKEND-RUST-MISSING-SELECTION-PRIORITY"
+    }
+    assert "backend_selection_priority.rust for 'alpha'" in diagnostics[0].message
+
+
+def test_static_selection_rejects_duplicate_priorities_within_architecture(
+    rust_static_result,
+) -> None:
+    emitted = next(
+        profile
+        for profile in rust_static_result.emitted_profiles
+        if profile.profile.name == "sse2"
+    )
+    alpha = _with_machine_profile(
+        emitted,
+        name="alpha",
+        features=frozenset((*emitted.profile.features, "alpha")),
+        backend_selection_priority={"rust": 10},
+    )
+    beta = _with_machine_profile(
+        emitted,
+        name="beta",
+        features=frozenset((*emitted.profile.features, "beta")),
+        backend_selection_priority={"rust": 10},
+    )
+
+    diagnostics = validate_rust_static_selection((alpha, beta))
+
+    assert {diagnostic.code for diagnostic in diagnostics} == {
+        "TSL-BACKEND-RUST-DUPLICATE-SELECTION-PRIORITY"
     }
 
 

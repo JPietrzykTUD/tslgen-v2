@@ -6,10 +6,6 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 from tslc.backend.registry import registered_backend_ids
-from tslc.backend.rust_package import (
-    DEFAULT_RUST_PACKAGE_CONFIG,
-    RustPackageConfig,
-)
 from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS
 from tslc.output.artifacts import ArtifactSet
 from tslc.output.verify import (
@@ -34,7 +30,17 @@ from tslc.pipeline import (
     generate,
 )
 from tslc.sources import expand_source_paths
-from tslc.project_render import ProjectRenderConfig
+from tslc.project_render import (
+    DEFAULT_PROJECT_RENDER_CONFIG,
+    ProjectRenderConfig,
+)
+
+__all__ = (
+    "generate_project",
+    "refresh_artifact_manifest",
+    "verify_project",
+    "write_artifacts",
+)
 
 _ARITH_TYPE_TAGS = DEFAULT_SCALAR_TYPE_TAGS
 
@@ -56,7 +62,7 @@ def generate_project(
     value_test_fuzz: bool = False,
     render_artifacts: bool = True,
     collect_target_support: bool = False,
-    rust_package: RustPackageConfig = DEFAULT_RUST_PACKAGE_CONFIG,
+    render_config: ProjectRenderConfig = DEFAULT_PROJECT_RENDER_CONFIG,
 ) -> GenerationResult:
     """Run the full compiler pipeline and return in-memory artifacts.
 
@@ -109,7 +115,7 @@ def generate_project(
         value_test_fuzz=value_test_fuzz,
         render_artifacts=render_artifacts,
         collect_target_support=collect_target_support,
-        render_config=ProjectRenderConfig(rust_package=rust_package),
+        render_config=render_config,
     )
     return generate(request)
 
@@ -125,6 +131,12 @@ def write_artifacts(
     output_root: Path | str,
     mode: ArtifactWriteMode = "manifest-clean",
 ) -> ArtifactWriteReport:
+    """Write one in-memory artifact set beneath ``output_root``.
+
+    ``manifest-clean`` removes only stale files recorded by the previous TSLc
+    manifest. It never adopts or removes unrelated files in the output tree.
+    """
+
     return ArtifactWriter().write(artifacts, output_root, mode)
 
 
@@ -146,6 +158,13 @@ def verify_project(
     run_value_tests: bool = False,
     run_quality_checks: bool = False,
 ) -> BuildVerificationReport:
+    """Build and optionally test an already-written generated project.
+
+    ``verify`` is normally ``GenerationResult.rendered.verify`` from the same
+    generation request. Missing optional toolchains or runners are reported in
+    the returned verification report rather than hidden by this facade.
+    """
+
     return verify_generated_project(
         Path(output_root),
         verify,

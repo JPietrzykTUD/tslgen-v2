@@ -291,7 +291,6 @@ def _classify_runtime_site(
     if (
         "size_of::<from>()" in lowered
         or "lane-preserving conversion" in lowered
-        or (kind == "trap" and "require_same_lanes" in context.lower())
         or "requires a vector with at least one lane" in lowered
         or "requires an integral mask storage type" in lowered
     ):

@@ -138,14 +138,6 @@ impl_base_type_dispatch!(isize => BaseSi32, usize => BaseUi32);
 #[cfg(target_pointer_width = "64")]
 impl_base_type_dispatch!(isize => BaseSi64, usize => BaseUi64);
 
-pub fn require_same_lanes(source_lanes: usize, target_lanes: usize) {
-    assert_eq!(
-        source_lanes,
-        target_lanes,
-        "lane-preserving conversion requires equal source and target lane counts"
-    );
-}
-
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "rdrand")]
 /// # Safety

@@ -5,11 +5,22 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from tslc.backend import translation_common as common
-from tslc.backend.translation import PointerCastOperand
+from tslc.backend.translation import BackendLoweringPolicy, PointerCastOperand
 from tslc.catalog.model import Catalog, Extension
 from tslc.catalog.register_shapes import RegisterMultiplicity
+from tslc.catalog.semantics import (
+    MASK_ALL_FALSE_REQUIREMENT,
+    VECTOR_ZERO_REQUIREMENT,
+)
 from tslc.lane_count import LaneCount
 from tslc.target_text import RenderField, RenderText, literal_text, render_sequence
+
+
+_CPP_LOWERING_POLICY = BackendLoweringPolicy(
+    checked_vector_failure_requirement=VECTOR_ZERO_REQUIREMENT,
+    checked_mask_failure_requirement=MASK_ALL_FALSE_REQUIREMENT,
+    fixed_native_abi_bridge=True,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -327,6 +338,7 @@ class _CppSyntax:
 class CppBackendDialect:
     catalog: Catalog
     backend_id: str = field(default="cpp", init=False)
+    lowering_policy: BackendLoweringPolicy = _CPP_LOWERING_POLICY
     types: _CppTypes = field(init=False)
     intrinsics: _CppIntrinsics = field(init=False)
     templates: _CppTemplates = field(init=False)

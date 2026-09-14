@@ -34,6 +34,7 @@ export interface ExplorerPreviewSlot {
   readonly profile: string;
   readonly type: string;
   readonly backend: string;
+  readonly previewFileSuffix: string;
   readonly extension: string;
   readonly toTarget: string | null;
   readonly signature: string;
@@ -108,6 +109,7 @@ const EMPTY_RESPONSE: PrimitiveExplorerResponse = {
   mode: "authored",
   profile: "",
   backend: "",
+  previewFileSuffix: "",
   profiles: [],
   backends: [],
   generation: 0,
@@ -163,7 +165,7 @@ export class TslExplorer implements vscode.Disposable {
     );
     this.backend = context.workspaceState.get<string>(
       "tsl.explorer.backend",
-      vscode.workspace.getConfiguration("tsl").get<string>("preview.backend", "cpp"),
+      vscode.workspace.getConfiguration("tsl").get<string>("preview.backend", ""),
     );
     this.onlyUnavailable = context.workspaceState.get<boolean>(
       "tsl.explorer.onlyUnavailable",
@@ -268,7 +270,7 @@ export class TslExplorer implements vscode.Disposable {
         if (event.affectsConfiguration("tsl.preview.backend")) {
           this.backend = vscode.workspace
             .getConfiguration("tsl")
-            .get<string>("preview.backend", "cpp");
+            .get<string>("preview.backend", "");
           void this.context.workspaceState.update(
             "tsl.explorer.backend",
             this.backend,
@@ -573,6 +575,7 @@ export class TslExplorer implements vscode.Disposable {
       primitive,
       profile: this.response.profile,
       backend: this.response.backend,
+      previewFileSuffix: this.response.previewFileSuffix,
       extension: element.slot.extension,
       type: element.slot.type,
       toTarget: element.slot.target?.value ?? null,
@@ -624,6 +627,7 @@ export class TslExplorer implements vscode.Disposable {
     const workspaceGeneration = this.response.generation;
     const result = await this.analyze({
       ...context,
+      previewFileSuffix: this.response.previewFileSuffix,
       signature: element.slot.signature,
       sourceUri: vscode.Uri.parse(source),
     });

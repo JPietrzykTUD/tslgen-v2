@@ -12,7 +12,7 @@ from tslc.backend.cpp_profile_model import (
 )
 from tslc.compiler_assets import RenderAssets
 from tslc.render._common import slug
-from tslc.value_tests.compile_failure import compile_failure_target_name
+from tslc.value_tests.identity import compile_failure_target_name
 from tslc.value_tests.model import ValueTestProjectPlan
 
 

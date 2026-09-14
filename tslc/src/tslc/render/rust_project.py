@@ -751,7 +751,7 @@ def _rust_build_policy_profiles(
                 for feature in entry.static_selection.requirement.target_features
             )
             + "],",
-            "    stronger_requirements: &["
+            "    higher_priority_requirements: &["
             + ", ".join(
                 "tsl_rust_variant_policy::GeneratedTargetRequirement { "
                 f"target_arch: {json.dumps(requirement.target_arch)}, "
@@ -761,7 +761,7 @@ def _rust_build_policy_profiles(
                     for feature in requirement.target_features
                 )
                 + "] }"
-                for requirement in entry.static_selection.stronger_requirements
+                for requirement in entry.static_selection.higher_priority_requirements
             )
             + "],",
             "    descriptor_relative_path: "

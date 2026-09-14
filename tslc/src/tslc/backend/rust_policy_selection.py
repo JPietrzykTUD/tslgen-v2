@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from collections import Counter
 from dataclasses import dataclass, replace
 from typing import Literal
@@ -15,12 +16,15 @@ from tslc.backend.rust_policy_manifest import (
     RustPolicyManifest,
     RustPolicySelectionPilot,
 )
+from tslc.benchmark.identity import specialization_key
 from tslc.benchmark.model import SpecializationKey
 from tslc.catalog.preconditions import PreconditionKind
+from tslc.catalog.model import Extension
 from tslc.diagnostics import Diagnostic
 from tslc.lower.lowerer import LoweredSpecialization
 
 RustPolicySelectionStatus = Literal["supported", "report_only"]
+ExtensionHeaderGroup = Callable[[Extension | None], str | None]
 _PolicySlot = tuple[
     SpecializationKey,
     LoweredSpecialization,
@@ -28,6 +32,11 @@ _PolicySlot = tuple[
     str | None,
     tuple[str, str] | None,
 ]
+
+
+def _no_extension_header_group(extension: Extension | None) -> str | None:
+    del extension
+    return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -192,12 +201,9 @@ class RustPolicySelectionPlan:
 def plan_rust_policy_selection(
     profiles: tuple[EmittedProfile, ...],
     manifest: RustPolicyManifest,
+    extension_header_group: ExtensionHeaderGroup = _no_extension_header_group,
 ) -> RustPolicySelectionPlan:
     """Plan the narrow stable-Rust selection family from finalized backend facts."""
-
-    # The benchmark subsystem owns policy identity.  Keep this import local so
-    # the Rust backend depends only on its small typed identity projection.
-    from tslc.benchmark.identity import specialization_key
 
     planned_profiles: list[RustPolicySelectionProfile] = []
     for profile in sorted(profiles, key=lambda item: item.profile.name):
@@ -213,6 +219,9 @@ def plan_rust_policy_selection(
                     profile=profile,
                     specialization=spec,
                     primitive_specializations=specializations,
+                    header_group=extension_header_group(
+                        profile.extensions.get(spec.extension_name)
+                    ),
                 )
                 candidate_ids = ("default", *spec.variant_names)
                 reason = rust_policy_selection_reason(
@@ -321,10 +330,15 @@ def validate_rust_policy_selection_plan(
     profiles: tuple[EmittedProfile, ...],
     plan: RustPolicySelectionPlan,
     manifest: RustPolicyManifest,
+    extension_header_group: ExtensionHeaderGroup = _no_extension_header_group,
 ) -> None:
     """Reject a stale, partial, or foreign mapping before Rust source rendering."""
 
-    expected = plan_rust_policy_selection(profiles, manifest)
+    expected = plan_rust_policy_selection(
+        profiles,
+        manifest,
+        extension_header_group,
+    )
     expected_by_name = {
         profile.profile_name: profile for profile in expected.profiles
     }
@@ -465,10 +479,9 @@ def rust_policy_selection_reason(
 def validate_rust_policy_manifest_profiles(
     profiles: tuple[EmittedProfile, ...],
     manifest: RustPolicyManifest,
+    extension_header_group: ExtensionHeaderGroup = _no_extension_header_group,
 ) -> tuple[Diagnostic, ...]:
     """Diagnose pilots that do not match one full-corpus lowered slot."""
-
-    from tslc.benchmark.identity import specialization_key
 
     counts = {pilot.pilot_id: 0 for pilot in manifest.selection_pilots}
     for profile in profiles:
@@ -481,6 +494,9 @@ def validate_rust_policy_manifest_profiles(
                     profile=profile,
                     specialization=spec,
                     primitive_specializations=specializations,
+                    header_group=extension_header_group(
+                        profile.extensions.get(spec.extension_name)
+                    ),
                 )
                 candidates = ("default", *spec.variant_names)
                 for pilot in manifest.matching_pilots(key, spec, candidates):

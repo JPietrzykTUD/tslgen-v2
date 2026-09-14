@@ -71,6 +71,52 @@ class OperandRole(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class PrimitiveProviderRequirement:
+    """Language-neutral shape required from one source primitive provider."""
+
+    operation: PrimitiveOperation
+    result_kind: str
+    parameter_kinds: tuple[str, ...]
+    operand_roles: tuple[OperandRole, ...]
+    required_attributes: tuple[tuple[str, str], ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.result_kind:
+            raise ValueError("primitive provider result kind must not be empty")
+        if len(self.operand_roles) != len(self.parameter_kinds):
+            raise ValueError(
+                "primitive provider operand roles must match parameter arity"
+            )
+        if any(not kind for kind in self.parameter_kinds):
+            raise ValueError("primitive provider parameter kinds must not be empty")
+        if any(not key or not value for key, value in self.required_attributes):
+            raise ValueError("primitive provider attributes must not be empty")
+        if len({key for key, _value in self.required_attributes}) != len(
+            self.required_attributes
+        ):
+            raise ValueError("primitive provider attributes must have unique names")
+        if self.required_attributes != tuple(sorted(self.required_attributes)):
+            raise ValueError("primitive provider attributes must be sorted")
+
+    @property
+    def signature_shape(self) -> str:
+        parameters = ",".join(self.parameter_kinds)
+        return f"{self.result_kind}:=({parameters})"
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedPrimitiveProvider:
+    """A semantic requirement bound to its source-owned primitive name."""
+
+    requirement: PrimitiveProviderRequirement
+    primitive_name: str
+
+    def __post_init__(self) -> None:
+        if not self.primitive_name:
+            raise ValueError("resolved primitive provider name must not be empty")
+
+
+@dataclass(frozen=True, slots=True)
 class OperandBinding:
     role: OperandRole
     parameter_name: str
@@ -95,6 +141,62 @@ class PrimitiveSemanticContract:
             (binding for binding in self.operand_bindings if binding.role is role),
             None,
         )
+
+
+MASK_TO_INTEGRAL_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.MASK_TO_INTEGRAL,
+    "im",
+    ("m",),
+    (OperandRole.PRIMARY,),
+)
+MASK_FROM_INTEGRAL_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.MASK_FROM_INTEGRAL,
+    "m",
+    ("im",),
+    (OperandRole.VALUE,),
+)
+COMPARE_EQUAL_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.COMPARE_EQUAL,
+    "m",
+    ("v", "v"),
+    (OperandRole.PRIMARY, OperandRole.SECONDARY),
+)
+MASK_AND_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.MASK_AND,
+    "m",
+    ("m", "m"),
+    (OperandRole.PRIMARY, OperandRole.SECONDARY),
+)
+MASK_ALL_FALSE_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.MASK_ALL_FALSE,
+    "m",
+    (),
+    (),
+)
+MASK_POPULATION_COUNT_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.MASK_POPULATION_COUNT,
+    "usize",
+    ("m",),
+    (OperandRole.PRIMARY,),
+)
+MASK_SET_LANE_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.MASK_SET_LANE,
+    "m",
+    ("m", "usize", "usize"),
+    (OperandRole.PRIMARY, OperandRole.INDEX, OperandRole.VALUE),
+)
+RUNTIME_LANE_EXTRACT_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.EXTRACT_LANE,
+    "s",
+    ("v", "usize"),
+    (OperandRole.PRIMARY, OperandRole.INDEX),
+)
+VECTOR_ZERO_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.VECTOR_ZERO,
+    "v",
+    (),
+    (),
+)
 
 
 PRIMITIVE_OPERATION_DESCRIPTIONS: Mapping[PrimitiveOperation, str] = MappingProxyType(
@@ -205,12 +307,23 @@ def operand_role_values() -> tuple[str, ...]:
 
 
 __all__ = (
+    "COMPARE_EQUAL_REQUIREMENT",
+    "MASK_ALL_FALSE_REQUIREMENT",
+    "MASK_AND_REQUIREMENT",
+    "MASK_FROM_INTEGRAL_REQUIREMENT",
+    "MASK_POPULATION_COUNT_REQUIREMENT",
+    "MASK_SET_LANE_REQUIREMENT",
+    "MASK_TO_INTEGRAL_REQUIREMENT",
     "OPERAND_ROLE_DESCRIPTIONS",
     "PRIMITIVE_OPERATION_DESCRIPTIONS",
     "OperandBinding",
     "OperandRole",
     "PrimitiveOperation",
+    "PrimitiveProviderRequirement",
     "PrimitiveSemanticContract",
+    "ResolvedPrimitiveProvider",
+    "RUNTIME_LANE_EXTRACT_REQUIREMENT",
+    "VECTOR_ZERO_REQUIREMENT",
     "operand_role_values",
     "primitive_operation_values",
 )

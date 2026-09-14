@@ -36,7 +36,8 @@ from tslc.catalog.preconditions import (
     PRECONDITION_DESCRIPTORS,
     PreconditionErrorKind,
 )
-from tslc.catalog.semantics import OperandBinding
+from tslc.catalog.semantics import OperandBinding, PrimitiveProviderRequirement
+from tslc.diagnostics import Diagnostic
 from tslc.maintenance import _repo_context
 from tslc.maintenance._catalog import load_repository_catalog
 from tslc.maintenance._repo_context import RepoContext
@@ -259,7 +260,9 @@ def _checked_algorithm_contracts() -> list[dict[str, object]]:
     ]
 
 
-def _checked_precondition_contracts() -> list[dict[str, object]]:
+def _checked_precondition_contracts(
+    catalog: Catalog,
+) -> list[dict[str, object]]:
     """Freeze every compiler-owned fact that defines one checked condition."""
 
     return [
@@ -292,10 +295,12 @@ def _checked_precondition_contracts() -> list[dict[str, object]]:
                 descriptor.checkable_arithmetic_binding_kinds
             ),
             "check_primitives": [
-                primitive.value for primitive in descriptor.check_primitives
+                _resolved_provider_name(catalog, requirement)
+                for requirement in descriptor.check_primitives
             ],
             "masked_check_primitives": [
-                primitive.value for primitive in descriptor.masked_check_primitives
+                _resolved_provider_name(catalog, requirement)
+                for requirement in descriptor.masked_check_primitives
             ],
             "compatible_memory_accesses": sorted(
                 access.value for access in descriptor.compatible_memory_accesses
@@ -310,6 +315,16 @@ def _checked_precondition_contracts() -> list[dict[str, object]]:
             key=lambda item: item.kind.value,
         )
     ]
+
+
+def _resolved_provider_name(
+    catalog: Catalog,
+    requirement: PrimitiveProviderRequirement,
+) -> str:
+    provider = catalog.resolve_primitive_provider(requirement)
+    if isinstance(provider, Diagnostic):
+        raise ValueError(provider.message)
+    return provider.name
 
 
 def _checked_error_contract() -> dict[str, object]:
@@ -451,7 +466,7 @@ def build_public_api_baseline(context: RepoContext) -> dict[str, object]:
             for identity in RUST_ROOT_PUBLIC_IDENTITIES
         ],
         "primitive_callable_families": primitives,
-        "checked_precondition_contracts": _checked_precondition_contracts(),
+        "checked_precondition_contracts": _checked_precondition_contracts(catalog),
         "checked_error_contract": _checked_error_contract(),
         "algorithm_callable_families": sorted(ALGORITHM_PUBLIC_FAMILIES),
         "checked_algorithm_contracts": _checked_algorithm_contracts(),

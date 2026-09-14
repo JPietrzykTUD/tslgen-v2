@@ -1013,8 +1013,8 @@ prim<v:=(v,v)> div(dividend, divisor):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              result[i] = helper<arith_div>(dividend[i], divisor[i]);
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              result[value(i)] = helper<arith_div>(dividend[value(i)], divisor[value(i)]);
             }
             complete(result);
           """
@@ -2525,8 +2525,8 @@ prim<v:=(v,v)> mod(dividend, divisor):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              result[i] = helper<arith_rem>(dividend[i], divisor[i]);
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              result[value(i)] = helper<arith_rem>(dividend[value(i)], divisor[value(i)]);
             }
             complete(result);
           """
@@ -2553,8 +2553,8 @@ prim<v:=(v,v)> mod(dividend, divisor):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              result[i] = helper<arith_rem>(dividend[i], divisor[i]);
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              result[value(i)] = helper<arith_rem>(dividend[value(i)], divisor[value(i)]);
             }
             complete(result);
           """

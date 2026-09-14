@@ -5,7 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from tslc.backend import translation_common as common
-from tslc.backend.translation import PointerCastOperand
+from tslc.backend.translation import (
+    DEFAULT_BACKEND_LOWERING_POLICY,
+    BackendLoweringPolicy,
+    PointerCastOperand,
+)
 from tslc.backend.target_capability import (
     rust_arch_module,
     rust_extension_tag,
@@ -425,6 +429,7 @@ def _has_top_level_comma(text: str) -> bool:
 class RustBackendDialect:
     catalog: Catalog
     backend_id: str = field(default="rust", init=False)
+    lowering_policy: BackendLoweringPolicy = DEFAULT_BACKEND_LOWERING_POLICY
     types: _RustTypes = field(init=False)
     intrinsics: _RustIntrinsics = field(init=False)
     templates: _RustTemplates = field(init=False)

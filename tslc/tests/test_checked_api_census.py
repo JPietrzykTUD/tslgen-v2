@@ -56,7 +56,7 @@ def test_census_matches_reviewed_baseline_and_report() -> None:
     assert render_markdown(census, context) == canonical_report_path(context).read_text(
         encoding="utf-8"
     )
-    assert len(census.runtime_sites) == 156
+    assert len(census.runtime_sites) == 153
     assert len(census.caller_unsafe_paths) == 33
     assert sum(gap.caller_unsafe_required for gap in census.metadata_gaps) == 26
 

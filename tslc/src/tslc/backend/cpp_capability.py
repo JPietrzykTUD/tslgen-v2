@@ -9,6 +9,7 @@ from tslc.backend.capability import (
     BackendDocumentationFormatter,
     BackendPolicyInputs,
     DocumentationSiteInput,
+    ExtensionHeaderGroupProjector,
     GeneratedDocumentationBuilder,
     GeneratedDocumentationSpec,
     GeneratedFormatSpec,
@@ -80,9 +81,14 @@ def cpp_benchmark_plan(
     profiles: tuple[EmittedProfile, ...],
     value_tests: ValueTestProjectPlan,
     policy_inputs: BackendPolicyInputs,
+    extension_header_group: ExtensionHeaderGroupProjector,
 ) -> BenchmarkProjectPlan:
     del policy_inputs
-    return BenchmarkPlanner(catalog, backend_id="cpp").plan(profiles, value_tests)
+    return BenchmarkPlanner(
+        catalog,
+        backend_id="cpp",
+        extension_header_group=extension_header_group,
+    ).plan(profiles, value_tests)
 
 
 def cpp_benchmark_project_artifacts(
@@ -141,6 +147,7 @@ CPP_BACKEND = BackendCapability(
     backend_id="cpp",
     root_path="cpp",
     artifact_media_type="text/x-c++",
+    preview_file_suffix="hpp",
     dialect_factory=create_cpp_dialect,
     artifact_renderer=cpp_backend_artifacts,
     verify_profiles=cpp_profile_verification,

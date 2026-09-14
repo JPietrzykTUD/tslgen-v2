@@ -3,18 +3,8 @@
 from __future__ import annotations
 
 from tslc.backend.rust_translation import rust_raw_identifier
-from tslc.render._common import slug
-from tslc.value_tests.case_helpers import sanitize
 from tslc.value_tests.literals import cpp_literal_list, rust_literal_list
-from tslc.value_tests.model import ValueTestCasePlan, ValueTestProfilePlan
-
-def compile_failure_target_name(
-    profile: ValueTestProfilePlan,
-    case: ValueTestCasePlan,
-) -> str:
-    if case.kind != "compile_failure":
-        raise ValueError("compile-failure target naming requires a compile_failure case")
-    return f"tsl_compile_failure_{slug(profile.profile_name)}_{sanitize(case.function_name)}"
+from tslc.value_tests.model import ValueTestCasePlan
 
 
 def render_cpp_compile_failure(case: ValueTestCasePlan) -> str:
@@ -145,7 +135,6 @@ def _rust_immediate_args(lines: list[str], case: ValueTestCasePlan) -> list[str]
 
 
 __all__ = (
-    "compile_failure_target_name",
     "render_cpp_compile_failure",
     "render_rust_compile_failure",
 )

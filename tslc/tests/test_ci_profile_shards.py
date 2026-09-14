@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-_RUST_COEXISTENCE_NAME = "rust-x86-coexistence"
+_RUST_COEXISTENCE_NAME = "rust-release-coexistence"
 _RELEASE_POLICY_PATH = Path("supplementary/release/tsl-v1-policy.json")
 _RELEASE_POLICY = json.loads(_RELEASE_POLICY_PATH.read_text(encoding="utf-8"))
 _RUST_COEXISTENCE_PROFILES = tuple(
@@ -308,6 +308,10 @@ def test_package_and_docs_generate_contract_owned_reference_and_bundles() -> Non
     assert "./dev.sh document" not in package_workflow
     assert "python -m tslc.maintenance.documentation" in package_workflow
     assert "tsl-generated-reference-${{ github.sha }}" in package_workflow
+    docs_extract_step = package_workflow.split("      - name: Extract generated package\n", 1)[
+        1
+    ].split("\n      - name:", 1)[0]
+    assert "--strip-components=1" in docs_extract_step
 
     consumer_verifier = Path(
         "supplementary/ci/verify_generated_consumers.sh"

@@ -8,6 +8,7 @@ from pathlib import Path
 from threading import Lock
 from typing import Literal
 
+from tslc.lsp.backend_selection import select_authoring_backend
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import (
     Catalog,
@@ -120,6 +121,7 @@ class PrimitiveExplorer:
     mode: ExplorerMode
     profile: str
     backend: str
+    preview_file_suffix: str
     profiles: tuple[str, ...]
     backends: tuple[str, ...]
     stale: bool
@@ -154,6 +156,7 @@ class PrimitiveExplorerCache:
         mode: ExplorerMode,
         profile: str,
         backend: str,
+        preview_file_suffix: str,
         path: Path | None,
         selected_primitive: str | None,
         stale: bool,
@@ -168,15 +171,16 @@ class PrimitiveExplorerCache:
             names = {primitive.name for primitive in self._primitives}
             selected = selected_primitive if selected_primitive in names else None
             return PrimitiveExplorer(
-                mode,
-                profile,
-                backend,
-                tuple(sorted(profiles)),
-                tuple(sorted(backends)),
-                stale,
-                self._primitives,
-                selected,
-                self._slots_by_name.get(selected or "", ()),
+                mode=mode,
+                profile=profile,
+                backend=backend,
+                preview_file_suffix=preview_file_suffix,
+                profiles=tuple(sorted(profiles)),
+                backends=tuple(sorted(backends)),
+                stale=stale,
+                primitives=self._primitives,
+                selected_primitive=selected,
+                slots=self._slots_by_name.get(selected or "", ()),
             )
 
     def _matches(
@@ -305,18 +309,20 @@ def primitive_explorer(
         if explorer_mode == "resolved"
         else ""
     )
-    backend_id = _selected_backend(backends, backend)
-    if (explorer_mode == "resolved" and not profile_name) or not backend_id:
+    selected_backend = select_authoring_backend(backends, backend)
+    backend_id = selected_backend.backend_id
+    if explorer_mode == "resolved" and not profile_name:
         return PrimitiveExplorer(
-            explorer_mode,
-            profile_name,
-            backend_id,
-            tuple(sorted(profiles)),
-            tuple(sorted(backends)),
-            stale,
-            (),
-            None,
-            (),
+            mode=explorer_mode,
+            profile=profile_name,
+            backend=backend_id,
+            preview_file_suffix=selected_backend.preview_file_suffix,
+            profiles=tuple(sorted(profiles)),
+            backends=tuple(sorted(backends)),
+            stale=stale,
+            primitives=(),
+            selected_primitive=None,
+            slots=(),
         )
 
     return (cache or PrimitiveExplorerCache()).project(
@@ -327,6 +333,7 @@ def primitive_explorer(
         mode=explorer_mode,
         profile=profile_name,
         backend=backend_id,
+        preview_file_suffix=selected_backend.preview_file_suffix,
         path=path.resolve() if path is not None else None,
         selected_primitive=selected_primitive,
         stale=stale,
@@ -862,14 +869,6 @@ def _selected_profile(
     if len(declared_fallbacks) == 1:
         return declared_fallbacks[0]
     return min(profiles, default="")
-
-
-def _selected_backend(backends: tuple[str, ...], requested: str | None) -> str:
-    if requested in backends:
-        return requested or ""
-    if "cpp" in backends:
-        return "cpp"
-    return min(backends, default="")
 
 
 def _span_key(span: SourceSpan) -> tuple[str, int, int, int, int]:

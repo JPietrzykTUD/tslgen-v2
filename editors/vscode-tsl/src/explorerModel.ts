@@ -78,6 +78,7 @@ export interface PrimitiveExplorerResponse {
   readonly mode: ExplorerMode;
   readonly profile: string;
   readonly backend: string;
+  readonly previewFileSuffix: string;
   readonly profiles: readonly string[];
   readonly backends: readonly string[];
   readonly generation: number;

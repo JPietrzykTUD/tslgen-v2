@@ -5,8 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
+from tslc.authoring_metadata import TextEdit, safety_metadata_suggestions
 from tslc.syntax.access import source_span
 from tslc.diagnostics import Diagnostic, SourceSpan
 from tslc.sources import SourceDocument
@@ -16,9 +17,6 @@ from tslc.syntax.ast import (
     ParsedTslField,
 )
 from tslc.syntax.authoring import AuthoringTextRange
-
-if TYPE_CHECKING:
-    from tslc.maintenance.metadata_audit import TextEdit
 
 ActionKind = Literal["quickfix", "help"]
 
@@ -84,11 +82,6 @@ def authoring_actions(
     document = SourceDocument(resolved, text, expected.digest, "tsl")
     actions: list[AuthoringAction] = []
     occupied_edits: set[tuple[int, int]] = set()
-
-    # The audit also supports selection/lowering workflows. Import its exact
-    # source-edit projection only when a code action is requested so ordinary
-    # language-server startup does not load that heavier maintenance boundary.
-    from tslc.maintenance.metadata_audit import safety_metadata_suggestions
 
     for suggestion in safety_metadata_suggestions(
         parsed, {resolved: document}, path=resolved

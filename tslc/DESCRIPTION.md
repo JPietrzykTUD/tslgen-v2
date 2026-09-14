@@ -65,6 +65,17 @@ drivers rather than maintaining parallel compiler knowledge.
 An omitted API/backend request resolves the live backend registry when the
 `GenerationRequest` is constructed; no import-time snapshot defines later
 requests. The project renderer consumes the request's explicit backend tuple.
+Optional backend project tables are parsed through registry-owned configuration
+specs into one immutable, typed `ProjectRenderConfig`; generic configuration and
+API surfaces do not acquire backend-specific fields.
+
+Authoring requests use one deterministic policy in
+[lsp/backend_selection.py](src/tslc/lsp/backend_selection.py): an explicitly
+requested configured backend wins, otherwise the first configured backend wins,
+and an unconfigured workspace uses the first registered capability. Capability
+registration order is therefore intentional. The selected capability supplies
+both the backend ID and its preview-file suffix to the protocol; editor clients
+do not infer either fact from C++ or Rust names.
 
 Compiler diagnostics carry one canonical, end-exclusive `SourceSpan`; producers
 must supply `span=` and may project its start only for point-oriented display
@@ -149,13 +160,17 @@ placement, never compiler semantics.
 catalog-backed primitive-shape discovery, default parameter-name selection,
 name validation, and source scaffolding; the client only presents choices and
 applies the returned edit. The TypeScript VS Code client contains no compiler
-semantics. Exact diagnostic and metadata-audit repairs are represented by the
-typed, editor-neutral records in
+semantics. Direct implementation-safety facts, selector-entry traversal, and
+exact source edits live in the compiler-owned
+[authoring_metadata.py](src/tslc/authoring_metadata.py); both maintenance audits
+and editor actions project those same immutable suggestions. Exact diagnostic
+and metadata repairs are represented by the typed, editor-neutral records in
 [authoring_fixes.py](src/tslc/authoring_fixes.py). They bind an edit to its
 diagnostic or suggestion identity, source path, document version and digest,
 replacement range, and expected original text. The LSP adapter revalidates the
 record and returns a versioned `WorkspaceEdit`; compiler and server code never
-write the document. Ambiguous diagnostics yield non-editing guide actions.
+write the document or import maintenance command implementations. Ambiguous
+diagnostics yield non-editing guide actions.
 [lsp/primitive_explorer.py](src/tslc/lsp/primitive_explorer.py)
 projects File/Corpus primitive lists in either authored-source or concrete
 profile mode. It owns authored, selected, profile-rejected, missing, and
@@ -289,6 +304,14 @@ prim<v:=(v,v)> add(left, right):
   to CMake modes, helper functions, and packaged assets before render-model
   construction; renderers never infer compiler selection from a compile-mode or
   profile-name literal.
+- **Rust compile-target priority**: a machine profile may declare a non-negative
+  `backend_selection_priority.rust` for deterministic selection between
+  incomparable feature sets. Strict feature supersets always precede subsets;
+  the reviewed priority is consulted only when neither feature set contains the
+  other. The Rust static-selection plan owns the resulting high-to-low order,
+  and every facade, manifest, dispatch, and benchmark-policy projection reuses
+  its mutually exclusive target predicates. Equal predicates remain an error
+  because ordering them would make one profile unreachable.
 - **Semantic overloads**: `overload_axes:` declares closed axes, values, and
   accepted operand signature kinds in source data. A primitive `overload`
   block selects one axis/value and may mark its source declaration primary.
@@ -330,7 +353,14 @@ prim<v:=(v,v)> add(left, right):
   the promoted contracts unchanged inside `LoweredSpecialization`; backend and
   downstream projections therefore receive typed facts without reconstructing
   them. Source data contains no Rust-specific spelling policy, and this stage
-  does not apply one.
+  does not apply one. Compiler-created calls identify their required provider
+  through a catalog-owned `PrimitiveProviderRequirement`: operation, parsed
+  result and parameter kinds, ordered operand roles, and any necessary mask or
+  attribute constraints. The catalog must resolve exactly one declaration;
+  missing and ambiguous providers are diagnostics, never name-based fallbacks.
+  The resolved source name is carried into lowering and dependency closure, so
+  renaming a semantically equivalent corpus primitive does not require changing
+  compiler-generated call logic.
 - **Explicit result vectors**: `return_type: vector: Name` refers to a declared
   `kind simd_type` generic and makes that complete caller-supplied vector the
   result owner without adding an implementation-selector axis. Lane-preserving
@@ -439,6 +469,17 @@ The [Selector](src/tslc/select/selector.py) enumerates the literal
 free-function primitive follows a separate path and returns the first usable
 declaration-owning extension slot in established profile order, because its
 rendered declaration has no SIMD axis.
+Candidate eligibility, applicable target/compiler requirements, exact ranking,
+capability-frontier winners, ambiguity diagnostics, and fixed-width fallback
+selection are one pure typed projection in
+[select/candidates.py](src/tslc/select/candidates.py). The `Selector` façade
+retains the public candidate-explanation entry point but does not implement the
+ranking algorithm.
+Literal extension/type/representation-target expansion, associated SIMD-base
+combinations and width constraints, and sized-vector lane monomorphization are
+deterministic functions in [select/slots.py](src/tslc/select/slots.py). They
+produce typed planning axes without choosing implementations or diagnosing
+selection outcomes; the façade owns those result and diagnostic decisions.
 
 The [Lowerer](src/tslc/lower/lowerer.py) orchestrates one
 `(primitive, extension, type, backend)` slot → a `LoweredSpecialization`
@@ -447,6 +488,14 @@ required target features). The frozen lowered records live in
 [lower/model.py](src/tslc/lower/model.py), cached catalog-derived facts in
 [lower/catalog_facts.py](src/tslc/lower/catalog_facts.py), and typed public
 parameter projection in [lower/param_types.py](src/tslc/lower/param_types.py).
+The focused
+[ImplementationBodyLowerer](src/tslc/lower/implementation_bodies.py) scans and
+lowers the default and variant bodies, accumulating body safety, implementation
+state, diagnostics, and typed call-dependency origins without assembling the
+final specialization. The pure
+[specialization assembler](src/tslc/lower/specialization_assembly.py) derives
+SIMD type-parameter bounds, validates symbolic dependencies, and constructs the
+frozen `LoweredSpecialization` from resolved signature/ABI and body facts.
 Region handlers
 ([lower/region_handlers/](src/tslc/lower/region_handlers/)) translate each
 keyword; a query evaluator ([lower/queries.py](src/tslc/lower/queries.py))
@@ -489,6 +538,13 @@ unsafe-ness, required target features, and implementation-state joins through
 the live call graph
 ([_pipeline_closure.py](src/tslc/_pipeline_closure.py),
 `_propagate_transitive_call_facts`).
+One stateful
+[ProfileGenerator](src/tslc/_pipeline_profile_generation.py) owns that complete
+per-profile worklist, active-backend filtering, harness expansion, cache use,
+pruning, coverage/skips, trace contributions, and emitted profile. The retained
+`_GenerationSession` coordinates request validation, profile results, backend
+validation, test/benchmark planning, rendering, and the final result; internal
+performance tooling continues to observe its shared lowering cache.
 
 After closure, constructing an
 [backend/emitted_profile.py](src/tslc/backend/emitted_profile.py) profile uses
@@ -512,12 +568,24 @@ load/store foundation.
 
 Backends differ idiomatically (a `BackendDialect`,
 [backend/translation.py](src/tslc/backend/translation.py), abstracts type
-spellings, intrinsic composition, call syntax, and unsafe framing). The
+spellings, intrinsic composition, call syntax, unsafe framing, and a small
+immutable lowering policy. That policy owns whether checked failure paths need
+vector/mask placeholder primitives and whether an opted-in compiler-vector
+implementation may bridge to an exact-width native ABI; common lowering never
+recognizes a backend ID or corpus primitive name to make either choice. These
+policies hold semantic provider requirements; catalog resolution supplies the
+names used by fixed-native bridges, checked guards, checked failure values, and
+their dependency edges. The
 [backend registry](src/tslc/backend/registry.py) owns each backend's dialect
-factory, artifact media type, complete artifact renderer, documentation
-formatter, validation, helper manifest, value-test support, optional benchmark
-planner, verification adapter, and post-generation formatting/documentation
-specs. C++ and Rust machine-profile verification projections live in
+factory, artifact media type and preview-file suffix, complete artifact
+renderer, documentation formatter, validation, helper manifest, value-test
+support, optional benchmark planner, optional project-configuration parser,
+verification adapter, and post-generation formatting/documentation specs.
+Backend capabilities bind their own extension-header projection and other
+backend-specific rendering adapters when they construct shared planners; shared
+benchmark, value-test, and policy-planning modules do not import the registry or
+concrete backends to rediscover those facts. C++ and Rust machine-profile
+verification projections live in
 [backend/cpp_verification.py](src/tslc/backend/cpp_verification.py) and
 [backend/rust_verification.py](src/tslc/backend/rust_verification.py);
 render modules only format their already-decided project models. Signature type
@@ -553,6 +621,17 @@ count. Neutral lowering never constructs a C++ or Rust lane-count expression.
   [backend/rust_direct_calls.py](src/tslc/backend/rust_direct_calls.py), and
   [backend/rust_documentation_api.py](src/tslc/backend/rust_documentation_api.py)
   own signature projection, direct-call rendering, and documentation API text.
+  Checked primitive precondition methods and wrapper bodies are rendered from
+  typed lowered and checked-plan facts by
+  [backend/rust_checked_primitives.py](src/tslc/backend/rust_checked_primitives.py);
+  typed ordinary/checked wrapper declarations are finalized separately in
+  [backend/rust_primitive_declarations.py](src/tslc/backend/rust_primitive_declarations.py).
+  The stateful
+  [backend/rust_primitive_implementations.py](src/tslc/backend/rust_primitive_implementations.py)
+  renderer owns overloaded internal traits, concrete impls, policy mappings,
+  direct implementation calls, and target-feature body wrapping. Ordinary
+  public wrapper bodies are the focused pure projection in
+  [backend/rust_primitive_wrappers.py](src/tslc/backend/rust_primitive_wrappers.py).
   Generated rustdoc uses a `cfg(doc)` profile-neutral facade containing one
   public signature per emitted Rust primitive; concrete profile availability
   stays in the specialization explorer, while normal builds select their
@@ -692,12 +771,16 @@ The focused renderer in
 shape records into sealed, opaque `Simd<T, N>` and `Mask<T, N>` values. A
 compile target selects one exact private hardware representation or the
 source-backed generic representation; no profile or extension is a Cargo
-feature. Complete release metadata is carried through the backend-neutral
-`ProjectRenderConfig` into the Rust package renderer, so templates format
-configured Cargo facts rather than owning repository release policy. The Cargo
-manifest uses an explicit source/test/benchmark include set: generated docs,
-research history, scratch trees, and unrelated checkout files cannot enter the
-published crate merely because documentation was built in place.
+feature. The backend-neutral `ProjectRenderConfig` is an immutable keyed
+container of backend-owned typed render inputs; it contains no Rust fields or
+raw configuration dictionaries. Rust retrieves its `RustPackageConfig` input,
+which its registered parser creates from `[tslc.rust_package]`, or applies its
+own default before invoking the package renderer. Templates therefore format
+configured Cargo facts rather than owning repository release policy.
+The Cargo manifest uses an explicit source/test/benchmark include set:
+generated docs, research history, scratch trees, and unrelated checkout files
+cannot enter the published crate merely because documentation was built in
+place.
 
 Generated documentation is assembled by
 [maintenance/documentation.py](src/tslc/maintenance/documentation.py). Doxygen
@@ -707,9 +790,20 @@ typed public type and algorithm manifests, primitive prose, unique callable
 identities, and ordinary twins for checked callables. Rustdoc treats the opaque
 root facade and selected `profile` API as the stable documented boundary; its
 public low-level substrate remains available for generated signatures but is
-hidden from the stable overview. Shared examples and the Sphinx contract page
+hidden from the stable overview. The source-controlled compiler manual under
+[docs/](docs/) is staged into the same Sphinx build and uses autodoc only for
+the explicit four-function [`tslc.api`](src/tslc/api.py) facade; importable
+internal modules are not promoted into a supported Python surface. Shared
+examples and the Sphinx contract page
 explain unchecked preconditions, checked errors, and residual language-level
-obligations. The repository maintenance projections
+obligations. When specialization data is present, its filterable explorer is
+the generated site's landing page and receives navigation links only for the
+API references and compiler manual built into that site; the former
+`specializations/` URL remains a compatibility redirect. The same compact
+navigation is added through
+Sphinx's layout template and rustdoc's supported HTML/CSS hooks, so every API
+landing page links back without post-processing either renderer's output. The
+repository maintenance projections
 [maintenance/public_api_baseline.py](src/tslc/maintenance/public_api_baseline.py)
 and [maintenance/checked_api_census.py](src/tslc/maintenance/checked_api_census.py)
 ratchet the typed v1 callable-family contract and exact checked coverage
@@ -724,7 +818,7 @@ the manifest consume the same records. A non-stable module/type may provide the
 default classification for otherwise-unrecorded descendants, while every
 stable exception remains an exact record. Rust reachability records include the
 typed target architecture,
-features, stronger-profile exclusions, and fallback selection. No compiler or
+features, higher-priority exclusions, and fallback selection. No compiler or
 maintenance path parses or hashes generated target text to reconstruct this
 contract. The schema-v3 release baseline ratchets the reviewed scalar/AVX2
 records in addition to the per-project scope-exact manifests.
@@ -786,8 +880,13 @@ The optional [benchmark/](src/tslc/benchmark/) stage consumes finalized
 backend specializations and authored value-test facts through one
 backend-parameterized typed planner. It plans every explicitly coexisting named
 variant in the emitted primitive/dependency closure and emits structured skip
-coverage for unsupported signature shapes. C++ renders those facts as a
-standalone native benchmark/policy tool. Rust admits scenario coverage through
+coverage for unsupported signature shapes. An optional backend-owned slot
+identity projector adds policy-ratchet identity without making the shared
+planner recognize that backend; Rust supplies the current projector while C++
+retains its existing empty coverage identity. The capability also injects the
+extension-header-group projection, and benchmark identities receive its decided
+value rather than querying global backend registration. C++ renders those facts
+as a standalone native benchmark/policy tool. Rust admits scenario coverage through
 explicit named `profile × scenario-family` pairs while deriving profile family,
 features, spellings, modes, and flags from the live machine profile. It renders
 the `sse2` register, whole-register cross-lane, and immediate families plus
@@ -857,8 +956,10 @@ invocation consumes that precomputed file; no convenience command hides or
 cycles the two phases. The
 generated benchmark Cargo profile is pinned to the compiler-owned settings. A
 frozen semantic consumption plan joins benchmark evidence to the selection
-seam; one render projection derives the Cargo and artifact names shared by
-project and benchmark rendering. Missing benchmark evidence therefore leaves
+seam; the Rust capability injects a narrow policy-mapping renderer factory, and
+one render projection derives the Cargo and artifact names shared by project
+and benchmark rendering. Policy planning consequently has no runtime dependency
+on the concrete Rust renderer. Missing benchmark evidence therefore leaves
 an ordinary default-only build instead of a dangling policy module. The build
 script materializes one complete mapping under `OUT_DIR` for
 both authored-default and policy-selected builds, and the library includes that
@@ -964,9 +1065,12 @@ verification, so the attestation identifies the bytes that were compiled.
   The opt-in exact target-support trace in
   [target_support.py](src/tslc/target_support.py) is different: selection owns
   its complete declaration/type/target universe, including slots with no
-  candidate, and the pipeline advances each selected realization through
-  `selected`, `lowered`, `pruned`, `policy_deferred`, or `emitted`. Emitted
-  realizations retain the propagated implementation state. The release-only
+  candidate, while the stateful
+  [TargetSupportRecorder](src/tslc/_pipeline_target_support.py) owns identities,
+  transition invariants, ordering, and advancement through `selected`,
+  `lowered`, `pruned`, `policy_deferred`, or `emitted`. It allocates no trace
+  maps when the projection is disabled. Emitted realizations retain the
+  propagated implementation state. The release-only
   [target_support_ratchet.py](src/tslc/maintenance/target_support_ratchet.py)
   filters those facts through the typed v1 support contract and serializes the
   exact SVE/SVE128/SVE256/SVE512/RVV baseline; it never selects or infers a

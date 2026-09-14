@@ -22,7 +22,7 @@
     "optimized_inline_call": "immediately consumed vector result did not materialize on the stack"
   },
   "validation_limits": {
-    "all_profile_rust_render": "not a valid census input: the current all-profile Rust request reports TSL-BACKEND-RUST-AMBIGUOUS-TARGET-PROFILES before artifact rendering",
+    "all_profile_rust_render": "not a valid census input: the current all-profile Rust request reports TSL-BACKEND-RUST-DUPLICATE-TARGET-PROFILES for equal normal/OneAPI target predicates before artifact rendering",
     "census_strategy": "scan canonical source bodies, render assets, and emitters; obtain public caller-safety identities from the validated typed catalog"
   },
   "families": [
@@ -788,22 +788,6 @@
       "family": "tooling_only"
     },
     {
-      "id": "tslc/src/tslc/backend/assets/tsl_core_detail_scalar.hpp|require_same_lanes|throw|8a50669413a63275|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_core_detail_scalar.hpp",
-      "owner": "require_same_lanes",
-      "kind": "throw",
-      "excerpt": "throw std::invalid_argument( \"lane-preserving conversion requires equal source and target lane counts\" );",
-      "family": "static_representation_or_lane_shape"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_core_detail_scalar.hpp|require_same_lanes|trap|b375913dce9106f7|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_core_detail_scalar.hpp",
-      "owner": "require_same_lanes",
-      "kind": "trap",
-      "excerpt": "__builtin_trap();",
-      "family": "static_representation_or_lane_shape"
-    },
-    {
       "id": "tslc/src/tslc/backend/assets/tsl_core_io.rs|ostream_write|unwrap|cd6918d80f05076c|0",
       "path": "tslc/src/tslc/backend/assets/tsl_core_io.rs",
       "owner": "ostream_write",
@@ -825,14 +809,6 @@
       "owner": "reinterpret_unchecked",
       "kind": "assert_eq",
       "excerpt": "assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());",
-      "family": "static_representation_or_lane_shape"
-    },
-    {
-      "id": "tslc/src/tslc/backend/assets/tsl_core_scalar.rs|require_same_lanes|assert_eq|e6c81f2c22bfe916|0",
-      "path": "tslc/src/tslc/backend/assets/tsl_core_scalar.rs",
-      "owner": "require_same_lanes",
-      "kind": "assert_eq",
-      "excerpt": "assert_eq!( source_lanes, target_lanes, \"lane-preserving conversion requires equal source and target lane counts\" );",
       "family": "static_representation_or_lane_shape"
     },
     {

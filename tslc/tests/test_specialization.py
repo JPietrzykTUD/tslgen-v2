@@ -527,22 +527,13 @@ def test_cpp_algorithm_mask_layout_uses_typed_vector_metadata(
     assert "std::is_integral<typename Vec::mask_type>" not in detail
 
 
-def test_cpp_static_lane_mismatch_traps_on_non_unwinding_targets(
+def test_cpp_core_has_no_inline_runtime_precondition_failures(
     specialization_artifacts: dict[str, str]
 ) -> None:
     core = specialization_artifacts["cpp/include/tsl_core_detail_scalar.hpp"]
 
-    assert "defined(__SYCL_DEVICE_ONLY__) || defined(__wasm__)" in core
-    assert "!defined(__cpp_exceptions) && !defined(_CPPUNWIND)" in core
-    assert (
-        "if (source_lanes != target_lanes) {\n"
-            "#if defined(__SYCL_DEVICE_ONLY__) || defined(__wasm__) || defined(__wasm32__) || \\\n"
-            "    defined(__wasm64__) || \\\n"
-            "    (!defined(__cpp_exceptions) && !defined(_CPPUNWIND))\n"
-        "        __builtin_trap();"
-        in core
-    )
-    assert '__builtin_trap();\n#else\n        throw std::invalid_argument(' in core
+    assert "require_same_lanes" not in core
+    assert "source_lanes != target_lanes" not in core
     assert "arith_zero_divisor_fail" not in core
     assert "TSL_ARITH_INTEGER_ZERO_DIVISOR" not in core
 

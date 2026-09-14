@@ -20,8 +20,17 @@ description: Add a backend or backend capability to tslc. Use when asked to intr
    diagnostics, and header groups belong to one immutable backend registry row;
    source data names only the semantic capability. Keep default backend choice
    explicit in requests/configuration and do not scatter hardcoded backend ID
-   lists or import-time registry snapshots.
-4. Add typed translation/render values before templates. Templates may format decided values only.
+   lists or import-time registry snapshots. Declare a nonempty preview-file
+   suffix on the capability and treat registration order as the default ordering
+   for unconfigured authoring requests. Configure the dialect's immutable
+   lowering policy when checked failure values need helper primitives or the
+   backend can bridge opted-in compiler-vector bodies to exact-width native
+   implementations; do not add backend-name tests to common lowering.
+4. Add typed translation/render values before templates. If the backend needs
+   project configuration, register its table parser on the backend capability
+   and place only the resulting backend-owned typed value in
+   `ProjectRenderConfig`; do not add backend fields or raw dictionaries to the
+   generic project configuration/API. Templates may format decided values only.
 5. Place packaged backend static files, templates, and helpers under
    `tslc/src/tslc/backend/assets/`. Keep generated-documentation inputs under
    `supplementary/docs/` and machine-profile configuration under
@@ -32,8 +41,13 @@ description: Add a backend or backend capability to tslc. Use when asked to intr
 6. Diagnose unsupported capability combinations before rendering or artifact writing.
 7. Add focused tests for registration, capability validation, signature/query
    projection, rendering, compiler assets, deterministic artifacts, and verifier
-   configuration. Use a fake third backend to prove generic pipeline, doctor,
-   authoring, and verification consumers dispatch through capabilities.
+   configuration. Inject any backend-specific benchmark coverage identity when
+   constructing that backend's typed planner, along with its extension-header
+   projection and any narrow backend render adapter required by shared policy
+   planning; shared benchmark and policy planners must not import the registry,
+   construct a concrete backend, or recognize backend names. Use a fake third
+   backend to prove generic pipeline, doctor, authoring, and verification
+   consumers dispatch through capabilities.
 
 ## Checks
 

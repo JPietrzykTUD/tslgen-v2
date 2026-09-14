@@ -733,10 +733,10 @@ def _rust_profile_selection_reachability(
         "target-features:" + ",".join(requirement.target_features),
         *(
             "excludes:"
-            + stronger.target_arch
+            + higher_priority.target_arch
             + ":"
-            + ",".join(stronger.target_features)
-            for stronger in selection.stronger_requirements
+            + ",".join(higher_priority.target_features)
+            for higher_priority in selection.higher_priority_requirements
         ),
     )
 

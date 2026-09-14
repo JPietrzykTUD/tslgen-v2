@@ -228,6 +228,7 @@ def test_shared_identity_helper_preserves_frozen_backend_keys(
             profile=profile,
             specialization=specialization,
             primitive_specializations=profile.specializations(backend_id)["mul"],
+            header_group=candidate_set.key.header_group,
         )
 
         assert rebuilt == candidate_set.key
@@ -537,3 +538,44 @@ def test_unregistered_backend_can_reuse_planner_without_name_dispatch(
         "default",
         "generic_fallback",
     ]
+    assert all(entry.slot_hash == "" for entry in first.coverage)
+
+    grouped_key = specialization_key(
+        backend_id="future",
+        profile=fake_profile,
+        specialization=candidate_set.specialization,
+        primitive_specializations=fake_profile.specializations("future")["mul"],
+        header_group="future_group",
+    )
+    assert grouped_key.header_group == "future_group"
+    assert specialization_stable_id(grouped_key) != candidate_set.stable_id
+
+    grouped = BenchmarkPlanner(
+        catalog,
+        backend_id="future",
+        extension_header_group=(
+            lambda extension: "future_group" if extension is not None else None
+        ),
+    ).plan((fake_profile,), fake_value_tests)
+    assert not any(entry.status == "emitted" for entry in grouped.coverage)
+    assert {
+        entry.reason
+        for entry in grouped.coverage
+        if entry.primitive_name == "mul"
+    } == {
+        "opt-in header-group extensions are not supported by benchmark planning"
+    }
+
+    identified = BenchmarkPlanner(
+        catalog,
+        backend_id="future",
+        slot_identity=lambda profile_name, spec: (
+            f"future:{profile_name}:{spec.primitive_name}"
+        ),
+    ).plan((fake_profile,), fake_value_tests)
+    assert identified.coverage
+    assert all(
+        entry.slot_hash
+        == f"future:{entry.profile_name}:{entry.primitive_name}"
+        for entry in identified.coverage
+    )

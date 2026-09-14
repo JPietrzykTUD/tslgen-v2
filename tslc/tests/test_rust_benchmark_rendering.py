@@ -16,6 +16,7 @@ import pytest
 
 from tslc.api import generate_project, write_artifacts
 from tslc.backend.rust_benchmark_context import RUST_BENCHMARK_CODEGEN_CONTRACT
+from tslc.backend.rust_capability import rust_policy_mapping_renderer
 from tslc.backend.rust_policy_consumption import (
     plan_rust_policy_consumption,
     plan_rust_policy_coverage,
@@ -219,7 +220,11 @@ def test_rust_immediate_reports_bind_const_calls_and_policy_reason(
         rust_immediate_benchmark_result.emitted_profiles,
         RUST_POLICY_MANIFEST,
     )
-    policy = plan_rust_policy_coverage(plan, selection).profile("sse2")
+    policy = plan_rust_policy_coverage(
+        plan,
+        selection,
+        mapping_renderer=rust_policy_mapping_renderer,
+    ).profile("sse2")
     assert policy is not None
     assert len(policy.decisions) == 6
     assert {decision.status for decision in policy.decisions} == {"report_only"}
@@ -312,7 +317,11 @@ def test_rust_avx2_reduction_reports_are_exact_and_report_only(
         rust_avx2_reduction_benchmark_result.emitted_profiles,
         RUST_POLICY_MANIFEST,
     )
-    policy = plan_rust_policy_coverage(plan, selection).profile("avx2")
+    policy = plan_rust_policy_coverage(
+        plan,
+        selection,
+        mapping_renderer=rust_policy_mapping_renderer,
+    ).profile("avx2")
     assert policy is not None
     assert len(policy.decisions) == 40
     assert {decision.status for decision in policy.decisions} == {"report_only"}
@@ -357,6 +366,7 @@ def test_rust_benchmark_artifacts_are_opt_in_and_deterministic(
         plan_rust_policy_consumption(
             rust_benchmark_result.rendered.benchmarks,
             selection,
+            mapping_renderer=rust_policy_mapping_renderer,
         ),
         plan_rust_static_selection(rust_benchmark_result.emitted_profiles),
     )
@@ -443,6 +453,7 @@ def test_rust_default_call_uses_actual_selection_membership(
             plan_rust_policy_consumption(
                 rust_benchmark_result.rendered.benchmarks,
                 demoted,
+                mapping_renderer=rust_policy_mapping_renderer,
             ),
             plan_rust_static_selection(rust_benchmark_result.emitted_profiles),
         ),

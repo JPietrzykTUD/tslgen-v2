@@ -23,14 +23,23 @@ from tslc.catalog.overloads import (
 )
 from tslc.catalog.preconditions import PrimitivePrecondition
 from tslc.catalog.register_shapes import RegisterMultiplicity
-from tslc.catalog.semantics import PrimitiveSemanticContract
+from tslc.catalog.semantics import (
+    PrimitiveProviderRequirement,
+    PrimitiveSemanticContract,
+)
 from tslc.catalog.shift import PrimitiveShiftContract
 from tslc.catalog.signature_kinds import PointerMutability
+from tslc.catalog.signatures import parse_signature
 from tslc.catalog.target_families import (
     ExtensionFamilyCapability,
     TargetFamilyCatalog,
 )
-from tslc.diagnostics import SourceSpan
+from tslc.diagnostics import (
+    Diagnostic,
+    RelatedLocation,
+    SourceSpan,
+    diagnostic_at,
+)
 
 _K = TypeVar("_K")
 _V = TypeVar("_V")
@@ -1021,6 +1030,49 @@ class Catalog:
             return primitive
         return None
 
+    def resolve_primitive_provider(
+        self,
+        requirement: PrimitiveProviderRequirement,
+        *,
+        source: SourceSpan | None = None,
+    ) -> Primitive | Diagnostic:
+        """Resolve exactly one source primitive by semantic operation and shape."""
+
+        matches = tuple(
+            primitive
+            for primitive in self.primitives
+            if _matches_provider_requirement(primitive, requirement)
+        )
+        if len(matches) == 1:
+            return matches[0]
+
+        requirement_text = _provider_requirement_text(requirement)
+        if not matches:
+            return diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-MISSING-PRIMITIVE-PROVIDER",
+                message=f"no source primitive provides {requirement_text}",
+                source=source,
+                help=(
+                    "Declare exactly one primitive with this operation, signature "
+                    "shape, operand-role order, and required attributes."
+                ),
+            )
+
+        candidates = tuple(sorted(matches, key=_provider_candidate_key))
+        labels = ", ".join(_provider_candidate_label(item) for item in candidates)
+        return diagnostic_at(
+            severity="error",
+            code="TSL-CATALOG-AMBIGUOUS-PRIMITIVE-PROVIDER",
+            message=f"multiple source primitives provide {requirement_text}: {labels}",
+            source=source,
+            related=_provider_related_locations(candidates),
+            help=(
+                "Make the semantic provider shape unique; tslc does not choose a "
+                "provider by primitive name or source order."
+            ),
+        )
+
     def resolve_primitive_overload(
         self,
         primitive: Primitive,
@@ -1091,6 +1143,89 @@ class Catalog:
         """Fewer members = more specific (used as the primary selection key)."""
 
         return len(self.type_group_members(type_group))
+
+
+def _matches_provider_requirement(
+    primitive: Primitive,
+    requirement: PrimitiveProviderRequirement,
+) -> bool:
+    operation = primitive.operation
+    if operation is None or operation.kind is not requirement.operation:
+        return False
+    shape = parse_signature(primitive.signature)
+    if shape is None or (
+        shape.result_kind,
+        shape.param_kinds,
+    ) != (
+        requirement.result_kind,
+        requirement.parameter_kinds,
+    ):
+        return False
+    bindings = tuple(
+        sorted(operation.operand_bindings, key=lambda binding: binding.parameter_index)
+    )
+    if tuple(range(len(bindings))) != tuple(
+        binding.parameter_index for binding in bindings
+    ):
+        return False
+    if tuple(binding.role for binding in bindings) != requirement.operand_roles:
+        return False
+    if tuple(binding.parameter_kind for binding in bindings) != requirement.parameter_kinds:
+        return False
+    return all(
+        primitive.attributes.get(key) == value
+        for key, value in requirement.required_attributes
+    )
+
+
+def _provider_requirement_text(requirement: PrimitiveProviderRequirement) -> str:
+    roles = ", ".join(role.value for role in requirement.operand_roles)
+    attributes = "".join(
+        f" [{key}={value}]" for key, value in requirement.required_attributes
+    )
+    return (
+        f"operation {requirement.operation.value!r} with signature shape "
+        f"{requirement.signature_shape!r}, operand roles [{roles}]{attributes}"
+    )
+
+
+def _provider_candidate_label(primitive: Primitive) -> str:
+    attributes = "".join(
+        f"[{key}={value}]" for key, value in sorted(primitive.attributes.items())
+    )
+    return f"{primitive.name}<{primitive.signature}>{attributes}"
+
+
+def _provider_candidate_key(
+    primitive: Primitive,
+) -> tuple[str, str, tuple[tuple[str, str], ...], str, int, int]:
+    source = primitive.header_source or primitive.source
+    return (
+        primitive.name,
+        primitive.signature,
+        tuple(sorted(primitive.attributes.items())),
+        "" if source is None else source.path.as_posix(),
+        0 if source is None else source.line,
+        0 if source is None else source.column,
+    )
+
+
+def _provider_related_locations(
+    candidates: tuple[Primitive, ...],
+) -> tuple[RelatedLocation, ...]:
+    related: list[RelatedLocation] = []
+    for candidate in candidates:
+        source = candidate.header_source or candidate.source
+        if source is not None:
+            related.append(
+                RelatedLocation(
+                    message=(
+                        f"provider candidate {_provider_candidate_label(candidate)}"
+                    ),
+                    span=source,
+                )
+            )
+    return tuple(related)
 
 
 def _freeze_mapping(mapping: Mapping[_K, _V]) -> Mapping[_K, _V]:

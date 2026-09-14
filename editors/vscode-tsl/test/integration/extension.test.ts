@@ -215,7 +215,7 @@ suite("TSL extension", () => {
     await configuration.update("preview.profile", "avx2", true);
     await configuration.update("preview.extension", "avx2", true);
     await configuration.update("preview.type", "si32", true);
-    await configuration.update("preview.backend", "cpp", true);
+    await configuration.update("preview.backend", "", true);
     assert.ok(
       (await waitForHover(uri, new vscode.Position(line, character))).length > 0,
     );
@@ -223,6 +223,28 @@ suite("TSL extension", () => {
     const checkEditor = vscode.window.activeTextEditor;
     assert.equal(checkEditor?.document.uri.scheme, "tsl-preview");
     assert.match(checkEditor.document.getText(), /ok: checked \d+ lowered slot/);
+    assert.match(
+      decodeURIComponent(checkEditor.document.uri.path),
+      /avx2\/avx2\/cpp/,
+    );
+
+    await configuration.update("preview.backend", "rust", true);
+    const rustCheckSourceEditor = await vscode.window.showTextDocument(document);
+    rustCheckSourceEditor.selection = new vscode.Selection(
+      line,
+      character,
+      line,
+      character + "add".length,
+    );
+    await vscode.commands.executeCommand<void>("tsl.checkSlot");
+    const rustCheckEditor = vscode.window.activeTextEditor;
+    assert.equal(rustCheckEditor?.document.uri.scheme, "tsl-preview");
+    assert.match(
+      decodeURIComponent(rustCheckEditor.document.uri.path),
+      /avx2\/avx2\/rust/,
+    );
+
+    await configuration.update("preview.backend", "cpp", true);
 
     const reopenedSourceEditor = await vscode.window.showTextDocument(document);
     reopenedSourceEditor.selection = new vscode.Selection(

@@ -20,7 +20,19 @@ from tslc.catalog.memory import (
     MemoryAccess,
     MemoryAddressing,
 )
-from tslc.catalog.semantics import OperandBinding, OperandRole, PrimitiveOperation
+from tslc.catalog.semantics import (
+    COMPARE_EQUAL_REQUIREMENT,
+    MASK_ALL_FALSE_REQUIREMENT,
+    MASK_AND_REQUIREMENT,
+    MASK_POPULATION_COUNT_REQUIREMENT,
+    MASK_SET_LANE_REQUIREMENT,
+    RUNTIME_LANE_EXTRACT_REQUIREMENT,
+    VECTOR_ZERO_REQUIREMENT,
+    OperandBinding,
+    OperandRole,
+    PrimitiveOperation,
+    PrimitiveProviderRequirement,
+)
 from tslc.diagnostics import SourceSpan
 
 
@@ -56,18 +68,6 @@ class PreconditionErrorKind(StrEnum):
     LANE_COUNT_MISMATCH = "lane_count_mismatch"
 
 
-class PreconditionCheckPrimitive(StrEnum):
-    """Canonical primitive dependencies used by generated checks."""
-
-    EQUAL = "equal"
-    MASK_AND = "mask_binary_and"
-    MASK_FALSE = "mask_false"
-    MASK_POPULATION_COUNT = "mask_population_count"
-    MASK_SET_LANE = "set_mask_lane"
-    VECTOR_EXTRACT_LANE = "extract_value_at"
-    ZERO_VECTOR = "set_zero"
-
-
 @dataclass(frozen=True, slots=True)
 class PreconditionDescriptor:
     """Compiler-owned meaning of one closed precondition spelling."""
@@ -84,8 +84,8 @@ class PreconditionDescriptor:
     compatible_arithmetic_operations: frozenset[ArithmeticOperation] = frozenset()
     numeric_domain: ArithmeticNumericDomain | None = None
     checkable_arithmetic_binding_kinds: frozenset[str] = frozenset()
-    check_primitives: tuple[PreconditionCheckPrimitive, ...] = ()
-    masked_check_primitives: tuple[PreconditionCheckPrimitive, ...] = ()
+    check_primitives: tuple[PrimitiveProviderRequirement, ...] = ()
+    masked_check_primitives: tuple[PrimitiveProviderRequirement, ...] = ()
     compatible_memory_accesses: frozenset[MemoryAccess] = frozenset()
     compatible_memory_addressings: frozenset[MemoryAddressing] = frozenset()
     compatible_conversion_lane_counts: frozenset[LaneCountRelation] = frozenset()
@@ -189,11 +189,11 @@ PRECONDITION_DESCRIPTORS: Mapping[
             numeric_domain=ArithmeticNumericDomain.INTEGER,
             checkable_arithmetic_binding_kinds=frozenset({"v"}),
             check_primitives=(
-                PreconditionCheckPrimitive.ZERO_VECTOR,
-                PreconditionCheckPrimitive.EQUAL,
-                PreconditionCheckPrimitive.MASK_POPULATION_COUNT,
+                VECTOR_ZERO_REQUIREMENT,
+                COMPARE_EQUAL_REQUIREMENT,
+                MASK_POPULATION_COUNT_REQUIREMENT,
             ),
-            masked_check_primitives=(PreconditionCheckPrimitive.MASK_AND,),
+            masked_check_primitives=(MASK_AND_REQUIREMENT,),
             hazard=PreconditionHazard.CATASTROPHIC,
             error=PreconditionErrorKind.ZERO_DIVISOR,
             unchecked_consequence=(
@@ -270,12 +270,12 @@ PRECONDITION_DESCRIPTORS: Mapping[
                 {MemoryAccess.READ, MemoryAccess.WRITE}
             ),
             compatible_memory_addressings=frozenset({MemoryAddressing.INDEXED}),
-            check_primitives=(PreconditionCheckPrimitive.VECTOR_EXTRACT_LANE,),
+            check_primitives=(RUNTIME_LANE_EXTRACT_REQUIREMENT,),
             masked_check_primitives=(
-                PreconditionCheckPrimitive.MASK_FALSE,
-                PreconditionCheckPrimitive.MASK_SET_LANE,
-                PreconditionCheckPrimitive.MASK_AND,
-                PreconditionCheckPrimitive.MASK_POPULATION_COUNT,
+                MASK_ALL_FALSE_REQUIREMENT,
+                MASK_SET_LANE_REQUIREMENT,
+                MASK_AND_REQUIREMENT,
+                MASK_POPULATION_COUNT_REQUIREMENT,
             ),
             hazard=PreconditionHazard.CATASTROPHIC,
             error=PreconditionErrorKind.INDEX_OUT_OF_BOUNDS,
@@ -302,7 +302,7 @@ PRECONDITION_DESCRIPTORS: Mapping[
                 {MemoryAccess.READ, MemoryAccess.WRITE}
             ),
             compatible_memory_addressings=frozenset({MemoryAddressing.COMPACTED}),
-            check_primitives=(PreconditionCheckPrimitive.MASK_POPULATION_COUNT,),
+            check_primitives=(MASK_POPULATION_COUNT_REQUIREMENT,),
             hazard=PreconditionHazard.CATASTROPHIC,
             error=PreconditionErrorKind.INSUFFICIENT_EXTENT,
             unchecked_consequence=(
@@ -351,7 +351,6 @@ def precondition_applies_to_type(
 __all__ = (
     "PRECONDITION_DESCRIPTORS",
     "PreconditionDescriptor",
-    "PreconditionCheckPrimitive",
     "PreconditionErrorKind",
     "PreconditionHazard",
     "PreconditionKind",

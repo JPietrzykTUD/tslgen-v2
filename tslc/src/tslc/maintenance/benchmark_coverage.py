@@ -19,6 +19,10 @@ from pathlib import Path
 from tslc.api import _ARITH_TYPE_TAGS, generate_project
 from tslc.authoring import check_catalog
 from tslc.backend.emitted_profile import EmittedProfile
+from tslc.backend.rust_capability import (
+    RUST_BACKEND,
+    rust_policy_mapping_renderer,
+)
 from tslc.backend.rust_policy_consumption import (
     RustPolicyCoveragePlan,
     plan_rust_policy_coverage,
@@ -181,7 +185,9 @@ def compute_benchmark_coverage_audit(
                 plan_rust_policy_selection(
                     merged_emitted_profiles,
                     load_rust_policy_manifest(),
+                    RUST_BACKEND.extension_header_group,
                 ),
+                mapping_renderer=rust_policy_mapping_renderer,
             )
         except ValueError as exc:
             return None, (f"Rust policy coverage planning failed: {exc}",)

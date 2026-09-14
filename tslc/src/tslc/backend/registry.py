@@ -58,7 +58,7 @@ def load_backend_policy_inputs(
 
 
 def registered_backend_ids() -> tuple[str, ...]:
-    return tuple(sorted(_BY_ID))
+    return tuple(capability.backend_id for capability in BACKEND_CAPABILITIES)
 
 
 def registered_compiler_capabilities() -> dict[str, frozenset[str]]:

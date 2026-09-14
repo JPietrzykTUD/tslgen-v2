@@ -102,22 +102,39 @@ class RustStaticVectorMapping:
 
 @dataclass(frozen=True, slots=True)
 class RustStaticProfileSelection:
-    """One emitted profile selected by target cfg, excluding stronger profiles."""
+    """One emitted profile selected by target cfg in reviewed priority order."""
 
     profile_name: str
     requirement: RustTargetRequirement
-    stronger_requirements: tuple[RustTargetRequirement, ...]
+    higher_priority_requirements: tuple[RustTargetRequirement, ...]
     mappings: tuple[RustStaticVectorMapping, ...]
     native_mappings: tuple[RustStaticVectorMapping, ...]
+    selection_priority: int | None = None
 
     def __post_init__(self) -> None:
         if not self.profile_name:
             raise ValueError("Rust static profile selections require a profile name")
         if any(
-            not requirement.strictly_contains(self.requirement)
-            for requirement in self.stronger_requirements
+            requirement.target_arch != self.requirement.target_arch
+            or requirement == self.requirement
+            for requirement in self.higher_priority_requirements
         ):
-            raise ValueError("Rust static selection exclusions must be stronger targets")
+            raise ValueError(
+                "Rust static selection exclusions must be distinct same-architecture "
+                "targets"
+            )
+        if len(set(self.higher_priority_requirements)) != len(
+            self.higher_priority_requirements
+        ):
+            raise ValueError("Rust static selection exclusions must be unique")
+        if self.selection_priority is not None and (
+            isinstance(self.selection_priority, bool)
+            or not isinstance(self.selection_priority, int)
+            or self.selection_priority < 0
+        ):
+            raise ValueError(
+                "Rust static selection priority must be a non-negative integer"
+            )
         keys = tuple((item.type_tag, item.lanes) for item in self.mappings)
         if len(set(keys)) != len(keys):
             raise ValueError("Rust static profile mappings must be unique")
@@ -185,6 +202,50 @@ class RustStaticSelectionPlan:
         names = tuple(profile.profile_name for profile in self.profiles)
         if len(set(names)) != len(names):
             raise ValueError("Rust static profile names must be unique")
+        prior_by_arch: dict[str, list[RustStaticProfileSelection]] = defaultdict(list)
+        priorities_by_arch: dict[str, set[int]] = defaultdict(set)
+        for profile in self.profiles:
+            arch = profile.requirement.target_arch
+            prior = prior_by_arch[arch]
+            if profile.higher_priority_requirements != tuple(
+                item.requirement for item in prior
+            ):
+                raise ValueError(
+                    "Rust static selection exclusions must exactly match preceding "
+                    "profiles for the target architecture"
+                )
+            priority = profile.selection_priority
+            if priority is not None:
+                if priority in priorities_by_arch[arch]:
+                    raise ValueError(
+                        "Rust static selection priorities must be unique within "
+                        "a target architecture"
+                    )
+                priorities_by_arch[arch].add(priority)
+            for higher_priority in prior:
+                if profile.requirement == higher_priority.requirement:
+                    raise ValueError(
+                        "Rust static selection requirements must be unique"
+                    )
+                if profile.requirement.strictly_contains(
+                    higher_priority.requirement
+                ):
+                    raise ValueError(
+                        "Rust static feature supersets must precede their subsets"
+                    )
+                if not higher_priority.requirement.strictly_contains(
+                    profile.requirement
+                ):
+                    if (
+                        priority is None
+                        or higher_priority.selection_priority is None
+                        or higher_priority.selection_priority <= priority
+                    ):
+                        raise ValueError(
+                            "Rust static incomparable requirements must follow "
+                            "descending explicit priority"
+                        )
+            prior.append(profile)
         fallback_keys = tuple(
             (item.type_tag, item.lanes) for item in self.fallback_mappings
         )
@@ -212,6 +273,14 @@ class RustStaticSelectionError(ValueError):
     def __init__(self, diagnostics: tuple[Diagnostic, ...]) -> None:
         self.diagnostics = diagnostics
         super().__init__("; ".join(item.message for item in diagnostics))
+
+
+@dataclass(frozen=True, slots=True)
+class _RustStaticCandidate:
+    emitted_profile: EmittedProfile
+    requirement: RustTargetRequirement
+    selection_priority: int | None
+    mappings: tuple[RustStaticVectorMapping, ...]
 
 
 def plan_rust_static_selection(
@@ -256,9 +325,7 @@ def _plan_rust_static_selection(
     fallback_mappings = _fallback_mappings(type_facts, admitted_widths)
     fallback_module, fallback_diagnostics = _fallback_module(profiles)
     diagnostics.extend(fallback_diagnostics)
-    candidates: list[
-        tuple[EmittedProfile, RustTargetRequirement, tuple[RustStaticVectorMapping, ...]]
-    ] = []
+    candidates: list[_RustStaticCandidate] = []
 
     for emitted_profile in sorted(profiles, key=lambda item: item.profile.name):
         hardware_extensions = _hardware_extensions(emitted_profile)
@@ -369,74 +436,180 @@ def _plan_rust_static_selection(
             frozenset(extension.name for extension in hardware_extensions),
         )
         diagnostics.extend(mapping_diagnostics)
-        candidates.append((emitted_profile, requirement, mappings))
+        candidates.append(
+            _RustStaticCandidate(
+                emitted_profile=emitted_profile,
+                requirement=requirement,
+                selection_priority=(
+                    emitted_profile.profile.selection_priority_for_backend("rust")
+                ),
+                mappings=mappings,
+            )
+        )
 
-    by_arch: dict[
-        str,
-        list[tuple[EmittedProfile, RustTargetRequirement, tuple[RustStaticVectorMapping, ...]]],
-    ] = defaultdict(list)
+    by_arch: dict[str, list[_RustStaticCandidate]] = defaultdict(list)
     for candidate in candidates:
-        by_arch[candidate[1].target_arch].append(candidate)
+        by_arch[candidate.requirement.target_arch].append(candidate)
+    ordered_candidates: list[_RustStaticCandidate] = []
     for arch, arch_candidates in sorted(by_arch.items()):
-        for index, left in enumerate(arch_candidates):
-            for right in arch_candidates[index + 1 :]:
-                left_features = set(left[1].target_features)
-                right_features = set(right[1].target_features)
-                if left_features < right_features or right_features < left_features:
-                    continue
-                diagnostics.append(
-                    diagnostic_at(
-                        severity="error",
-                        code="TSL-BACKEND-RUST-AMBIGUOUS-TARGET-PROFILES",
-                        message=(
-                            f"Rust profiles {left[0].profile.name!r} and "
-                            f"{right[0].profile.name!r} have overlapping, unordered "
-                            f"compile-target requirements for {arch!r}"
-                        ),
-                        source=(
-                            left[0].profile_family.source
-                            if left[0].profile_family is not None
-                            else None
-                        ),
-                    )
-                )
+        ordered, ordering_diagnostics = _order_arch_candidates(
+            arch,
+            tuple(arch_candidates),
+        )
+        ordered_candidates.extend(ordered)
+        diagnostics.extend(ordering_diagnostics)
 
     ordered_diagnostics = sort_diagnostics(diagnostics)
     if ordered_diagnostics:
         return None, ordered_diagnostics
 
-    selections = tuple(
-        RustStaticProfileSelection(
-            profile_name=emitted_profile.profile.name,
-            requirement=requirement,
-            stronger_requirements=tuple(
-                sorted(
-                    (
-                        other_requirement
-                        for _other_profile, other_requirement, _mappings in candidates
-                        if other_requirement.strictly_contains(requirement)
-                    ),
-                    key=lambda item: (item.target_arch, item.target_features),
-                )
-            ),
-            mappings=mappings,
-            native_mappings=_native_profile_mappings(emitted_profile, mappings),
+    selections: list[RustStaticProfileSelection] = []
+    prior_requirements: dict[str, list[RustTargetRequirement]] = defaultdict(list)
+    for candidate in ordered_candidates:
+        emitted_profile = candidate.emitted_profile
+        selections.append(
+            RustStaticProfileSelection(
+                profile_name=emitted_profile.profile.name,
+                requirement=candidate.requirement,
+                selection_priority=candidate.selection_priority,
+                higher_priority_requirements=tuple(
+                    prior_requirements[candidate.requirement.target_arch]
+                ),
+                mappings=candidate.mappings,
+                native_mappings=_native_profile_mappings(
+                    emitted_profile,
+                    candidate.mappings,
+                ),
+            )
         )
-        for emitted_profile, requirement, mappings in sorted(
-            candidates,
-            key=lambda item: (
-                item[1].target_arch,
-                len(item[1].target_features),
-                item[1].target_features,
-                item[0].profile.name,
-            ),
+        prior_requirements[candidate.requirement.target_arch].append(
+            candidate.requirement
         )
-    )
     return RustStaticSelectionPlan(
-        selections,
+        tuple(selections),
         fallback_mappings,
         fallback_module,
     ), ()
+
+
+def _order_arch_candidates(
+    target_arch: str,
+    candidates: tuple[_RustStaticCandidate, ...],
+) -> tuple[tuple[_RustStaticCandidate, ...], tuple[Diagnostic, ...]]:
+    """Order one architecture without making profile names selection policy."""
+
+    diagnostics: list[Diagnostic] = []
+    ordered_by_name = tuple(
+        sorted(candidates, key=lambda item: item.emitted_profile.profile.name)
+    )
+    for index, left in enumerate(ordered_by_name):
+        for right in ordered_by_name[index + 1 :]:
+            if left.requirement != right.requirement:
+                continue
+            diagnostics.append(
+                _candidate_diagnostic(
+                    left,
+                    code="TSL-BACKEND-RUST-DUPLICATE-TARGET-PROFILES",
+                    message=(
+                        f"Rust profiles {left.emitted_profile.profile.name!r} and "
+                        f"{right.emitted_profile.profile.name!r} have identical "
+                        f"compile-target requirements for {target_arch!r}; place "
+                        "them in separate gated generation scopes"
+                    ),
+                )
+            )
+    if diagnostics:
+        return (), sort_diagnostics(diagnostics)
+
+    priorities: dict[int, _RustStaticCandidate] = {}
+    for candidate in ordered_by_name:
+        priority = candidate.selection_priority
+        if priority is None:
+            continue
+        previous = priorities.setdefault(priority, candidate)
+        if previous is candidate:
+            continue
+        diagnostics.append(
+            _candidate_diagnostic(
+                candidate,
+                code="TSL-BACKEND-RUST-DUPLICATE-SELECTION-PRIORITY",
+                message=(
+                    f"Rust profiles {previous.emitted_profile.profile.name!r} and "
+                    f"{candidate.emitted_profile.profile.name!r} use duplicate "
+                    f"selection priority {priority} for {target_arch!r}"
+                ),
+            )
+        )
+
+    for index, left in enumerate(ordered_by_name):
+        for right in ordered_by_name[index + 1 :]:
+            if left.requirement.strictly_contains(
+                right.requirement
+            ) or right.requirement.strictly_contains(left.requirement):
+                continue
+            if left.selection_priority is None or right.selection_priority is None:
+                missing = tuple(
+                    candidate
+                    for candidate in (left, right)
+                    if candidate.selection_priority is None
+                )
+                diagnostics.append(
+                    _candidate_diagnostic(
+                        missing[0],
+                        code="TSL-BACKEND-RUST-MISSING-SELECTION-PRIORITY",
+                        message=(
+                            f"Rust profiles {left.emitted_profile.profile.name!r} and "
+                            f"{right.emitted_profile.profile.name!r} have incomparable "
+                            f"compile-target requirements for {target_arch!r}; declare "
+                            "backend_selection_priority.rust for "
+                            + ", ".join(
+                                repr(candidate.emitted_profile.profile.name)
+                                for candidate in missing
+                            )
+                        ),
+                    )
+                )
+
+    if diagnostics:
+        return (), sort_diagnostics(diagnostics)
+
+    remaining = list(ordered_by_name)
+    ordered: list[_RustStaticCandidate] = []
+    while remaining:
+        maximal = tuple(
+            candidate
+            for candidate in remaining
+            if not any(
+                other.requirement.strictly_contains(candidate.requirement)
+                for other in remaining
+            )
+        )
+        selected = max(
+            maximal,
+            key=lambda item: (
+                item.selection_priority
+                if item.selection_priority is not None
+                else -1
+            ),
+        )
+        ordered.append(selected)
+        remaining.remove(selected)
+    return tuple(ordered), ()
+
+
+def _candidate_diagnostic(
+    candidate: _RustStaticCandidate,
+    *,
+    code: str,
+    message: str,
+) -> Diagnostic:
+    profile_family = candidate.emitted_profile.profile_family
+    return diagnostic_at(
+        severity="error",
+        code=code,
+        message=message,
+        source=profile_family.source if profile_family is not None else None,
+    )
 
 
 def _native_profile_mappings(

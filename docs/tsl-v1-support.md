@@ -56,12 +56,25 @@ exclusions below remain authoritative for those cases.
 | `cpp` | `all_supported` | `tigerlake` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
 | `cpp` | `all_supported` | `zen4` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
 | `cpp` | `all_supported` | `zen5` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `rust` | `explicit` | `neon` | `aarch64` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `rust` | `explicit` | `scalar` | `generic` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `rust` | `explicit` | `wasm32-simd128` | `wasm32` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
 | `rust` | `explicit` | `avx` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
 | `rust` | `explicit` | `avx2` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `rust` | `explicit` | `cannonlake` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `rust` | `explicit` | `cascadelake` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `rust` | `explicit` | `cooperlake` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `rust` | `explicit` | `icelake_rockerlake` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `rust` | `explicit` | `kml` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
 | `rust` | `explicit` | `knl` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `rust` | `explicit` | `sapphire_emerald_granite_rapids` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `rust` | `explicit` | `skylake` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
 | `rust` | `explicit` | `sse` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
 | `rust` | `explicit` | `sse2` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
 | `rust` | `explicit` | `sse3` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `rust` | `explicit` | `tigerlake` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `rust` | `explicit` | `zen4` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `rust` | `explicit` | `zen5` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
 
 The Rust rows name emitted physical profiles. Every generated Rust package
 also contains the compiler-created generic fallback selected when no emitted
@@ -91,7 +104,7 @@ The exact callable-family records below are projected from
 `coverage/tsl-v1-public-api.json`; generated projects also carry their
 scope-exact backend declaration manifests.
 
-Public-API baseline SHA-256: `e42e58051f0bce23ece37b43f91d5b7e8bdfe6de68eec5918102eb4923a02bdf`.
+Public-API baseline SHA-256: `2bf7b00ca3fd31ea3abd27065ddcdbb09142e302d6a21db0d71f0e02a931f67d`.
 
 ### Primitive callable families
 

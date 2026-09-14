@@ -13,7 +13,7 @@ from tslc.backend.capability import (
     BackendPolicyInputs,
     EMPTY_BACKEND_POLICY_INPUTS,
 )
-from tslc.backend.registry import load_backend_policy_inputs
+from tslc.backend.registry import load_backend_policy_inputs, registered_backend_ids
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.model import Catalog
 from tslc.compiler_assets import (
@@ -82,6 +82,7 @@ def _load_inputs(request: _InputRequest) -> tuple[_PipelineInputs | None, list[D
     profile_result = load_machine_profiles_checked(
         request.machine_profiles_path,
         catalog.target_families,
+        known_backend_ids=frozenset(registered_backend_ids()),
     )
     diagnostics.extend(profile_result.diagnostics)
     if has_errors(diagnostics):

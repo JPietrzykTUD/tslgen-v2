@@ -14,7 +14,6 @@ from tslc.catalog.preconditions import (
     PreconditionErrorKind,
     PreconditionHazard,
     PreconditionKind,
-    PreconditionCheckPrimitive,
     precondition_applies_to_type,
 )
 from tslc.catalog.memory import (
@@ -24,7 +23,12 @@ from tslc.catalog.memory import (
     MemoryIndexedLaneExtent,
     MemoryPayloadExtent,
 )
-from tslc.catalog.semantics import OperandBinding, OperandRole
+from tslc.catalog.semantics import (
+    OperandBinding,
+    OperandRole,
+    PrimitiveProviderRequirement,
+    ResolvedPrimitiveProvider,
+)
 from tslc.lower.lowerer import LoweredSpecialization
 
 
@@ -59,7 +63,7 @@ class CheckedConditionPlan:
     parameter_index: int
     applicable_type_tags: tuple[str, ...]
     numeric_domain: ArithmeticNumericDomain | None = None
-    check_primitives: tuple[PreconditionCheckPrimitive, ...] = ()
+    check_primitives: tuple[ResolvedPrimitiveProvider, ...] = ()
     mask_parameter_name: str | None = None
     mask_parameter_index: int | None = None
     memory_access: MemoryAccess | None = None
@@ -73,6 +77,20 @@ class CheckedConditionPlan:
     @property
     def errors(self) -> tuple[PreconditionErrorKind, ...]:
         return (self.error, *self.additional_errors)
+
+    def provider_name(
+        self,
+        requirement: PrimitiveProviderRequirement,
+    ) -> str | None:
+        provider = next(
+            (
+                provider
+                for provider in self.check_primitives
+                if provider.requirement == requirement
+            ),
+            None,
+        )
+        return None if provider is None else provider.primitive_name
 
     def __post_init__(self) -> None:
         if not self.description.strip() or not self.unchecked_consequence.strip():
@@ -120,6 +138,11 @@ class CheckedConditionPlan:
             raise ValueError(
                 "checked condition applicable type tags must be unique and sorted"
             )
+        requirements = tuple(
+            provider.requirement for provider in self.check_primitives
+        )
+        if len(set(requirements)) != len(requirements):
+            raise ValueError("checked condition primitive providers must be unique")
         if (
             self.kind is PreconditionKind.SELECTED_MEMORY_ALIGNMENT
             and self.memory_alignment_axis_name is None
@@ -157,6 +180,8 @@ class CheckedConditionPlan:
 @dataclass(frozen=True, slots=True)
 class CheckedApiPlan:
     conditions: tuple[CheckedConditionPlan, ...]
+    primitive_providers: tuple[ResolvedPrimitiveProvider, ...] = ()
+    failure_provider: ResolvedPrimitiveProvider | None = None
 
     def __post_init__(self) -> None:
         if not self.conditions:
@@ -164,12 +189,31 @@ class CheckedApiPlan:
         kinds = tuple(condition.kind for condition in self.conditions)
         if len(set(kinds)) != len(kinds):
             raise ValueError("checked API plans require unique condition kinds")
+        requirements = tuple(
+            provider.requirement for provider in self.primitive_providers
+        )
+        if len(set(requirements)) != len(requirements):
+            raise ValueError("checked API primitive providers must be unique")
 
     def condition(self, kind: PreconditionKind) -> CheckedConditionPlan | None:
         return next(
             (condition for condition in self.conditions if condition.kind is kind),
             None,
         )
+
+    def provider_name(
+        self,
+        requirement: PrimitiveProviderRequirement,
+    ) -> str | None:
+        provider = next(
+            (
+                provider
+                for provider in self.primitive_providers
+                if provider.requirement == requirement
+            ),
+            None,
+        )
+        return None if provider is None else provider.primitive_name
 
 
 def checked_memory_condition(
@@ -218,6 +262,8 @@ def checked_api_plan(
     if any(spec.unresolved_call_preconditions for spec in specializations):
         return None
     first = specializations[0]
+    primitive_providers = _consistent_primitive_providers(specializations)
+    failure_provider = _consistent_failure_provider(specializations)
     declared = first.primitive_semantics.preconditions
     if not declared:
         return None
@@ -265,7 +311,7 @@ def checked_api_plan(
             continue
         mask_name: str | None = None
         mask_index: int | None = None
-        check_primitives = descriptor.check_primitives
+        check_requirements = descriptor.check_primitives
         if first.mask_policy is not None and descriptor.masked_check_primitives:
             mask_indexes = tuple(
                 index for index, kind in enumerate(first.param_kinds) if kind == "m"
@@ -274,7 +320,24 @@ def checked_api_plan(
                 raise ValueError("masked checked API requires one mask parameter")
             mask_index = mask_indexes[0]
             mask_name = first.param_names[mask_index]
-            check_primitives += descriptor.masked_check_primitives
+            check_requirements += descriptor.masked_check_primitives
+        applicable_type_tags = tuple(
+            sorted(
+                {
+                    spec.type_tag
+                    for spec in specializations
+                    for item in spec.primitive_semantics.preconditions
+                    if item.kind is precondition.kind
+                    and precondition_applies_to_type(item, spec.type_tag)
+                }
+            )
+        )
+        check_primitives: list[ResolvedPrimitiveProvider] = []
+        for requirement in check_requirements if applicable_type_tags else ():
+            provider = primitive_providers.get(requirement)
+            if provider is None:
+                return None
+            check_primitives.append(provider)
         binding: OperandBinding | ArithmeticOperandBinding | None
         if precondition.kind is PreconditionKind.LANE_INDEX_IN_RANGE:
             binding = precondition.binding(OperandRole.INDEX)
@@ -407,19 +470,9 @@ def checked_api_plan(
                 additional_errors=descriptor.additional_errors,
                 parameter_name=binding.parameter_name,
                 parameter_index=binding.parameter_index,
-                applicable_type_tags=tuple(
-                    sorted(
-                        {
-                            spec.type_tag
-                            for spec in specializations
-                            for item in spec.primitive_semantics.preconditions
-                            if item.kind is precondition.kind
-                            and precondition_applies_to_type(item, spec.type_tag)
-                        }
-                    )
-                ),
+                applicable_type_tags=applicable_type_tags,
                 numeric_domain=descriptor.numeric_domain,
-                check_primitives=check_primitives,
+                check_primitives=tuple(check_primitives),
                 mask_parameter_name=mask_name,
                 mask_parameter_index=mask_index,
                 memory_access=memory_access,
@@ -438,7 +491,46 @@ def checked_api_plan(
         and not _has_complete_memory_check(tuple(conditions), specializations)
     ):
         return None
-    return CheckedApiPlan(tuple(conditions))
+    return CheckedApiPlan(
+        tuple(conditions),
+        primitive_providers=tuple(primitive_providers.values()),
+        failure_provider=failure_provider,
+    )
+
+
+def _consistent_primitive_providers(
+    specializations: tuple[LoweredSpecialization, ...],
+) -> dict[PrimitiveProviderRequirement, ResolvedPrimitiveProvider]:
+    names: dict[PrimitiveProviderRequirement, set[str]] = {}
+    for spec in specializations:
+        for provider in spec.checked_primitive_providers:
+            names.setdefault(provider.requirement, set()).add(
+                provider.primitive_name
+            )
+    if any(len(values) != 1 for values in names.values()):
+        raise ValueError("checked API specializations disagree on primitive providers")
+    return {
+        requirement: ResolvedPrimitiveProvider(requirement, next(iter(values)))
+        for requirement, values in names.items()
+    }
+
+
+def _consistent_failure_provider(
+    specializations: tuple[LoweredSpecialization, ...],
+) -> ResolvedPrimitiveProvider | None:
+    providers = tuple(
+        spec.checked_failure_provider
+        for spec in specializations
+        if spec.checked_failure_provider is not None
+    )
+    if not providers:
+        return None
+    identities = {
+        (provider.requirement, provider.primitive_name) for provider in providers
+    }
+    if len(identities) != 1:
+        raise ValueError("checked API specializations disagree on failure provider")
+    return providers[0]
 
 
 def _has_complete_memory_check(
@@ -538,7 +630,15 @@ def applicable_checked_api_plan(
     conditions = tuple(
         condition for condition in plan.conditions if condition.applicable_type_tags
     )
-    return CheckedApiPlan(conditions) if conditions else None
+    return (
+        CheckedApiPlan(
+            conditions,
+            primitive_providers=plan.primitive_providers,
+            failure_provider=plan.failure_provider,
+        )
+        if conditions
+        else None
+    )
 
 
 def applicable_checked_condition(
