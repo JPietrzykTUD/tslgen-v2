@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+import tslc.semantic_authoring as semantic_authoring
 from tslc.authoring_completion_model import (
     AuthoringCompletion,
     AuthoringCompletionKind,
@@ -18,24 +19,6 @@ from tslc.backend.registry import (
     registered_backend_ids,
     registered_compiler_capabilities,
 )
-from tslc.catalog.arithmetic import (
-    arithmetic_guarantee_values,
-    arithmetic_operand_role_values,
-    arithmetic_operation_values,
-)
-from tslc.catalog.arithmetic_promotion import KNOWN_ARITHMETIC_FIELDS
-from tslc.catalog.conversion import (
-    conversion_kind_values,
-    lane_count_relation_values,
-    numeric_conversion_mode_values,
-)
-from tslc.catalog.conversion_promotion import KNOWN_CONVERSION_FIELDS
-from tslc.catalog.memory import (
-    memory_access_values,
-    memory_addressing_values,
-    memory_indexed_lane_extent_values,
-)
-from tslc.catalog.memory_promotion import KNOWN_MEMORY_FIELDS
 from tslc.catalog.model import (
     Catalog,
     IntrinsicNameOrder,
@@ -43,12 +26,8 @@ from tslc.catalog.model import (
     PrimitivePortability,
     RESULT_DIM_VECTOR,
 )
-from tslc.catalog.preconditions import precondition_values
 from tslc.catalog.register_shapes import REGISTER_MULTIPLICITY_COMPLETIONS
-from tslc.catalog.semantics import operand_role_values, primitive_operation_values
 from tslc.catalog.scalar_types import KNOWN_SCALAR_TYPE_TAGS
-from tslc.catalog.shift import shift_count_rule_values, shift_lane_rule_values
-from tslc.catalog.shift_promotion import KNOWN_SHIFT_FIELDS
 from tslc.catalog.signature_kinds import DEFAULT_SIGNATURE_KINDS
 from tslc.catalog.validation._schema_benchmarks import (
     KNOWN_BENCHMARK_FIELDS,
@@ -85,6 +64,7 @@ from tslc.catalog.validation._schema_primitives import (
     KNOWN_IMMEDIATE_PARAM_FIELDS,
     KNOWN_PRIMITIVE_FIELDS,
     KNOWN_PRIMITIVE_OVERLOAD_FIELDS,
+    KNOWN_PRIMITIVE_SEMANTIC_FIELDS,
     KNOWN_RETURN_TYPE_FIELDS,
 )
 from tslc.catalog.validation._schema_overloads import (
@@ -258,21 +238,25 @@ def _field_candidates(
     path = context.block_path
     backends = _backend_ids(catalog)
     if path == ("primitive",):
-        return KNOWN_PRIMITIVE_FIELDS, "field", "primitive field"
+        return (
+            (
+                *KNOWN_PRIMITIVE_FIELDS.difference(
+                    KNOWN_PRIMITIVE_SEMANTIC_FIELDS
+                ),
+                *semantic_authoring.semantic_child_fields(path),
+            ),
+            "field",
+            "primitive field",
+        )
     if path == ("primitive", "overload"):
         return KNOWN_PRIMITIVE_OVERLOAD_FIELDS, "field", "primitive overload field"
-    if path == ("primitive", "arithmetic"):
-        return KNOWN_ARITHMETIC_FIELDS, "field", "arithmetic contract field"
-    if path == ("primitive", "arithmetic", "operand_roles"):
-        return arithmetic_operand_role_values(), "field", "arithmetic operand role"
-    if path == ("primitive", "operand_roles"):
-        return operand_role_values(), "field", "primitive operand role"
-    if path == ("primitive", "memory"):
-        return KNOWN_MEMORY_FIELDS, "field", "memory contract field"
-    if path == ("primitive", "conversion"):
-        return KNOWN_CONVERSION_FIELDS, "field", "conversion contract field"
-    if path == ("primitive", "shift"):
-        return KNOWN_SHIFT_FIELDS, "field", "shift contract field"
+    semantic_fields = semantic_authoring.semantic_child_fields(path)
+    if semantic_fields:
+        return (
+            semantic_fields,
+            "field",
+            semantic_authoring.semantic_child_detail(path) or "semantic field",
+        )
     if path[:2] == ("primitive", "impls"):
         return _implementation_fields(context, catalog)
     if path[:2] == ("primitive", "generic_params"):
@@ -498,12 +482,17 @@ def _value_completions(
         return ()
     values: Iterable[str] = ()
     detail = f"value for {field}"
-    if (
-        context.block_path == ("primitive", "operand_roles")
-        and field in operand_role_values()
-    ):
-        values = context.primitive_parameters
-        detail = "primitive parameter"
+    semantic = semantic_authoring.semantic_value_projection(
+        context.block_path,
+        field,
+    )
+    if semantic is not None:
+        values = (
+            context.primitive_parameters
+            if semantic.dynamic_value_source == "primitive-parameters"
+            else semantic.completion_values()
+        )
+        detail = semantic.value_detail
     elif field in _BOOLEAN_FIELDS:
         values = KNOWN_BOOLEAN_VALUES
         detail = "boolean"
@@ -513,57 +502,9 @@ def _value_completions(
     ):
         values = tuple(item.value for item in IntrinsicNameOrder)
         detail = "intrinsic name order"
-    elif field == "operation" and context.block_path == ("primitive",):
-        values = primitive_operation_values()
-        detail = "primitive operation"
     elif field == "portability" and context.block_path == ("primitive",):
         values = tuple(item.value for item in PrimitivePortability)
         detail = "primitive portability"
-    elif field == "preconditions" and context.block_path == ("primitive",):
-        values = precondition_values()
-        detail = "primitive precondition"
-    elif field == "access" and context.block_path == ("primitive", "memory"):
-        values = memory_access_values()
-        detail = "memory access"
-    elif field == "addressing" and context.block_path == ("primitive", "memory"):
-        values = memory_addressing_values()
-        detail = "memory addressing"
-    elif field == "indexed_lanes" and context.block_path == ("primitive", "memory"):
-        values = memory_indexed_lane_extent_values()
-        detail = "indexed memory lane extent"
-    elif field == "kind" and context.block_path == ("primitive", "conversion"):
-        values = conversion_kind_values()
-        detail = "conversion kind"
-    elif field == "lane_count" and context.block_path == ("primitive", "conversion"):
-        values = lane_count_relation_values()
-        detail = "conversion lane-count relation"
-    elif field == "numeric_mode" and context.block_path == ("primitive", "conversion"):
-        values = numeric_conversion_mode_values()
-        detail = "numeric conversion mode"
-    elif field == "count_rule" and context.block_path == ("primitive", "shift"):
-        values = shift_count_rule_values()
-        detail = "shift count rule"
-    elif field == "lane_rule" and context.block_path == ("primitive", "shift"):
-        values = shift_lane_rule_values()
-        detail = "shift lane rule"
-    elif field == "scalar_count_types" and context.block_path == (
-        "primitive",
-        "shift",
-    ):
-        values = KNOWN_SCALAR_TYPE_TAGS
-        detail = "shift scalar count type"
-    elif field == "operations" and context.block_path == ("primitive", "arithmetic"):
-        values = arithmetic_operation_values()
-        detail = "arithmetic operation"
-    elif field == "guarantees" and context.block_path == ("primitive", "arithmetic"):
-        values = arithmetic_guarantee_values()
-        detail = "arithmetic guarantee"
-    elif (
-        context.block_path == ("primitive", "arithmetic", "operand_roles")
-        and field in arithmetic_operand_role_values()
-    ):
-        values = context.primitive_parameters
-        detail = "primitive parameter"
     elif field == "axis" and context.block_path == ("primitive", "overload"):
         values = catalog.overload_registry.axes
         detail = "overload axis"

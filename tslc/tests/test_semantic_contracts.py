@@ -6,26 +6,35 @@ from pathlib import Path
 
 import pytest
 
+import tslc.semantic_authoring as semantic_authoring
 from tslc.authoring_completion import authoring_completions
-from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.arithmetic import (
     ArithmeticGuarantee,
     ArithmeticOperandRole,
     ArithmeticOperation,
 )
+from tslc.catalog.arithmetic_promotion import KNOWN_ARITHMETIC_FIELDS
+from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.conversion import (
     ConversionKind,
     LaneCountRelation,
     NumericConversionMode,
 )
+from tslc.catalog.conversion_promotion import KNOWN_CONVERSION_FIELDS
 from tslc.catalog.memory import MemoryAccess, MemoryAddressing
+from tslc.catalog.memory_promotion import KNOWN_MEMORY_FIELDS
 from tslc.catalog.model import Catalog
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
 from tslc.catalog.shift import ShiftCountRule, ShiftLaneRule
+from tslc.catalog.shift_promotion import KNOWN_SHIFT_FIELDS
 from tslc.catalog.validation import validate_catalog
+from tslc.catalog.validation._schema_primitives import (
+    KNOWN_PRIMITIVE_SEMANTIC_FIELDS,
+)
 from tslc.catalog_cli import _primitive
 from tslc.catalog_index import build_catalog_index
 from tslc.compiler_assets import load_default_tsl_grammar
+from tslc.semantic_authoring import SemanticFieldProjection
 from tslc.sources import SourceDocument
 from tslc.syntax.authoring import authoring_cursor_context
 from tslc.syntax.parser import TslParser
@@ -97,6 +106,90 @@ def _projection(catalog: Catalog) -> tuple[object, ...]:
             )
             for binding in primitive.operation.operand_bindings
         ),
+    )
+
+
+def test_semantic_authoring_descriptors_cover_every_validated_closed_field() -> None:
+    described_paths = {
+        descriptor.path[:depth]
+        for descriptor in semantic_authoring.semantic_field_projections()
+        for depth in range(2, len(descriptor.path) + 1)
+    }
+    validated_paths: set[tuple[str, ...]] = {
+        ("primitive", name) for name in KNOWN_PRIMITIVE_SEMANTIC_FIELDS
+    }
+    for contract, fields in (
+        ("arithmetic", KNOWN_ARITHMETIC_FIELDS),
+        ("memory", KNOWN_MEMORY_FIELDS),
+        ("conversion", KNOWN_CONVERSION_FIELDS),
+        ("shift", KNOWN_SHIFT_FIELDS),
+    ):
+        validated_paths.update(("primitive", contract, name) for name in fields)
+
+    assert described_paths == validated_paths
+    assert len(semantic_authoring.semantic_field_projections()) == len(
+        {item.path for item in semantic_authoring.semantic_field_projections()}
+    )
+
+
+def test_synthetic_semantic_descriptor_reaches_every_authoring_projection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, catalog, diagnostics = _build(_binary_source())
+    assert diagnostics == ()
+    descriptor = SemanticFieldProjection(
+        ("primitive", "research_fact"),
+        "enum-scalar",
+        "primitive-operation",
+        "enumMember",
+        lambda: ("bit_and", "bit_and_not"),
+        "primitive field",
+        "research operation",
+    )
+    monkeypatch.setattr(
+        semantic_authoring,
+        "SEMANTIC_FIELD_PROJECTIONS",
+        (*semantic_authoring.SEMANTIC_FIELD_PROJECTIONS, descriptor),
+    )
+    source = "prim<v:=v> probe(value):\n  research_fact bit_and\n"
+    parsed = _parse(source)
+
+    field_edit = "prim<v:=v> probe(value):\n  research"
+    field_context = authoring_cursor_context(
+        parsed,
+        _PATH,
+        field_edit,
+        len(field_edit),
+    )
+    field_completions = authoring_completions(field_context, catalog)
+    assert {item.label for item in field_completions} == {"research_fact"}
+    assert {item.detail for item in field_completions} == {"primitive field"}
+
+    value_edit = source.split("bit_and", 1)[0] + "bit_a"
+    value_context = authoring_cursor_context(
+        parsed,
+        _PATH,
+        value_edit,
+        len(value_edit),
+    )
+    value_completions = authoring_completions(value_context, catalog)
+    assert {item.label for item in value_completions} == {
+        "bit_and",
+        "bit_and_not",
+    }
+    assert {item.detail for item in value_completions} == {"research operation"}
+
+    index = build_catalog_index(catalog, parsed)
+    occurrence = next(
+        item
+        for item in index.occurrences_by_path[_PATH]
+        if item.kind == "primitive-operation" and item.name == "bit_and"
+    )
+    assert index.references(occurrence) == (occurrence.span,)
+    assert "Primitive operation" in (index.hover(occurrence) or "")
+    assert any(
+        token.kind == "enumMember" and token.span == occurrence.span
+        for token in index.semantic_tokens_by_path[_PATH]
     )
 
 

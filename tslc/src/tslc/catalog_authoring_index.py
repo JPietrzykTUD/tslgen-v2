@@ -8,24 +8,7 @@ from pathlib import Path
 import re
 from typing import Literal
 
-from tslc.catalog.arithmetic import (
-    arithmetic_guarantee_values,
-    arithmetic_operation_values,
-)
-from tslc.catalog.conversion import (
-    conversion_kind_values,
-    lane_count_relation_values,
-    numeric_conversion_mode_values,
-)
-from tslc.catalog.memory import (
-    memory_access_values,
-    memory_addressing_values,
-    memory_indexed_lane_extent_values,
-)
 from tslc.catalog.model import RESULT_DIM_VECTOR
-from tslc.catalog.preconditions import precondition_values
-from tslc.catalog.semantics import primitive_operation_values
-from tslc.catalog.shift import shift_count_rule_values, shift_lane_rule_values
 from tslc.catalog.validation._schema_benchmarks import KNOWN_OPERAND_DOMAINS
 from tslc.catalog.validation._schema_common import KNOWN_BOOLEAN_VALUES
 from tslc.catalog.validation._schema_implementation import (
@@ -46,6 +29,11 @@ from tslc.ir.region_syntax import (
 from tslc.ir.scan import scan
 from tslc.ir.segments import Region, Segment
 from tslc.lower.query_authoring import DEFAULT_QUERY_AUTHORING_INDEX
+from tslc.semantic_authoring import (
+    SemanticTokenKind,
+    semantic_projection_fields,
+    semantic_scalar_values,
+)
 from tslc.syntax.access import child, children
 from tslc.syntax.ast import (
     ParsedBlockDeclaration,
@@ -78,18 +66,6 @@ DocumentSymbolKind = Literal[
     "target-axis",
     "test-case",
 ]
-SemanticTokenKind = Literal[
-    "function",
-    "class",
-    "type",
-    "keyword",
-    "property",
-    "parameter",
-    "typeParameter",
-    "enumMember",
-    "namespace",
-]
-
 _CLOSED_ENUM_VALUES = frozenset(
     (
         *KNOWN_BOOLEAN_VALUES,
@@ -98,11 +74,6 @@ _CLOSED_ENUM_VALUES = frozenset(
         *KNOWN_TARGET_FAMILY_RELATIONS,
         *KNOWN_TARGET_WIDTH_RELATIONS,
         *KNOWN_TEST_ROLES,
-        *arithmetic_operation_values(),
-        *arithmetic_guarantee_values(),
-        *precondition_values(),
-        *shift_count_rule_values(),
-        *shift_lane_rule_values(),
         *(value for values in KNOWN_PRIMITIVE_ATTRIBUTES.values() for value in values),
     )
 )
@@ -398,90 +369,40 @@ def _primitive_semantic_tokens(
             if value is not None and isinstance(value.value, ParsedTslScalarValue):
                 source = value.value.payload_source or value.value.source
                 tokens.append(IndexedSemanticToken("enumMember", _source_span(source)))
-        elif primitive_field.kind == "arithmetic":
-            roles = child(field, "operand_roles")
-            for role in children(roles):
-                tokens.append(
-                    IndexedSemanticToken("enumMember", _source_span(role.key.source))
-                )
-                if isinstance(role.value, ParsedTslScalarValue):
-                    source = role.value.payload_source or role.value.source
-                    tokens.append(IndexedSemanticToken("parameter", _source_span(source)))
-        elif primitive_field.kind == "operand_roles":
-            for role in children(field):
-                tokens.append(
-                    IndexedSemanticToken("enumMember", _source_span(role.key.source))
-                )
-                if isinstance(role.value, ParsedTslScalarValue):
-                    source = role.value.payload_source or role.value.source
-                    tokens.append(IndexedSemanticToken("parameter", _source_span(source)))
-        elif primitive_field.kind == "operation":
-            if (
-                isinstance(field.value, ParsedTslScalarValue)
-                and field.value.text in primitive_operation_values()
-            ):
-                source = field.value.payload_source or field.value.source
-                tokens.append(IndexedSemanticToken("enumMember", _source_span(source)))
-        elif primitive_field.kind == "memory":
-            tokens.extend(
-                _closed_contract_value_tokens(
-                    field,
-                    {
-                        "access": memory_access_values(),
-                        "addressing": memory_addressing_values(),
-                        "indexed_lanes": memory_indexed_lane_extent_values(),
-                    },
-                )
-            )
-        elif primitive_field.kind == "conversion":
-            tokens.extend(
-                _closed_contract_value_tokens(
-                    field,
-                    {
-                        "kind": conversion_kind_values(),
-                        "lane_count": lane_count_relation_values(),
-                        "numeric_mode": numeric_conversion_mode_values(),
-                    },
-                )
-            )
-        elif primitive_field.kind == "shift":
-            tokens.extend(
-                _closed_contract_value_tokens(
-                    field,
-                    {
-                        "count_rule": shift_count_rule_values(),
-                        "lane_rule": shift_lane_rule_values(),
-                    },
-                )
-            )
-            scalar_count_types = child(field, "scalar_count_types")
-            if scalar_count_types is not None and isinstance(
-                scalar_count_types.value,
-                ParsedTslListValue,
-            ):
-                tokens.extend(
-                    IndexedSemanticToken(
-                        "type",
-                        _source_span(item.payload_source or item.source),
-                    )
-                    for item in scalar_count_types.value.items
-                    if isinstance(item, ParsedTslScalarValue)
-                )
+    tokens.extend(_semantic_projection_tokens(primitive))
     return tuple(tokens)
 
 
-def _closed_contract_value_tokens(
-    field: ParsedTslField,
-    values_by_field: dict[str, tuple[str, ...]],
+def _semantic_projection_tokens(
+    primitive: ParsedPrimitiveDeclaration,
 ) -> tuple[IndexedSemanticToken, ...]:
     tokens: list[IndexedSemanticToken] = []
-    for member in children(field):
-        if not isinstance(member.value, ParsedTslScalarValue):
+    for descriptor, field in semantic_projection_fields(primitive):
+        if descriptor.value_shape == "parameter-bindings":
+            for binding in children(field):
+                tokens.append(
+                    IndexedSemanticToken(
+                        descriptor.semantic_token_kind,
+                        _source_span(binding.key.source),
+                    )
+                )
+                if isinstance(binding.value, ParsedTslScalarValue):
+                    source = binding.value.payload_source or binding.value.source
+                    tokens.append(
+                        IndexedSemanticToken("parameter", _source_span(source))
+                    )
             continue
-        if member.value.text not in values_by_field.get(member.key.text, ()):
-            continue
-        source = member.value.payload_source or member.value.source
-        tokens.append(IndexedSemanticToken("enumMember", _source_span(source)))
+        admitted = frozenset(descriptor.completion_values())
+        for value in semantic_scalar_values(descriptor, field):
+            if descriptor.value_shape != "type-list" and value.text not in admitted:
+                continue
+            source = value.payload_source or value.source
+            tokens.append(
+                IndexedSemanticToken(
+                    descriptor.semantic_token_kind,
+                    _source_span(source),
+                )
+            )
     return tuple(tokens)
 
 

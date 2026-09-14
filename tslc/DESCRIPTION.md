@@ -99,9 +99,15 @@ symbols and registry-backed semantic token facts are built separately in
 [catalog_authoring_index.py](src/tslc/catalog_authoring_index.py); the core
 index retains resolvable catalog occurrences, including individual list
 selector elements, primitive-scoped result targets, and source-defined
-semantic-overload axes and values. Overload completion, hover, navigation,
-references, symbols, tokens, and diagnostics all project the same typed
-registry and validated primitive-family facts; the parsed cursor contributes
+semantic-overload axes and values. Closed primitive operation, arithmetic,
+memory, conversion, and shift fields share the authoring-only descriptors in
+[semantic_authoring.py](src/tslc/semantic_authoring.py) for source paths,
+value shapes, occurrence and token kinds, completion providers, and display
+details. Catalog promotion and validation remain explicit in their owning
+modules; an exact coverage test prevents an accepted closed semantic field
+from silently missing an authoring projection. Overload completion, hover,
+navigation, references, symbols, tokens, and diagnostics all project the same
+typed registry and validated primitive-family facts; the parsed cursor contributes
 only generic sibling scalar fields for axis-scoped value completion. Implementation
 selector levels are classified by the catalog-owned projection in
 [catalog/selector_paths.py](src/tslc/catalog/selector_paths.py) — one

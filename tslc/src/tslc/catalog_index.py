@@ -8,29 +8,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import TypeVar
 
-from tslc.catalog.arithmetic import (
-    ARITHMETIC_GUARANTEE_SPECS,
-    ARITHMETIC_OPERAND_ROLE_DESCRIPTIONS,
-    ARITHMETIC_OPERATION_DESCRIPTIONS,
-)
-from tslc.catalog.conversion import (
-    CONVERSION_KIND_DESCRIPTIONS,
-    LANE_COUNT_RELATION_DESCRIPTIONS,
-    NUMERIC_CONVERSION_MODE_DESCRIPTIONS,
-)
-from tslc.catalog.memory import (
-    MEMORY_ACCESS_DESCRIPTIONS,
-    MEMORY_ADDRESSING_DESCRIPTIONS,
-)
 from tslc.catalog.model import Catalog, Primitive, RESULT_DIM_VECTOR
-from tslc.catalog.semantics import (
-    OPERAND_ROLE_DESCRIPTIONS,
-    PRIMITIVE_OPERATION_DESCRIPTIONS,
-)
-from tslc.catalog.shift import (
-    SHIFT_COUNT_RULE_DESCRIPTIONS,
-    SHIFT_LANE_RULE_DESCRIPTIONS,
-)
 from tslc.catalog.selector_paths import classify_selector_path
 from tslc.catalog_authoring_index import (
     DocumentSymbolKind,
@@ -63,7 +41,7 @@ from tslc.catalog_occurrences import (
     freeze_spans as _freeze_spans,
     name_in_source as _name_in_source,
     occurrence_key as _occurrence_key,
-    parameter_spans as _parameter_spans,
+    primitive_semantic_occurrences as _primitive_semantic_occurrences,
     record as _record,
     record_scalar_reference as _record_scalar_reference,
     record_scoped as _record_scoped,
@@ -196,6 +174,27 @@ class _IndexAccumulator:
         )
 
     def record_occurrence(self, occurrence: IndexedOccurrence) -> None:
+        self.occurrences.append(occurrence)
+
+    def record_projected_occurrence(self, occurrence: IndexedOccurrence) -> None:
+        if occurrence.scope is None:
+            values = self.definitions if occurrence.definition else self.references
+            values[occurrence.kind].setdefault(occurrence.name, []).append(
+                occurrence.span
+            )
+        else:
+            if occurrence.kind not in {
+                "arithmetic-operand",
+                "semantic-operand",
+            }:
+                raise ValueError(
+                    "projected scoped occurrence has unsupported kind "
+                    f"{occurrence.kind!r}"
+                )
+            scoped = self._scoped_spans(occurrence.kind, occurrence.definition)
+            scoped.setdefault((occurrence.scope, occurrence.name), []).append(
+                occurrence.span
+            )
         self.occurrences.append(occurrence)
 
     def record_primitive_call(self, caller: str, callee: str) -> None:
@@ -527,8 +526,8 @@ def _index_document(
         span = _name_in_source(primitive.header_source, primitive.name)
         accumulator.record("primitive", primitive.name, span, definition=True)
         _index_primitive_overload(primitive, accumulator)
-        _index_primitive_arithmetic(primitive, accumulator, scope)
-        _index_primitive_semantics(primitive, accumulator, scope)
+        for occurrence in _primitive_semantic_occurrences(primitive, scope):
+            accumulator.record_projected_occurrence(occurrence)
         if result_target is not None:
             _, target_name, target_span = result_target
             accumulator.record_scoped(
@@ -621,139 +620,6 @@ def _index_primitive_overload(
             _source_span(value.payload_source or value.source),
             definition=False,
         )
-
-
-def _index_primitive_arithmetic(
-    primitive: ParsedPrimitiveDeclaration,
-    accumulator: _IndexAccumulator,
-    scope: str,
-) -> None:
-    arithmetic_fields = primitive.fields_by_name("arithmetic")
-    if not arithmetic_fields:
-        return
-    bound_names: set[str] = set()
-    for parsed in arithmetic_fields:
-        arithmetic = parsed.field
-        arithmetic_lists: tuple[tuple[str, SymbolKind], ...] = (
-            ("operations", "arithmetic-operation"),
-            ("guarantees", "arithmetic-guarantee"),
-        )
-        for field_name, kind in arithmetic_lists:
-            value = child(arithmetic, field_name)
-            if value is None or not isinstance(value.value, ParsedTslListValue):
-                continue
-            for item in value.value.items:
-                if isinstance(item, ParsedTslScalarValue):
-                    accumulator.record_scalar_reference(item, kind)
-        for role in children(child(arithmetic, "operand_roles")):
-            accumulator.record(
-                "arithmetic-role",
-                role.key.text,
-                _source_span(role.key.source),
-                definition=False,
-            )
-            if not isinstance(role.value, ParsedTslScalarValue):
-                continue
-            source = role.value.payload_source or role.value.source
-            bound_names.add(role.value.text)
-            accumulator.record_scoped(
-                "arithmetic-operand",
-                scope,
-                role.value.text,
-                _source_span(source),
-                definition=False,
-            )
-    for name, span in _parameter_spans(primitive):
-        if name not in bound_names:
-            continue
-        accumulator.record_scoped(
-            "arithmetic-operand",
-            scope,
-            name,
-            span,
-            definition=True,
-        )
-
-
-def _index_primitive_semantics(
-    primitive: ParsedPrimitiveDeclaration,
-    accumulator: _IndexAccumulator,
-    scope: str,
-) -> None:
-    bound_names: set[str] = set()
-    for parsed in primitive.fields_by_name("operation"):
-        if isinstance(parsed.field.value, ParsedTslScalarValue):
-            accumulator.record_scalar_reference(
-                parsed.field.value, "primitive-operation"
-            )
-    for parsed in primitive.fields_by_name("operand_roles"):
-        for role in children(parsed.field):
-            accumulator.record(
-                "operand-role",
-                role.key.text,
-                _source_span(role.key.source),
-                definition=False,
-            )
-            if not isinstance(role.value, ParsedTslScalarValue):
-                continue
-            source = role.value.payload_source or role.value.source
-            bound_names.add(role.value.text)
-            accumulator.record_scoped(
-                "semantic-operand",
-                scope,
-                role.value.text,
-                _source_span(source),
-                definition=False,
-            )
-    for parsed in primitive.fields_by_name("preconditions"):
-        value = parsed.field.value
-        if not isinstance(value, ParsedTslListValue):
-            continue
-        for item in value.items:
-            if isinstance(item, ParsedTslScalarValue):
-                accumulator.record_scalar_reference(item, "precondition")
-    semantic_members: tuple[
-        tuple[str, tuple[tuple[str, SymbolKind], ...]], ...
-    ] = (
-        (
-            "memory",
-            (
-                ("access", "memory-access"),
-                ("addressing", "memory-addressing"),
-                ("indexed_lanes", "memory-indexed-lane-extent"),
-            ),
-        ),
-        (
-            "conversion",
-            (
-                ("kind", "conversion-kind"),
-                ("lane_count", "lane-count-relation"),
-                ("numeric_mode", "numeric-conversion-mode"),
-            ),
-        ),
-        (
-            "shift",
-            (
-                ("count_rule", "shift-count-rule"),
-                ("lane_rule", "shift-lane-rule"),
-            ),
-        ),
-    )
-    for field_name, members in semantic_members:
-        for parsed in primitive.fields_by_name(field_name):
-            for member_name, kind in members:
-                member = child(parsed.field, member_name)
-                if member is not None and isinstance(member.value, ParsedTslScalarValue):
-                    accumulator.record_scalar_reference(member.value, kind)
-    for name, span in _parameter_spans(primitive):
-        if name in bound_names:
-            accumulator.record_scoped(
-                "semantic-operand",
-                scope,
-                name,
-                span,
-                definition=True,
-            )
 
 
 def _index_implementation_selectors(
