@@ -29,7 +29,12 @@ from tslc.catalog.preconditions import (
     PreconditionKind,
     PrimitivePrecondition,
 )
-from tslc.catalog.semantics import OperandBinding, OperandRole
+from tslc.catalog.semantics import (
+    OperandBinding,
+    OperandRole,
+    PrimitiveOperation,
+    PrimitiveSemanticContract,
+)
 from tslc.compiler_assets import RenderAssets
 from tslc.diagnostics import Diagnostic, SourceSpan
 from tslc.lower.lowerer import LoweredSpecialization
@@ -224,25 +229,89 @@ def test_emitted_profile_freezes_backend_mappings() -> None:
         profile.specializations("cpp")["late"] = ()  # type: ignore[index]
 
 
-def test_harness_discovery_uses_signatures_not_names() -> None:
-    catalog = _catalog(
-        Primitive("lane_in", "v:=s[]", ("data",), (), ()),
-        Primitive("lane_out", "s[]:=v", ("data",), (), ()),
-        Primitive("mask_bits", "im:=m", ("mask",), (), ()),
-        Primitive("mask_from_bits", "m:=im", ("bits",), (), ()),
-        Primitive("load", "v:=cptr", ("ptr",), (), ()),
-        Primitive("store", "void:=(ptr,v)", ("ptr", "data"), (), ()),
+def test_harness_discovery_uses_semantics_not_names_or_source_order() -> None:
+    renamed_names = (
+        "build_vector",
+        "materialize_vector",
+        "pack_mask",
+        "unpack_mask",
+        "read_vector",
+        "write_vector",
     )
+    primitives = tuple(
+        replace(primitive, name=name)
+        for primitive, name in zip(
+            _harness_primitives(), renamed_names, strict=True
+        )
+    )
+    catalog = _catalog(*primitives)
 
     harness = discover_harness_primitives(catalog)
+    reversed_harness = discover_harness_primitives(_catalog(*reversed(primitives)))
+
+    assert harness.from_array == "build_vector"
+    assert harness.to_array == "materialize_vector"
+    assert harness.to_integral == "pack_mask"
+    assert harness.to_mask == "unpack_mask"
+    assert harness.load == "read_vector"
+    assert harness.store == "write_vector"
+    assert harness.diagnostics == ()
+    assert reversed_harness == harness
+
+
+def test_harness_discovery_ignores_same_signature_different_operation() -> None:
+    primitives = _harness_primitives()
+    from_array = primitives[0]
+    decoy = replace(
+        from_array,
+        name="unrelated_same_shape",
+        operation=PrimitiveSemanticContract(
+            PrimitiveOperation.CONVERT,
+            (OperandBinding(OperandRole.VALUE, "data", 0, "s[]"),),
+        ),
+    )
+
+    harness = discover_harness_primitives(_catalog(*primitives, decoy))
 
     assert harness.from_array == "lane_in"
-    assert harness.to_array == "lane_out"
-    assert harness.to_integral == "mask_bits"
-    assert harness.to_mask == "mask_from_bits"
-    assert harness.load == "load"
-    assert harness.store == "store"
     assert harness.diagnostics == ()
+
+
+def test_harness_discovery_fails_closed_on_ambiguous_semantic_provider() -> None:
+    primitives = _harness_primitives()
+    duplicate = replace(primitives[0], name="another_lane_in")
+
+    harness = discover_harness_primitives(_catalog(duplicate, *reversed(primitives)))
+    reordered = discover_harness_primitives(_catalog(*primitives, duplicate))
+
+    assert harness.from_array is None
+    assert len(harness.diagnostics) == 1
+    diagnostic = harness.diagnostics[0]
+    assert diagnostic.severity == "error"
+    assert diagnostic.code == "TSL-VALUE-TEST-HARNESS-AMBIGUOUS"
+    assert diagnostic.message.index("another_lane_in") < diagnostic.message.index(
+        "lane_in"
+    )
+    assert reordered == harness
+
+
+def test_harness_discovery_reports_missing_semantic_providers_as_warnings() -> None:
+    harness = discover_harness_primitives(_catalog())
+
+    assert (
+        harness.from_array,
+        harness.to_array,
+        harness.to_integral,
+        harness.to_mask,
+        harness.load,
+        harness.store,
+    ) == (None, None, None, None, None, None)
+    assert len(harness.diagnostics) == 6
+    assert all(
+        diagnostic.severity == "warning"
+        and diagnostic.code == "TSL-VALUE-TEST-HARNESS-MISSING"
+        for diagnostic in harness.diagnostics
+    )
 
 
 def test_runtime_failure_cases_plan_and_render_for_both_backends(
@@ -4482,12 +4551,81 @@ def _catalog(*primitives: Primitive) -> Catalog:
 
 def _harness_primitives() -> tuple[Primitive, ...]:
     return (
-        Primitive("lane_in", "v:=s[]", ("data",), (), ()),
-        Primitive("lane_out", "s[]:=v", ("data",), (), ()),
-        Primitive("mask_bits", "im:=m", ("mask",), (), ()),
-        Primitive("mask_from_bits", "m:=im", ("bits",), (), ()),
-        Primitive("load", "v:=cptr", ("ptr",), (), ()),
-        Primitive("store", "void:=(ptr,v)", ("ptr", "data"), (), ()),
+        _harness_primitive(
+            "lane_in",
+            "v:=s[]",
+            ("data",),
+            PrimitiveOperation.VECTOR_FROM_ARRAY,
+            ((OperandRole.VALUE, "s[]"),),
+        ),
+        _harness_primitive(
+            "lane_out",
+            "s[]:=v",
+            ("data",),
+            PrimitiveOperation.VECTOR_TO_ARRAY,
+            ((OperandRole.PRIMARY, "v"),),
+        ),
+        _harness_primitive(
+            "mask_bits",
+            "im:=m",
+            ("mask",),
+            PrimitiveOperation.MASK_TO_INTEGRAL,
+            ((OperandRole.PRIMARY, "m"),),
+        ),
+        _harness_primitive(
+            "mask_from_bits",
+            "m:=im",
+            ("bits",),
+            PrimitiveOperation.MASK_FROM_INTEGRAL,
+            ((OperandRole.VALUE, "im"),),
+        ),
+        _harness_primitive(
+            "load",
+            "v:=cptr",
+            ("ptr",),
+            PrimitiveOperation.LOAD,
+            ((OperandRole.MEMORY_SOURCE, "cptr"),),
+            aligned=False,
+        ),
+        _harness_primitive(
+            "store",
+            "void:=(ptr,v)",
+            ("ptr", "data"),
+            PrimitiveOperation.STORE,
+            (
+                (OperandRole.MEMORY_DESTINATION, "ptr"),
+                (OperandRole.VALUE, "v"),
+            ),
+            aligned=False,
+        ),
+    )
+
+
+def _harness_primitive(
+    name: str,
+    signature: str,
+    parameters: tuple[str, ...],
+    operation: PrimitiveOperation,
+    roles: tuple[tuple[OperandRole, str], ...],
+    *,
+    aligned: bool | None = None,
+) -> Primitive:
+    return Primitive(
+        name,
+        signature,
+        parameters,
+        ("aligned",) if aligned is not None else (),
+        (),
+        attributes=(
+            {"aligned": str(aligned).lower()} if aligned is not None else {}
+        ),
+        operation=PrimitiveSemanticContract(
+            operation,
+            tuple(
+                OperandBinding(role, parameters[index], index, parameter_kind)
+                for index, (role, parameter_kind) in enumerate(roles)
+            ),
+        ),
     )
 
 

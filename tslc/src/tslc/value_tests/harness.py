@@ -2,22 +2,42 @@
 
 from __future__ import annotations
 
-from tslc.catalog.model import Catalog
-from tslc.catalog.signatures import parse_signature
-from tslc.diagnostics import Diagnostic
+from dataclasses import replace
+
+from tslc.catalog.model import Catalog, Primitive
+from tslc.catalog.semantics import (
+    CONTIGUOUS_VECTOR_LOAD_REQUIREMENT,
+    CONTIGUOUS_VECTOR_STORE_REQUIREMENT,
+    MASK_FROM_INTEGRAL_REQUIREMENT,
+    MASK_TO_INTEGRAL_REQUIREMENT,
+    VECTOR_FROM_ARRAY_REQUIREMENT,
+    VECTOR_TO_ARRAY_REQUIREMENT,
+    PrimitiveProviderRequirement,
+)
+from tslc.diagnostics import Diagnostic, Severity
 from tslc.value_tests.model import HarnessPrimitiveNames
 
 
 def discover_harness_primitives(catalog: Catalog) -> HarnessPrimitiveNames:
-    """Discover value-test harness helpers from unique source signatures."""
+    """Resolve value-test harness helpers from source-owned semantic facts."""
 
     diagnostics: list[Diagnostic] = []
-    from_array = _unique_primitive_name(catalog, ("v", ("s[]",)), diagnostics)
-    to_array = _unique_primitive_name(catalog, ("s[]", ("v",)), diagnostics)
-    to_integral = _unique_primitive_name(catalog, ("im", ("m",)), diagnostics)
-    to_mask = _unique_primitive_name(catalog, ("m", ("im",)), diagnostics)
-    load = _unique_primitive_name(catalog, ("v", ("cptr",)), diagnostics)
-    store = _unique_primitive_name(catalog, ("void", ("ptr", "v")), diagnostics)
+    from_array = _provider_name(
+        catalog, VECTOR_FROM_ARRAY_REQUIREMENT, diagnostics
+    )
+    to_array = _provider_name(catalog, VECTOR_TO_ARRAY_REQUIREMENT, diagnostics)
+    to_integral = _provider_name(
+        catalog, MASK_TO_INTEGRAL_REQUIREMENT, diagnostics
+    )
+    to_mask = _provider_name(
+        catalog, MASK_FROM_INTEGRAL_REQUIREMENT, diagnostics
+    )
+    load = _provider_name(
+        catalog, CONTIGUOUS_VECTOR_LOAD_REQUIREMENT, diagnostics
+    )
+    store = _provider_name(
+        catalog, CONTIGUOUS_VECTOR_STORE_REQUIREMENT, diagnostics
+    )
     return HarnessPrimitiveNames(
         from_array=from_array,
         to_array=to_array,
@@ -29,42 +49,33 @@ def discover_harness_primitives(catalog: Catalog) -> HarnessPrimitiveNames:
     )
 
 
-def _unique_primitive_name(
+def _provider_name(
     catalog: Catalog,
-    shape_key: tuple[str, tuple[str, ...]],
+    requirement: PrimitiveProviderRequirement,
     diagnostics: list[Diagnostic],
 ) -> str | None:
-    matches: list[str] = []
-    for primitive in catalog.primitives:
-        shape = parse_signature(primitive.signature)
-        if shape is None:
-            continue
-        if (shape.result_kind, tuple(shape.param_kinds)) == shape_key:
-            matches.append(primitive.name)
-    unique = tuple(sorted(set(matches)))
-    if len(unique) == 1:
-        return unique[0]
-    result, params = shape_key
-    spelling = f"{result}:=({', '.join(params)})"
-    if not unique:
-        diagnostics.append(
-            Diagnostic(
-                severity="warning",
-                code="TSL-VALUE-TEST-HARNESS-MISSING",
-                message=f"no unique value-test harness primitive has signature {spelling}",
-            )
-        )
+    result = catalog.resolve_primitive_provider(requirement)
+    if isinstance(result, Primitive):
+        return result.name
+    severity: Severity
+    if result.code == "TSL-CATALOG-MISSING-PRIMITIVE-PROVIDER":
+        severity = "warning"
+        code = "TSL-VALUE-TEST-HARNESS-MISSING"
+    elif result.code == "TSL-CATALOG-AMBIGUOUS-PRIMITIVE-PROVIDER":
+        severity = "error"
+        code = "TSL-VALUE-TEST-HARNESS-AMBIGUOUS"
     else:
-        diagnostics.append(
-            Diagnostic(
-                severity="warning",
-                code="TSL-VALUE-TEST-HARNESS-AMBIGUOUS",
-                message=(
-                    f"value-test harness signature {spelling} is ambiguous: "
-                    f"{', '.join(unique)}"
-                ),
-            )
+        raise ValueError(
+            f"unsupported primitive-provider diagnostic {result.code!r}"
         )
+    diagnostics.append(
+        replace(
+            result,
+            severity=severity,
+            code=code,
+            message=f"value-test harness {result.message}",
+        )
+    )
     return None
 
 

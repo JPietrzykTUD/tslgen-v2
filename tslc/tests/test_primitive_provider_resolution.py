@@ -8,6 +8,8 @@ from pathlib import Path
 from tslc.catalog.model import Catalog, Primitive
 from tslc.catalog.semantics import (
     COMPARE_EQUAL_REQUIREMENT,
+    CONTIGUOUS_VECTOR_LOAD_REQUIREMENT,
+    CONTIGUOUS_VECTOR_STORE_REQUIREMENT,
     MASK_ALL_FALSE_REQUIREMENT,
     MASK_AND_REQUIREMENT,
     MASK_FROM_INTEGRAL_REQUIREMENT,
@@ -15,6 +17,8 @@ from tslc.catalog.semantics import (
     MASK_SET_LANE_REQUIREMENT,
     MASK_TO_INTEGRAL_REQUIREMENT,
     RUNTIME_LANE_EXTRACT_REQUIREMENT,
+    VECTOR_FROM_ARRAY_REQUIREMENT,
+    VECTOR_TO_ARRAY_REQUIREMENT,
     VECTOR_ZERO_REQUIREMENT,
     OperandRole,
     PrimitiveOperation,
@@ -24,6 +28,8 @@ from tslc.diagnostics import Diagnostic, SourceSpan
 
 
 _CURRENT_PROVIDERS = (
+    (CONTIGUOUS_VECTOR_LOAD_REQUIREMENT, "load"),
+    (CONTIGUOUS_VECTOR_STORE_REQUIREMENT, "store"),
     (MASK_TO_INTEGRAL_REQUIREMENT, "to_integral"),
     (MASK_FROM_INTEGRAL_REQUIREMENT, "to_mask"),
     (COMPARE_EQUAL_REQUIREMENT, "equal"),
@@ -32,6 +38,8 @@ _CURRENT_PROVIDERS = (
     (MASK_POPULATION_COUNT_REQUIREMENT, "mask_population_count"),
     (MASK_SET_LANE_REQUIREMENT, "set_mask_lane"),
     (RUNTIME_LANE_EXTRACT_REQUIREMENT, "extract_value_at"),
+    (VECTOR_FROM_ARRAY_REQUIREMENT, "from_array"),
+    (VECTOR_TO_ARRAY_REQUIREMENT, "to_array"),
     (VECTOR_ZERO_REQUIREMENT, "set_zero"),
 )
 

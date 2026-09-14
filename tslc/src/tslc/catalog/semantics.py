@@ -143,6 +143,20 @@ class PrimitiveSemanticContract:
         )
 
 
+CONTIGUOUS_VECTOR_LOAD_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.LOAD,
+    "v",
+    ("cptr",),
+    (OperandRole.MEMORY_SOURCE,),
+    required_attributes=(("aligned", "false"),),
+)
+CONTIGUOUS_VECTOR_STORE_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.STORE,
+    "void",
+    ("ptr", "v"),
+    (OperandRole.MEMORY_DESTINATION, OperandRole.VALUE),
+    required_attributes=(("aligned", "false"),),
+)
 MASK_TO_INTEGRAL_REQUIREMENT = PrimitiveProviderRequirement(
     PrimitiveOperation.MASK_TO_INTEGRAL,
     "im",
@@ -196,6 +210,18 @@ VECTOR_ZERO_REQUIREMENT = PrimitiveProviderRequirement(
     "v",
     (),
     (),
+)
+VECTOR_FROM_ARRAY_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.VECTOR_FROM_ARRAY,
+    "v",
+    ("s[]",),
+    (OperandRole.VALUE,),
+)
+VECTOR_TO_ARRAY_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.VECTOR_TO_ARRAY,
+    "s[]",
+    ("v",),
+    (OperandRole.PRIMARY,),
 )
 
 
@@ -308,6 +334,8 @@ def operand_role_values() -> tuple[str, ...]:
 
 __all__ = (
     "COMPARE_EQUAL_REQUIREMENT",
+    "CONTIGUOUS_VECTOR_LOAD_REQUIREMENT",
+    "CONTIGUOUS_VECTOR_STORE_REQUIREMENT",
     "MASK_ALL_FALSE_REQUIREMENT",
     "MASK_AND_REQUIREMENT",
     "MASK_FROM_INTEGRAL_REQUIREMENT",
@@ -323,6 +351,8 @@ __all__ = (
     "PrimitiveSemanticContract",
     "ResolvedPrimitiveProvider",
     "RUNTIME_LANE_EXTRACT_REQUIREMENT",
+    "VECTOR_FROM_ARRAY_REQUIREMENT",
+    "VECTOR_TO_ARRAY_REQUIREMENT",
     "VECTOR_ZERO_REQUIREMENT",
     "operand_role_values",
     "primitive_operation_values",

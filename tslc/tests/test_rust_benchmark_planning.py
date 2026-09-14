@@ -32,13 +32,61 @@ from tslc.benchmark.planner import (
     BenchmarkPlanner,
     BenchmarkScenarioAdmission,
 )
-from tslc.catalog.model import Catalog
+from tslc.catalog.model import Catalog, Primitive
+from tslc.catalog.semantics import (
+    CONTIGUOUS_VECTOR_LOAD_REQUIREMENT,
+    CONTIGUOUS_VECTOR_STORE_REQUIREMENT,
+    MASK_FROM_INTEGRAL_REQUIREMENT,
+    MASK_TO_INTEGRAL_REQUIREMENT,
+    VECTOR_FROM_ARRAY_REQUIREMENT,
+    VECTOR_TO_ARRAY_REQUIREMENT,
+)
 from tslc.compiler_assets import load_default_render_assets
 from tslc.diagnostics import has_errors
 from tslc.value_tests.model import ValueTestProjectPlan
 
 RUST_POLICY_INPUTS = load_backend_policy_inputs(("rust",))
 
+
+def test_benchmark_planner_uses_semantically_resolved_harness_names(
+    catalog: Catalog,
+) -> None:
+    requirements = (
+        VECTOR_FROM_ARRAY_REQUIREMENT,
+        VECTOR_TO_ARRAY_REQUIREMENT,
+        MASK_TO_INTEGRAL_REQUIREMENT,
+        MASK_FROM_INTEGRAL_REQUIREMENT,
+        CONTIGUOUS_VECTOR_LOAD_REQUIREMENT,
+        CONTIGUOUS_VECTOR_STORE_REQUIREMENT,
+    )
+    providers = tuple(
+        catalog.resolve_primitive_provider(item) for item in requirements
+    )
+    assert all(isinstance(provider, Primitive) for provider in providers)
+    names_by_identity = {
+        id(provider): f"benchmark_provider_{index}"
+        for index, provider in enumerate(providers)
+    }
+    renamed = replace(
+        catalog,
+        primitives=tuple(
+            replace(primitive, name=names_by_identity[id(primitive)])
+            if id(primitive) in names_by_identity
+            else primitive
+            for primitive in catalog.primitives
+        ),
+    )
+
+    planner = BenchmarkPlanner(renamed, backend_id="rust")
+
+    assert (
+        planner._harness.from_array,
+        planner._harness.to_array,
+        planner._harness.to_integral,
+        planner._harness.to_mask,
+        planner._harness.load,
+        planner._harness.store,
+    ) == tuple(f"benchmark_provider_{index}" for index in range(len(requirements)))
 
 
 @pytest.fixture(scope="module")
