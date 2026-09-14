@@ -20,6 +20,10 @@ from tslc.backend.cpp_build_policy import (
     cpp_profile_flags,
     cpp_profile_target,
 )
+from tslc.backend.cpp_algorithm import CppAlgorithmHelperForm
+from tslc.backend.cpp_profile_model import cpp_project_render_model
+from tslc.backend.emitted_profile import EmittedProfile
+from tslc.backend.helper_requirements import BackendHelperPlan, CPP_HELPER_MANIFEST
 from tslc.backend.cpp_detection import x86_profile_detection_source
 from tslc.backend.rust_verification import (
     rust_linker,
@@ -27,14 +31,17 @@ from tslc.backend.rust_verification import (
     rust_target_features,
 )
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
+from tslc.catalog.model import Catalog
 from tslc.catalog.target_families import (
     BackendProfileFamily,
     ProfileFamilyCapability,
     TargetFeatureCapability,
 )
 from tslc.diagnostics import has_errors
-from tslc.lower.lowerer import LoweredImplementationVariant
+from tslc.compiler_assets import RenderAssets
+from tslc.lower.lowerer import LoweredImplementationVariant, LoweredSpecialization
 from tslc.render._common import slug
+from tslc.render.cpp_project import cpp_artifacts
 
 
 def _roots(result) -> set[str]:
@@ -364,6 +371,15 @@ def test_representative_project_shape_is_byte_stable(
         "cpp/CMakeLists.txt": "8159716947d12e88565fd8eb907cae11ebdf99e2f6a00c46a24ec2bd2c916d64",
         "cpp/docs/input/tsl_api_docs.hpp": "82cb2d56e9e34b15535e65cbc6b23840982c374a89b0feae4972af9659be322b",
         "cpp/include/tsl.hpp": "fdebd390b5777e6806b13f994ec33e3289bbf163cd91f9a3a6b183bbbc5ae5cb",
+        "cpp/include/tsl_algorithm_detail_aggregate.hpp": "97520ffd902fbf7408cfe97de238b03dc3bb4ff4fa181f5d2a3d6623fdb91be8",
+        "cpp/include/tsl_algorithm_detail_consume.hpp": "59938d6ce8907fd931931bccdfca0a12c7f435ef1ab4cf56ca84f4ef846f42d2",
+        "cpp/include/tsl_algorithm_detail_core.hpp": "6e8ea11b772475069d8299c1e929733ac40fd32f8a75237468aeb7fdba3006ea",
+        "cpp/include/tsl_algorithm_detail_count.hpp": "30159f2b9310e07a0b2e6f2916622a44422f7892c449a14a174f04d495a07994",
+        "cpp/include/tsl_algorithm_detail_iteration.hpp": "e9040b5ec44e55e78da818de009126ef8f0d4d4c1f4f7bf496634a7b08c14b10",
+        "cpp/include/tsl_algorithm_detail_mask.hpp": "2861975b36ef108ec03963f6109f6438f1b1f052064d8f142b077355a14406da",
+        "cpp/include/tsl_algorithm_detail_predicate.hpp": "9f3ed230010da5e2a3105d5f498b30b47e983d0777086178feeacc6686225273",
+        "cpp/include/tsl_algorithm_detail_select.hpp": "ddc7036aff252135e6f312b3b37726504bced2791f32ac263c14568bc338c9d5",
+        "cpp/include/tsl_algorithm_detail_transform.hpp": "bae76ac37791a9be0ee51e59bb925da891e4b55208533cd6053196cc4cac1434",
         "cpp/include/tsl_primitives.hpp": "1ed6539e2285a7af59dbd5212e32e931b19620fa96387c833dacb882d986d743",
         "cpp/include/tsl_scalar.hpp": "34d4f8d5f6082976c8210042bb85573c59b350508381b7c932cd0903159a5b09",
         "cpp/tests/smoke_scalar.cpp": "43046adfe06468b6eb75f351dc8883cb1e35635e66f40fc3f033d41651554a1e",
@@ -380,6 +396,126 @@ def test_representative_project_shape_is_byte_stable(
     }
 
     assert actual == expected
+
+
+def test_cpp_algorithm_assets_follow_renamed_semantic_providers(
+    data_root: Path,
+    machine_profiles_path: Path,
+    catalog: Catalog,
+    render_assets: RenderAssets,
+) -> None:
+    result = _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=["add"],
+        profiles=["scalar", "avx2"],
+        backends=["cpp"],
+    )
+    renamed_sources = {
+        "load": "read_contiguous",
+        "store": "write_contiguous",
+        "gather_narrow": "read_selected_rows",
+        "to_integral": "mask_to_bits",
+        "to_mask": "mask_from_bits",
+        "compress_store": "write_compacted",
+        "mask_population_count": "count_active_mask_lanes",
+        "mask_binary_and": "intersect_masks",
+    }
+    renamed_catalog = replace(
+        catalog,
+        primitives=tuple(
+            replace(
+                primitive,
+                name=renamed_sources.get(primitive.name, primitive.name),
+            )
+            for primitive in catalog.primitives
+        ),
+    )
+    helper_plan = BackendHelperPlan.resolve(CPP_HELPER_MANIFEST, renamed_catalog)
+    renamed_profiles = tuple(
+        _renamed_cpp_helper_profile(profile, renamed_sources)
+        for profile in result.emitted_profiles
+    )
+    model = cpp_project_render_model(renamed_profiles, helper_plan)
+    artifacts = {
+        artifact.logical_path: artifact.content
+        for artifact in cpp_artifacts(
+            renamed_profiles,
+            render_assets,
+            media_type="text/plain",
+            model=model,
+        )
+    }
+    detail = "\n".join(
+        content
+        for path, content in artifacts.items()
+        if path.startswith("cpp/include/tsl_algorithm_detail_")
+    )
+
+    assert model.algorithm.helper(
+        CppAlgorithmHelperForm.CONTIGUOUS_READ
+    ).emitted_callable_name == "read_contiguous"
+    assert model.algorithm.helper(
+        CppAlgorithmHelperForm.MASKED_WRITE
+    ).emitted_callable_name == "write_contiguous_mask"
+    assert all(
+        f"::tsl::{name}<" in detail
+        for name in (
+            "read_contiguous",
+            "write_contiguous",
+            "write_contiguous_mask",
+            "read_selected_rows",
+            "mask_to_bits",
+            "mask_from_bits",
+            "write_compacted",
+            "count_active_mask_lanes",
+            "intersect_masks",
+        )
+    )
+    assert all(
+        f"::tsl::{name}<" not in detail
+        for name in (
+            "load",
+            "store",
+            "store_mask",
+            "gather_narrow",
+            "to_integral",
+            "to_mask",
+            "compress_store",
+            "mask_population_count",
+            "mask_binary_and",
+        )
+    )
+
+
+def _renamed_cpp_helper_profile(
+    profile: EmittedProfile,
+    renamed_sources: dict[str, str],
+) -> EmittedProfile:
+    by_primitive: dict[str, list[LoweredSpecialization]] = {}
+    for specializations in profile.specializations("cpp").values():
+        for specialization in specializations:
+            source_name = renamed_sources.get(
+                specialization.source_primitive_name,
+                specialization.source_primitive_name,
+            )
+            emitted_name = specialization.primitive_name
+            if specialization.source_primitive_name in renamed_sources:
+                suffix = emitted_name[len(specialization.source_primitive_name) :]
+                emitted_name = f"{source_name}{suffix}"
+            renamed = replace(
+                specialization,
+                source_primitive_name=source_name,
+                primitive_name=emitted_name,
+            )
+            by_primitive.setdefault(emitted_name, []).append(renamed)
+    return EmittedProfile(
+        profile.profile,
+        {"cpp": {name: tuple(items) for name, items in by_primitive.items()}},
+        profile.extensions,
+        profile.profile_family,
+        immediate_split_names=frozenset(),
+    )
 
 
 def test_clang_vector_overlay_is_split_guarded_and_uses_hardware_facade(

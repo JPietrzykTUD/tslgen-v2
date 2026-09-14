@@ -13,6 +13,7 @@ from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.memory import (
     MemoryAccess,
     MemoryAddressing,
+    MemoryIndexedLaneExtent,
     MemoryPayloadExtent,
     PrimitiveMemoryContract,
 )
@@ -36,10 +37,13 @@ from tslc.catalog.preconditions import (
     PrimitivePrecondition,
 )
 from tslc.catalog.semantics import (
+    RUNTIME_LANE_EXTRACT_REQUIREMENT,
+    VECTOR_ZERO_REQUIREMENT,
     OperandBinding,
     OperandRole,
     PrimitiveOperation,
     PrimitiveSemanticContract,
+    ResolvedPrimitiveProvider,
 )
 from tslc.compiler_assets import RenderAssets
 from tslc.diagnostics import Diagnostic, SourceSpan
@@ -3611,6 +3615,119 @@ def test_scalable_lane_conversion_tests_success_and_checked_mismatch(
     assert "using ToVec = tsl::simd<double, tsl::sve>;" in source
     assert "tsl::convert_lanes_checked<Vec, ToVec>(v0, error)" in source
     assert "precondition_error::lane_count_mismatch" in source
+
+
+def test_scalable_indexed_checked_cases_follow_checked_api_admission() -> None:
+    def indexed_primitive(name: str, index_kind: str) -> Primitive:
+        return Primitive(
+            name,
+            f"v:=(cptr,{index_kind},sImm)",
+            ("base", "index", "scale"),
+            (),
+            (),
+            tests=(
+                TslTestCase(
+                    name=f"{name}_basic",
+                    type_tag="si32",
+                    tags=("basic",),
+                    lanes=4,
+                    extension="sve",
+                    scale=4,
+                    inputs=(
+                        TslTestArg("vector", values=("10", "20", "30", "40")),
+                        TslTestArg("vector", values=("0", "1", "2", "3")),
+                    ),
+                    expected=("10", "20", "30", "40"),
+                ),
+            ),
+        )
+
+    def indexed_spec(name: str, index_kind: str) -> LoweredSpecialization:
+        bindings = (
+            OperandBinding(OperandRole.MEMORY_SOURCE, "p0", 0, "cptr"),
+            OperandBinding(OperandRole.INDEX, "p1", 1, index_kind),
+            OperandBinding(OperandRole.SCALE, "p2", 2, "sImm"),
+        )
+        semantics = LoweredPrimitiveSemantics(
+            operation=PrimitiveSemanticContract(PrimitiveOperation.LOAD, bindings),
+            preconditions=(
+                PrimitivePrecondition(
+                    PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID,
+                    bindings,
+                ),
+            ),
+            memory=PrimitiveMemoryContract(
+                MemoryAccess.READ,
+                MemoryAddressing.INDEXED,
+                MemoryPayloadExtent.VECTOR,
+                MemoryIndexedLaneExtent.VECTOR,
+            ),
+        )
+        return replace(
+            _spec(
+                name,
+                name,
+                param_kinds=("cptr", index_kind, "sImm"),
+                immediate=("scale", "std::size_t"),
+                extension_name="sve",
+                uses_sized_vector=False,
+                lane_parameter=None,
+                primitive_semantics=semantics,
+            ),
+            checked_primitive_providers=(
+                ResolvedPrimitiveProvider(
+                    RUNTIME_LANE_EXTRACT_REQUIREMENT,
+                    "read_runtime_lane",
+                ),
+            ),
+            checked_failure_provider=ResolvedPrimitiveProvider(
+                VECTOR_ZERO_REQUIREMENT,
+                "zero_vector",
+            ),
+        )
+
+    vector_indexed = indexed_primitive("vector_indexed", "vidx")
+    pointer_indexed = indexed_primitive("pointer_indexed", "cptr")
+    catalog = Catalog(
+        primitives=(vector_indexed, pointer_indexed, *_harness_primitives()),
+        type_groups={},
+        extensions={"sve": _scalable_test_extension()},
+        type_spellings={},
+        translations={},
+    )
+    plan = ValueTestPlanner(catalog, (CPP_VALUE_TEST_SUPPORT,)).plan(
+        (
+            ValueTestBackendProfileInput(
+                "cpp",
+                "sve",
+                {
+                    "vector_indexed": (indexed_spec("vector_indexed", "vidx"),),
+                    "pointer_indexed": (
+                        indexed_spec("pointer_indexed", "cptr"),
+                    ),
+                },
+            ),
+        )
+    )
+
+    assert not plan.diagnostics
+    scalable = tuple(
+        case for case in plan.profiles[0].cases if case.scalable is not None
+    )
+    assert {
+        case.call_name for case in scalable if case.kind == "scalable_indexed_load"
+    } == {"vector_indexed", "pointer_indexed"}
+    checked = tuple(case for case in scalable if case.kind == "checked_precondition")
+    assert {case.call_name for case in checked} == {"vector_indexed"}
+    assert {
+        case.checked_precondition.error
+        for case in checked
+        if case.checked_precondition is not None
+    } == {
+        PreconditionErrorKind.INDEX_OUT_OF_BOUNDS,
+        PreconditionErrorKind.MISALIGNED,
+    }
+
 
 def test_scalable_indexed_lane_uses_one_runtime_lane() -> None:
     insert_value = Primitive(

@@ -4,15 +4,14 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from tslc.backend.checked_api import applicable_checked_condition
 from tslc.catalog.model import Catalog, Primitive, TestCase
 from tslc.catalog.memory import MemoryIndexedLaneExtent
 from tslc.catalog.preconditions import (
-    PRECONDITION_DESCRIPTORS,
     PreconditionErrorKind,
     PreconditionKind,
 )
 from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS
-from tslc.catalog.semantics import OperandRole
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.value_tests._case_scalable_common import (
     scalable_case_facts,
@@ -295,6 +294,10 @@ def scalable_indexed_memory_cases(
         return ()
     if case.index_type is not None and index_base_spelling is None:
         return ()
+    checked_condition = applicable_checked_condition(
+        specs,
+        PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID,
+    )
     plans: list[ValueTestCasePlan] = []
     selected_extensions: set[str] = set()
     for spec in specs:
@@ -383,31 +386,12 @@ def scalable_indexed_memory_cases(
             scalable=scalable,
         )
         plans.append(plan)
-        if index != 0:
+        if index != 0 or checked_condition is None:
             continue
-        precondition = next(
-            (
-                item
-                for item in spec.primitive_semantics.preconditions
-                if item.kind is PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID
-            ),
-            None,
-        )
-        memory_role = (
-            OperandRole.MEMORY_SOURCE
-            if result_kind == "v"
-            else OperandRole.MEMORY_DESTINATION
-        )
-        binding = precondition.binding(memory_role) if precondition is not None else None
-        if binding is None:
-            continue
-        descriptor = PRECONDITION_DESCRIPTORS[
-            PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID
-        ]
         failures = [
             (
                 "out_of_range",
-                descriptor.error,
+                checked_condition.error,
                 ValueTestInvalidPreconditionValue.INDEXED_ADDRESS_OUT_OF_RANGE,
                 plan.invocation.immediate,
             )
@@ -429,7 +413,7 @@ def scalable_indexed_memory_cases(
         if (
             scalar_info is not None
             and scalar_info.bit_width > 8
-            and PreconditionErrorKind.MISALIGNED in descriptor.errors
+            and PreconditionErrorKind.MISALIGNED in checked_condition.errors
         ):
             failures.append(
                 (
@@ -451,7 +435,7 @@ def scalable_indexed_memory_cases(
                     checked_precondition=ValueTestCheckedPrecondition(
                         PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID,
                         error,
-                        binding.parameter_index,
+                        checked_condition.parameter_index,
                         invalid_value,
                         invalid_lane_index=invalid_lane,
                     ),

@@ -9,6 +9,7 @@ import pytest
 from rust_project_test_support import render_rust_artifacts_for_test
 from tslc.backend.helper_requirements import BackendHelperPlan
 from tslc.backend.algorithm_contracts import ALGORITHM_PUBLIC_FAMILIES
+from tslc.backend.cpp_algorithm import CppAlgorithmHelperForm
 from tslc.backend.cpp_algorithm_public_declarations import (
     cpp_algorithm_declaration_holes,
     cpp_algorithm_public_declarations,
@@ -768,6 +769,30 @@ def test_algorithm_assets_have_one_typed_declaration_hole_per_record() -> None:
     )
     assert all(cpp_asset.count(f"@{{{name}}}") == 1 for name in cpp_holes)
     assert all(rust_asset.count(f"@{{{name}}}") == 1 for name in rust_holes)
+
+
+def test_cpp_algorithm_detail_helper_holes_cover_bound_forms_exactly() -> None:
+    assets = load_default_render_assets()
+    detail_assets = tuple(
+        name
+        for name in assets.files
+        if name.startswith("tsl_algorithm_detail_") and name.endswith(".hpp")
+    )
+    helper_holes = {
+        match
+        for name in detail_assets
+        for match in re.findall(
+            r"@\{(algorithm_helper_[a-z_]+)\}", assets.text(name)
+        )
+    }
+    expected = {form.template_hole for form in CppAlgorithmHelperForm}
+
+    assert helper_holes == expected
+    replacements = {hole: f"bound_{hole}" for hole in expected}
+    rendered = "\n".join(
+        assets.fill(name, **replacements) for name in detail_assets
+    )
+    assert "@{algorithm_helper_" not in rendered
 
 
 def test_rust_algorithm_names_cover_shared_public_families() -> None:

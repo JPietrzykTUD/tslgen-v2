@@ -19,6 +19,11 @@ from tslc.backend.algorithm_surface import (
     AlgorithmShape,
     AlgorithmSurfaceFamily,
 )
+from tslc.backend.cpp_algorithm import (
+    CppAlgorithmHelperBinding,
+    CppAlgorithmHelperForm,
+    cpp_algorithm_helper_signature,
+)
 from tslc.backend.cpp_algorithm_public_declarations import (
     cpp_algorithm_form_support,
 )
@@ -93,13 +98,17 @@ class CppUnavailableAlgorithmHelpers:
 
     profile_name: str
     profile_macro: str
-    requirements: tuple[PrimitiveRequirement, ...]
+    bindings: tuple[CppAlgorithmHelperBinding, ...]
 
     def __post_init__(self) -> None:
-        if not self.profile_name or not self.profile_macro or not self.requirements:
+        if not self.profile_name or not self.profile_macro or not self.bindings:
             raise ValueError("unavailable C++ algorithm helpers require context")
-        if len(set(self.requirements)) != len(self.requirements):
+        if len({binding.form for binding in self.bindings}) != len(self.bindings):
             raise ValueError("unavailable C++ algorithm helpers must be unique")
+
+    @property
+    def requirements(self) -> tuple[PrimitiveRequirement, ...]:
+        return tuple(binding.requirement for binding in self.bindings)
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,6 +140,7 @@ class CppAlgorithmAdmissionPlan:
     admitted_families: tuple[AlgorithmSurfaceFamily, ...]
     admitted_forms: tuple[AlgorithmCallableForm, ...]
     family_headers: tuple[CppAlgorithmFamilyHeader, ...]
+    helper_bindings: tuple[CppAlgorithmHelperBinding, ...]
     unavailable_helpers: tuple[CppUnavailableAlgorithmHelpers, ...]
 
     def __post_init__(self) -> None:
@@ -166,6 +176,21 @@ class CppAlgorithmAdmissionPlan:
             raise ValueError(
                 "C++ algorithm family headers must follow admitted semantic order"
             )
+        if tuple(binding.form for binding in self.helper_bindings) != tuple(
+            CppAlgorithmHelperForm
+        ):
+            raise ValueError(
+                "C++ algorithm helper bindings must cover semantic forms in order"
+            )
+        planned_bindings = frozenset(self.helper_bindings)
+        if any(
+            binding not in planned_bindings
+            for group in self.unavailable_helpers
+            for binding in group.bindings
+        ):
+            raise ValueError(
+                "unavailable C++ helpers must reuse project helper bindings"
+            )
 
     @property
     def supported(self) -> bool:
@@ -198,6 +223,11 @@ class CppAlgorithmAdmissionPlan:
             None,
         )
 
+    def helper(
+        self, form: CppAlgorithmHelperForm
+    ) -> CppAlgorithmHelperBinding:
+        return next(binding for binding in self.helper_bindings if binding.form is form)
+
 
 def plan_cpp_algorithm_admission(
     profiles: tuple[EmittedProfile, ...],
@@ -205,6 +235,7 @@ def plan_cpp_algorithm_admission(
 ) -> CppAlgorithmAdmissionPlan:
     """Admit only forms whose exact helper groups exist in every profile."""
 
+    helper_bindings = _cpp_algorithm_helper_bindings(profiles, helper_plan)
     profile_plans = tuple(
         plan_algorithm_profile_admission(
             profile.profile.name,
@@ -244,18 +275,83 @@ def plan_cpp_algorithm_admission(
             for family in AlgorithmSemanticFamily
             if family in admitted_semantic_families
         ),
+        helper_bindings,
         tuple(
             CppUnavailableAlgorithmHelpers(
                 profile.profile_name,
                 f"TSL_PROFILE_{identifier_slug(profile.profile_name).upper()}",
                 tuple(
-                    dict.fromkeys(gap.requirement for gap in profile.gaps)
+                    binding
+                    for binding in helper_bindings
+                    if binding.requirement
+                    in {gap.requirement for gap in profile.gaps}
                 ),
             )
             for profile in profile_plans
             if profile.gaps
         ),
     )
+
+
+def _cpp_algorithm_helper_bindings(
+    profiles: tuple[EmittedProfile, ...],
+    helper_plan: BackendHelperPlan,
+) -> tuple[CppAlgorithmHelperBinding, ...]:
+    """Bind each helper form to one project-wide finalized callable name."""
+
+    if helper_plan.manifest != CPP_HELPER_MANIFEST:
+        raise ValueError("C++ algorithm planning requires the C++ helper plan")
+    bindings: list[CppAlgorithmHelperBinding] = []
+    for form in CppAlgorithmHelperForm:
+        requirement = form.requirement
+        names_by_profile = tuple(
+            (
+                profile.profile.name,
+                tuple(
+                    sorted(
+                        {
+                            specialization.primitive_name
+                            for specialization in helper_plan.matching_specializations(
+                                requirement,
+                                profile.specializations("cpp"),
+                            )
+                        }
+                    )
+                ),
+            )
+            for profile in sorted(profiles, key=lambda item: item.profile.name)
+        )
+        emitted_names = tuple(
+            sorted(
+                {
+                    name
+                    for _profile_name, profile_names in names_by_profile
+                    for name in profile_names
+                }
+            )
+        )
+        if len(emitted_names) > 1:
+            detail = ", ".join(
+                f"{profile_name}={list(profile_names)!r}"
+                for profile_name, profile_names in names_by_profile
+                if profile_names
+            )
+            raise ValueError(
+                f"C++ algorithm helper form {form.value!r} has inconsistent "
+                f"finalized callable names: {detail}"
+            )
+        bindings.append(
+            CppAlgorithmHelperBinding(
+                form=form,
+                provider=helper_plan.provider(requirement),
+                emitted_callable_name=(
+                    emitted_names[0] if emitted_names else form.unavailable_symbol
+                ),
+                mask_policy=requirement.mask_policy,
+                signature=cpp_algorithm_helper_signature(form),
+            )
+        )
+    return tuple(bindings)
 
 
 def _cpp_algorithm_family_header(

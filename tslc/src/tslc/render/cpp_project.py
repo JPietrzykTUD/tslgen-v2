@@ -9,7 +9,10 @@ from tslc.backend.algorithm_surface import (
     AlgorithmSemanticFamily,
 )
 from tslc.backend.cpp import CppBackend
-from tslc.backend.cpp_algorithm import cpp_unavailable_algorithm_helper_declaration
+from tslc.backend.cpp_algorithm import (
+    cpp_algorithm_helper_holes,
+    cpp_unavailable_algorithm_helper_declaration,
+)
 from tslc.backend.cpp_algorithm_contracts import cpp_algorithm_contract_holes
 from tslc.backend.cpp_algorithm_public_declarations import (
     cpp_algorithm_declaration_holes,
@@ -237,6 +240,11 @@ def _cpp_static_header(
                 ),
             )
     holes = cpp_static_declaration_holes(header)
+    if header.startswith("tsl_algorithm_detail_"):
+        holes = {
+            **holes,
+            **cpp_algorithm_helper_holes(model.algorithm.helper_bindings),
+        }
     return assets.fill(header, **holes) if holes else assets.text(header)
 
 
@@ -383,8 +391,8 @@ def _cpp_unavailable_algorithm_helpers(model: CppProjectRenderModel) -> str:
     blocks: list[str] = []
     for group in model.algorithm.unavailable_helpers:
         declarations = "\n".join(
-            cpp_unavailable_algorithm_helper_declaration(requirement)
-            for requirement in group.requirements
+            cpp_unavailable_algorithm_helper_declaration(binding)
+            for binding in group.bindings
         )
         blocks.append(
             f"#if defined({group.profile_macro})\n"

@@ -57,7 +57,7 @@ template <class MaskLayout, class Vec>
 inline typename Vec::mask_type mask_from_storage(
     mask_storage_for_vec_t<MaskLayout, Vec> mask) {
     if constexpr (std::is_same<MaskLayout, mask_layout::integral>::value) {
-        return ::tsl::to_mask<Vec>(mask);
+        return ::tsl::@{algorithm_helper_mask_from_integral}<Vec>(mask);
     } else if constexpr (std::is_same<MaskLayout, mask_layout::native>::value) {
         return mask;
     } else {
@@ -71,7 +71,7 @@ template <class MaskLayout, class Vec>
 inline mask_storage_for_vec_t<MaskLayout, Vec> mask_to_storage(
     typename Vec::mask_type mask) {
     if constexpr (std::is_same<MaskLayout, mask_layout::integral>::value) {
-        return ::tsl::to_integral<Vec>(mask);
+        return ::tsl::@{algorithm_helper_integral_mask}<Vec>(mask);
     } else if constexpr (std::is_same<MaskLayout, mask_layout::native>::value) {
         return mask;
     } else {
@@ -87,7 +87,7 @@ inline typename Vec::imask_type mask_storage_to_integral(
     if constexpr (std::is_same<MaskLayout, mask_layout::integral>::value) {
         return mask;
     } else if constexpr (std::is_same<MaskLayout, mask_layout::native>::value) {
-        return ::tsl::to_integral<Vec>(mask);
+        return ::tsl::@{algorithm_helper_integral_mask}<Vec>(mask);
     } else {
         static_assert(
             always_false<MaskLayout, Vec>::value,
@@ -101,7 +101,7 @@ inline mask_storage_for_vec_t<MaskLayout, Vec> mask_storage_from_integral(
     if constexpr (std::is_same<MaskLayout, mask_layout::integral>::value) {
         return mask;
     } else if constexpr (std::is_same<MaskLayout, mask_layout::native>::value) {
-        return ::tsl::to_mask<Vec>(mask);
+        return ::tsl::@{algorithm_helper_mask_from_integral}<Vec>(mask);
     } else {
         static_assert(
             always_false<MaskLayout, Vec>::value,
@@ -128,14 +128,14 @@ inline void store_mask_storage(
     std::size_t element,
     typename Vec::mask_type mask) {
     if constexpr (std::is_same<MaskLayout, mask_layout::bytes>::value) {
-        const auto imask = ::tsl::to_integral<Vec>(mask);
+        const auto imask = ::tsl::@{algorithm_helper_integral_mask}<Vec>(mask);
         const std::size_t lanes = detail::lane_count<Vec>();
         for (std::size_t lane = 0; lane < lanes; ++lane) {
             masks[element + lane] =
                 imask_test_lane(imask, lane) ? std::uint8_t{1} : std::uint8_t{0};
         }
     } else if constexpr (std::is_same<MaskLayout, mask_layout::bits>::value) {
-        const auto imask = ::tsl::to_integral<Vec>(mask);
+        const auto imask = ::tsl::@{algorithm_helper_integral_mask}<Vec>(mask);
         const std::size_t lanes = detail::lane_count<Vec>();
         for (std::size_t lane = 0; lane < lanes; ++lane) {
             packed_bit_mask_set(masks, element + lane, imask_test_lane(imask, lane));
@@ -178,7 +178,7 @@ inline typename Vec::mask_type load_mask_storage(
                 imask = imask_set_lane<Vec>(imask, lane);
             }
         }
-        return ::tsl::to_mask<Vec>(imask);
+        return ::tsl::@{algorithm_helper_mask_from_integral}<Vec>(imask);
     } else if constexpr (std::is_same<MaskLayout, mask_layout::bits>::value) {
         typename Vec::imask_type imask{};
         const std::size_t lanes = detail::lane_count<Vec>();
@@ -187,7 +187,7 @@ inline typename Vec::mask_type load_mask_storage(
                 imask = imask_set_lane<Vec>(imask, lane);
             }
         }
-        return ::tsl::to_mask<Vec>(imask);
+        return ::tsl::@{algorithm_helper_mask_from_integral}<Vec>(imask);
     } else {
         return mask_from_storage<MaskLayout, Vec>(masks[chunk]);
     }
@@ -219,7 +219,7 @@ inline void append_indices_from_mask(
     static_assert(
         is_selection_index<IndexT>::value,
         "selection-vector output indices must use an unsigned integral row-id type");
-    const auto imask = ::tsl::to_integral<Vec>(active);
+    const auto imask = ::tsl::@{algorithm_helper_integral_mask}<Vec>(active);
     for (std::size_t lane = 0; lane < lanes; ++lane) {
         if (imask_test_lane(imask, lane)) {
             indices[produced] = static_cast<IndexT>(base_index + lane);
@@ -242,7 +242,7 @@ inline void append_selected_indices_from_mask(
     static_assert(
         is_selection_index<OutputIndexT>::value,
         "selection-vector output indices must use an unsigned integral row-id type");
-    const auto imask = ::tsl::to_integral<Vec>(active);
+    const auto imask = ::tsl::@{algorithm_helper_integral_mask}<Vec>(active);
     for (std::size_t lane = 0; lane < lanes; ++lane) {
         if (imask_test_lane(imask, lane)) {
             output_indices[produced] =

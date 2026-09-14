@@ -25,14 +25,14 @@ inline void transform_unary_loop(
     const std::size_t chunk_count = count / lanes;
     std::size_t i = 0;
     for (std::size_t chunk = 0; chunk < chunk_count; ++chunk, i += lanes) {
-        auto x = ::tsl::load<Vec, input_aligned>(input + i);
+        auto x = ::tsl::@{algorithm_helper_contiguous_read}<Vec, input_aligned>(input + i);
         auto y = invoke_op<Vec>(op, x);
-        ::tsl::store<Vec, output_aligned>(output + i, y);
+        ::tsl::@{algorithm_helper_contiguous_write}<Vec, output_aligned>(output + i, y);
     }
     for (; i < count; ++i) {
-        auto x = ::tsl::load<scalar_vec, false>(input + i);
+        auto x = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(input + i);
         auto y = invoke_op<scalar_vec>(op, x);
-        ::tsl::store<scalar_vec, false>(output + i, y);
+        ::tsl::@{algorithm_helper_contiguous_write}<scalar_vec, false>(output + i, y);
     }
 }
 
@@ -61,16 +61,16 @@ inline void transform_binary_loop(
     const std::size_t chunk_count = count / lanes;
     std::size_t i = 0;
     for (std::size_t chunk = 0; chunk < chunk_count; ++chunk, i += lanes) {
-        auto x = ::tsl::load<Vec, left_aligned>(left + i);
-        auto y = ::tsl::load<Vec, right_aligned>(right + i);
+        auto x = ::tsl::@{algorithm_helper_contiguous_read}<Vec, left_aligned>(left + i);
+        auto y = ::tsl::@{algorithm_helper_contiguous_read}<Vec, right_aligned>(right + i);
         auto z = invoke_op<Vec>(op, x, y);
-        ::tsl::store<Vec, output_aligned>(output + i, z);
+        ::tsl::@{algorithm_helper_contiguous_write}<Vec, output_aligned>(output + i, z);
     }
     for (; i < count; ++i) {
-        auto x = ::tsl::load<scalar_vec, false>(left + i);
-        auto y = ::tsl::load<scalar_vec, false>(right + i);
+        auto x = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(left + i);
+        auto y = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(right + i);
         auto z = invoke_op<scalar_vec>(op, x, y);
-        ::tsl::store<scalar_vec, false>(output + i, z);
+        ::tsl::@{algorithm_helper_contiguous_write}<scalar_vec, false>(output + i, z);
     }
 }
 
@@ -238,9 +238,9 @@ inline void transform_where_unary_loop(
     std::size_t i = 0;
     for (std::size_t chunk = 0; chunk < chunk_count; ++chunk, i += lanes) {
         auto active = load_mask_storage<MaskLayout, Vec>(masks, chunk, i);
-        auto x = ::tsl::load<Vec, input_aligned>(input + i);
+        auto x = ::tsl::@{algorithm_helper_contiguous_read}<Vec, input_aligned>(input + i);
         auto y = invoke_masked_op<Vec>(op, active, x);
-        ::tsl::store_mask<Vec, output_aligned>(active, output + i, y);
+        ::tsl::@{algorithm_helper_masked_write}<Vec, output_aligned>(active, output + i, y);
     }
     if (i == count) {
         return;
@@ -251,9 +251,9 @@ inline void transform_where_unary_loop(
                 masks, chunk_count, i, lane)) {
             continue;
         }
-        auto x = ::tsl::load<scalar_vec, false>(input + i);
+        auto x = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(input + i);
         auto y = invoke_masked_op<scalar_vec>(op, true, x);
-        ::tsl::store<scalar_vec, false>(output + i, y);
+        ::tsl::@{algorithm_helper_contiguous_write}<scalar_vec, false>(output + i, y);
     }
 }
 
@@ -287,10 +287,10 @@ inline void transform_where_binary_loop(
     std::size_t i = 0;
     for (std::size_t chunk = 0; chunk < chunk_count; ++chunk, i += lanes) {
         auto active = load_mask_storage<MaskLayout, Vec>(masks, chunk, i);
-        auto x = ::tsl::load<Vec, left_aligned>(left + i);
-        auto y = ::tsl::load<Vec, right_aligned>(right + i);
+        auto x = ::tsl::@{algorithm_helper_contiguous_read}<Vec, left_aligned>(left + i);
+        auto y = ::tsl::@{algorithm_helper_contiguous_read}<Vec, right_aligned>(right + i);
         auto z = invoke_masked_op<Vec>(op, active, x, y);
-        ::tsl::store_mask<Vec, output_aligned>(active, output + i, z);
+        ::tsl::@{algorithm_helper_masked_write}<Vec, output_aligned>(active, output + i, z);
     }
     if (i == count) {
         return;
@@ -301,10 +301,10 @@ inline void transform_where_binary_loop(
                 masks, chunk_count, i, lane)) {
             continue;
         }
-        auto x = ::tsl::load<scalar_vec, false>(left + i);
-        auto y = ::tsl::load<scalar_vec, false>(right + i);
+        auto x = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(left + i);
+        auto y = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(right + i);
         auto z = invoke_masked_op<scalar_vec>(op, true, x, y);
-        ::tsl::store<scalar_vec, false>(output + i, z);
+        ::tsl::@{algorithm_helper_contiguous_write}<scalar_vec, false>(output + i, z);
     }
 }
 
@@ -334,9 +334,9 @@ inline void transform_masked_unary_loop(
     std::size_t i = 0;
     for (std::size_t chunk = 0; chunk < chunk_count; ++chunk, i += lanes) {
         auto active = load_mask_storage<MaskLayout, Vec>(masks, chunk, i);
-        auto x = ::tsl::load<Vec, input_aligned>(input + i);
+        auto x = ::tsl::@{algorithm_helper_contiguous_read}<Vec, input_aligned>(input + i);
         auto y = invoke_masked_op<Vec>(op, active, x);
-        ::tsl::store<Vec, output_aligned>(output + i, y);
+        ::tsl::@{algorithm_helper_contiguous_write}<Vec, output_aligned>(output + i, y);
     }
     if (i == count) {
         return;
@@ -345,9 +345,9 @@ inline void transform_masked_unary_loop(
     for (std::size_t lane = 0; i < count; ++i, ++lane) {
         const bool active = mask_storage_lane_active<MaskLayout, Vec>(
             masks, chunk_count, i, lane);
-        auto x = ::tsl::load<scalar_vec, false>(input + i);
+        auto x = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(input + i);
         auto y = invoke_masked_op<scalar_vec>(op, active, x);
-        ::tsl::store<scalar_vec, false>(output + i, y);
+        ::tsl::@{algorithm_helper_contiguous_write}<scalar_vec, false>(output + i, y);
     }
 }
 
@@ -381,10 +381,10 @@ inline void transform_masked_binary_loop(
     std::size_t i = 0;
     for (std::size_t chunk = 0; chunk < chunk_count; ++chunk, i += lanes) {
         auto active = load_mask_storage<MaskLayout, Vec>(masks, chunk, i);
-        auto x = ::tsl::load<Vec, left_aligned>(left + i);
-        auto y = ::tsl::load<Vec, right_aligned>(right + i);
+        auto x = ::tsl::@{algorithm_helper_contiguous_read}<Vec, left_aligned>(left + i);
+        auto y = ::tsl::@{algorithm_helper_contiguous_read}<Vec, right_aligned>(right + i);
         auto z = invoke_masked_op<Vec>(op, active, x, y);
-        ::tsl::store<Vec, output_aligned>(output + i, z);
+        ::tsl::@{algorithm_helper_contiguous_write}<Vec, output_aligned>(output + i, z);
     }
     if (i == count) {
         return;
@@ -393,10 +393,10 @@ inline void transform_masked_binary_loop(
     for (std::size_t lane = 0; i < count; ++i, ++lane) {
         const bool active = mask_storage_lane_active<MaskLayout, Vec>(
             masks, chunk_count, i, lane);
-        auto x = ::tsl::load<scalar_vec, false>(left + i);
-        auto y = ::tsl::load<scalar_vec, false>(right + i);
+        auto x = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(left + i);
+        auto y = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(right + i);
         auto z = invoke_masked_op<scalar_vec>(op, active, x, y);
-        ::tsl::store<scalar_vec, false>(output + i, z);
+        ::tsl::@{algorithm_helper_contiguous_write}<scalar_vec, false>(output + i, z);
     }
 }
 
@@ -415,10 +415,10 @@ inline void transform_selected_unary_loop(
 
     if constexpr (std::is_same<Vec, scalar_vec>::value) {
         for (std::size_t i = 0; i < selected_count; ++i) {
-            auto x = ::tsl::load<scalar_vec, false>(
+            auto x = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(
                 selected_row_pointer<T, IndexT, Scale>(input, indices[i]));
             auto y = invoke_op<scalar_vec>(op, x);
-            ::tsl::store<scalar_vec, false>(output + i, y);
+            ::tsl::@{algorithm_helper_contiguous_write}<scalar_vec, false>(output + i, y);
         }
     } else {
         const std::size_t lanes = detail::lane_count<Vec>();
@@ -429,13 +429,13 @@ inline void transform_selected_unary_loop(
             auto x = load_selected_vector<Vec, T, IndexT, Scale>(
                 input, indices + i);
             auto y = invoke_op<Vec>(op, x);
-            ::tsl::store<Vec, false>(output + i, y);
+            ::tsl::@{algorithm_helper_contiguous_write}<Vec, false>(output + i, y);
         }
         for (; i < selected_count; ++i) {
-            auto x = ::tsl::load<scalar_vec, false>(
+            auto x = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(
                 selected_row_pointer<T, IndexT, Scale>(input, indices[i]));
             auto y = invoke_op<scalar_vec>(op, x);
-            ::tsl::store<scalar_vec, false>(output + i, y);
+            ::tsl::@{algorithm_helper_contiguous_write}<scalar_vec, false>(output + i, y);
         }
     }
 }
@@ -456,12 +456,12 @@ inline void transform_selected_binary_loop(
 
     if constexpr (std::is_same<Vec, scalar_vec>::value) {
         for (std::size_t i = 0; i < selected_count; ++i) {
-            auto x = ::tsl::load<scalar_vec, false>(
+            auto x = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(
                 selected_row_pointer<T, IndexT, Scale>(left, indices[i]));
-            auto y = ::tsl::load<scalar_vec, false>(
+            auto y = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(
                 selected_row_pointer<T, IndexT, Scale>(right, indices[i]));
             auto z = invoke_op<scalar_vec>(op, x, y);
-            ::tsl::store<scalar_vec, false>(output + i, z);
+            ::tsl::@{algorithm_helper_contiguous_write}<scalar_vec, false>(output + i, z);
         }
     } else {
         const std::size_t lanes = detail::lane_count<Vec>();
@@ -474,15 +474,15 @@ inline void transform_selected_binary_loop(
             auto y = load_selected_vector<Vec, T, IndexT, Scale>(
                 right, indices + i);
             auto z = invoke_op<Vec>(op, x, y);
-            ::tsl::store<Vec, false>(output + i, z);
+            ::tsl::@{algorithm_helper_contiguous_write}<Vec, false>(output + i, z);
         }
         for (; i < selected_count; ++i) {
-            auto x = ::tsl::load<scalar_vec, false>(
+            auto x = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(
                 selected_row_pointer<T, IndexT, Scale>(left, indices[i]));
-            auto y = ::tsl::load<scalar_vec, false>(
+            auto y = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(
                 selected_row_pointer<T, IndexT, Scale>(right, indices[i]));
             auto z = invoke_op<scalar_vec>(op, x, y);
-            ::tsl::store<scalar_vec, false>(output + i, z);
+            ::tsl::@{algorithm_helper_contiguous_write}<scalar_vec, false>(output + i, z);
         }
     }
 }

@@ -5,8 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass, fields, replace
 from types import SimpleNamespace
 
+import pytest
+
 from tslc.backend.algorithm_surface import AlgorithmSemanticFamily
-from tslc.backend.cpp_algorithm import cpp_unavailable_algorithm_helper_declaration
+from tslc.backend.cpp_algorithm import (
+    CppAlgorithmHelperForm,
+    cpp_unavailable_algorithm_helper_declaration,
+)
 from tslc.backend.cpp_algorithm_plan import plan_cpp_algorithm_admission
 from tslc.backend.helper_requirements import (
     BackendHelperManifest,
@@ -32,6 +37,11 @@ from tslc.catalog.semantics import (
 class _Specialization:
     source_primitive_name: str
     mask_policy: PrimitiveMaskMode | None = None
+    primitive_name: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.primitive_name:
+            object.__setattr__(self, "primitive_name", self.source_primitive_name)
 
 
 class _EmittedProfile:
@@ -233,6 +243,14 @@ def test_missing_provider_only_gaps_its_features(catalog: Catalog) -> None:
         for gap in admission.gaps
         if gap.feature_name == "compaction"
     )
+    compaction = admission.helper(CppAlgorithmHelperForm.COMPACTION)
+    assert compaction.provider is None
+    assert compaction.emitted_callable_name == (
+        "tslc_unavailable_algorithm_helper_compaction"
+    )
+    assert "compress_store" not in cpp_unavailable_algorithm_helper_declaration(
+        compaction
+    )
 
 
 def test_static_helper_manifests_have_no_source_name_field() -> None:
@@ -248,22 +266,131 @@ def test_static_helper_manifests_have_no_source_name_field() -> None:
     )
 
 
-def test_every_cpp_algorithm_helper_has_a_partial_profile_lookup_declaration() -> None:
-    requirements = tuple(
-        dict.fromkeys(
-            requirement
-            for feature in CPP_HELPER_MANIFEST.features
-            for requirement in feature.requirements
+def test_every_cpp_algorithm_helper_has_a_partial_profile_lookup_declaration(
+    catalog: Catalog,
+) -> None:
+    helper_plan = BackendHelperPlan.resolve(CPP_HELPER_MANIFEST, catalog)
+    specializations = {
+        provider.primitive_name: (
+            _Specialization(
+                provider.primitive_name,
+                requirement.mask_policy,
+            ),
         )
+        for feature in CPP_HELPER_MANIFEST.features
+        for requirement in feature.requirements
+        if (provider := helper_plan.provider(requirement)) is not None
+    }
+    plan = plan_cpp_algorithm_admission(  # type: ignore[arg-type]
+        (_EmittedProfile("synthetic", specializations),), helper_plan
     )
 
     declarations = tuple(
-        cpp_unavailable_algorithm_helper_declaration(requirement)
-        for requirement in requirements
+        cpp_unavailable_algorithm_helper_declaration(binding)
+        for binding in plan.helper_bindings
     )
 
-    assert len(declarations) == len(requirements)
+    assert len(declarations) == len(tuple(CppAlgorithmHelperForm))
     assert all(declaration.endswith("= delete;") for declaration in declarations)
+
+
+def test_cpp_masked_store_uses_its_finalized_emitted_name(catalog: Catalog) -> None:
+    helper_plan = BackendHelperPlan.resolve(CPP_HELPER_MANIFEST, catalog)
+    requirement = CPP_HELPER_MANIFEST.requirements("masked_write")[0]
+    provider = helper_plan.provider(requirement)
+    assert provider is not None
+    profile = _EmittedProfile(
+        "synthetic",
+        {
+            "renamed_masked_write": (
+                _Specialization(
+                    provider.primitive_name,
+                    requirement.mask_policy,
+                    "renamed_masked_write",
+                ),
+            ),
+        },
+    )
+
+    plan = plan_cpp_algorithm_admission(  # type: ignore[arg-type]
+        (profile,), helper_plan
+    )
+
+    binding = plan.helper(CppAlgorithmHelperForm.MASKED_WRITE)
+    assert binding.provider == provider
+    assert binding.emitted_callable_name == "renamed_masked_write"
+
+
+def test_cpp_helper_callable_names_must_agree_across_profiles(
+    catalog: Catalog,
+) -> None:
+    helper_plan = BackendHelperPlan.resolve(CPP_HELPER_MANIFEST, catalog)
+    requirement = CPP_HELPER_MANIFEST.requirements("contiguous_read")[0]
+    provider = helper_plan.provider(requirement)
+    assert provider is not None
+    profiles = (
+        _EmittedProfile(
+            "alpha",
+            {
+                "read_alpha": (
+                    _Specialization(provider.primitive_name, None, "read_alpha"),
+                )
+            },
+        ),
+        _EmittedProfile(
+            "beta",
+            {
+                "read_beta": (
+                    _Specialization(provider.primitive_name, None, "read_beta"),
+                )
+            },
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "contiguous_read.*alpha=\\['read_alpha'\\].*"
+            "beta=\\['read_beta'\\]"
+        ),
+    ):
+        plan_cpp_algorithm_admission(profiles, helper_plan)  # type: ignore[arg-type]
+
+
+def test_cpp_profile_local_gap_deletes_the_bound_callable(
+    catalog: Catalog,
+) -> None:
+    helper_plan = BackendHelperPlan.resolve(CPP_HELPER_MANIFEST, catalog)
+    grouped: dict[str, list[_Specialization]] = {}
+    for feature in CPP_HELPER_MANIFEST.features:
+        for requirement in feature.requirements:
+            provider = helper_plan.provider(requirement)
+            assert provider is not None
+            grouped.setdefault(provider.primitive_name, []).append(
+                _Specialization(provider.primitive_name, requirement.mask_policy)
+            )
+    complete = {name: tuple(items) for name, items in grouped.items()}
+    partial = {
+        name: items for name, items in complete.items() if name != "compress_store"
+    }
+
+    plan = plan_cpp_algorithm_admission(  # type: ignore[arg-type]
+        (
+            _EmittedProfile("alpha", partial),
+            _EmittedProfile("beta", complete),
+        ),
+        helper_plan,
+    )
+
+    compaction = plan.helper(CppAlgorithmHelperForm.COMPACTION)
+    alpha = next(
+        group for group in plan.unavailable_helpers if group.profile_name == "alpha"
+    )
+    assert compaction.emitted_callable_name == "compress_store"
+    assert compaction in alpha.bindings
+    assert " compress_store(" in cpp_unavailable_algorithm_helper_declaration(
+        compaction
+    )
 
 
 def test_cpp_algorithm_admission_is_granular_around_compaction(
