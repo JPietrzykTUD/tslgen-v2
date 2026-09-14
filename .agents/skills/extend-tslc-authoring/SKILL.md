@@ -36,8 +36,12 @@ description: Add or change compiler-owned authoring and LSP capabilities in tslc
    expected text so stale actions fail safely.
 6. Make explorer, specialization, scaffold, and query views consume the real
    catalog, `Selector`, selector-path projection, registered TSIL descriptors,
-   and backend query data. Add a synthetic next backend, namespace, selector
-   shape, or region test when the feature crosses one of those extension points.
+   and backend query data. Select a backend in one compiler-owned policy:
+   explicit configured request, then first configured backend, then first
+   registered capability. Return the resolved backend and capability-owned
+   preview-file suffix to clients; do not make clients infer file types from
+   backend IDs. Add a synthetic next backend, namespace, selector shape, or
+   region test when the feature crosses one of those extension points.
 7. Keep the TypeScript client limited to transport, cancellation, caching,
    presentation, and applying server-provided edits. Generate shared keyword
    inventories from compiler registries; never copy compiler semantics into the
@@ -58,6 +62,8 @@ description: Add or change compiler-owned authoring and LSP capabilities in tslc
   outside the language-server process.
 - The editor client contains no TSL parsing, selector rules, backend knowledge,
   or TSIL vocabulary.
+- Generic authoring paths contain no C++/Rust default literals; a fake-only
+  registry remains usable without client or endpoint changes.
 
 ## Useful Commands
 

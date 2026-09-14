@@ -20,7 +20,9 @@ description: Add a backend or backend capability to tslc. Use when asked to intr
    diagnostics, and header groups belong to one immutable backend registry row;
    source data names only the semantic capability. Keep default backend choice
    explicit in requests/configuration and do not scatter hardcoded backend ID
-   lists or import-time registry snapshots. Configure the dialect's immutable
+   lists or import-time registry snapshots. Declare a nonempty preview-file
+   suffix on the capability and treat registration order as the default ordering
+   for unconfigured authoring requests. Configure the dialect's immutable
    lowering policy when checked failure values need helper primitives or the
    backend can bridge opted-in compiler-vector bodies to exact-width native
    implementations; do not add backend-name tests to common lowering.
@@ -40,9 +42,12 @@ description: Add a backend or backend capability to tslc. Use when asked to intr
 7. Add focused tests for registration, capability validation, signature/query
    projection, rendering, compiler assets, deterministic artifacts, and verifier
    configuration. Inject any backend-specific benchmark coverage identity when
-   constructing that backend's typed planner; the shared planner must not
-   recognize backend names. Use a fake third backend to prove generic pipeline,
-   doctor, authoring, and verification consumers dispatch through capabilities.
+   constructing that backend's typed planner, along with its extension-header
+   projection and any narrow backend render adapter required by shared policy
+   planning; shared benchmark and policy planners must not import the registry,
+   construct a concrete backend, or recognize backend names. Use a fake third
+   backend to prove generic pipeline, doctor, authoring, and verification
+   consumers dispatch through capabilities.
 
 ## Checks
 

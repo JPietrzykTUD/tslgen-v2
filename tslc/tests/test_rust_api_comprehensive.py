@@ -33,7 +33,12 @@ from tslc.catalog.memory import (
 from tslc.catalog.model import ImplementationSafety
 from tslc.catalog.overloads import ResolvedPrimitiveOverload
 from tslc.catalog.preconditions import PreconditionErrorKind, PreconditionKind
-from tslc.catalog.semantics import OperandRole, PrimitiveOperation
+from tslc.catalog.semantics import (
+    MASK_POPULATION_COUNT_REQUIREMENT,
+    OperandRole,
+    PrimitiveOperation,
+    ResolvedPrimitiveProvider,
+)
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.lower.primitive_semantics import LoweredMemoryAlignment
 from tslc.render.rust_facade_comprehensive import render_comprehensive_facade
@@ -209,7 +214,16 @@ def test_compacted_checked_facade_checks_extent_and_conditional_alignment() -> N
             PreconditionKind.SELECTED_MEMORY_ALIGNMENT,
         ),
     )
-    spec = replace(spec, axis=(("aligned", "true"),))
+    spec = replace(
+        spec,
+        axis=(("aligned", "true"),),
+        checked_primitive_providers=(
+            ResolvedPrimitiveProvider(
+                MASK_POPULATION_COUNT_REQUIREMENT,
+                "semantic_mask_population",
+            ),
+        ),
+    )
 
     plan = plan_rust_facade((), _plan(spec))
     rendered = render_comprehensive_facade(plan).public_items

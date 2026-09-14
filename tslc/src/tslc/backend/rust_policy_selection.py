@@ -16,6 +16,7 @@ from tslc.backend.rust_policy_manifest import (
     RustPolicyManifest,
     RustPolicySelectionPilot,
 )
+from tslc.benchmark.identity import specialization_key
 from tslc.benchmark.model import SpecializationKey
 from tslc.catalog.preconditions import PreconditionKind
 from tslc.catalog.model import Extension
@@ -203,10 +204,6 @@ def plan_rust_policy_selection(
     extension_header_group: ExtensionHeaderGroup = _no_extension_header_group,
 ) -> RustPolicySelectionPlan:
     """Plan the narrow stable-Rust selection family from finalized backend facts."""
-
-    # The benchmark subsystem owns policy identity.  Keep this import local so
-    # the Rust backend depends only on its small typed identity projection.
-    from tslc.benchmark.identity import specialization_key
 
     planned_profiles: list[RustPolicySelectionProfile] = []
     for profile in sorted(profiles, key=lambda item: item.profile.name):
@@ -485,8 +482,6 @@ def validate_rust_policy_manifest_profiles(
     extension_header_group: ExtensionHeaderGroup = _no_extension_header_group,
 ) -> tuple[Diagnostic, ...]:
     """Diagnose pilots that do not match one full-corpus lowered slot."""
-
-    from tslc.benchmark.identity import specialization_key
 
     counts = {pilot.pilot_id: 0 for pilot in manifest.selection_pilots}
     for profile in profiles:

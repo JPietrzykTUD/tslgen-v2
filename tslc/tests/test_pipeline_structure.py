@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ast
 import json
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -1005,6 +1005,73 @@ def test_checked_lowering_and_rendering_have_no_concrete_helper_names() -> None:
     assert offenders == []
 
 
+def test_benchmark_modules_do_not_import_backend_registration() -> None:
+    benchmark_root = _REPO_ROOT / "tslc" / "src" / "tslc" / "benchmark"
+
+    assert _forbidden_imports(
+        sorted(benchmark_root.rglob("*.py")),
+        "tslc.backend.registry",
+    ) == []
+
+
+def test_cycle_boundary_modules_have_no_function_local_tslc_imports() -> None:
+    package_root = _REPO_ROOT / "tslc" / "src" / "tslc"
+    paths = (
+        package_root / "backend" / "capability.py",
+        package_root / "backend" / "rust_policy_consumption.py",
+        package_root / "backend" / "rust_policy_selection.py",
+        package_root / "benchmark" / "identity.py",
+        package_root / "benchmark" / "planner.py",
+        package_root / "value_tests" / "identity.py",
+    )
+
+    assert _function_local_imports(paths, "tslc") == []
+
+
+def test_runtime_import_graph_has_no_cross_ownership_cycles() -> None:
+    package_root = _REPO_ROOT / "tslc" / "src" / "tslc"
+    graph = _runtime_import_graph(package_root)
+    closure = {
+        module_name: _reachable_modules(graph, module_name)
+        for module_name in graph
+    }
+    offenders: set[tuple[str, str]] = set()
+    for source in sorted(graph):
+        source_owner = _pipeline_owner(source)
+        if source_owner is None:
+            continue
+        reachable = closure[source]
+        for target in reachable:
+            target_owner = _pipeline_owner(target)
+            if (
+                target_owner is not None
+                and target_owner != source_owner
+                and source in closure[target]
+            ):
+                offenders.add(tuple(sorted((source, target))))
+
+    assert sorted(offenders) == []
+
+
+def test_generic_lsp_backend_selection_has_no_concrete_backend_literals() -> None:
+    lsp_root = _REPO_ROOT / "tslc" / "src" / "tslc" / "lsp"
+    paths = (
+        lsp_root / "backend_selection.py",
+        lsp_root / "primitive_explorer.py",
+        lsp_root / "specialization_context.py",
+    )
+    offenders: list[str] = []
+    for path in paths:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        offenders.extend(
+            f"{path}:{node.lineno}: {node.value}"
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Constant) and node.value in {"cpp", "rust"}
+        )
+
+    assert offenders == []
+
+
 def test_pre_lowering_packages_do_not_import_lowering() -> None:
     package_root = _REPO_ROOT / "tslc" / "src" / "tslc"
     paths = (
@@ -1322,6 +1389,97 @@ def _function_local_imports(paths: Iterable[Path], prefix: str) -> list[str]:
                     if _is_forbidden_import(node.module, prefix):
                         offenders.append(f"{path}:{node.lineno}")
     return sorted(set(offenders))
+
+
+def _runtime_import_graph(package_root: Path) -> dict[str, set[str]]:
+    paths_by_module = {
+        _python_module_name(path, package_root): path
+        for path in package_root.rglob("*.py")
+    }
+    known_modules = frozenset(paths_by_module)
+    graph: dict[str, set[str]] = {}
+    for module_name, path in paths_by_module.items():
+        package_name = (
+            module_name
+            if path.name == "__init__.py"
+            else module_name.rpartition(".")[0]
+        )
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        collector = _RuntimeImportCollector(package_name, known_modules)
+        collector.visit(tree)
+        graph[module_name] = collector.imports
+    return graph
+
+
+def _python_module_name(path: Path, package_root: Path) -> str:
+    parts = path.relative_to(package_root.parent).with_suffix("").parts
+    if parts[-1] == "__init__":
+        parts = parts[:-1]
+    return ".".join(parts)
+
+
+class _RuntimeImportCollector(ast.NodeVisitor):
+    def __init__(
+        self,
+        package_name: str,
+        known_modules: frozenset[str],
+    ) -> None:
+        self._package_name = package_name
+        self._known_modules = known_modules
+        self.imports: set[str] = set()
+
+    def visit_If(self, node: ast.If) -> None:
+        if isinstance(node.test, ast.Name) and node.test.id == "TYPE_CHECKING":
+            for child in node.orelse:
+                self.visit(child)
+            return
+        self.generic_visit(node)
+
+    def visit_Import(self, node: ast.Import) -> None:
+        self.imports.update(
+            alias.name for alias in node.names if alias.name in self._known_modules
+        )
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        base = node.module or ""
+        if node.level:
+            package_parts = self._package_name.split(".")
+            retained = len(package_parts) - node.level + 1
+            prefix = ".".join(package_parts[:retained])
+            base = ".".join(part for part in (prefix, base) if part)
+        for alias in node.names:
+            candidate = f"{base}.{alias.name}" if base else alias.name
+            if candidate in self._known_modules:
+                self.imports.add(candidate)
+            elif base in self._known_modules:
+                self.imports.add(base)
+
+
+def _reachable_modules(
+    graph: Mapping[str, set[str]],
+    source: str,
+) -> set[str]:
+    reachable: set[str] = set()
+    pending = list(graph[source])
+    while pending:
+        module_name = pending.pop()
+        if module_name in reachable:
+            continue
+        reachable.add(module_name)
+        pending.extend(graph.get(module_name, ()))
+    return reachable
+
+
+def _pipeline_owner(module_name: str) -> str | None:
+    return next(
+        (
+            owner
+            for owner in ("backend", "benchmark", "render", "value_tests")
+            if module_name == f"tslc.{owner}"
+            or module_name.startswith(f"tslc.{owner}.")
+        ),
+        None,
+    )
 
 
 def _empty_backend_artifacts(

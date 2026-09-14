@@ -69,6 +69,14 @@ Optional backend project tables are parsed through registry-owned configuration
 specs into one immutable, typed `ProjectRenderConfig`; generic configuration and
 API surfaces do not acquire backend-specific fields.
 
+Authoring requests use one deterministic policy in
+[lsp/backend_selection.py](src/tslc/lsp/backend_selection.py): an explicitly
+requested configured backend wins, otherwise the first configured backend wins,
+and an unconfigured workspace uses the first registered capability. Capability
+registration order is therefore intentional. The selected capability supplies
+both the backend ID and its preview-file suffix to the protocol; editor clients
+do not infer either fact from C++ or Rust names.
+
 Compiler diagnostics carry one canonical, end-exclusive `SourceSpan`; producers
 must supply `span=` and may project its start only for point-oriented display
 APIs. Strict-mode promotion, variant context, value-test coverage, and generation
@@ -345,7 +353,14 @@ prim<v:=(v,v)> add(left, right):
   the promoted contracts unchanged inside `LoweredSpecialization`; backend and
   downstream projections therefore receive typed facts without reconstructing
   them. Source data contains no Rust-specific spelling policy, and this stage
-  does not apply one.
+  does not apply one. Compiler-created calls identify their required provider
+  through a catalog-owned `PrimitiveProviderRequirement`: operation, parsed
+  result and parameter kinds, ordered operand roles, and any necessary mask or
+  attribute constraints. The catalog must resolve exactly one declaration;
+  missing and ambiguous providers are diagnostics, never name-based fallbacks.
+  The resolved source name is carried into lowering and dependency closure, so
+  renaming a semantically equivalent corpus primitive does not require changing
+  compiler-generated call logic.
 - **Explicit result vectors**: `return_type: vector: Name` refers to a declared
   `kind simd_type` generic and makes that complete caller-supplied vector the
   result owner without adding an implementation-selector axis. Lane-preserving
@@ -557,12 +572,19 @@ spellings, intrinsic composition, call syntax, unsafe framing, and a small
 immutable lowering policy. That policy owns whether checked failure paths need
 vector/mask placeholder primitives and whether an opted-in compiler-vector
 implementation may bridge to an exact-width native ABI; common lowering never
-recognizes a backend ID to make either choice. The
+recognizes a backend ID or corpus primitive name to make either choice. These
+policies hold semantic provider requirements; catalog resolution supplies the
+names used by fixed-native bridges, checked guards, checked failure values, and
+their dependency edges. The
 [backend registry](src/tslc/backend/registry.py) owns each backend's dialect
-factory, artifact media type, complete artifact renderer, documentation
-formatter, validation, helper manifest, value-test support, optional benchmark
-planner, optional project-configuration parser, verification adapter, and
-post-generation formatting/documentation specs. C++ and Rust machine-profile
+factory, artifact media type and preview-file suffix, complete artifact
+renderer, documentation formatter, validation, helper manifest, value-test
+support, optional benchmark planner, optional project-configuration parser,
+verification adapter, and post-generation formatting/documentation specs.
+Backend capabilities bind their own extension-header projection and other
+backend-specific rendering adapters when they construct shared planners; shared
+benchmark, value-test, and policy-planning modules do not import the registry or
+concrete backends to rediscover those facts. C++ and Rust machine-profile
 verification projections live in
 [backend/cpp_verification.py](src/tslc/backend/cpp_verification.py) and
 [backend/rust_verification.py](src/tslc/backend/rust_verification.py);
@@ -861,8 +883,10 @@ variant in the emitted primitive/dependency closure and emits structured skip
 coverage for unsupported signature shapes. An optional backend-owned slot
 identity projector adds policy-ratchet identity without making the shared
 planner recognize that backend; Rust supplies the current projector while C++
-retains its existing empty coverage identity. C++ renders those facts as a
-standalone native benchmark/policy tool. Rust admits scenario coverage through
+retains its existing empty coverage identity. The capability also injects the
+extension-header-group projection, and benchmark identities receive its decided
+value rather than querying global backend registration. C++ renders those facts
+as a standalone native benchmark/policy tool. Rust admits scenario coverage through
 explicit named `profile × scenario-family` pairs while deriving profile family,
 features, spellings, modes, and flags from the live machine profile. It renders
 the `sse2` register, whole-register cross-lane, and immediate families plus
@@ -932,8 +956,10 @@ invocation consumes that precomputed file; no convenience command hides or
 cycles the two phases. The
 generated benchmark Cargo profile is pinned to the compiler-owned settings. A
 frozen semantic consumption plan joins benchmark evidence to the selection
-seam; one render projection derives the Cargo and artifact names shared by
-project and benchmark rendering. Missing benchmark evidence therefore leaves
+seam; the Rust capability injects a narrow policy-mapping renderer factory, and
+one render projection derives the Cargo and artifact names shared by project
+and benchmark rendering. Policy planning consequently has no runtime dependency
+on the concrete Rust renderer. Missing benchmark evidence therefore leaves
 an ordinary default-only build instead of a dangling policy module. The build
 script materializes one complete mapping under `OUT_DIR` for
 both authored-default and policy-selected builds, and the library includes that
