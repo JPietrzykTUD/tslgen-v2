@@ -6,7 +6,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
-from typing import Literal
+from typing import Literal, cast, get_args
 
 from tslc.catalog_authoring_index import IndexedDocumentSymbol, IndexedSemanticToken
 from tslc.diagnostics import SourceSpan
@@ -36,6 +36,8 @@ SymbolKind = Literal[
     "shift-count-rule",
     "shift-lane-rule",
 ]
+
+ALL_SYMBOL_KINDS = cast(tuple[SymbolKind, ...], get_args(SymbolKind))
 
 ENUM_SYMBOL_KINDS: frozenset[SymbolKind] = frozenset(
     {
@@ -259,6 +261,7 @@ def _span_size(span: SourceSpan) -> tuple[int, int]:
 
 
 __all__ = (
+    "ALL_SYMBOL_KINDS",
     "CatalogIndex",
     "ENUM_SYMBOL_KINDS",
     "IndexedOccurrence",

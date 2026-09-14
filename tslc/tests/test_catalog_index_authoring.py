@@ -3,12 +3,22 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast, get_args
+
+import pytest
 
 from tslc.authoring_completion import authoring_completions
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.model import Catalog
 from tslc.catalog.validation import validate_catalog
-from tslc.catalog_index import CatalogIndex, IndexedDocumentSymbol, build_catalog_index
+from tslc.catalog_index import (
+    CatalogIndex,
+    CatalogIndexCache,
+    IndexedDocumentSymbol,
+    _IndexAccumulator,
+    build_catalog_index,
+)
+from tslc.catalog_index_model import ALL_SYMBOL_KINDS, SymbolKind
 from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.lsp.features import document_symbols, semantic_tokens
 from tslc.sources import SourceDocument
@@ -111,6 +121,90 @@ def _indexed_token_snapshot(
         )
         for token in index.semantic_tokens_by_path[_PATH]
     )
+
+
+def test_symbol_kind_inventory_drives_accumulator_maps_and_frozen_fragments() -> None:
+    assert ALL_SYMBOL_KINDS == get_args(SymbolKind)
+
+    accumulator = _IndexAccumulator()
+    assert tuple(accumulator.definitions) == ALL_SYMBOL_KINDS
+    assert tuple(accumulator.references) == ALL_SYMBOL_KINDS
+
+    fragment = accumulator.freeze_document((), ())
+    assert tuple(fragment.definitions) == ALL_SYMBOL_KINDS
+    assert tuple(fragment.references) == ALL_SYMBOL_KINDS
+    with pytest.raises(TypeError):
+        cast(dict[str, object], fragment.definitions["primitive"])["new"] = ()
+
+
+def test_empty_and_reordered_document_indexes_are_deterministic_and_immutable(
+    catalog: Catalog,
+) -> None:
+    alpha_path = Path("tslctmp/catalog-index-alpha.tsl").resolve()
+    zeta_path = Path("tslctmp/catalog-index-zeta.tsl").resolve()
+    parser = TslParser(load_default_tsl_grammar())
+    parsed = parser.parse(
+        (
+            SourceDocument(
+                zeta_path,
+                'extension zeta:\n  extension_name "zeta"\n',
+                "",
+                "tsl",
+            ),
+            SourceDocument(
+                alpha_path,
+                'extension alpha:\n  extension_name "alpha"\n',
+                "",
+                "tsl",
+            ),
+        )
+    )
+    assert parsed.diagnostics == ()
+    reordered = OuterTslParseResult(tuple(reversed(parsed.documents)), ())
+
+    uncached = build_catalog_index(catalog, parsed)
+    reversed_index = build_catalog_index(catalog, reordered)
+    cached = build_catalog_index(catalog, parsed, cache=CatalogIndexCache())
+
+    assert uncached == reversed_index == cached
+    expected_paths = (alpha_path, zeta_path)
+    assert tuple(uncached.occurrences_by_path) == expected_paths
+    assert tuple(uncached.document_symbols_by_path) == expected_paths
+    assert tuple(uncached.semantic_tokens_by_path) == expected_paths
+    with pytest.raises(TypeError):
+        cast(dict[str, object], uncached.extension_definitions)["new"] = ()
+
+    empty = build_catalog_index(catalog, OuterTslParseResult((), ()))
+    assert empty.occurrences_by_path == {}
+    assert empty.document_symbols_by_path == {}
+    assert empty.semantic_tokens_by_path == {}
+    assert empty.primitive_calls == {}
+    assert empty.primitive_call_preconditions == {}
+
+
+def test_semantic_operand_scopes_do_not_leak_between_primitives(
+    catalog: Catalog,
+) -> None:
+    source = '''prim<v:=v> first(value):
+  operation reinterpret
+  operand_roles:
+    primary value
+prim<v:=v> second(value):
+  operation reinterpret
+  operand_roles:
+    primary value
+'''
+    index, _ = _index(catalog, source)
+    references = tuple(
+        occurrence
+        for occurrence in index.occurrences_by_path[_PATH]
+        if occurrence.kind == "semantic-operand" and not occurrence.definition
+    )
+
+    assert len(references) == 2
+    assert references[0].scope != references[1].scope
+    assert index.definitions(references[0])[0].line == 1
+    assert index.definitions(references[1])[0].line == 5
 
 
 def test_document_symbol_hierarchy_covers_outer_and_nested_declarations(

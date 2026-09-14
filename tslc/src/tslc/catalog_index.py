@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from types import MappingProxyType
+from typing import TypeVar
 
 from tslc.catalog.arithmetic import (
     ARITHMETIC_GUARANTEE_SPECS,
@@ -45,6 +47,7 @@ from tslc.catalog_hover import (
     semantic_operand_hover as _semantic_operand_hover,
 )
 from tslc.catalog_index_model import (
+    ALL_SYMBOL_KINDS as _ALL_SYMBOL_KINDS,
     CatalogIndex,
     ENUM_SYMBOL_KINDS as _ENUM_SYMBOL_KINDS,
     IndexedOccurrence,
@@ -55,6 +58,7 @@ from tslc.catalog_index_model import (
     sorted_spans as _sorted_spans,
 )
 from tslc.catalog_occurrences import (
+    ScopedSymbolKind as _ScopedSymbolKind,
     freeze_scoped_spans as _freeze_scoped_spans,
     freeze_spans as _freeze_spans,
     name_in_source as _name_in_source,
@@ -87,6 +91,10 @@ from tslc.syntax.ast import (
     ParsedTslScalarValue,
 )
 
+
+_SpanKey = TypeVar("_SpanKey")
+
+
 @dataclass(frozen=True, slots=True)
 class _DocumentIndex:
     definitions: Mapping[SymbolKind, Mapping[str, tuple[SourceSpan, ...]]]
@@ -104,6 +112,333 @@ class _DocumentIndex:
     primitive_call_preconditions: tuple[IndexedCallPreconditionDisposition, ...]
     symbols: tuple[IndexedDocumentSymbol, ...]
     semantic_tokens: tuple[IndexedSemanticToken, ...]
+
+
+def _symbol_span_maps() -> dict[SymbolKind, dict[str, list[SourceSpan]]]:
+    return {kind: {} for kind in _ALL_SYMBOL_KINDS}
+
+
+@dataclass(slots=True)
+class _IndexAccumulator:
+    """Mutable construction state for one document or complete catalog index."""
+
+    definitions: dict[SymbolKind, dict[str, list[SourceSpan]]] = field(
+        default_factory=_symbol_span_maps
+    )
+    references: dict[SymbolKind, dict[str, list[SourceSpan]]] = field(
+        default_factory=_symbol_span_maps
+    )
+    target_axis_definitions: dict[tuple[str, str], list[SourceSpan]] = field(
+        default_factory=dict
+    )
+    target_axis_references: dict[tuple[str, str], list[SourceSpan]] = field(
+        default_factory=dict
+    )
+    overload_value_definitions: dict[tuple[str, str], list[SourceSpan]] = field(
+        default_factory=dict
+    )
+    overload_value_references: dict[tuple[str, str], list[SourceSpan]] = field(
+        default_factory=dict
+    )
+    arithmetic_operand_definitions: dict[tuple[str, str], list[SourceSpan]] = field(
+        default_factory=dict
+    )
+    arithmetic_operand_references: dict[tuple[str, str], list[SourceSpan]] = field(
+        default_factory=dict
+    )
+    semantic_operand_definitions: dict[tuple[str, str], list[SourceSpan]] = field(
+        default_factory=dict
+    )
+    semantic_operand_references: dict[tuple[str, str], list[SourceSpan]] = field(
+        default_factory=dict
+    )
+    occurrences: list[IndexedOccurrence] = field(default_factory=list)
+    primitive_calls: set[tuple[str, str]] = field(default_factory=set)
+    call_preconditions: list[IndexedCallPreconditionDisposition] = field(
+        default_factory=list
+    )
+
+    def record(
+        self,
+        kind: SymbolKind,
+        name: str,
+        span: SourceSpan,
+        *,
+        definition: bool,
+    ) -> None:
+        values = self.definitions if definition else self.references
+        _record(values, self.occurrences, kind, name, span, definition)
+
+    def record_scalar_reference(
+        self,
+        value: ParsedTslScalarValue,
+        kind: SymbolKind,
+    ) -> None:
+        _record_scalar_reference(value, self.references, self.occurrences, kind)
+
+    def record_scoped(
+        self,
+        kind: _ScopedSymbolKind,
+        scope: str,
+        name: str,
+        span: SourceSpan,
+        *,
+        definition: bool,
+    ) -> None:
+        _record_scoped(
+            self._scoped_spans(kind, definition),
+            self.occurrences,
+            kind,
+            scope,
+            name,
+            span,
+            definition,
+        )
+
+    def record_occurrence(self, occurrence: IndexedOccurrence) -> None:
+        self.occurrences.append(occurrence)
+
+    def record_primitive_call(self, caller: str, callee: str) -> None:
+        self.primitive_calls.add((caller, callee))
+
+    def record_call_precondition(
+        self, disposition: IndexedCallPreconditionDisposition
+    ) -> None:
+        self.call_preconditions.append(disposition)
+
+    def merge(self, fragment: _DocumentIndex) -> None:
+        for kind in _ALL_SYMBOL_KINDS:
+            self._merge_spans(self.definitions[kind], fragment.definitions[kind])
+            self._merge_spans(self.references[kind], fragment.references[kind])
+        self._merge_spans(
+            self.target_axis_definitions, fragment.target_axis_definitions
+        )
+        self._merge_spans(
+            self.target_axis_references, fragment.target_axis_references
+        )
+        self._merge_spans(
+            self.overload_value_definitions, fragment.overload_value_definitions
+        )
+        self._merge_spans(
+            self.overload_value_references, fragment.overload_value_references
+        )
+        self._merge_spans(
+            self.arithmetic_operand_definitions,
+            fragment.arithmetic_operand_definitions,
+        )
+        self._merge_spans(
+            self.arithmetic_operand_references,
+            fragment.arithmetic_operand_references,
+        )
+        self._merge_spans(
+            self.semantic_operand_definitions,
+            fragment.semantic_operand_definitions,
+        )
+        self._merge_spans(
+            self.semantic_operand_references,
+            fragment.semantic_operand_references,
+        )
+        self.occurrences.extend(fragment.occurrences)
+        self.primitive_calls.update(fragment.primitive_calls)
+        self.call_preconditions.extend(fragment.primitive_call_preconditions)
+
+    def freeze_document(
+        self,
+        symbols: tuple[IndexedDocumentSymbol, ...],
+        semantic_tokens: tuple[IndexedSemanticToken, ...],
+    ) -> _DocumentIndex:
+        return _DocumentIndex(
+            definitions=self._freeze_symbol_spans(self.definitions),
+            references=self._freeze_symbol_spans(self.references),
+            target_axis_definitions=self._freeze_scoped(
+                self.target_axis_definitions
+            ),
+            target_axis_references=self._freeze_scoped(self.target_axis_references),
+            overload_value_definitions=self._freeze_scoped(
+                self.overload_value_definitions
+            ),
+            overload_value_references=self._freeze_scoped(
+                self.overload_value_references
+            ),
+            arithmetic_operand_definitions=self._freeze_scoped(
+                self.arithmetic_operand_definitions
+            ),
+            arithmetic_operand_references=self._freeze_scoped(
+                self.arithmetic_operand_references
+            ),
+            semantic_operand_definitions=self._freeze_scoped(
+                self.semantic_operand_definitions
+            ),
+            semantic_operand_references=self._freeze_scoped(
+                self.semantic_operand_references
+            ),
+            occurrences=tuple(sorted(self.occurrences, key=_occurrence_key)),
+            primitive_calls=tuple(sorted(self.primitive_calls)),
+            primitive_call_preconditions=tuple(self.call_preconditions),
+            symbols=symbols,
+            semantic_tokens=semantic_tokens,
+        )
+
+    def freeze_catalog(
+        self,
+        catalog: Catalog,
+        *,
+        symbols_by_path: Mapping[Path, tuple[IndexedDocumentSymbol, ...]],
+        semantic_tokens_by_path: Mapping[Path, tuple[IndexedSemanticToken, ...]],
+    ) -> CatalogIndex:
+        calls: dict[str, set[str]] = {}
+        callers: dict[str, set[str]] = {}
+        for caller, callee in sorted(self.primitive_calls):
+            calls.setdefault(caller, set()).add(callee)
+            callers.setdefault(callee, set()).add(caller)
+        preconditions_by_caller: dict[
+            str, set[IndexedCallPreconditionDisposition]
+        ] = {}
+        for item in self.call_preconditions:
+            preconditions_by_caller.setdefault(item.caller, set()).add(item)
+        occurrences_by_path: dict[Path, list[IndexedOccurrence]] = {}
+        for occurrence in self.occurrences:
+            occurrences_by_path.setdefault(
+                occurrence.span.path.resolve(), []
+            ).append(occurrence)
+        return CatalogIndex(
+            primitive_definitions=_freeze_spans(self.definitions["primitive"]),
+            extension_definitions=_freeze_spans(self.definitions["extension"]),
+            type_group_definitions=_freeze_spans(self.definitions["type-group"]),
+            primitive_references=_freeze_spans(self.references["primitive"]),
+            extension_references=_freeze_spans(self.references["extension"]),
+            type_group_references=_freeze_spans(self.references["type-group"]),
+            target_axis_definitions=_freeze_scoped_spans(
+                self.target_axis_definitions
+            ),
+            target_axis_references=_freeze_scoped_spans(self.target_axis_references),
+            overload_axis_definitions=_freeze_spans(
+                self.definitions["overload-axis"]
+            ),
+            overload_axis_references=_freeze_spans(
+                self.references["overload-axis"]
+            ),
+            overload_value_definitions=_freeze_scoped_spans(
+                self.overload_value_definitions
+            ),
+            overload_value_references=_freeze_scoped_spans(
+                self.overload_value_references
+            ),
+            arithmetic_operand_definitions=_freeze_scoped_spans(
+                self.arithmetic_operand_definitions
+            ),
+            arithmetic_operand_references=_freeze_scoped_spans(
+                self.arithmetic_operand_references
+            ),
+            semantic_operand_definitions=_freeze_scoped_spans(
+                self.semantic_operand_definitions
+            ),
+            semantic_operand_references=_freeze_scoped_spans(
+                self.semantic_operand_references
+            ),
+            enum_references={
+                (kind, name): _sorted_spans(spans)
+                for kind in sorted(_ENUM_SYMBOL_KINDS)
+                for name, spans in sorted(self.references[kind].items())
+            },
+            primitive_calls={
+                name: tuple(sorted(values)) for name, values in sorted(calls.items())
+            },
+            primitive_callers={
+                name: tuple(sorted(values))
+                for name, values in sorted(callers.items())
+            },
+            primitive_call_preconditions={
+                name: tuple(
+                    sorted(
+                        values,
+                        key=lambda item: (
+                            item.callee,
+                            item.condition,
+                            item.disposition,
+                            item.span.path.as_posix(),
+                            item.span.line,
+                            item.span.column,
+                        ),
+                    )
+                )
+                for name, values in sorted(preconditions_by_caller.items())
+            },
+            occurrences_by_path={
+                path: tuple(sorted(items, key=_occurrence_key))
+                for path, items in sorted(
+                    occurrences_by_path.items(),
+                    key=lambda item: item[0].as_posix(),
+                )
+            },
+            document_symbols_by_path=dict(
+                sorted(symbols_by_path.items(), key=lambda item: item[0].as_posix())
+            ),
+            semantic_tokens_by_path=dict(
+                sorted(
+                    semantic_tokens_by_path.items(),
+                    key=lambda item: item[0].as_posix(),
+                )
+            ),
+            hover_text=_hover_text(catalog, self.definitions),
+            overload_value_hover=_overload_value_hover(catalog),
+            arithmetic_operand_hover=_arithmetic_operand_hover(catalog),
+            semantic_operand_hover=_semantic_operand_hover(catalog),
+        )
+
+    def _scoped_spans(
+        self, kind: _ScopedSymbolKind, definition: bool
+    ) -> dict[tuple[str, str], list[SourceSpan]]:
+        if kind == "target-axis":
+            return (
+                self.target_axis_definitions
+                if definition
+                else self.target_axis_references
+            )
+        if kind == "overload-value":
+            return (
+                self.overload_value_definitions
+                if definition
+                else self.overload_value_references
+            )
+        if kind == "arithmetic-operand":
+            return (
+                self.arithmetic_operand_definitions
+                if definition
+                else self.arithmetic_operand_references
+            )
+        if kind == "semantic-operand":
+            return (
+                self.semantic_operand_definitions
+                if definition
+                else self.semantic_operand_references
+            )
+        raise ValueError(f"unsupported scoped catalog symbol kind {kind!r}")
+
+    @staticmethod
+    def _merge_spans(
+        destination: dict[_SpanKey, list[SourceSpan]],
+        source: Mapping[_SpanKey, tuple[SourceSpan, ...]],
+    ) -> None:
+        for key, spans in source.items():
+            destination.setdefault(key, []).extend(spans)
+
+    @staticmethod
+    def _freeze_symbol_spans(
+        values: Mapping[SymbolKind, dict[str, list[SourceSpan]]],
+    ) -> Mapping[SymbolKind, Mapping[str, tuple[SourceSpan, ...]]]:
+        return MappingProxyType(
+            {
+                kind: MappingProxyType(_freeze_spans(values[kind]))
+                for kind in _ALL_SYMBOL_KINDS
+            }
+        )
+
+    @staticmethod
+    def _freeze_scoped(
+        values: dict[tuple[str, str], list[SourceSpan]],
+    ) -> Mapping[tuple[str, str], tuple[SourceSpan, ...]]:
+        return MappingProxyType(_freeze_scoped_spans(values))
 
 
 class CatalogIndexCache:
@@ -146,101 +481,18 @@ def build_catalog_index(
     *,
     cache: CatalogIndexCache | None = None,
 ) -> CatalogIndex:
-    definitions: dict[SymbolKind, dict[str, list[SourceSpan]]] = {
-        "primitive": {},
-        "extension": {},
-        "type-group": {},
-        "region": {},
-        "target-axis": {},
-        "overload-axis": {},
-        "overload-value": {},
-        "arithmetic-operation": {},
-        "arithmetic-role": {},
-        "arithmetic-guarantee": {},
-        "arithmetic-operand": {},
-        "primitive-operation": {},
-        "operand-role": {},
-        "precondition": {},
-        "semantic-operand": {},
-        "memory-access": {},
-        "memory-addressing": {},
-        "memory-indexed-lane-extent": {},
-        "conversion-kind": {},
-        "lane-count-relation": {},
-        "numeric-conversion-mode": {},
-        "shift-count-rule": {},
-        "shift-lane-rule": {},
-    }
-    references: dict[SymbolKind, dict[str, list[SourceSpan]]] = {
-        "primitive": {},
-        "extension": {},
-        "type-group": {},
-        "region": {},
-        "target-axis": {},
-        "overload-axis": {},
-        "overload-value": {},
-        "arithmetic-operation": {},
-        "arithmetic-role": {},
-        "arithmetic-guarantee": {},
-        "arithmetic-operand": {},
-        "primitive-operation": {},
-        "operand-role": {},
-        "precondition": {},
-        "semantic-operand": {},
-        "memory-access": {},
-        "memory-addressing": {},
-        "memory-indexed-lane-extent": {},
-        "conversion-kind": {},
-        "lane-count-relation": {},
-        "numeric-conversion-mode": {},
-        "shift-count-rule": {},
-        "shift-lane-rule": {},
-    }
-    target_axis_definitions: dict[tuple[str, str], list[SourceSpan]] = {}
-    target_axis_references: dict[tuple[str, str], list[SourceSpan]] = {}
-    overload_value_definitions: dict[tuple[str, str], list[SourceSpan]] = {}
-    overload_value_references: dict[tuple[str, str], list[SourceSpan]] = {}
-    arithmetic_operand_definitions: dict[tuple[str, str], list[SourceSpan]] = {}
-    arithmetic_operand_references: dict[tuple[str, str], list[SourceSpan]] = {}
-    semantic_operand_definitions: dict[tuple[str, str], list[SourceSpan]] = {}
-    semantic_operand_references: dict[tuple[str, str], list[SourceSpan]] = {}
-    occurrences: list[IndexedOccurrence] = []
-    primitive_calls: set[tuple[str, str]] = set()
-    call_preconditions: list[IndexedCallPreconditionDisposition] = []
+    accumulator = _IndexAccumulator()
     symbols_by_path: dict[Path, tuple[IndexedDocumentSymbol, ...]] = {}
     semantic_tokens_by_path: dict[Path, tuple[IndexedSemanticToken, ...]] = {}
 
+    documents = tuple(sorted(parsed.documents, key=lambda item: item.path.as_posix()))
     fragments = (
-        cache.fragments(parsed.documents)
+        cache.fragments(documents)
         if cache is not None
-        else tuple(_build_document_index(document) for document in parsed.documents)
+        else tuple(_build_document_index(document) for document in documents)
     )
     for fragment in fragments:
-        for kind, names in fragment.definitions.items():
-            for name, spans in names.items():
-                definitions[kind].setdefault(name, []).extend(spans)
-        for kind, names in fragment.references.items():
-            for name, spans in names.items():
-                references[kind].setdefault(name, []).extend(spans)
-        for key, spans in fragment.target_axis_definitions.items():
-            target_axis_definitions.setdefault(key, []).extend(spans)
-        for key, spans in fragment.target_axis_references.items():
-            target_axis_references.setdefault(key, []).extend(spans)
-        for key, spans in fragment.overload_value_definitions.items():
-            overload_value_definitions.setdefault(key, []).extend(spans)
-        for key, spans in fragment.overload_value_references.items():
-            overload_value_references.setdefault(key, []).extend(spans)
-        for key, spans in fragment.arithmetic_operand_definitions.items():
-            arithmetic_operand_definitions.setdefault(key, []).extend(spans)
-        for key, spans in fragment.arithmetic_operand_references.items():
-            arithmetic_operand_references.setdefault(key, []).extend(spans)
-        for key, spans in fragment.semantic_operand_definitions.items():
-            semantic_operand_definitions.setdefault(key, []).extend(spans)
-        for key, spans in fragment.semantic_operand_references.items():
-            semantic_operand_references.setdefault(key, []).extend(spans)
-        occurrences.extend(fragment.occurrences)
-        primitive_calls.update(fragment.primitive_calls)
-        call_preconditions.extend(fragment.primitive_call_preconditions)
+        accumulator.merge(fragment)
         if fragment.symbols:
             path = fragment.symbols[0].span.path.resolve()
             symbols_by_path[path] = fragment.symbols
@@ -248,254 +500,47 @@ def build_catalog_index(
             path = fragment.semantic_tokens[0].span.path.resolve()
             semantic_tokens_by_path[path] = fragment.semantic_tokens
 
-    calls: dict[str, set[str]] = {}
-    callers: dict[str, set[str]] = {}
-    for caller, callee in sorted(primitive_calls):
-        calls.setdefault(caller, set()).add(callee)
-        callers.setdefault(callee, set()).add(caller)
-    preconditions_by_caller: dict[
-        str, set[IndexedCallPreconditionDisposition]
-    ] = {}
-    for item in call_preconditions:
-        preconditions_by_caller.setdefault(item.caller, set()).add(item)
-
-    by_path: dict[Path, list[IndexedOccurrence]] = {}
-    for occurrence in occurrences:
-        by_path.setdefault(occurrence.span.path.resolve(), []).append(occurrence)
-    return CatalogIndex(
-        primitive_definitions=_freeze_spans(definitions["primitive"]),
-        extension_definitions=_freeze_spans(definitions["extension"]),
-        type_group_definitions=_freeze_spans(definitions["type-group"]),
-        primitive_references=_freeze_spans(references["primitive"]),
-        extension_references=_freeze_spans(references["extension"]),
-        type_group_references=_freeze_spans(references["type-group"]),
-        target_axis_definitions=_freeze_scoped_spans(target_axis_definitions),
-        target_axis_references=_freeze_scoped_spans(target_axis_references),
-        overload_axis_definitions=_freeze_spans(definitions["overload-axis"]),
-        overload_axis_references=_freeze_spans(references["overload-axis"]),
-        overload_value_definitions=_freeze_scoped_spans(overload_value_definitions),
-        overload_value_references=_freeze_scoped_spans(overload_value_references),
-        arithmetic_operand_definitions=_freeze_scoped_spans(
-            arithmetic_operand_definitions
-        ),
-        arithmetic_operand_references=_freeze_scoped_spans(
-            arithmetic_operand_references
-        ),
-        semantic_operand_definitions=_freeze_scoped_spans(
-            semantic_operand_definitions
-        ),
-        semantic_operand_references=_freeze_scoped_spans(
-            semantic_operand_references
-        ),
-        enum_references={
-            (kind, name): _sorted_spans(spans)
-            for kind in sorted(_ENUM_SYMBOL_KINDS)
-            for name, spans in sorted(references[kind].items())
-        },
-        primitive_calls={
-            name: tuple(sorted(values)) for name, values in sorted(calls.items())
-        },
-        primitive_callers={
-            name: tuple(sorted(values)) for name, values in sorted(callers.items())
-        },
-        primitive_call_preconditions={
-            name: tuple(
-                sorted(
-                    values,
-                    key=lambda item: (
-                        item.callee,
-                        item.condition,
-                        item.disposition,
-                        item.span.path.as_posix(),
-                        item.span.line,
-                        item.span.column,
-                    ),
-                )
-            )
-            for name, values in sorted(preconditions_by_caller.items())
-        },
-        occurrences_by_path={
-            path: tuple(sorted(items, key=_occurrence_key))
-            for path, items in sorted(by_path.items(), key=lambda item: item[0].as_posix())
-        },
-        document_symbols_by_path=symbols_by_path,
+    return accumulator.freeze_catalog(
+        catalog,
+        symbols_by_path=symbols_by_path,
         semantic_tokens_by_path=semantic_tokens_by_path,
-        hover_text=_hover_text(catalog, definitions),
-        overload_value_hover=_overload_value_hover(catalog),
-        arithmetic_operand_hover=_arithmetic_operand_hover(catalog),
-        semantic_operand_hover=_semantic_operand_hover(catalog),
     )
 
 
 def _build_document_index(document: ParsedOuterTslDocument) -> _DocumentIndex:
-    definitions: dict[SymbolKind, dict[str, list[SourceSpan]]] = {
-        "primitive": {},
-        "extension": {},
-        "type-group": {},
-        "region": {},
-        "target-axis": {},
-        "overload-axis": {},
-        "overload-value": {},
-        "arithmetic-operation": {},
-        "arithmetic-role": {},
-        "arithmetic-guarantee": {},
-        "arithmetic-operand": {},
-        "primitive-operation": {},
-        "operand-role": {},
-        "precondition": {},
-        "semantic-operand": {},
-        "memory-access": {},
-        "memory-addressing": {},
-        "memory-indexed-lane-extent": {},
-        "conversion-kind": {},
-        "lane-count-relation": {},
-        "numeric-conversion-mode": {},
-        "shift-count-rule": {},
-        "shift-lane-rule": {},
-    }
-    references: dict[SymbolKind, dict[str, list[SourceSpan]]] = {
-        "primitive": {},
-        "extension": {},
-        "type-group": {},
-        "region": {},
-        "target-axis": {},
-        "overload-axis": {},
-        "overload-value": {},
-        "arithmetic-operation": {},
-        "arithmetic-role": {},
-        "arithmetic-guarantee": {},
-        "arithmetic-operand": {},
-        "primitive-operation": {},
-        "operand-role": {},
-        "precondition": {},
-        "semantic-operand": {},
-        "memory-access": {},
-        "memory-addressing": {},
-        "memory-indexed-lane-extent": {},
-        "conversion-kind": {},
-        "lane-count-relation": {},
-        "numeric-conversion-mode": {},
-        "shift-count-rule": {},
-        "shift-lane-rule": {},
-    }
-    target_axis_definitions: dict[tuple[str, str], list[SourceSpan]] = {}
-    target_axis_references: dict[tuple[str, str], list[SourceSpan]] = {}
-    overload_value_definitions: dict[tuple[str, str], list[SourceSpan]] = {}
-    overload_value_references: dict[tuple[str, str], list[SourceSpan]] = {}
-    arithmetic_operand_definitions: dict[tuple[str, str], list[SourceSpan]] = {}
-    arithmetic_operand_references: dict[tuple[str, str], list[SourceSpan]] = {}
-    semantic_operand_definitions: dict[tuple[str, str], list[SourceSpan]] = {}
-    semantic_operand_references: dict[tuple[str, str], list[SourceSpan]] = {}
-    occurrences: list[IndexedOccurrence] = []
-    primitive_calls: set[tuple[str, str]] = set()
-    call_preconditions: list[IndexedCallPreconditionDisposition] = []
-    _index_document(
-        document,
-        definitions,
-        references,
-        target_axis_definitions,
-        target_axis_references,
-        overload_value_definitions,
-        overload_value_references,
-        arithmetic_operand_definitions,
-        arithmetic_operand_references,
-        semantic_operand_definitions,
-        semantic_operand_references,
-        occurrences,
-        primitive_calls,
-        call_preconditions,
-    )
+    accumulator = _IndexAccumulator()
+    _index_document(document, accumulator)
     authoring = build_document_authoring_index(document)
-    return _DocumentIndex(
-        definitions={
-            kind: _freeze_spans(names) for kind, names in definitions.items()
-        },
-        references={
-            kind: _freeze_spans(names) for kind, names in references.items()
-        },
-        target_axis_definitions=_freeze_scoped_spans(target_axis_definitions),
-        target_axis_references=_freeze_scoped_spans(target_axis_references),
-        overload_value_definitions=_freeze_scoped_spans(overload_value_definitions),
-        overload_value_references=_freeze_scoped_spans(overload_value_references),
-        arithmetic_operand_definitions=_freeze_scoped_spans(
-            arithmetic_operand_definitions
-        ),
-        arithmetic_operand_references=_freeze_scoped_spans(
-            arithmetic_operand_references
-        ),
-        semantic_operand_definitions=_freeze_scoped_spans(
-            semantic_operand_definitions
-        ),
-        semantic_operand_references=_freeze_scoped_spans(
-            semantic_operand_references
-        ),
-        occurrences=tuple(sorted(occurrences, key=_occurrence_key)),
-        primitive_calls=tuple(sorted(primitive_calls)),
-        primitive_call_preconditions=tuple(call_preconditions),
-        symbols=authoring.symbols,
-        semantic_tokens=authoring.semantic_tokens,
+    return accumulator.freeze_document(
+        authoring.symbols,
+        authoring.semantic_tokens,
     )
 
 
 def _index_document(
     document: ParsedOuterTslDocument,
-    definitions: dict[SymbolKind, dict[str, list[SourceSpan]]],
-    references: dict[SymbolKind, dict[str, list[SourceSpan]]],
-    target_axis_definitions: dict[tuple[str, str], list[SourceSpan]],
-    target_axis_references: dict[tuple[str, str], list[SourceSpan]],
-    overload_value_definitions: dict[tuple[str, str], list[SourceSpan]],
-    overload_value_references: dict[tuple[str, str], list[SourceSpan]],
-    arithmetic_operand_definitions: dict[tuple[str, str], list[SourceSpan]],
-    arithmetic_operand_references: dict[tuple[str, str], list[SourceSpan]],
-    semantic_operand_definitions: dict[tuple[str, str], list[SourceSpan]],
-    semantic_operand_references: dict[tuple[str, str], list[SourceSpan]],
-    occurrences: list[IndexedOccurrence],
-    primitive_calls: set[tuple[str, str]],
-    call_preconditions: list[IndexedCallPreconditionDisposition],
+    accumulator: _IndexAccumulator,
 ) -> None:
     for primitive in document.primitives:
         scope = _primitive_scope(primitive)
         result_target = _result_target(primitive)
         span = _name_in_source(primitive.header_source, primitive.name)
-        _record(definitions, occurrences, "primitive", primitive.name, span, True)
-        _index_primitive_overload(
-            primitive,
-            references,
-            overload_value_references,
-            occurrences,
-        )
-        _index_primitive_arithmetic(
-            primitive,
-            references,
-            arithmetic_operand_definitions,
-            arithmetic_operand_references,
-            occurrences,
-            scope,
-        )
-        _index_primitive_semantics(
-            primitive,
-            references,
-            semantic_operand_definitions,
-            semantic_operand_references,
-            occurrences,
-            scope,
-        )
+        accumulator.record("primitive", primitive.name, span, definition=True)
+        _index_primitive_overload(primitive, accumulator)
+        _index_primitive_arithmetic(primitive, accumulator, scope)
+        _index_primitive_semantics(primitive, accumulator, scope)
         if result_target is not None:
             _, target_name, target_span = result_target
-            _record_scoped(
-                target_axis_definitions,
-                occurrences,
+            accumulator.record_scoped(
                 "target-axis",
                 scope,
                 target_name,
                 target_span,
-                True,
+                definition=True,
             )
         _index_implementation_selectors(
             primitive,
-            references,
-            target_axis_references,
-            occurrences,
+            accumulator,
             result_target=(
                 result_target
                 if result_target is None or result_target[0] != RESULT_DIM_VECTOR
@@ -506,75 +551,58 @@ def _index_document(
         for envelope in primitive.body_envelopes:
             source = _source_span(envelope.payload_source)
             for region in _regions(scan(envelope.payload_text, source=source)):
-                _index_region(
-                    primitive,
-                    region,
-                    references,
-                    occurrences,
-                    primitive_calls,
-                    call_preconditions,
-                )
+                _index_region(primitive, region, accumulator)
 
     for block in document.blocks:
         if block.kind == "extension" and block.name:
             span = _name_in_source(block.source, block.name)
-            _record(definitions, occurrences, "extension", block.name, span, True)
+            accumulator.record("extension", block.name, span, definition=True)
             for block_field in block.fields:
                 if block_field.key.text == "inherits" and isinstance(
                     block_field.value, ParsedTslScalarValue
                 ):
-                    _record_scalar_reference(
-                        block_field.value, references, occurrences, "extension"
+                    accumulator.record_scalar_reference(
+                        block_field.value, "extension"
                     )
                 elif block_field.key.text == "supersedes" and isinstance(
                     block_field.value, ParsedTslListValue
                 ):
                     for item in block_field.value.items:
                         if isinstance(item, ParsedTslScalarValue):
-                            _record_scalar_reference(
-                                item, references, occurrences, "extension"
-                            )
+                            accumulator.record_scalar_reference(item, "extension")
         elif block.kind == "types":
             for block_field in block.fields:
                 span = _source_span(block_field.key.source)
-                _record(
-                    definitions,
-                    occurrences,
+                accumulator.record(
                     "type-group",
                     block_field.key.text,
                     span,
-                    True,
+                    definition=True,
                 )
 
     for declaration in document.fields:
         if declaration.field.key.text != "overload_axes":
             continue
         for axis in children(declaration.field):
-            _record(
-                definitions,
-                occurrences,
+            accumulator.record(
                 "overload-axis",
                 axis.key.text,
                 _source_span(axis.key.source),
-                True,
+                definition=True,
             )
             for value in children(child(axis, "values")):
-                _record_scoped(
-                    overload_value_definitions,
-                    occurrences,
+                accumulator.record_scoped(
                     "overload-value",
                     axis.key.text,
                     value.key.text,
                     _source_span(value.key.source),
-                    True,
+                    definition=True,
                 )
 
 
 def _index_primitive_overload(
     primitive: ParsedPrimitiveDeclaration,
-    references: dict[SymbolKind, dict[str, list[SourceSpan]]],
-    overload_value_references: dict[tuple[str, str], list[SourceSpan]],
-    occurrences: list[IndexedOccurrence],
+    accumulator: _IndexAccumulator,
 ) -> None:
     for primitive_field in primitive.fields_by_name("overload"):
         axis_field = child(primitive_field.field, "axis")
@@ -582,32 +610,22 @@ def _index_primitive_overload(
         if axis_field is None or not isinstance(axis_field.value, ParsedTslScalarValue):
             continue
         axis_value = axis_field.value
-        _record_scalar_reference(
-            axis_value,
-            references,
-            occurrences,
-            "overload-axis",
-        )
+        accumulator.record_scalar_reference(axis_value, "overload-axis")
         if value_field is None or not isinstance(value_field.value, ParsedTslScalarValue):
             continue
         value = value_field.value
-        _record_scoped(
-            overload_value_references,
-            occurrences,
+        accumulator.record_scoped(
             "overload-value",
             axis_value.text,
             value.text,
             _source_span(value.payload_source or value.source),
-            False,
+            definition=False,
         )
 
 
 def _index_primitive_arithmetic(
     primitive: ParsedPrimitiveDeclaration,
-    references: dict[SymbolKind, dict[str, list[SourceSpan]]],
-    operand_definitions: dict[tuple[str, str], list[SourceSpan]],
-    operand_references: dict[tuple[str, str], list[SourceSpan]],
-    occurrences: list[IndexedOccurrence],
+    accumulator: _IndexAccumulator,
     scope: str,
 ) -> None:
     arithmetic_fields = primitive.fields_by_name("arithmetic")
@@ -626,82 +644,66 @@ def _index_primitive_arithmetic(
                 continue
             for item in value.value.items:
                 if isinstance(item, ParsedTslScalarValue):
-                    _record_scalar_reference(item, references, occurrences, kind)
+                    accumulator.record_scalar_reference(item, kind)
         for role in children(child(arithmetic, "operand_roles")):
-            _record(
-                references,
-                occurrences,
+            accumulator.record(
                 "arithmetic-role",
                 role.key.text,
                 _source_span(role.key.source),
-                False,
+                definition=False,
             )
             if not isinstance(role.value, ParsedTslScalarValue):
                 continue
             source = role.value.payload_source or role.value.source
             bound_names.add(role.value.text)
-            _record_scoped(
-                operand_references,
-                occurrences,
+            accumulator.record_scoped(
                 "arithmetic-operand",
                 scope,
                 role.value.text,
                 _source_span(source),
-                False,
+                definition=False,
             )
     for name, span in _parameter_spans(primitive):
         if name not in bound_names:
             continue
-        _record_scoped(
-            operand_definitions,
-            occurrences,
+        accumulator.record_scoped(
             "arithmetic-operand",
             scope,
             name,
             span,
-            True,
+            definition=True,
         )
 
 
 def _index_primitive_semantics(
     primitive: ParsedPrimitiveDeclaration,
-    references: dict[SymbolKind, dict[str, list[SourceSpan]]],
-    operand_definitions: dict[tuple[str, str], list[SourceSpan]],
-    operand_references: dict[tuple[str, str], list[SourceSpan]],
-    occurrences: list[IndexedOccurrence],
+    accumulator: _IndexAccumulator,
     scope: str,
 ) -> None:
     bound_names: set[str] = set()
     for parsed in primitive.fields_by_name("operation"):
         if isinstance(parsed.field.value, ParsedTslScalarValue):
-            _record_scalar_reference(
-                parsed.field.value,
-                references,
-                occurrences,
-                "primitive-operation",
+            accumulator.record_scalar_reference(
+                parsed.field.value, "primitive-operation"
             )
     for parsed in primitive.fields_by_name("operand_roles"):
         for role in children(parsed.field):
-            _record(
-                references,
-                occurrences,
+            accumulator.record(
                 "operand-role",
                 role.key.text,
                 _source_span(role.key.source),
-                False,
+                definition=False,
             )
             if not isinstance(role.value, ParsedTslScalarValue):
                 continue
             source = role.value.payload_source or role.value.source
             bound_names.add(role.value.text)
-            _record_scoped(
-                operand_references,
-                occurrences,
+            accumulator.record_scoped(
                 "semantic-operand",
                 scope,
                 role.value.text,
                 _source_span(source),
-                False,
+                definition=False,
             )
     for parsed in primitive.fields_by_name("preconditions"):
         value = parsed.field.value
@@ -709,12 +711,7 @@ def _index_primitive_semantics(
             continue
         for item in value.items:
             if isinstance(item, ParsedTslScalarValue):
-                _record_scalar_reference(
-                    item,
-                    references,
-                    occurrences,
-                    "precondition",
-                )
+                accumulator.record_scalar_reference(item, "precondition")
     semantic_members: tuple[
         tuple[str, tuple[tuple[str, SymbolKind], ...]], ...
     ] = (
@@ -747,30 +744,21 @@ def _index_primitive_semantics(
             for member_name, kind in members:
                 member = child(parsed.field, member_name)
                 if member is not None and isinstance(member.value, ParsedTslScalarValue):
-                    _record_scalar_reference(
-                        member.value,
-                        references,
-                        occurrences,
-                        kind,
-                    )
+                    accumulator.record_scalar_reference(member.value, kind)
     for name, span in _parameter_spans(primitive):
         if name in bound_names:
-            _record_scoped(
-                operand_definitions,
-                occurrences,
+            accumulator.record_scoped(
                 "semantic-operand",
                 scope,
                 name,
                 span,
-                True,
+                definition=True,
             )
 
 
 def _index_implementation_selectors(
     primitive: ParsedPrimitiveDeclaration,
-    references: dict[SymbolKind, dict[str, list[SourceSpan]]],
-    target_axis_references: dict[tuple[str, str], list[SourceSpan]],
-    occurrences: list[IndexedOccurrence],
+    accumulator: _IndexAccumulator,
     *,
     result_target: tuple[str, str, SourceSpan] | None,
     scope: str,
@@ -785,24 +773,22 @@ def _index_implementation_selectors(
         items = selector_items(entry.selector)
         if level.kind == "extensions":
             for name, span in items:
-                _record(references, occurrences, "extension", name, span, False)
+                accumulator.record("extension", name, span, definition=False)
         elif level.kind == "source-type-group":
             for name, span in items:
-                _record(references, occurrences, "type-group", name, span, False)
+                accumulator.record("type-group", name, span, definition=False)
         elif level.kind == "target-axis":
             for name, span in items:
-                _record_scoped(
-                    target_axis_references,
-                    occurrences,
+                accumulator.record_scoped(
                     "target-axis",
                     scope,
                     name,
                     span,
-                    False,
+                    definition=False,
                 )
         elif level.kind == "target-reference":
             for name, span in items:
-                _record(references, occurrences, "type-group", name, span, False)
+                accumulator.record("type-group", name, span, definition=False)
         # A `where` constraint level references no catalog symbol; it is never
         # indexed as a type group.
         for child in entry.children:
@@ -815,10 +801,7 @@ def _index_implementation_selectors(
 def _index_region(
     primitive: ParsedPrimitiveDeclaration,
     region: Region,
-    references: dict[SymbolKind, dict[str, list[SourceSpan]]],
-    occurrences: list[IndexedOccurrence],
-    primitive_calls: set[tuple[str, str]],
-    call_preconditions: list[IndexedCallPreconditionDisposition],
+    accumulator: _IndexAccumulator,
 ) -> None:
     if region.source is None:
         return
@@ -828,17 +811,19 @@ def _index_region(
         0,
         len(region.keyword),
     )
-    occurrences.append(IndexedOccurrence("region", region.keyword, keyword_span, False))
+    accumulator.record_occurrence(
+        IndexedOccurrence("region", region.keyword, keyword_span, False)
+    )
     if region.keyword != "call":
         return
     call = parse_call_selector(region.selector_text)
     if call is None:
         return
     name = primitive.name if call.primitive_ref == "@self" else call.primitive_ref
-    primitive_calls.add((primitive.name, name))
+    accumulator.record_primitive_call(primitive.name, name)
     reference_span = _region_selector_name_span(region, call.primitive_ref)
     if reference_span is not None:
-        _record(references, occurrences, "primitive", name, reference_span, False)
+        accumulator.record("primitive", name, reference_span, definition=False)
     selector_offset = region.full_text.find(region.selector_text)
     if selector_offset < 0:
         return
@@ -849,15 +834,13 @@ def _index_region(
             selector_offset + item.start,
             selector_offset + item.end,
         )
-        _record(
-            references,
-            occurrences,
+        accumulator.record(
             "precondition",
             item.condition,
             span,
-            False,
+            definition=False,
         )
-        call_preconditions.append(
+        accumulator.record_call_precondition(
             IndexedCallPreconditionDisposition(
                 caller=primitive.name,
                 callee=name,
