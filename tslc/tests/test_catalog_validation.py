@@ -118,6 +118,49 @@ def test_valid_tiny_catalog_has_no_validation_diagnostics() -> None:
     assert _diagnostics(_base_source()) == ()
 
 
+def test_indexed_pointer_load_requires_indexed_lane_extent() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "prim<v:=(cptr,cptr,sImm)> indexed_pointer_load(base_ptr, index_ptr, scale):\n"
+            "  operation load\n"
+            "  operand_roles:\n"
+            "    memory_source base_ptr\n"
+            "    index index_ptr\n"
+            "    scale scale\n"
+            "  memory:\n"
+            "    access read\n"
+            "    addressing indexed\n"
+        )
+    )
+
+    diagnostic = next(
+        item
+        for item in diagnostics
+        if item.code == "TSL-CATALOG-MISSING-MEMORY-INDEXED-LANES"
+    )
+    assert diagnostic.span is not None
+    assert diagnostic.span.path.name == "catalog_validation_fixture.tsl"
+
+
+def test_pointer_index_operand_remains_specific_to_indexed_loads() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "prim<s:=(v,cptr)> extract_by_pointer(data, index_ptr):\n"
+            "  operation extract_lane\n"
+            "  operand_roles:\n"
+            "    primary data\n"
+            "    index index_ptr\n"
+        )
+    )
+
+    diagnostic = next(
+        item
+        for item in diagnostics
+        if item.code == "TSL-CATALOG-INCOMPATIBLE-OPERATION-SIGNATURE"
+    )
+    assert "role 'index' to signature kind 'cptr'" in diagnostic.message
+
+
 def test_invalid_primitive_portability_is_diagnosed() -> None:
     diagnostics = _diagnostics(
         _base_source().replace(

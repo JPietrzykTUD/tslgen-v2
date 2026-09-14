@@ -1991,7 +1991,9 @@
       "implementation_count": 18,
       "family": "indexed_memory_contract",
       "checked_source_status": "coverage_gap",
-      "preconditions": [],
+      "preconditions": [
+        "indexed_memory_address_valid"
+      ],
       "checked_coverage_reason": "implemented for vector-index gather/scatter, including partial narrow gather, from a valid base view, typed scale, and active-index validation; pointer-indexed narrow gather remains omitted"
     },
     {

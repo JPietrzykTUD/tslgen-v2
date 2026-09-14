@@ -983,6 +983,27 @@ def test_indexed_memory_checked_twins_use_typed_address_facts(
     assert "0..IndicesType::lane_count()" in partial_rust
 
 
+def test_index_pointer_gather_does_not_publish_an_uncheckable_twin(
+    catalog: Catalog,
+    machine_profiles: Mapping[str, MachineProfile],
+) -> None:
+    cpp = _lowered(catalog, machine_profiles, "gather_narrow", "cpp")
+    rust = _lowered(catalog, machine_profiles, "gather_narrow", "rust")
+
+    assert cpp.primitive_semantics.preconditions
+    assert rust.primitive_semantics.preconditions
+    assert cpp.checked_primitive_providers == ()
+    assert rust.checked_primitive_providers == ()
+    assert checked_api_plan((cpp,)) is None
+    assert checked_api_plan((rust,)) is None
+    assert "gather_narrow_checked" not in CppBackend().render_checked_wrappers(
+        "gather_narrow", (cpp,)
+    )
+    assert "gather_narrow_checked" not in RustBackend().render_primitive_public(
+        "gather_narrow", (rust,)
+    )
+
+
 def test_indexed_checked_backends_reject_ambiguous_vector_type_ownership(
     catalog: Catalog,
     machine_profiles: Mapping[str, MachineProfile],

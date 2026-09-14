@@ -23,6 +23,7 @@ from tslc.backend.rust_facade_public_declarations import (
     rust_facade_core_declaration_owners,
 )
 from tslc.catalog.model import Catalog, Primitive
+from tslc.catalog.preconditions import precondition_supports_checked_api
 from tslc.diagnostics import format_diagnostic, has_errors
 from tslc.maintenance import _repo_context
 from tslc.maintenance._catalog import load_repository_catalog
@@ -367,6 +368,10 @@ def _caller_unsafe_paths(catalog: Catalog) -> tuple[CallerUnsafePath, ...]:
         preconditions = tuple(
             sorted(precondition.kind.value for precondition in primitive.preconditions)
         )
+        checked_source_ready = bool(preconditions) and all(
+            precondition_supports_checked_api(precondition)
+            for precondition in primitive.preconditions
+        )
         records.append(
             CallerUnsafePath(
                 identity=identity,
@@ -378,12 +383,12 @@ def _caller_unsafe_paths(catalog: Catalog) -> tuple[CallerUnsafePath, ...]:
                 implementation_count=len(unsafe),
                 family_id=family_id,
                 checked_source_status=(
-                    "declared" if preconditions else "coverage_gap"
+                    "declared" if checked_source_ready else "coverage_gap"
                 ),
                 preconditions=preconditions,
                 checked_coverage_reason=(
                     "source preconditions are available for backend check planning"
-                    if preconditions
+                    if checked_source_ready
                     else FAMILY_BY_ID[family_id].checked_feasibility
                 ),
             )

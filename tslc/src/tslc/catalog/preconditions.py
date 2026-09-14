@@ -152,6 +152,20 @@ class PrimitivePrecondition:
         )
 
 
+def precondition_supports_checked_api(
+    precondition: PrimitivePrecondition,
+) -> bool:
+    """Whether the current typed operands can be inspected by a checked facade."""
+
+    if precondition.kind is not PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID:
+        return True
+    index = precondition.binding(OperandRole.INDEX)
+    # A vector index is a value with a known lane extent. A raw index pointer
+    # has no extent, so dereferencing it during validation could itself violate
+    # the caller contract that the checked facade is meant to protect.
+    return index is not None and index.parameter_kind == "vidx"
+
+
 PRECONDITION_DESCRIPTORS: Mapping[
     PreconditionKind, PreconditionDescriptor
 ] = MappingProxyType(
@@ -257,7 +271,7 @@ PRECONDITION_DESCRIPTORS: Mapping[
         PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID: PreconditionDescriptor(
             kind=PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID,
             description=(
-                "The index-vector lane extent satisfies the indexed memory "
+                "The index source supplies the lane extent required by the indexed memory "
                 "contract, and every active accessed index with its compile-time "
                 "byte scale forms an aligned element address wholly inside the "
                 "represented base range without overflowing address arithmetic."
@@ -356,5 +370,6 @@ __all__ = (
     "PreconditionKind",
     "PrimitivePrecondition",
     "precondition_applies_to_type",
+    "precondition_supports_checked_api",
     "precondition_values",
 )

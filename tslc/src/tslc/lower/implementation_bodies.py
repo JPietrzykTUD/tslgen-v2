@@ -10,6 +10,7 @@ from tslc.catalog.preconditions import (
     PRECONDITION_DESCRIPTORS,
     PreconditionHazard,
     precondition_applies_to_type,
+    precondition_supports_checked_api,
 )
 from tslc.catalog.semantics import (
     PrimitiveProviderRequirement,
@@ -228,6 +229,8 @@ def _checked_precondition_dependencies(
     for precondition in selected.primitive.preconditions:
         descriptor = PRECONDITION_DESCRIPTORS[precondition.kind]
         if not precondition_applies_to_type(precondition, selected.type_tag):
+            continue
+        if not precondition_supports_checked_api(precondition):
             continue
         if descriptor.hazard is PreconditionHazard.CATASTROPHIC:
             has_checked_condition = True

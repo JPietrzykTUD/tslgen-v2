@@ -157,6 +157,12 @@ CONTIGUOUS_VECTOR_STORE_REQUIREMENT = PrimitiveProviderRequirement(
     (OperandRole.MEMORY_DESTINATION, OperandRole.VALUE),
     required_attributes=(("aligned", "false"),),
 )
+INDEXED_POINTER_VECTOR_LOAD_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.LOAD,
+    "v",
+    ("cptr", "cptr", "sImm"),
+    (OperandRole.MEMORY_SOURCE, OperandRole.INDEX, OperandRole.SCALE),
+)
 MASK_TO_INTEGRAL_REQUIREMENT = PrimitiveProviderRequirement(
     PrimitiveOperation.MASK_TO_INTEGRAL,
     "im",
@@ -312,7 +318,9 @@ OPERAND_ROLE_DESCRIPTIONS: Mapping[OperandRole, str] = MappingProxyType(
     {
         OperandRole.CONTROL_MASK: "The mask controlling active lanes.",
         OperandRole.COUNT: "The uniform or per-lane count operand.",
-        OperandRole.INDEX: "The runtime logical lane index operand.",
+        OperandRole.INDEX: (
+            "The runtime logical lane index or indexed-memory offset operand."
+        ),
         OperandRole.MEMORY_DESTINATION: "The memory destination written by the operation.",
         OperandRole.MEMORY_SOURCE: "The memory source read by the operation.",
         OperandRole.PASS_THROUGH: "The value preserved where a control mask is inactive.",
@@ -336,6 +344,7 @@ __all__ = (
     "COMPARE_EQUAL_REQUIREMENT",
     "CONTIGUOUS_VECTOR_LOAD_REQUIREMENT",
     "CONTIGUOUS_VECTOR_STORE_REQUIREMENT",
+    "INDEXED_POINTER_VECTOR_LOAD_REQUIREMENT",
     "MASK_ALL_FALSE_REQUIREMENT",
     "MASK_AND_REQUIREMENT",
     "MASK_FROM_INTEGRAL_REQUIREMENT",

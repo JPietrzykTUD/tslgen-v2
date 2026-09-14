@@ -15,6 +15,7 @@ from tslc.catalog.preconditions import (
     PreconditionHazard,
     PreconditionKind,
     precondition_applies_to_type,
+    precondition_supports_checked_api,
 )
 from tslc.catalog.memory import (
     MemoryAccess,
@@ -266,6 +267,15 @@ def checked_api_plan(
     failure_provider = _consistent_failure_provider(specializations)
     declared = first.primitive_semantics.preconditions
     if not declared:
+        return None
+    if any(
+        not precondition_supports_checked_api(precondition)
+        and any(
+            precondition_applies_to_type(precondition, spec.type_tag)
+            for spec in specializations
+        )
+        for precondition in declared
+    ):
         return None
     semantic_keys = tuple(
         (

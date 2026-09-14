@@ -59,6 +59,16 @@ def test_census_matches_reviewed_baseline_and_report() -> None:
     assert len(census.runtime_sites) == 153
     assert len(census.caller_unsafe_paths) == 33
     assert sum(gap.caller_unsafe_required for gap in census.metadata_gaps) == 26
+    gather_narrow = next(
+        record
+        for record in census.caller_unsafe_paths
+        if record.name == "gather_narrow"
+    )
+    assert gather_narrow.checked_source_status == "coverage_gap"
+    assert gather_narrow.preconditions == ("indexed_memory_address_valid",)
+    assert "pointer-indexed narrow gather remains omitted" in (
+        gather_narrow.checked_coverage_reason
+    )
 
 
 def test_runtime_line_numbers_are_report_locations_not_baseline_identities() -> None:

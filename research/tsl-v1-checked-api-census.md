@@ -295,7 +295,7 @@ Review: Validation must precede any compress-store output write; an all-inactive
 - `gather v:=(m,cptr,vidx,v,sImm)`; attributes `mask=pass_through`; result target `none`; reasons `intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 22; checked source status `declared`; preconditions `indexed_memory_address_valid`; coverage: source preconditions are available for backend check planning
 - `scatter void:=(m,ptr,vidx,v,sImm)`; attributes `mask=zero`; result target `none`; reasons `intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 30; checked source status `declared`; preconditions `indexed_memory_address_valid`; coverage: source preconditions are available for backend check planning
 - `gather v:=(cptr,vidx,sImm)`; attributes `none`; result target `none`; reasons `intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 30; checked source status `declared`; preconditions `indexed_memory_address_valid`; coverage: source preconditions are available for backend check planning
-- `gather_narrow v:=(cptr,cptr,sImm)`; attributes `none`; result target `none`; reasons `raw_memory, raw_pointer`; caller-unsafe implementations 18; checked source status `coverage_gap`; preconditions `none`; coverage: implemented for vector-index gather/scatter, including partial narrow gather, from a valid base view, typed scale, and active-index validation; pointer-indexed narrow gather remains omitted
+- `gather_narrow v:=(cptr,cptr,sImm)`; attributes `none`; result target `none`; reasons `raw_memory, raw_pointer`; caller-unsafe implementations 18; checked source status `coverage_gap`; preconditions `indexed_memory_address_valid`; coverage: implemented for vector-index gather/scatter, including partial narrow gather, from a valid base view, typed scale, and active-index validation; pointer-indexed narrow gather remains omitted
 - `gather_narrow_partial v:=(cptr,vidx,sImm)`; attributes `none`; result target `none`; reasons `intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 19; checked source status `declared`; preconditions `indexed_memory_address_valid`; coverage: source preconditions are available for backend check planning
 - `scatter void:=(ptr,vidx,v,sImm)`; attributes `none`; result target `none`; reasons `intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 30; checked source status `declared`; preconditions `indexed_memory_address_valid`; coverage: source preconditions are available for backend check planning
 
@@ -353,10 +353,10 @@ The 26 caller-visible gaps are:
 - `tsldata/primitives/load_store/pack_expand.tsl:1063` — load_convert_up [avx2, avx2_vl]/f32/ToBase/f64
 - `tsldata/primitives/load_store/rnd_access.tsl:438` — gather sve/arith
 - `tsldata/primitives/load_store/rnd_access.tsl:828` — gather_narrow_partial sve/[bword, dword]
-- `tsldata/primitives/load_store/rnd_access.tsl:1043` — gather_narrow sve/[bword, dword]
-- `tsldata/primitives/load_store/rnd_access.tsl:1462` — gather sve/arith
-- `tsldata/primitives/load_store/rnd_access.tsl:1900` — scatter sve/arith
-- `tsldata/primitives/load_store/rnd_access.tsl:2441` — scatter sve/arith
+- `tsldata/primitives/load_store/rnd_access.tsl:1053` — gather_narrow sve/[bword, dword]
+- `tsldata/primitives/load_store/rnd_access.tsl:1472` — gather sve/arith
+- `tsldata/primitives/load_store/rnd_access.tsl:1910` — scatter sve/arith
+- `tsldata/primitives/load_store/rnd_access.tsl:2451` — scatter sve/arith
 
 ## Reviewed declaration-shape examples
 

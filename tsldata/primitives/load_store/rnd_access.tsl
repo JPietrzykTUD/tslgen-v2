@@ -893,6 +893,16 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
             complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
           """
 prim<v:=(cptr,cptr,sImm)> gather_narrow(base_ptr, index_ptr, scale):
+  operation load
+  operand_roles:
+    memory_source base_ptr
+    index index_ptr
+    scale scale
+  memory:
+    access read
+    addressing indexed
+    indexed_lanes vector
+  preconditions [indexed_memory_address_valid]
   brief_description "Gathers a full vector of narrow memory elements using scalar indices loaded from memory."
   detailed_description """
     Loads non-contiguous memory elements through a pointer to integral indices

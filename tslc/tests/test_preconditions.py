@@ -15,7 +15,10 @@ from tslc.catalog.memory import (
     MemoryPayloadExtent,
 )
 from tslc.catalog.model import Catalog
-from tslc.catalog.preconditions import PreconditionKind
+from tslc.catalog.preconditions import (
+    PreconditionKind,
+    precondition_supports_checked_api,
+)
 from tslc.catalog.semantics import OperandRole, PrimitiveOperation
 from tslc.catalog.validation import validate_catalog
 from tslc.catalog_index import build_catalog_index
@@ -238,7 +241,7 @@ def test_indexed_memory_precondition_hover_lists_every_checked_error() -> None:
         if item.kind == "memory-indexed-lane-extent"
     )
     assert lane_extent.name == "vector"
-    assert "index vector must cover" in (index.hover(lane_extent) or "")
+    assert "index source must cover" in (index.hover(lane_extent) or "")
 
     edited = source.split("indexed_lanes vector", 1)[0] + "indexed_lanes v"
     context = authoring_cursor_context(parsed, _PATH, edited, len(edited))
@@ -506,10 +509,11 @@ def test_irregular_memory_families_declare_only_honest_checked_contracts(
 ) -> None:
     indexed = (
         *catalog.primitives_named("gather", unmasked=False),
+        *catalog.primitives_named("gather_narrow", unmasked=False),
         *catalog.primitives_named("gather_narrow_partial", unmasked=False),
         *catalog.primitives_named("scatter", unmasked=False),
     )
-    assert len(indexed) == 5
+    assert len(indexed) == 6
     assert {
         primitive.memory.addressing
         for primitive in indexed
@@ -521,6 +525,7 @@ def test_irregular_memory_families_declare_only_honest_checked_contracts(
         if primitive.memory is not None
     } == {
         ("gather", MemoryIndexedLaneExtent.VECTOR),
+        ("gather_narrow", MemoryIndexedLaneExtent.VECTOR),
         ("gather_narrow_partial", MemoryIndexedLaneExtent.INDEX_VECTOR),
         ("scatter", MemoryIndexedLaneExtent.VECTOR),
     }
@@ -556,8 +561,14 @@ def test_irregular_memory_families_declare_only_honest_checked_contracts(
         "gather_narrow", unmasked=False
     )
     assert len(pointer_indexed) == 1
-    assert pointer_indexed[0].memory is None
-    assert pointer_indexed[0].preconditions == ()
+    assert pointer_indexed[0].memory is not None
+    assert pointer_indexed[0].memory.addressing is MemoryAddressing.INDEXED
+    assert tuple(
+        condition.kind for condition in pointer_indexed[0].preconditions
+    ) == (PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID,)
+    assert not precondition_supports_checked_api(
+        pointer_indexed[0].preconditions[0]
+    )
 
 
 def test_remaining_checked_memory_sources_distinguish_payload_owners(

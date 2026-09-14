@@ -81,7 +81,7 @@ MEMORY_ADDRESSING_DESCRIPTIONS: Mapping[MemoryAddressing, str] = MappingProxyTyp
     {
         MemoryAddressing.CONTIGUOUS: "Accesses consecutive elements in memory.",
         MemoryAddressing.INDEXED: (
-            "Accesses per-lane byte offsets computed from an index vector and scale."
+            "Accesses per-lane byte offsets computed from indices and a scale."
         ),
         MemoryAddressing.COMPACTED: (
             "Accesses consecutive elements selected by active mask lanes."
@@ -94,7 +94,7 @@ MEMORY_INDEXED_LANE_EXTENT_DESCRIPTIONS: Mapping[
     {
         MemoryIndexedLaneExtent.VECTOR: (
             "Accesses one index for every logical operation lane; the index "
-            "vector must cover those lanes."
+            "source must cover those lanes."
         ),
         MemoryIndexedLaneExtent.INDEX_VECTOR: (
             "Accesses one element for every supplied index lane; those lanes "

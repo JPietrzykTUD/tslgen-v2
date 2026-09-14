@@ -30,7 +30,7 @@ _VECTOR_VALUES = frozenset({"v", "m", "im"})
 _ROLE_KINDS: dict[OperandRole, frozenset[str]] = {
     OperandRole.CONTROL_MASK: frozenset({"m"}),
     OperandRole.COUNT: frozenset({"s", "sImm", "usize", "v"}),
-    OperandRole.INDEX: frozenset({"usize", "vidx"}),
+    OperandRole.INDEX: frozenset({"cptr", "usize", "vidx"}),
     OperandRole.MEMORY_DESTINATION: frozenset({"ptr", "ptr+"}),
     OperandRole.MEMORY_SOURCE: frozenset({"cptr", "cptr+"}),
     OperandRole.PASS_THROUGH: frozenset({"v"}),
@@ -309,7 +309,7 @@ _OPERATION_ROLE_KINDS.update(
             OperandRole.VALUE: frozenset({"s"}),
         },
         PrimitiveOperation.LOAD: {
-            OperandRole.INDEX: frozenset({"vidx"}),
+            OperandRole.INDEX: frozenset({"cptr", "vidx"}),
             OperandRole.SCALE: frozenset({"sImm"}),
         },
         PrimitiveOperation.MASK_AND: {
