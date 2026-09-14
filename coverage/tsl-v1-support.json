@@ -1787,10 +1787,13 @@
         "attributes": {},
         "result_target": [],
         "overload": null,
-        "checked_companion": false,
-        "semantic_categories": [],
+        "checked_companion": true,
+        "semantic_categories": [
+          "operation",
+          "memory"
+        ],
         "fixed_shape_only": false,
-        "source_contract_sha256": "751e47ccd6acda579af75e458d6775e3961c8b71be7390278fe4ad3380638433"
+        "source_contract_sha256": "49f8c1b16b679e486539557a2087c2aa59032458f266c68a3eb184ab91b0b02b"
       },
       {
         "identity": "gather_narrow_partial#v:=(cptr,vidx,sImm)",
@@ -4117,7 +4120,7 @@
     "public_api_baseline": {
       "path": "coverage/tsl-v1-public-api.json",
       "schema_version": 4,
-      "sha256": "2bf7b00ca3fd31ea3abd27065ddcdbb09142e302d6a21db0d71f0e02a931f67d",
+      "sha256": "4aa3f8dd2b458e9c9ba967efdcf820a87279a0ab50b4fa20c87e2163fcac6744",
       "exact_declaration_counts": {
         "cpp": 8001,
         "rust": 12951

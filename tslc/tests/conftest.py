@@ -10,6 +10,11 @@ import pytest
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.model import Catalog
+from tslc.backend.helper_requirements import (
+    BackendHelperPlan,
+    CPP_HELPER_MANIFEST,
+    RUST_HELPER_MANIFEST,
+)
 from tslc.compiler_assets import (
     RenderAssets,
     load_default_render_assets,
@@ -95,3 +100,13 @@ def catalog(tsl_grammar: str) -> Catalog:
     result = CatalogBuilder().build(parsed)
     assert result.catalog is not None
     return result.catalog
+
+
+@pytest.fixture(scope="session")
+def cpp_helper_plan(catalog: Catalog) -> BackendHelperPlan:
+    return BackendHelperPlan.resolve(CPP_HELPER_MANIFEST, catalog)
+
+
+@pytest.fixture(scope="session")
+def rust_helper_plan(catalog: Catalog) -> BackendHelperPlan:
+    return BackendHelperPlan.resolve(RUST_HELPER_MANIFEST, catalog)

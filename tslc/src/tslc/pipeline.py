@@ -294,6 +294,7 @@ class _GenerationSession:
                 assets=self.inputs.render_assets,
                 config=self.request.render_config,
                 policy_inputs=self.inputs.policy_inputs,
+                helper_plans=self.inputs.helper_plans,
                 input_digest=self.inputs.input_digest,
             )
             if self.emitted_profiles

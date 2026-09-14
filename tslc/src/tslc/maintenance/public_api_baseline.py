@@ -16,6 +16,11 @@ from tslc.backend.cpp_public_api import (
     CPP_CORE_PUBLIC_IDENTITIES,
     cpp_public_api_manifest,
 )
+from tslc.backend.helper_requirements import (
+    BackendHelperPlan,
+    CPP_HELPER_MANIFEST,
+    RUST_HELPER_MANIFEST,
+)
 from tslc.backend.precondition_error_rendering import (
     cpp_precondition_error,
     rust_precondition_error,
@@ -411,7 +416,11 @@ def _exact_backend_declarations(
             + "; ".join(item.message for item in errors)
         )
     static_selection = plan_rust_static_selection(result.emitted_profiles)
-    algorithm = plan_rust_algorithm(result.emitted_profiles, static_selection)
+    cpp_helpers = BackendHelperPlan.resolve(CPP_HELPER_MANIFEST, catalog)
+    rust_helpers = BackendHelperPlan.resolve(RUST_HELPER_MANIFEST, catalog)
+    algorithm = plan_rust_algorithm(
+        result.emitted_profiles, static_selection, rust_helpers
+    )
     facade = plan_rust_facade(result.emitted_profiles, static_selection)
     dispatch = plan_rust_dispatch(result.emitted_profiles, static_selection, facade)
     return {
@@ -419,7 +428,9 @@ def _exact_backend_declarations(
             backend_id: list(profiles_by_backend[backend_id])
             for backend_id in _EXACT_DECLARATION_BACKENDS
         },
-        "cpp": cpp_public_api_manifest(result.emitted_profiles).payload(),
+        "cpp": cpp_public_api_manifest(
+            result.emitted_profiles, helper_plan=cpp_helpers
+        ).payload(),
         "rust": rust_public_api_manifest(
             result.emitted_profiles,
             static_selection,

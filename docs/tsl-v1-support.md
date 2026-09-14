@@ -104,7 +104,7 @@ The exact callable-family records below are projected from
 `coverage/tsl-v1-public-api.json`; generated projects also carry their
 scope-exact backend declaration manifests.
 
-Public-API baseline SHA-256: `2bf7b00ca3fd31ea3abd27065ddcdbb09142e302d6a21db0d71f0e02a931f67d`.
+Public-API baseline SHA-256: `4aa3f8dd2b458e9c9ba967efdcf820a87279a0ab50b4fa20c87e2163fcac6744`.
 
 ### Primitive callable families
 
@@ -165,7 +165,7 @@ Public-API baseline SHA-256: `2bf7b00ca3fd31ea3abd27065ddcdbb09142e302d6a21db0d7
 | `from_array#v:=s[]` | no | yes | operation |
 | `gather#v:=(cptr,vidx,sImm)` | yes | no | operation, memory |
 | `gather[mask=pass_through]#v:=(m,cptr,vidx,v,sImm)` | yes | no | operation, memory |
-| `gather_narrow#v:=(cptr,cptr,sImm)` | no | no | not yet annotated |
+| `gather_narrow#v:=(cptr,cptr,sImm)` | yes | no | operation, memory |
 | `gather_narrow_partial#v:=(cptr,vidx,sImm)` | yes | no | operation, memory |
 | `greater_than#m:=(v,v)` | no | no | operation |
 | `greater_than[mask=zero]#m:=(m,v,v)` | no | no | operation |

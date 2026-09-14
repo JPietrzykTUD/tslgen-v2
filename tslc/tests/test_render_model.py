@@ -11,6 +11,7 @@ import pytest
 from tslc.api import generate_project
 from tslc.backend import translation_common
 from tslc.backend.cpp_profile_model import cpp_project_render_model
+from tslc.backend.helper_requirements import BackendHelperPlan
 from tslc.backend.registry import create_backend_dialect
 from tslc.catalog.model import Catalog
 from tslc.lower.lowerer import Lowerer
@@ -286,7 +287,9 @@ def test_lowered_body_model_does_not_scan_for_semantic_spellings() -> None:
 
 
 def test_cpp_profile_render_model_decides_smoke_and_guard_facts(
-    data_root: Path, machine_profiles_path: Path
+    data_root: Path,
+    machine_profiles_path: Path,
+    cpp_helper_plan: BackendHelperPlan,
 ) -> None:
     """Smoke instantiations and compile-guard grouping are backend-decided data."""
 
@@ -296,7 +299,7 @@ def test_cpp_profile_render_model_decides_smoke_and_guard_facts(
         primitives=["add", "store"],
         profiles=["avx2", "sve", "sve512"],
     )
-    model = cpp_project_render_model(result.emitted_profiles)
+    model = cpp_project_render_model(result.emitted_profiles, cpp_helper_plan)
     by_name = {profile.profile_name: profile for profile in model.profiles}
 
     base = by_name["avx2"].base_header
@@ -348,6 +351,7 @@ def test_cpp_profile_render_model_decides_smoke_and_guard_facts(
 def test_cpp_smoke_uses_a_viable_vector_for_symbolic_type_parameters(
     data_root: Path,
     machine_profiles_path: Path,
+    cpp_helper_plan: BackendHelperPlan,
 ) -> None:
     result = generate_project(
         [data_root],
@@ -358,7 +362,7 @@ def test_cpp_smoke_uses_a_viable_vector_for_symbolic_type_parameters(
     )
     assert not any(diagnostic.severity == "error" for diagnostic in result.diagnostics)
 
-    model = cpp_project_render_model(result.emitted_profiles)
+    model = cpp_project_render_model(result.emitted_profiles, cpp_helper_plan)
     smoke = model.profiles[0].base_header.smoke
     source = "tsl::simd<int8_t, tsl::sse>"
     source_instantiations = tuple(

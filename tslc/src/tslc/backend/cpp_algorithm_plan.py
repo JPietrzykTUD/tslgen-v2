@@ -23,7 +23,11 @@ from tslc.backend.cpp_algorithm_public_declarations import (
     cpp_algorithm_form_support,
 )
 from tslc.backend.emitted_profile import EmittedProfile
-from tslc.backend.helper_requirements import CPP_HELPER_MANIFEST, PrimitiveRequirement
+from tslc.backend.helper_requirements import (
+    BackendHelperPlan,
+    CPP_HELPER_MANIFEST,
+    PrimitiveRequirement,
+)
 from tslc.names import identifier_slug
 
 
@@ -197,6 +201,7 @@ class CppAlgorithmAdmissionPlan:
 
 def plan_cpp_algorithm_admission(
     profiles: tuple[EmittedProfile, ...],
+    helper_plan: BackendHelperPlan,
 ) -> CppAlgorithmAdmissionPlan:
     """Admit only forms whose exact helper groups exist in every profile."""
 
@@ -205,6 +210,7 @@ def plan_cpp_algorithm_admission(
             profile.profile.name,
             profile.specializations("cpp"),
             CPP_ALGORITHM_REQUIREMENTS,
+            helper_plan,
             cpp_algorithm_form_support,
         )
         for profile in sorted(profiles, key=lambda item: item.profile.name)

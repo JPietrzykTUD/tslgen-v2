@@ -10,6 +10,7 @@ import pytest
 
 from tslc.api import generate_project
 from tslc.backend.emitted_profile import EmittedProfile
+from tslc.backend.helper_requirements import BackendHelperPlan
 from tslc.backend.registry import (
     backend_capability,
     load_backend_policy_inputs,
@@ -144,6 +145,7 @@ def _mul_candidate_set(
 
 def test_rust_backend_produces_typed_plan_and_report_artifacts(
     rust_benchmark_planning_result,
+    rust_helper_plan: BackendHelperPlan,
 ) -> None:
     result = rust_benchmark_planning_result
     plan = result.rendered.benchmarks
@@ -189,6 +191,7 @@ def test_rust_backend_produces_typed_plan_and_report_artifacts(
         plan,
         load_default_render_assets(),
         policy_inputs=RUST_POLICY_INPUTS,
+        helper_plan=rust_helper_plan,
     )
 
 

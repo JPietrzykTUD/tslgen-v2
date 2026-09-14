@@ -10,6 +10,12 @@ import pytest
 import tslc.pipeline as pipeline_module
 from tslc.api import generate_project
 from tslc.catalog.machine_profiles import MachineProfile
+from tslc.catalog.memory import (
+    MemoryAccess,
+    MemoryAddressing,
+    MemoryPayloadExtent,
+    PrimitiveMemoryContract,
+)
 from tslc.catalog.model import (
     BackendExtensionMetadata,
     Catalog,
@@ -44,6 +50,7 @@ from tslc.lower.target_vectors import TargetVector
 from tslc.backend.emitted_names import finalize_emitted_names
 from tslc.target_text import LoweredBody
 from tslc.backend.emitted_profile import EmittedProfile
+from tslc.backend.helper_requirements import BackendHelperPlan
 from tslc.render.project import render_project
 from tslc.value_tests.coverage import (
     ValueTestCaseDrop,
@@ -2104,6 +2111,7 @@ def test_planner_warns_for_each_unsupported_authored_case() -> None:
 
 def test_render_project_consumes_prebuilt_value_test_plan(
     render_assets: RenderAssets,
+    cpp_helper_plan: BackendHelperPlan,
 ) -> None:
     primitive = Primitive(
         "neg",
@@ -2133,7 +2141,13 @@ def test_render_project_consumes_prebuilt_value_test_plan(
             ),
         )
     )
-    rendered = render_project((profile,), ("cpp",), plan, assets=render_assets)
+    rendered = render_project(
+        (profile,),
+        ("cpp",),
+        plan,
+        assets=render_assets,
+        helper_plans={"cpp": cpp_helper_plan},
+    )
 
     assert [diagnostic.code for diagnostic in plan.diagnostics] == [
         "TSL-VALUE-TEST-UNSUPPORTED-CASE"
@@ -4625,6 +4639,19 @@ def _harness_primitive(
                 OperandBinding(role, parameters[index], index, parameter_kind)
                 for index, (role, parameter_kind) in enumerate(roles)
             ),
+        ),
+        memory=(
+            PrimitiveMemoryContract(
+                (
+                    MemoryAccess.READ
+                    if operation is PrimitiveOperation.LOAD
+                    else MemoryAccess.WRITE
+                ),
+                MemoryAddressing.CONTIGUOUS,
+                MemoryPayloadExtent.VECTOR,
+            )
+            if aligned is not None
+            else None
         ),
     )
 

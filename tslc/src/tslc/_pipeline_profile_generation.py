@@ -171,7 +171,8 @@ class ProfileGenerator:
                         None,
                     )
                     for name in capability.closure_seed_primitives(
-                        self.inputs.catalog
+                        self.inputs.catalog,
+                        self.inputs.helper_plans[capability.backend_id],
                     )
                 )
 

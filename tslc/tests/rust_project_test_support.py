@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from tslc.backend.emitted_profile import EmittedProfile
+from tslc.backend.helper_requirements import BackendHelperPlan
 from tslc.backend.rust_algorithm_plan import plan_rust_algorithm
 from tslc.backend.rust_api_planner import plan_rust_facade
 from tslc.backend.rust_dispatch import plan_rust_dispatch
@@ -29,13 +30,16 @@ def render_rust_artifacts_for_test(
     media_type: str,
     selection_plan: RustPolicySelectionPlan,
     static_selection_plan: RustStaticSelectionPlan,
+    helper_plan: BackendHelperPlan,
     consumption_plan: RustPolicyConsumptionRenderPlan = (
         EMPTY_RUST_POLICY_CONSUMPTION_RENDER_PLAN
     ),
     package_config: RustPackageConfig = DEFAULT_RUST_PACKAGE_CONFIG,
 ) -> list[Artifact]:
     facade_plan = plan_rust_facade(profiles, static_selection_plan)
-    algorithm_plan = plan_rust_algorithm(profiles, static_selection_plan)
+    algorithm_plan = plan_rust_algorithm(
+        profiles, static_selection_plan, helper_plan
+    )
     dispatch_plan = plan_rust_dispatch(
         profiles,
         static_selection_plan,

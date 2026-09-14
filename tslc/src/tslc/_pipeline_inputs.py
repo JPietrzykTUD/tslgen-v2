@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
+from types import MappingProxyType
 from typing import Protocol
 
 from tslc.authoring import check_documents
@@ -13,7 +14,12 @@ from tslc.backend.capability import (
     BackendPolicyInputs,
     EMPTY_BACKEND_POLICY_INPUTS,
 )
-from tslc.backend.registry import load_backend_policy_inputs, registered_backend_ids
+from tslc.backend.helper_requirements import BackendHelperPlan
+from tslc.backend.registry import (
+    backend_capabilities,
+    load_backend_policy_inputs,
+    registered_backend_ids,
+)
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.model import Catalog
 from tslc.compiler_assets import (
@@ -63,6 +69,7 @@ class _PipelineInputs:
     split_names: frozenset[str]
     imm_split_names: frozenset[str]
     test_harness: HarnessPrimitiveNames
+    helper_plans: Mapping[str, BackendHelperPlan]
     input_digest: str
 
 
@@ -79,6 +86,17 @@ def _load_inputs(request: _InputRequest) -> tuple[_PipelineInputs | None, list[D
     test_harness = discover_harness_primitives(catalog)
     if request.test_harness:
         diagnostics.extend(test_harness.diagnostics)
+    helper_plans = MappingProxyType(
+        {
+            capability.backend_id: capability.helper_plan(catalog)
+            for capability in backend_capabilities(request.backends)
+        }
+    )
+    diagnostics.extend(
+        diagnostic
+        for plan in helper_plans.values()
+        for diagnostic in plan.ambiguity_diagnostics
+    )
     profile_result = load_machine_profiles_checked(
         request.machine_profiles_path,
         catalog.target_families,
@@ -103,6 +121,7 @@ def _load_inputs(request: _InputRequest) -> tuple[_PipelineInputs | None, list[D
             split_names=split_names,
             imm_split_names=imm_split_names,
             test_harness=test_harness,
+            helper_plans=helper_plans,
             input_digest=_combine_input_digests(
                 catalog_inputs.source_digest,
                 profile_result.digest,

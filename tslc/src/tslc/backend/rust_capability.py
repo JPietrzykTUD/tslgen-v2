@@ -15,7 +15,10 @@ from tslc.backend.capability import (
     GeneratedDocumentationSpec,
     GeneratedFormatSpec,
 )
-from tslc.backend.helper_requirements import RUST_HELPER_MANIFEST
+from tslc.backend.helper_requirements import (
+    BackendHelperPlan,
+    RUST_HELPER_MANIFEST,
+)
 from tslc.backend.rust import RustBackend
 from tslc.backend.rust_algorithm_plan import plan_rust_algorithm
 from tslc.backend.rust_api_planner import (
@@ -160,6 +163,7 @@ def rust_backend_artifacts(
     media_type: str,
     config: ProjectRenderConfig,
     policy_inputs: BackendPolicyInputs,
+    helper_plan: BackendHelperPlan,
 ) -> list[Artifact]:
     """Render Rust from one frozen selection/consumption projection."""
 
@@ -173,7 +177,9 @@ def rust_backend_artifacts(
         RUST_BACKEND.extension_header_group,
     )
     static_selection_plan = plan_rust_static_selection(profiles)
-    algorithm_plan = plan_rust_algorithm(profiles, static_selection_plan)
+    algorithm_plan = plan_rust_algorithm(
+        profiles, static_selection_plan, helper_plan
+    )
     facade_plan = plan_rust_facade(profiles, static_selection_plan)
     dispatch_plan = plan_rust_dispatch(
         profiles,

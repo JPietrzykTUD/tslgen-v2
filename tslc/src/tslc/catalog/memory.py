@@ -6,9 +6,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
+from typing import TYPE_CHECKING
 
-from tslc.catalog.semantics import PrimitiveOperation
 from tslc.diagnostics import SourceSpan
+
+if TYPE_CHECKING:
+    from tslc.catalog.semantics import PrimitiveOperation
 
 
 class MemoryAccess(StrEnum):
@@ -60,6 +63,8 @@ def resolve_memory_alignment(
 
 def memory_operations(access: MemoryAccess) -> frozenset[PrimitiveOperation]:
     """Return the semantic operations admitted by one memory access."""
+
+    from tslc.catalog.semantics import PrimitiveOperation
 
     return {
         MemoryAccess.READ: frozenset(

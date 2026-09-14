@@ -19,7 +19,6 @@ from tslc.backend.cpp_profile_model import (
     CppProfileHeader,
     CppProjectRenderModel,
     CppSmokeInstantiation,
-    cpp_project_render_model,
 )
 from tslc.backend.cpp_public_api import cpp_public_api_manifest
 from tslc.backend.cpp_static_public_declarations import (
@@ -52,10 +51,10 @@ def cpp_artifacts(
     assets: RenderAssets,
     *,
     media_type: str,
+    model: CppProjectRenderModel,
     value_tests: ValueTestProjectPlan | None = None,
 ) -> list[Artifact]:
     backend = CppBackend()
-    model = cpp_project_render_model(profiles)
     artifacts = [
         text(
             f"cpp/include/{header}",

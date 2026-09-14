@@ -7,6 +7,7 @@ import tomllib
 import pytest
 
 from rust_project_test_support import render_rust_artifacts_for_test
+from tslc.backend.helper_requirements import BackendHelperPlan
 from tslc.backend.algorithm_contracts import ALGORITHM_PUBLIC_FAMILIES
 from tslc.backend.cpp_algorithm_public_declarations import (
     cpp_algorithm_declaration_holes,
@@ -399,7 +400,9 @@ def test_boolean_tokens_do_not_capture_identifier_prefixes() -> None:
     assert isinstance(enabled, ParsedTslScalarValue)
     assert enabled.text == "true"
 
-def test_rust_project_renderer_consumes_injected_assets() -> None:
+def test_rust_project_renderer_consumes_injected_assets(
+    rust_helper_plan: BackendHelperPlan,
+) -> None:
     assets = RenderAssets(
         {
             "rustfmt.toml": "# injected rustfmt\n",
@@ -467,6 +470,7 @@ def test_rust_project_renderer_consumes_injected_assets() -> None:
                 (), RUST_POLICY_MANIFEST
             ),
             static_selection_plan=plan_rust_static_selection(()),
+            helper_plan=rust_helper_plan,
         )
     }
 
@@ -535,7 +539,9 @@ def test_rust_project_renderer_consumes_injected_assets() -> None:
     assert 'runtime-dispatch = ["std"]' in rendered["rust/Cargo.toml"]
     assert "[[bench]]" not in rendered["rust/Cargo.toml"]
 
-def test_rust_project_renderer_uses_typed_release_metadata() -> None:
+def test_rust_project_renderer_uses_typed_release_metadata(
+    rust_helper_plan: BackendHelperPlan,
+) -> None:
     package = RustPackageConfig(
         name="custom-tsl",
         version="2.3.4",
@@ -557,6 +563,7 @@ def test_rust_project_renderer_uses_typed_release_metadata() -> None:
                 (), RUST_POLICY_MANIFEST
             ),
             static_selection_plan=plan_rust_static_selection(()),
+            helper_plan=rust_helper_plan,
             package_config=package,
         )
     }
@@ -634,7 +641,9 @@ def test_rust_package_config_rejects_invalid_metadata(
     with pytest.raises(ValueError):
         RustPackageConfig(**metadata)
 
-def test_rust_project_renderer_wires_opt_in_profile_benchmarks() -> None:
+def test_rust_project_renderer_wires_opt_in_profile_benchmarks(
+    rust_helper_plan: BackendHelperPlan,
+) -> None:
     profiles = tuple(
         EmittedProfile(
             MachineProfile(name, "test", frozenset(), {}),
@@ -654,6 +663,7 @@ def test_rust_project_renderer_wires_opt_in_profile_benchmarks() -> None:
                 profiles, RUST_POLICY_MANIFEST
             ),
             static_selection_plan=plan_rust_static_selection(profiles),
+            helper_plan=rust_helper_plan,
         )
     }
 

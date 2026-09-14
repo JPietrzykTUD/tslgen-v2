@@ -15,6 +15,7 @@ import pytest
 
 from rust_project_test_support import render_rust_artifacts_for_test
 from tslc.api import generate_project, write_artifacts
+from tslc.backend.helper_requirements import BackendHelperPlan
 from tslc.backend.rust_capability import rust_policy_mapping_renderer
 from tslc.backend.rust_policy_manifest import load_rust_policy_manifest
 from tslc.backend.rust_policy_consumption import plan_rust_policy_consumption
@@ -99,6 +100,7 @@ def _rust_item(source: str, marker: str) -> str:
 def test_rust_policy_plan_and_default_rendering_are_typed_and_deterministic(
     rust_policy_result,
     render_assets: RenderAssets,
+    rust_helper_plan: BackendHelperPlan,
 ) -> None:
     plan = plan_rust_policy_selection(
         rust_policy_result.emitted_profiles, RUST_POLICY_MANIFEST
@@ -154,6 +156,7 @@ def test_rust_policy_plan_and_default_rendering_are_typed_and_deterministic(
         media_type="text/rust",
         selection_plan=plan,
         static_selection_plan=static_selection,
+        helper_plan=rust_helper_plan,
     )
     default_second = render_rust_artifacts_for_test(
         rust_policy_result.emitted_profiles,
@@ -161,6 +164,7 @@ def test_rust_policy_plan_and_default_rendering_are_typed_and_deterministic(
         media_type="text/rust",
         selection_plan=plan,
         static_selection_plan=static_selection,
+        helper_plan=rust_helper_plan,
     )
     consumable_artifacts = render_rust_artifacts_for_test(
         rust_policy_result.emitted_profiles,
@@ -168,6 +172,7 @@ def test_rust_policy_plan_and_default_rendering_are_typed_and_deterministic(
         media_type="text/rust",
         selection_plan=plan,
         static_selection_plan=static_selection,
+        helper_plan=rust_helper_plan,
         consumption_plan=consumption,
     )
     forced_artifacts = render_rust_artifacts_for_test(
@@ -176,6 +181,7 @@ def test_rust_policy_plan_and_default_rendering_are_typed_and_deterministic(
         media_type="text/rust",
         selection_plan=forced,
         static_selection_plan=static_selection,
+        helper_plan=rust_helper_plan,
     )
     assert default_first == default_second
 
@@ -302,6 +308,7 @@ def _write_policy_crate(
     result,
     render_assets: RenderAssets,
     plan: RustPolicySelectionPlan,
+    helper_plan: BackendHelperPlan,
 ) -> Path:
     project_artifacts = render_rust_artifacts_for_test(
         result.emitted_profiles,
@@ -311,6 +318,7 @@ def _write_policy_crate(
         static_selection_plan=plan_rust_static_selection(
             result.emitted_profiles
         ),
+        helper_plan=helper_plan,
     )
     artifacts = _overlay_project_artifacts(
         result.artifacts,
@@ -450,6 +458,7 @@ def test_generated_rust_default_and_forced_selection_are_static_and_correct(
     rust_policy_result,
     render_assets: RenderAssets,
     tmp_path: Path,
+    rust_helper_plan: BackendHelperPlan,
 ) -> None:
     if shutil.which("cargo") is None or shutil.which("rustc") is None:
         pytest.skip("cargo and rustc are required")
@@ -475,6 +484,7 @@ def test_generated_rust_default_and_forced_selection_are_static_and_correct(
                 rust_policy_result,
                 render_assets,
                 default_plan,
+                rust_helper_plan,
             ),
         ),
         (
@@ -484,6 +494,7 @@ def test_generated_rust_default_and_forced_selection_are_static_and_correct(
                 rust_policy_result,
                 render_assets,
                 forced_plan,
+                rust_helper_plan,
             ),
         ),
     )

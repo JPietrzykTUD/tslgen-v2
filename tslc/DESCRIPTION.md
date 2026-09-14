@@ -553,18 +553,22 @@ and immediate wrapper names, then freezes deterministic per-backend groups.
 Backend validators reject contradictory declared
 capabilities before artifacts are constructed, while an extension that declares
 a backend unsupported is not admitted as a coverage attempt for that backend.
-Helper dependency roots and helper
-admission both come from typed manifests in
+Helper manifests declare operation, signature, operand-role, attribute, and
+mask-policy requirements without naming source primitives. At the pipeline
+input boundary, the catalog resolves each backend manifest once into a frozen
+helper plan. Dependency closure and backend artifact planning share that same
+plan; renderers never receive the catalog. These types live in
 [backend/helper_requirements.py](src/tslc/backend/helper_requirements.py).
 [backend/algorithm_admission.py](src/tslc/backend/algorithm_admission.py)
-joins those exact primitive and mask-policy requirements to the shared
+joins those resolved provider and mask-policy requirements to the shared
 algorithm families. C++ computes a project-wide intersection in
 [backend/cpp_algorithm_plan.py](src/tslc/backend/cpp_algorithm_plan.py); Rust
 retains a profile-local admission. Both expose deterministic gaps carrying the
-backend, profile, helper feature, semantic family, primitive, and mask policy,
-so optional compaction or mask helpers suppress only dependent forms. The same
-helper groups seed dependency closure, including Rust's mandatory contiguous
-load/store foundation.
+backend, profile, helper feature, semantic family, resolved provider (or its
+catalog diagnostic), and mask policy. A missing semantic provider disables only
+the features that consume it; a resolved provider without a matching profile
+specialization remains a profile-local gap. The same resolved providers seed
+dependency closure, including Rust's mandatory contiguous memory foundation.
 
 Backends differ idiomatically (a `BackendDialect`,
 [backend/translation.py](src/tslc/backend/translation.py), abstracts type

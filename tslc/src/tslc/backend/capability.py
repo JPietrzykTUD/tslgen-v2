@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Generic, Protocol, TypeVar
 
 from tslc.backend.helper_requirements import (
     BackendHelperManifest,
+    BackendHelperPlan,
     EMPTY_HELPER_MANIFEST,
 )
 from tslc.output.verify_model import VerifyBackend, VerifyCompileFailure
@@ -72,6 +73,7 @@ BackendArtifactRenderer = Callable[
         str,
         "ProjectRenderConfig",
         "BackendPolicyInputs",
+        "BackendHelperPlan",
     ],
     list["Artifact"],
 ]
@@ -426,9 +428,13 @@ class BackendCapability:
         assets: RenderAssets,
         config: ProjectRenderConfig = DEFAULT_PROJECT_RENDER_CONFIG,
         policy_inputs: BackendPolicyInputs = EMPTY_BACKEND_POLICY_INPUTS,
+        *,
+        helper_plan: BackendHelperPlan,
     ) -> list[Artifact]:
         """Render the backend's complete artifact set from one fact snapshot."""
 
+        if helper_plan.manifest != self.helper_manifest:
+            raise ValueError("backend helper plan does not match its capability")
         return self.artifact_renderer(
             profiles,
             value_tests,
@@ -437,6 +443,7 @@ class BackendCapability:
             self.artifact_media_type,
             config,
             policy_inputs,
+            helper_plan,
         )
 
     def plan_benchmarks(
@@ -511,11 +518,20 @@ class BackendCapability:
     def verify_driver(self) -> VerifyBackendDriver:
         return self.verify_driver_factory()
 
-    def closure_seed_primitives(self, catalog: Catalog) -> tuple[str, ...]:
+    def helper_plan(self, catalog: Catalog) -> BackendHelperPlan:
+        return BackendHelperPlan.resolve(self.helper_manifest, catalog)
+
+    def closure_seed_primitives(
+        self,
+        catalog: Catalog,
+        helper_plan: BackendHelperPlan,
+    ) -> tuple[str, ...]:
+        if helper_plan.manifest != self.helper_manifest:
+            raise ValueError("backend helper plan does not match its capability")
         return tuple(
             dict.fromkeys(
                 (
-                    *self.helper_manifest.closure_seed_primitives(catalog),
+                    *helper_plan.closure_seed_primitives,
                     *self.additional_closure_seeds(catalog),
                 )
             )
@@ -549,6 +565,7 @@ __all__ = [
     "BackendArtifactRenderer",
     "BackendCapability",
     "BackendDocumentationFormatter",
+    "BackendHelperPlan",
     "BackendPolicyInput",
     "BackendPolicyInputs",
     "BackendProjectConfigSpec",

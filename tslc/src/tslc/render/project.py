@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from tslc.backend.capability import (
+    BackendHelperPlan,
     BackendPolicyInputs,
     EMPTY_BACKEND_POLICY_INPUTS,
 )
@@ -42,6 +44,7 @@ def render_project(
     assets: RenderAssets,
     config: ProjectRenderConfig = DEFAULT_PROJECT_RENDER_CONFIG,
     policy_inputs: BackendPolicyInputs = EMPTY_BACKEND_POLICY_INPUTS,
+    helper_plans: Mapping[str, BackendHelperPlan] | None = None,
     input_digest: str | None = None,
 ) -> RenderedProject:
     ordered = tuple(sorted(profiles, key=lambda profile: profile.profile.name))
@@ -50,6 +53,15 @@ def render_project(
 
     drivers = backend_capabilities(backends)
     for driver in drivers:
+        helper_plan = (
+            None if helper_plans is None else helper_plans.get(driver.backend_id)
+        )
+        if helper_plan is None:
+            if driver.helper_manifest.provider_requirements:
+                raise ValueError(
+                    f"backend {driver.backend_id!r} requires a resolved helper plan"
+                )
+            helper_plan = BackendHelperPlan(driver.helper_manifest, (), ())
         backend_profiles = tuple(
             profile
             for profile in ordered
@@ -63,6 +75,7 @@ def render_project(
                 assets,
                 config,
                 policy_inputs,
+                helper_plan=helper_plan,
             )
         )
         verify_backends.append(driver.verify_backend(backend_profiles, value_tests))

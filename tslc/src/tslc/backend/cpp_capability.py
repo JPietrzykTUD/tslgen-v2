@@ -17,9 +17,13 @@ from tslc.backend.capability import (
 from tslc.backend.cpp_translation import CppBackendDialect
 from tslc.backend.cpp_compiler_capabilities import CPP_COMPILER_CAPABILITIES
 from tslc.backend.cpp import CppBackend
+from tslc.backend.cpp_profile_model import cpp_project_render_model
 from tslc.benchmark.planner import BenchmarkPlanner
 from tslc.benchmark.render_cpp import cpp_benchmark_artifacts
-from tslc.backend.helper_requirements import CPP_HELPER_MANIFEST
+from tslc.backend.helper_requirements import (
+    BackendHelperPlan,
+    CPP_HELPER_MANIFEST,
+)
 from tslc.backend.cpp_verification import cpp_verify_profile, cpp_verify_profiles
 from tslc.backend.cpp_validation import validate_cpp_profiles
 from tslc.catalog.model import Catalog
@@ -53,10 +57,16 @@ def cpp_project_artifacts(
     profiles: tuple[EmittedProfile, ...],
     assets: RenderAssets,
     media_type: str,
+    helper_plan: BackendHelperPlan,
     value_tests: ValueTestProjectPlan | None = None,
 ) -> list[Artifact]:
+    model = cpp_project_render_model(profiles, helper_plan)
     return cpp_artifacts(
-        profiles, assets, media_type=media_type, value_tests=value_tests
+        profiles,
+        assets,
+        media_type=media_type,
+        model=model,
+        value_tests=value_tests,
     )
 
 
@@ -109,12 +119,15 @@ def cpp_backend_artifacts(
     media_type: str,
     config: ProjectRenderConfig,
     policy_inputs: BackendPolicyInputs,
+    helper_plan: BackendHelperPlan,
 ) -> list[Artifact]:
     """Render the complete C++ artifact set from one fact snapshot."""
 
     del config, policy_inputs
     return [
-        *cpp_project_artifacts(profiles, assets, media_type, value_tests),
+        *cpp_project_artifacts(
+            profiles, assets, media_type, helper_plan, value_tests
+        ),
         *cpp_value_test_artifacts(value_tests, assets, media_type),
         *cpp_benchmark_project_artifacts(
             benchmarks,

@@ -19,6 +19,7 @@ from tslc.backend import (
     rust_validation,
 )
 from tslc.backend.rust_policy_manifest import load_rust_policy_manifest
+from tslc.backend.helper_requirements import BackendHelperPlan
 from tslc.compiler_assets import RenderAssets
 from tslc.diagnostics import has_errors
 from tslc.render.rust_benchmark_layout import plan_rust_benchmark_layout
@@ -34,6 +35,7 @@ def test_artifact_pass_plans_once_and_renderer_consumes_frozen_plans(
     data_root: Path,
     machine_profiles_path: Path,
     render_assets: RenderAssets,
+    rust_helper_plan: BackendHelperPlan,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     planner_names = (
@@ -100,7 +102,9 @@ def test_artifact_pass_plans_once_and_renderer_consumes_frozen_plans(
     )
     static = rust_static_selection.plan_rust_static_selection(profiles)
     facade = rust_api_planner.plan_rust_facade(profiles, static)
-    algorithm = rust_algorithm_plan.plan_rust_algorithm(profiles, static)
+    algorithm = rust_algorithm_plan.plan_rust_algorithm(
+        profiles, static, rust_helper_plan
+    )
     dispatch = rust_dispatch.plan_rust_dispatch(
         profiles,
         static,

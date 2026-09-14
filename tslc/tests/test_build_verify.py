@@ -34,6 +34,8 @@ from algorithm_conformance_rust import (
 )
 from tslc.api import generate_project, verify_project, write_artifacts
 from tslc.backend.algorithm_surface import ALGORITHM_CALLABLE_FORMS
+from tslc.backend.cpp_profile_model import cpp_project_render_model
+from tslc.backend.helper_requirements import BackendHelperPlan
 from tslc.compiler_assets import load_default_render_assets
 from tslc.diagnostics import has_errors
 from tslc.maintenance.build_verified import BUILD_VERIFIED_PRIMITIVE_SETS
@@ -127,7 +129,10 @@ def test_generated_profiles_build(
 
 
 def test_cpp_incomplete_compaction_keeps_admitted_algorithms_compilable(
-    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+    cpp_helper_plan: BackendHelperPlan,
 ) -> None:
     compiler = shutil.which("c++")
     if compiler is None:
@@ -157,6 +162,7 @@ def test_cpp_incomplete_compaction_keeps_admitted_algorithms_compilable(
                 (profile,),
                 load_default_render_assets(),
                 media_type="text/x-c++",
+                model=cpp_project_render_model((profile,), cpp_helper_plan),
             )
         )
     )

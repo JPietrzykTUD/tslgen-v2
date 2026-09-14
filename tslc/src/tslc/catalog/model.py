@@ -1172,6 +1172,15 @@ def _matches_provider_requirement(
         return False
     if tuple(binding.parameter_kind for binding in bindings) != requirement.parameter_kinds:
         return False
+    if requirement.memory_access is not None and (
+        primitive.memory is None
+        or primitive.memory.access is not requirement.memory_access
+        or primitive.memory.addressing is not requirement.memory_addressing
+        or primitive.memory.payload_extent is not requirement.memory_payload_extent
+        or primitive.memory.indexed_lane_extent
+        is not requirement.memory_indexed_lane_extent
+    ):
+        return False
     return all(
         primitive.attributes.get(key) == value
         for key, value in requirement.required_attributes
@@ -1183,9 +1192,25 @@ def _provider_requirement_text(requirement: PrimitiveProviderRequirement) -> str
     attributes = "".join(
         f" [{key}={value}]" for key, value in requirement.required_attributes
     )
+    if requirement.memory_access is None:
+        memory = ""
+    else:
+        assert requirement.memory_addressing is not None
+        assert requirement.memory_payload_extent is not None
+        memory = (
+            f", memory {requirement.memory_access.value}/"
+            f"{requirement.memory_addressing.value}/"
+            f"{requirement.memory_payload_extent.value}"
+            + (
+                ""
+                if requirement.memory_indexed_lane_extent is None
+                else f"/{requirement.memory_indexed_lane_extent.value}"
+            )
+        )
     return (
         f"operation {requirement.operation.value!r} with signature shape "
-        f"{requirement.signature_shape!r}, operand roles [{roles}]{attributes}"
+        f"{requirement.signature_shape!r}, operand roles [{roles}]"
+        f"{attributes}{memory}"
     )
 
 

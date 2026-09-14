@@ -9,6 +9,7 @@ import pytest
 
 from tslc.api import generate_project
 from tslc.backend.emitted_profile import EmittedProfile
+from tslc.backend.helper_requirements import BackendHelperPlan
 from tslc.backend.rust_algorithm_plan import plan_rust_algorithm
 from tslc.backend.rust_static_selection import (
     RustStaticSelectionPlan,
@@ -116,6 +117,7 @@ def test_static_selection_uses_only_exact_width_available_hardware(
 def test_algorithm_native_mapping_reuses_static_selection_exactly(
     rust_static_result,
     rust_static_plan: RustStaticSelectionPlan,
+    rust_helper_plan: BackendHelperPlan,
 ) -> None:
     static_avx2 = rust_static_plan.profile("avx2")
     assert static_avx2 is not None
@@ -133,6 +135,7 @@ def test_algorithm_native_mapping_reuses_static_selection_exactly(
     algorithm = plan_rust_algorithm(
         rust_static_result.emitted_profiles,
         rust_static_plan,
+        rust_helper_plan,
     )
     algorithm_avx2 = algorithm.profile("avx2")
     assert algorithm_avx2 is not None

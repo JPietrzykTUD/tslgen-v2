@@ -53,6 +53,7 @@ from tslc.backend.cpp_profile import (
     cpp_system_header_name,
 )
 from tslc.backend.emitted_profile import EmittedProfile, used_extensions
+from tslc.backend.helper_requirements import BackendHelperPlan
 from tslc.backend.target_capability import is_width_indexed_register_extension
 from tslc.catalog.model import Extension
 from tslc.lower.lowerer import (
@@ -206,6 +207,7 @@ class CppProjectRenderModel:
 
 def cpp_project_render_model(
     profiles: tuple[EmittedProfile, ...],
+    helper_plan: BackendHelperPlan,
 ) -> CppProjectRenderModel:
     """Decide every C++ profile-content fact from emitted backend profiles."""
 
@@ -242,7 +244,7 @@ def cpp_project_render_model(
             )
         ),
         value_test_compile_options=cpp_value_test_compile_options(),
-        algorithm=plan_cpp_algorithm_admission(profiles),
+        algorithm=plan_cpp_algorithm_admission(profiles, helper_plan),
         profile_detection=cpp_profile_detection_plan(
             tuple(profile.profile for profile in profiles),
             candidates=cpp_profile_detection_candidates(profiles),

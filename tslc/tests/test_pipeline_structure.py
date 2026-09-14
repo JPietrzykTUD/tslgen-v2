@@ -7,7 +7,6 @@ import json
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -30,7 +29,11 @@ from tslc.backend.cpp_capability import CPP_BACKEND
 from tslc.backend.cpp_compiler_capabilities import CPP_COMPILER_CAPABILITIES
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.helper_requirements import (
+    BackendHelperManifest,
+    BackendHelperPlan,
     CPP_HELPER_MANIFEST,
+    HelperFeature,
+    PrimitiveRequirement,
     RUST_HELPER_MANIFEST,
 )
 from tslc.backend.rust_capability import RUST_BACKEND
@@ -39,16 +42,7 @@ from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS
 from tslc.catalog.semantics import (
-    OperandBinding,
-    OperandRole,
-    PrimitiveOperation,
-    PrimitiveSemanticContract,
-)
-from tslc.catalog.memory import (
-    MemoryAccess,
-    MemoryAddressing,
-    MemoryPayloadExtent,
-    PrimitiveMemoryContract,
+    CONTIGUOUS_VECTOR_LOAD_REQUIREMENT,
 )
 from tslc.catalog.validation import validate_catalog
 from tslc.compiler_assets import RenderAssets, load_default_render_assets
@@ -409,127 +403,17 @@ def test_render_assets_have_one_packaged_source_of_truth() -> None:
         )
 
 
-def test_backend_closure_seed_primitives_are_capability_owned() -> None:
-    class FakeCatalog:
-        def __init__(self, names: set[str]) -> None:
-            self.names = names
-            semantic_primitives = {
-                "load": (
-                    "v:=cptr",
-                    PrimitiveSemanticContract(
-                        PrimitiveOperation.LOAD,
-                        (
-                            OperandBinding(
-                                OperandRole.MEMORY_SOURCE,
-                                "source",
-                                0,
-                                "cptr",
-                            ),
-                        ),
-                    ),
-                    PrimitiveMemoryContract(
-                        MemoryAccess.READ,
-                        MemoryAddressing.CONTIGUOUS,
-                        MemoryPayloadExtent.VECTOR,
-                    ),
-                ),
-                "store": (
-                    "void:=(ptr,v)",
-                    PrimitiveSemanticContract(
-                        PrimitiveOperation.STORE,
-                        (
-                            OperandBinding(
-                                OperandRole.MEMORY_DESTINATION,
-                                "destination",
-                                0,
-                                "ptr",
-                            ),
-                            OperandBinding(OperandRole.VALUE, "value", 1, "v"),
-                        ),
-                    ),
-                    PrimitiveMemoryContract(
-                        MemoryAccess.WRITE,
-                        MemoryAddressing.CONTIGUOUS,
-                        MemoryPayloadExtent.VECTOR,
-                    ),
-                ),
-                "read_contiguous": (
-                    "v:=cptr",
-                    PrimitiveSemanticContract(
-                        PrimitiveOperation.LOAD,
-                        (
-                            OperandBinding(
-                                OperandRole.MEMORY_SOURCE,
-                                "source",
-                                0,
-                                "cptr",
-                            ),
-                        ),
-                    ),
-                    PrimitiveMemoryContract(
-                        MemoryAccess.READ,
-                        MemoryAddressing.CONTIGUOUS,
-                        MemoryPayloadExtent.VECTOR,
-                    ),
-                ),
-                "write_contiguous": (
-                    "void:=(ptr,v)",
-                    PrimitiveSemanticContract(
-                        PrimitiveOperation.STORE,
-                        (
-                            OperandBinding(
-                                OperandRole.MEMORY_DESTINATION,
-                                "destination",
-                                0,
-                                "ptr",
-                            ),
-                            OperandBinding(OperandRole.VALUE, "value", 1, "v"),
-                        ),
-                    ),
-                    PrimitiveMemoryContract(
-                        MemoryAccess.WRITE,
-                        MemoryAddressing.CONTIGUOUS,
-                        MemoryPayloadExtent.VECTOR,
-                    ),
-                ),
-                "to_array": (
-                    "s[]:=v",
-                    PrimitiveSemanticContract(
-                        PrimitiveOperation.VECTOR_TO_ARRAY,
-                        (
-                            OperandBinding(
-                                OperandRole.PRIMARY,
-                                "value",
-                                0,
-                                "v",
-                            ),
-                        ),
-                    ),
-                    None,
-                ),
-            }
-            self.primitives = tuple(
-                SimpleNamespace(
-                    name=name,
-                    signature=semantic_primitives[name][0],
-                    operation=semantic_primitives[name][1],
-                    memory=semantic_primitives[name][2],
-                    attributes=(
-                        {"aligned": "false"}
-                        if semantic_primitives[name][2] is not None
-                        else {}
-                    ),
-                )
-                for name in sorted(names)
-                if name in semantic_primitives
-            )
-
-        def primitives_named(self, name: str, *, unmasked: bool) -> tuple[str, ...]:
-            del unmasked
-            return (name,) if name in self.names else ()
-
-    catalog = FakeCatalog({"load", "store", "to_array"})
-    assert BackendCapability(
+def test_backend_closure_seed_primitives_are_capability_owned(catalog) -> None:
+    fake_manifest = BackendHelperManifest(
+        "fake",
+        (
+            HelperFeature(
+                "read",
+                (PrimitiveRequirement(CONTIGUOUS_VECTOR_LOAD_REQUIREMENT),),
+            ),
+        ),
+    )
+    fake = BackendCapability(
         backend_id="fake",
         root_path="fake",
         artifact_media_type="text/fake",
@@ -542,23 +426,59 @@ def test_backend_closure_seed_primitives_are_capability_owned() -> None:
         verify_machine_profile=lambda profile, family: None,  # type: ignore[arg-type,return-value]
         toolchain_commands=lambda profile, config: None,  # type: ignore[arg-type,return-value]
         documentation_formatter_factory=_FakeDocumentationFormatter,
-    ).closure_seed_primitives(catalog) == ()
+        helper_manifest=fake_manifest,
+    )
+    fake_plan = fake.helper_plan(catalog)
+
+    assert fake.closure_seed_primitives(catalog, fake_plan) == ("load",)
     assert CPP_BACKEND.helper_manifest is CPP_HELPER_MANIFEST
     assert RUST_BACKEND.helper_manifest is RUST_HELPER_MANIFEST
-    assert CPP_BACKEND.closure_seed_primitives(catalog) == ("load", "store")
-    assert RUST_BACKEND.closure_seed_primitives(catalog) == (
+    cpp_plan = CPP_BACKEND.helper_plan(catalog)
+    rust_plan = RUST_BACKEND.helper_plan(catalog)
+    assert CPP_BACKEND.closure_seed_primitives(catalog, cpp_plan) == (
         "load",
         "store",
+        "gather_narrow",
+        "to_integral",
+        "to_mask",
+        "compress_store",
+        "mask_population_count",
+        "mask_binary_and",
+    )
+    assert rust_plan.closure_seed_primitives == (
+        "load",
+        "store",
+        "set_zero",
         "to_array",
+        "from_array",
+        "gather_narrow",
+        "compress_store",
+        "mask_population_count",
+        "to_integral",
+        "to_mask",
     )
-    renamed_catalog = FakeCatalog(
-        {"read_contiguous", "write_contiguous", "to_array"}
+    assert RUST_BACKEND.closure_seed_primitives(
+        catalog, rust_plan
+    )[: len(rust_plan.closure_seed_primitives)] == rust_plan.closure_seed_primitives
+    assert BackendHelperPlan.resolve(fake_manifest, catalog) == fake_plan
+
+
+def test_fake_third_backend_resolves_its_own_helper_plan(catalog) -> None:
+    manifest = BackendHelperManifest(
+        "future",
+        (
+            HelperFeature(
+                "read",
+                (PrimitiveRequirement(CONTIGUOUS_VECTOR_LOAD_REQUIREMENT),),
+            ),
+        ),
     )
-    assert RUST_BACKEND.closure_seed_primitives(renamed_catalog) == (
-        "to_array",
-        "read_contiguous",
-        "write_contiguous",
-    )
+    capability = replace(CPP_BACKEND, backend_id="future", helper_manifest=manifest)
+
+    plan = capability.helper_plan(catalog)
+
+    assert plan.backend_id == "future"
+    assert plan.closure_seed_primitives == ("load",)
 
 
 def test_backend_capability_owns_optional_benchmark_planning(catalog) -> None:
@@ -666,8 +586,9 @@ def test_fake_backend_drives_config_documentation_and_artifact_media_type(
         media_type: str,
         config: ProjectRenderConfig,
         policy_inputs: object,
+        helper_plan: object,
     ) -> list[Artifact]:
-        del profiles, value_tests, benchmarks, assets, policy_inputs
+        del profiles, value_tests, benchmarks, assets, policy_inputs, helper_plan
         received_config.append(config.require("fake", _FakeRenderInput))
         return [Artifact("fake/lib.fake", "fake\n", media_type)]
 
@@ -766,8 +687,10 @@ def test_render_project_filters_profiles_by_backend_membership(monkeypatch) -> N
         media_type: str,
         config: object,
         policy_inputs: object,
+        helper_plan: object,
     ) -> list[Artifact]:
         del value_tests, benchmarks, assets, media_type, config, policy_inputs
+        del helper_plan
         received["render"] = tuple(profile.profile.name for profile in profiles)
         return []
 
@@ -1490,8 +1413,10 @@ def _empty_backend_artifacts(
     media_type: str,
     config: object,
     policy_inputs: object,
+    helper_plan: object,
 ) -> list[Artifact]:
     del profiles, value_tests, benchmarks, assets, media_type, config, policy_inputs
+    del helper_plan
     return []
 
 

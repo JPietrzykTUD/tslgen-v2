@@ -24,7 +24,7 @@ from tslc.backend.algorithm_surface import (
 )
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.helper_requirements import (
-    PrimitiveRequirement,
+    BackendHelperPlan,
     RUST_HELPER_MANIFEST,
 )
 from tslc.backend.primitive_facade import plan_contiguous_memory_primitive_facades
@@ -287,6 +287,7 @@ class RustAlgorithmPlan:
 def plan_rust_algorithm(
     profiles: tuple[EmittedProfile, ...],
     static_selection: RustStaticSelectionPlan,
+    helper_plan: BackendHelperPlan,
 ) -> RustAlgorithmPlan:
     """Finalize algorithm support from lowered facts and exact static mappings."""
 
@@ -314,6 +315,7 @@ def plan_rust_algorithm(
                     else static_selection.fallback_native_mappings
                 ),
                 is_fallback=False,
+                helper_plan=helper_plan,
             )
         )
     fallback_module = static_selection.fallback_module
@@ -323,6 +325,7 @@ def plan_rust_algorithm(
         static_selection.fallback_mappings,
         static_selection.fallback_native_mappings,
         is_fallback=True,
+        helper_plan=helper_plan,
     )
     return RustAlgorithmPlan(tuple(planned_profiles), fallback)
 
@@ -334,21 +337,15 @@ def _plan_profile(
     native_mappings: tuple[RustStaticVectorMapping, ...],
     *,
     is_fallback: bool,
+    helper_plan: BackendHelperPlan,
 ) -> RustAlgorithmProfilePlan:
     memory = plan_contiguous_memory_primitive_facades(by_primitive)
-    semantic_memory_requirements = frozenset(
-        PrimitiveRequirement(
-            "load" if binding.memory_access is MemoryAccess.READ else "store"
-        )
-        for binding in (memory.read, memory.write)
-        if binding is not None
-    )
     admission = plan_algorithm_profile_admission(
         profile_name,
         by_primitive,
         RUST_ALGORITHM_REQUIREMENTS,
+        helper_plan,
         rust_algorithm_form_support,
-        satisfied_requirements=semantic_memory_requirements,
     )
     primitive_facades = plan_rust_algorithm_primitive_facades(
         by_primitive,
@@ -381,6 +378,7 @@ def _plan_profile(
             static_mappings,
             by_primitive,
             admission.helpers,
+            helper_plan,
         ),
         primitive_facades=primitive_facades,
         requires_rebind=any(facade.requires_rebind for facade in primitive_facades),
@@ -449,27 +447,28 @@ def _selected_load_targets(
     mappings: tuple[RustStaticVectorMapping, ...],
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
     admissions: tuple[AlgorithmHelperAdmission, ...],
+    helper_plan: BackendHelperPlan,
 ) -> tuple[RustAlgorithmSelectedLoadTarget, ...]:
     selected_load = next(
         item for item in admissions if item.feature_name == "selected_load"
     )
     if not selected_load.supported:
         return ()
-    gather_requirement = RUST_HELPER_MANIFEST.requirements("gather_narrow")[0]
+    gather_requirement = helper_plan.manifest.requirements("gather_narrow")[0]
     gather_vectors = {
         (spec.extension_name, spec.base_type_spelling)
-        for spec in RUST_HELPER_MANIFEST.matching_specializations(
+        for spec in helper_plan.matching_specializations(
             gather_requirement, by_primitive
         )
     }
     array_vector_sets = [
         {
             (spec.extension_name, spec.base_type_spelling)
-            for spec in RUST_HELPER_MANIFEST.matching_specializations(
+            for spec in helper_plan.matching_specializations(
                 requirement, by_primitive
             )
         }
-        for requirement in RUST_HELPER_MANIFEST.requirements("selected_load")
+        for requirement in helper_plan.manifest.requirements("selected_load")
     ]
     array_vectors = (
         set.intersection(*array_vector_sets) if array_vector_sets else set()

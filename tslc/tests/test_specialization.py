@@ -21,6 +21,7 @@ from tslc.backend.cpp_algorithm_public_declarations import (
     cpp_algorithm_public_declarations,
 )
 from tslc.backend.cpp_public_api import cpp_public_api_manifest
+from tslc.backend.helper_requirements import BackendHelperPlan
 from tslc.backend.public_declarations import PublicDeclarationStability
 from tslc.backend.rust import RustBackend
 from tslc.backend.rust_api_planner import plan_rust_facade
@@ -1294,13 +1295,15 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
 def test_generated_public_manifests_match_the_finalized_backend_plans(
     specialization_result,
     specialization_artifacts: dict[str, str],
+    cpp_helper_plan: BackendHelperPlan,
+    rust_helper_plan: BackendHelperPlan,
 ) -> None:
     profiles = specialization_result.emitted_profiles
     static_selection = plan_rust_static_selection(profiles)
-    algorithm = plan_rust_algorithm(profiles, static_selection)
+    algorithm = plan_rust_algorithm(profiles, static_selection, rust_helper_plan)
     facade = plan_rust_facade(profiles, static_selection)
     dispatch = plan_rust_dispatch(profiles, static_selection, facade)
-    cpp_manifest = cpp_public_api_manifest(profiles)
+    cpp_manifest = cpp_public_api_manifest(profiles, helper_plan=cpp_helper_plan)
     rust_manifest_plan = rust_public_api_manifest(
         profiles, static_selection, algorithm, facade, dispatch
     )
@@ -1319,15 +1322,19 @@ def test_generated_public_manifests_match_the_finalized_backend_plans(
     )
     reversed_profiles = tuple(reversed(profiles))
     reversed_selection = plan_rust_static_selection(reversed_profiles)
-    reversed_algorithm = plan_rust_algorithm(reversed_profiles, reversed_selection)
+    reversed_algorithm = plan_rust_algorithm(
+        reversed_profiles, reversed_selection, rust_helper_plan
+    )
     reversed_facade = plan_rust_facade(reversed_profiles, reversed_selection)
     reversed_dispatch = plan_rust_dispatch(
         reversed_profiles,
         reversed_selection,
         reversed_facade,
     )
-    assert cpp_public_api_manifest(reversed_profiles).serialize() == (
-        cpp_public_api_manifest(profiles).serialize()
+    assert cpp_public_api_manifest(
+        reversed_profiles, helper_plan=cpp_helper_plan
+    ).serialize() == (
+        cpp_public_api_manifest(profiles, helper_plan=cpp_helper_plan).serialize()
     )
     assert rust_public_api_manifest(
         reversed_profiles,

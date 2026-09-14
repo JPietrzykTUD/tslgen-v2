@@ -7,6 +7,12 @@ from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
 
+from tslc.catalog.memory import (
+    MemoryAccess,
+    MemoryAddressing,
+    MemoryIndexedLaneExtent,
+    MemoryPayloadExtent,
+)
 from tslc.diagnostics import SourceSpan
 
 
@@ -79,6 +85,10 @@ class PrimitiveProviderRequirement:
     parameter_kinds: tuple[str, ...]
     operand_roles: tuple[OperandRole, ...]
     required_attributes: tuple[tuple[str, str], ...] = ()
+    memory_access: MemoryAccess | None = None
+    memory_addressing: MemoryAddressing | None = None
+    memory_payload_extent: MemoryPayloadExtent | None = None
+    memory_indexed_lane_extent: MemoryIndexedLaneExtent | None = None
 
     def __post_init__(self) -> None:
         if not self.result_kind:
@@ -97,6 +107,28 @@ class PrimitiveProviderRequirement:
             raise ValueError("primitive provider attributes must have unique names")
         if self.required_attributes != tuple(sorted(self.required_attributes)):
             raise ValueError("primitive provider attributes must be sorted")
+        if self.memory_access is None:
+            if any(
+                value is not None
+                for value in (
+                    self.memory_addressing,
+                    self.memory_payload_extent,
+                    self.memory_indexed_lane_extent,
+                )
+            ):
+                raise ValueError(
+                    "primitive provider memory constraints require an access"
+                )
+        elif self.memory_addressing is None or self.memory_payload_extent is None:
+            raise ValueError(
+                "primitive provider memory constraints require addressing and payload"
+            )
+        if (self.memory_addressing is MemoryAddressing.INDEXED) != (
+            self.memory_indexed_lane_extent is not None
+        ):
+            raise ValueError(
+                "indexed primitive provider memory requires exactly one lane extent"
+            )
 
     @property
     def signature_shape(self) -> str:
@@ -149,6 +181,9 @@ CONTIGUOUS_VECTOR_LOAD_REQUIREMENT = PrimitiveProviderRequirement(
     ("cptr",),
     (OperandRole.MEMORY_SOURCE,),
     required_attributes=(("aligned", "false"),),
+    memory_access=MemoryAccess.READ,
+    memory_addressing=MemoryAddressing.CONTIGUOUS,
+    memory_payload_extent=MemoryPayloadExtent.VECTOR,
 )
 CONTIGUOUS_VECTOR_STORE_REQUIREMENT = PrimitiveProviderRequirement(
     PrimitiveOperation.STORE,
@@ -156,12 +191,47 @@ CONTIGUOUS_VECTOR_STORE_REQUIREMENT = PrimitiveProviderRequirement(
     ("ptr", "v"),
     (OperandRole.MEMORY_DESTINATION, OperandRole.VALUE),
     required_attributes=(("aligned", "false"),),
+    memory_access=MemoryAccess.WRITE,
+    memory_addressing=MemoryAddressing.CONTIGUOUS,
+    memory_payload_extent=MemoryPayloadExtent.VECTOR,
+)
+CONTIGUOUS_MASKED_VECTOR_STORE_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.STORE,
+    "void",
+    ("m", "ptr", "v"),
+    (
+        OperandRole.CONTROL_MASK,
+        OperandRole.MEMORY_DESTINATION,
+        OperandRole.VALUE,
+    ),
+    required_attributes=(("aligned", "false"), ("mask", "pass_through")),
+    memory_access=MemoryAccess.WRITE,
+    memory_addressing=MemoryAddressing.CONTIGUOUS,
+    memory_payload_extent=MemoryPayloadExtent.VECTOR,
+)
+COMPACTED_VECTOR_STORE_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.STORE,
+    "void",
+    ("m", "ptr", "v"),
+    (
+        OperandRole.CONTROL_MASK,
+        OperandRole.MEMORY_DESTINATION,
+        OperandRole.VALUE,
+    ),
+    required_attributes=(("aligned", "true"),),
+    memory_access=MemoryAccess.WRITE,
+    memory_addressing=MemoryAddressing.COMPACTED,
+    memory_payload_extent=MemoryPayloadExtent.ACTIVE_LANES,
 )
 INDEXED_POINTER_VECTOR_LOAD_REQUIREMENT = PrimitiveProviderRequirement(
     PrimitiveOperation.LOAD,
     "v",
     ("cptr", "cptr", "sImm"),
     (OperandRole.MEMORY_SOURCE, OperandRole.INDEX, OperandRole.SCALE),
+    memory_access=MemoryAccess.READ,
+    memory_addressing=MemoryAddressing.INDEXED,
+    memory_payload_extent=MemoryPayloadExtent.VECTOR,
+    memory_indexed_lane_extent=MemoryIndexedLaneExtent.VECTOR,
 )
 MASK_TO_INTEGRAL_REQUIREMENT = PrimitiveProviderRequirement(
     PrimitiveOperation.MASK_TO_INTEGRAL,
@@ -342,6 +412,8 @@ def operand_role_values() -> tuple[str, ...]:
 
 __all__ = (
     "COMPARE_EQUAL_REQUIREMENT",
+    "COMPACTED_VECTOR_STORE_REQUIREMENT",
+    "CONTIGUOUS_MASKED_VECTOR_STORE_REQUIREMENT",
     "CONTIGUOUS_VECTOR_LOAD_REQUIREMENT",
     "CONTIGUOUS_VECTOR_STORE_REQUIREMENT",
     "INDEXED_POINTER_VECTOR_LOAD_REQUIREMENT",
