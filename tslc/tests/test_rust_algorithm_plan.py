@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import replace
 
 import pytest
@@ -21,6 +22,7 @@ from tslc.backend.rust_algorithm import (
 from tslc.backend.rust_algorithm_plan import plan_rust_algorithm
 from tslc.backend.rust_static_selection import (
     RustStaticProfileSelection,
+    RustStaticVectorMapping,
     RustTargetRequirement,
 )
 from tslc.catalog.machine_profiles import MachineProfile
@@ -40,6 +42,7 @@ from tslc.catalog.semantics import (
     VECTOR_TO_ARRAY_REQUIREMENT,
     VECTOR_ZERO_REQUIREMENT,
     OperandRole,
+    PrimitiveProviderRequirement,
     PrimitiveOperation,
     ResolvedPrimitiveProvider,
 )
@@ -81,20 +84,31 @@ def _emitted_profile(
     name: str,
     read: tuple[LoweredSpecialization, ...],
     write: tuple[LoweredSpecialization, ...],
+    helpers: tuple[LoweredSpecialization, ...] = (),
 ) -> EmittedProfile:
+    by_primitive: dict[str, list[LoweredSpecialization]] = {
+        "write_contiguous": list(write),
+        "read_contiguous": list(read),
+    }
+    for specialization in helpers:
+        by_primitive.setdefault(specialization.primitive_name, []).append(
+            specialization
+        )
     return EmittedProfile(
         MachineProfile(name, "synthetic", frozenset(), {}),
         {
             "rust": {
-                "write_contiguous": write,
-                "read_contiguous": read,
+                primitive_name: tuple(specializations)
+                for primitive_name, specializations in by_primitive.items()
             }
         },
         immediate_split_names=frozenset(),
     )
 
 
-def _helper_plan() -> BackendHelperPlan:
+def _helper_plan(
+    renamed: Mapping[PrimitiveProviderRequirement, str] | None = None,
+) -> BackendHelperPlan:
     names = {
         CONTIGUOUS_VECTOR_LOAD_REQUIREMENT: "read_contiguous",
         CONTIGUOUS_VECTOR_STORE_REQUIREMENT: "write_contiguous",
@@ -108,6 +122,8 @@ def _helper_plan() -> BackendHelperPlan:
         MASK_TO_INTEGRAL_REQUIREMENT: "to_integral",
         MASK_FROM_INTEGRAL_REQUIREMENT: "to_mask",
     }
+    if renamed is not None:
+        names.update(renamed)
     return BackendHelperPlan(
         RUST_HELPER_MANIFEST,
         tuple(
@@ -122,12 +138,18 @@ def _helper_specs(
     base: LoweredSpecialization,
     *,
     excluded: frozenset[str],
+    helper_plan: BackendHelperPlan | None = None,
+    emitted_names: Mapping[str, str] | None = None,
 ) -> tuple[LoweredSpecialization, ...]:
-    helper_plan = _helper_plan()
+    helper_plan = helper_plan or _helper_plan()
+    emitted_names = emitted_names or {}
     return tuple(
         replace(
             base,
-            primitive_name=provider.primitive_name,
+            primitive_name=emitted_names.get(
+                provider.primitive_name,
+                provider.primitive_name,
+            ),
             source_primitive_name=provider.primitive_name,
             primitive_semantics=LoweredPrimitiveSemantics(),
             mask_policy=requirement.mask_policy,
@@ -204,6 +226,9 @@ def test_missing_optional_compaction_only_excludes_dependent_rust_families() -> 
     }
     assert "transform_unary" in incomplete.admitted_family_names
     assert "predicate_unary" in incomplete.admitted_family_names
+    support = rust_algorithm_support_module(incomplete)
+    assert " CompressStore<" not in support
+    assert " MaskPopulationCount<" in support
 
     compress = replace(
         read[0],
@@ -268,6 +293,154 @@ def test_rust_population_count_gap_only_excludes_compacting_selection() -> None:
     assert "select_masked_indices_unary" in plan.admitted_family_names
     assert "select_unary" not in plan.admitted_family_names
     assert "select_masked_unary" not in plan.admitted_family_names
+
+
+def test_renamed_rust_algorithm_helpers_drive_traits_and_calls() -> None:
+    read, write = _memory_specs()
+    renamed = {
+        CONTIGUOUS_MASKED_VECTOR_STORE_REQUIREMENT: "write_where",
+        VECTOR_ZERO_REQUIREMENT: "type",
+        VECTOR_TO_ARRAY_REQUIREMENT: "unpack_lanes",
+        VECTOR_FROM_ARRAY_REQUIREMENT: "pack_lanes",
+        INDEXED_POINTER_VECTOR_LOAD_REQUIREMENT: "read_rows",
+        COMPACTED_VECTOR_STORE_REQUIREMENT: "write_dense",
+        MASK_POPULATION_COUNT_REQUIREMENT: "count_active",
+        MASK_TO_INTEGRAL_REQUIREMENT: "mask_bits",
+        MASK_FROM_INTEGRAL_REQUIREMENT: "bits_mask",
+    }
+    helper_plan = _helper_plan(renamed)
+    helpers = _helper_specs(
+        read[0],
+        excluded=frozenset(),
+        helper_plan=helper_plan,
+        emitted_names={"write_where": "write_where_mask"},
+    )
+    helpers = tuple(
+        replace(specialization, extension_name="synthetic128")
+        if specialization.source_primitive_name == "read_rows"
+        else specialization
+        for specialization in helpers
+    )
+    hardware = RustStaticVectorMapping(
+        "si32",
+        "i32",
+        4,
+        128,
+        "SyntheticI32x4",
+        "u8",
+        extension_name="synthetic128",
+        extension_tag_spelling="Synthetic128",
+    )
+    emitted = _emitted_profile("synthetic", read, write, helpers)
+    static = replace(
+        _plan(*read, *write, *helpers),
+        profiles=(
+            RustStaticProfileSelection(
+                "synthetic",
+                RustTargetRequirement("x86_64", ("synthetic",)),
+                (),
+                (hardware,),
+                (),
+            ),
+        ),
+    )
+    profile = plan_rust_algorithm((emitted,), static, helper_plan).profile(
+        "synthetic"
+    )
+
+    assert profile is not None
+    assert profile.supported
+    masked_write = profile.helper_binding("masked_store")
+    assert masked_write.provider is not None
+    assert masked_write.provider.primitive_name == "write_where"
+    assert masked_write.facade is not None
+    assert masked_write.facade.primitive_name == "write_where_mask"
+    support = rust_algorithm_support_module(profile)
+    assert "detail::primitives::TypeImpl" in support
+    assert "detail::primitives::Unpack_lanesImpl" in support
+    assert "detail::primitives::Pack_lanesImpl" in support
+    assert "super::super::r#type::<" in support
+    assert "super::super::unpack_lanes::<" in support
+    assert "super::super::pack_lanes::<" in support
+    assert "detail::primitives::Read_rowsImpl<" in support
+    assert "super::super::read_rows::<" in support
+    assert "detail::primitives::Write_where_maskImpl<false>" in support
+    assert "super::super::write_where_mask::<" in support
+    assert "detail::primitives::Write_denseImpl<true>" in support
+    assert "super::super::write_dense::<" in support
+    assert "detail::primitives::Count_activeImpl" in support
+    assert "super::super::count_active::<" in support
+    assert "detail::primitives::Mask_bitsImpl" in support
+    assert "super::super::mask_bits::<" in support
+    assert "detail::primitives::Bits_maskImpl" in support
+    assert "super::super::bits_mask::<" in support
+
+
+def test_rust_algorithm_helper_names_must_be_consistent_within_a_profile() -> None:
+    read, write = _memory_specs()
+    helper_specs = _helper_specs(read[0], excluded=frozenset())
+    zero = next(
+        specialization
+        for specialization in helper_specs
+        if specialization.source_primitive_name == "set_zero"
+    )
+    conflicting_zero = replace(zero, primitive_name="zero_variant")
+
+    for ordered in (
+        (*helper_specs, conflicting_zero),
+        (conflicting_zero, *reversed(helper_specs)),
+    ):
+        with pytest.raises(
+            ValueError,
+            match=(
+                "Rust algorithm helper specializations disagree on their "
+                "finalized callable name: \\['set_zero', 'zero_variant'\\]"
+            ),
+        ):
+            plan_rust_algorithm(
+                (),
+                _plan(*read, *write, *ordered),
+                _helper_plan(),
+            )
+
+
+def test_fallback_and_selected_profiles_bind_renamed_helpers_identically() -> None:
+    read, write = _memory_specs()
+    helper_plan = _helper_plan(
+        {
+            VECTOR_ZERO_REQUIREMENT: "empty_vector",
+            VECTOR_TO_ARRAY_REQUIREMENT: "unpack_vector",
+            VECTOR_FROM_ARRAY_REQUIREMENT: "pack_vector",
+        }
+    )
+    helpers = _helper_specs(
+        read[0],
+        excluded=frozenset(),
+        helper_plan=helper_plan,
+    )
+    base = _plan(*read, *write, *helpers)
+    emitted = _emitted_profile("synthetic", read, write, helpers)
+    static = replace(
+        base,
+        profiles=(
+            RustStaticProfileSelection(
+                "synthetic",
+                RustTargetRequirement("x86_64", ("synthetic",)),
+                (),
+                base.fallback_mappings,
+                (),
+            ),
+        ),
+    )
+
+    plan = plan_rust_algorithm((emitted,), static, helper_plan)
+    profile = plan.profile("synthetic")
+
+    assert profile is not None
+    assert profile.helper_bindings == plan.fallback.helper_bindings
+    assert rust_algorithm_support_module(profile) == rust_algorithm_support_module(
+        plan.fallback
+    )
 
 
 def test_renamed_and_reordered_profiles_are_planned_by_exact_identity(

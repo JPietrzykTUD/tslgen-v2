@@ -246,3 +246,30 @@ def test_rust_facade_orchestrator_contains_only_public_api_and_pipeline() -> Non
     }
     for module in _CHILD_MODULES:
         assert module.removesuffix(".py") in source
+
+
+def test_rust_algorithm_renderer_has_no_exact_corpus_helper_calls() -> None:
+    source = (_BACKEND_ROOT / "rust_algorithm.py").read_text(encoding="utf-8")
+
+    forbidden = (
+        "super::super::set_zero::<",
+        "super::super::to_array::<",
+        "super::super::from_array::<",
+        "super::super::gather_narrow::<",
+        "super::super::store_mask::<",
+        "super::super::compress_store::<",
+        "super::super::mask_population_count::<",
+        "super::super::to_integral::<",
+        "super::super::to_mask::<",
+        "detail::primitives::Set_zeroImpl",
+        "detail::primitives::To_arrayImpl",
+        "detail::primitives::From_arrayImpl",
+        "detail::primitives::Gather_narrowImpl",
+        "detail::primitives::Store_maskImpl",
+        "detail::primitives::Compress_storeImpl",
+        "detail::primitives::Mask_population_countImpl",
+        "detail::primitives::To_integralImpl",
+        "detail::primitives::To_maskImpl",
+    )
+
+    assert [needle for needle in forbidden if needle in source] == []

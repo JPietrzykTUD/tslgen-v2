@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.rust_static_selection import (
     RustStaticFallbackModule,
     RustStaticSelectionPlan,
@@ -242,11 +241,9 @@ def _fallback_extension(
 
 def _plan(
     *specs: LoweredSpecialization,
-    profiles: tuple[EmittedProfile, ...] = (),
     fallback_extensions: tuple[Extension, ...] | None = None,
     fallback_mappings: tuple[RustStaticVectorMapping, ...] | None = None,
 ) -> RustStaticSelectionPlan:
-    del profiles
     by_name: dict[str, list[LoweredSpecialization]] = {}
     for spec in specs:
         by_name.setdefault(spec.primitive_name, []).append(spec)
