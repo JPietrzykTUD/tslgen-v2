@@ -1036,13 +1036,15 @@ The default `comparison value` remains NaN-aware while retaining exact signed
 zero and infinity checks. The
 `status_pointer` case kind validates nondeterministic status-plus-output
 contracts by checking the status domain and failure-path output preservation,
-without inventing vector lanes or a deterministic success value. The
-array↔register round-trip uses auto-discovered "harness primitives"
-(`from_array`, `to_array`,
-`to_integral`, found by signature shape in
-[value_tests/harness.py](src/tslc/value_tests/harness.py)). A **differential**
-mode cross-checks each hardware implementation against the portable `generic`
-one. [output/verify.py](src/tslc/output/verify.py) then actually compiles and
+without inventing vector lanes or a deterministic success value. Array↔register,
+mask↔integral, and contiguous-memory harness operations use semantic provider
+requirements resolved by the catalog in
+[value_tests/harness.py](src/tslc/value_tests/harness.py). Operation, signature,
+operand-role, mask, attribute, and memory facts identify each provider without a
+corpus primitive name; missing providers produce warnings and ambiguous providers
+fail closed. A **differential** mode cross-checks each hardware implementation
+against the portable `generic` one.
+[output/verify.py](src/tslc/output/verify.py) then actually compiles and
 runs them — optionally under **Intel SDE**, **qemu-aarch64**, or
 **qemu-riscv64** so target code runs on hardware that lacks it. Scalable
 machine profiles may provide typed, named runner variants. The verifier builds
