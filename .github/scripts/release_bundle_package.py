@@ -27,6 +27,7 @@ class GeneratedBundleConfig:
     backend_grouping: tuple[tuple[str, str], ...]
     backend_product_markers: tuple[tuple[str, str], ...]
     generated_scope_additions: tuple[tuple[str, tuple[str, ...]], ...]
+    generated_scope_omissions: tuple[tuple[str, tuple[str, ...]], ...]
     shared_artifact_roots: tuple[str, ...]
 
 
@@ -132,27 +133,31 @@ def load_generated_bundle_config(
             )
         markers.append((backend_id, marker))
 
-    raw_additions = raw.get("generated_scope_additions", {})
-    if not isinstance(raw_additions, dict):
-        raise ReleaseBundleError(
-            "generated_bundles generated_scope_additions must be an object"
+    additions = _scope_adjustments(
+        raw,
+        "generated_scope_additions",
+        backend_ids=frozenset(raw_grouping),
+    )
+    omissions = _scope_adjustments(
+        raw,
+        "generated_scope_omissions",
+        backend_ids=frozenset(raw_grouping),
+    )
+    additions_by_backend = dict(additions)
+    omissions_by_backend = dict(omissions)
+    overlapping_adjustments = tuple(
+        sorted(
+            backend_id
+            for backend_id in raw_grouping
+            if set(additions_by_backend.get(backend_id, ()))
+            & set(omissions_by_backend.get(backend_id, ()))
         )
-    additions: list[tuple[str, tuple[str, ...]]] = []
-    for backend_id, values in raw_additions.items():
-        if (
-            not isinstance(backend_id, str)
-            or backend_id not in raw_grouping
-            or not isinstance(values, list)
-            or any(
-                not isinstance(value, str) or SAFE_ID.fullmatch(value) is None
-                for value in values
-            )
-            or len(values) != len(set(values))
-        ):
-            raise ReleaseBundleError(
-                "generated_bundles generated_scope_additions is invalid"
-            )
-        additions.append((backend_id, tuple(values)))
+    )
+    if overlapping_adjustments:
+        raise ReleaseBundleError(
+            "generated_bundles scope additions and omissions overlap for: "
+            + ", ".join(overlapping_adjustments)
+        )
     shared_roots_value = raw.get("shared_artifact_roots", [])
     if (
         not isinstance(shared_roots_value, list)
@@ -172,8 +177,35 @@ def load_generated_bundle_config(
         backend_grouping=tuple(grouping),
         backend_product_markers=tuple(markers),
         generated_scope_additions=tuple(additions),
+        generated_scope_omissions=tuple(omissions),
         shared_artifact_roots=tuple(shared_roots_value),
     )
+
+
+def _scope_adjustments(
+    raw: Mapping[str, object],
+    field: str,
+    *,
+    backend_ids: frozenset[str],
+) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    value = raw.get(field, {})
+    if not isinstance(value, dict):
+        raise ReleaseBundleError(f"generated_bundles {field} must be an object")
+    adjustments: list[tuple[str, tuple[str, ...]]] = []
+    for backend_id, names in value.items():
+        if (
+            not isinstance(backend_id, str)
+            or backend_id not in backend_ids
+            or not isinstance(names, list)
+            or any(
+                not isinstance(name, str) or SAFE_ID.fullmatch(name) is None
+                for name in names
+            )
+            or len(names) != len(set(names))
+        ):
+            raise ReleaseBundleError(f"generated_bundles {field} is invalid")
+        adjustments.append((backend_id, tuple(names)))
+    return tuple(adjustments)
 
 
 def expected_generated_bundles(
@@ -184,6 +216,7 @@ def expected_generated_bundles(
         raise ReleaseBundleError("release contract has no backends array")
     grouping = dict(config.backend_grouping)
     additions = dict(config.generated_scope_additions)
+    omissions = dict(config.generated_scope_omissions)
     seen: set[str] = set()
     result: list[GeneratedBundleSpec] = []
     for raw_backend in raw_backends:
@@ -196,7 +229,17 @@ def expected_generated_bundles(
             raise ReleaseBundleError(f"duplicate release backend {backend_id!r}")
         seen.add(backend_id)
         profiles = _release_profiles(raw_backend, backend_id=backend_id)
+        unknown_omissions = tuple(
+            sorted(set(omissions.get(backend_id, ())) - set(profiles))
+        )
+        if unknown_omissions:
+            raise ReleaseBundleError(
+                f"release backend {backend_id!r} has generated-scope omissions "
+                "outside its profiles: "
+                + ", ".join(unknown_omissions)
+            )
         mode = grouping.get(backend_id)
+        groups: tuple[tuple[str, ...], ...]
         if mode == "per_profile":
             groups = tuple((profile,) for profile in profiles)
         elif mode == "combined":
@@ -213,7 +256,10 @@ def expected_generated_bundles(
                     backend_id=backend_id,
                     profiles=group,
                     generated_scope=tuple(
-                        sorted({*group, *additions.get(backend_id, ())})
+                        sorted(
+                            (set(group) - set(omissions.get(backend_id, ())))
+                            | set(additions.get(backend_id, ()))
+                        )
                     ),
                 )
             )

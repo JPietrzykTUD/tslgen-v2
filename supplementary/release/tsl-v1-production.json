@@ -19,6 +19,9 @@
     "generated_scope_additions": {
       "rust": ["fallback"]
     },
+    "generated_scope_omissions": {
+      "rust": ["scalar"]
+    },
     "shared_artifact_roots": ["docs"]
   },
   "editor_targets": [
