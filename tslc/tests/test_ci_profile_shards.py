@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from collections import Counter
 import json
+from pathlib import Path
 import shutil
 import subprocess
-from pathlib import Path
+import tomllib
 
 import pytest
 
@@ -16,10 +17,17 @@ _RELEASE_POLICY = json.loads(_RELEASE_POLICY_PATH.read_text(encoding="utf-8"))
 _RUST_COEXISTENCE_PROFILES = tuple(
     _RELEASE_POLICY["backend_profiles"]["rust"]["profiles"]
 )
+_ROOT_CONFIG = tomllib.loads(Path("tslc.toml").read_text(encoding="utf-8"))
 _REFERENCE_GENERATOR = (
     "bash .github/scripts/generate_release_reference_project.sh"
 )
 _BUNDLE_GENERATOR = "python .github/scripts/build_release_bundles.py"
+
+
+def test_project_default_rust_scope_matches_release_coexistence_policy() -> None:
+    assert tuple(_ROOT_CONFIG["tslc"]["backend_profiles"]["rust"]) == (
+        _RUST_COEXISTENCE_PROFILES
+    )
 
 
 def test_generated_profile_shards_preserve_exhaustive_and_coexistence_lanes(

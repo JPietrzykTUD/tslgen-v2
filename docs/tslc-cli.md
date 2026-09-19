@@ -30,6 +30,9 @@ backends = ["cpp", "rust"]
 authoring_profiles = ["scalar", "avx2"]
 output_root = "tslctmp/generated"
 
+[tslc.backend_profiles]
+rust = ["scalar", "avx2"]
+
 [tslc.rust_package]
 name = "tsl"
 version = "1.0.0"
@@ -50,6 +53,15 @@ capabilities = ["elementwise_clzg"]
 qemu-aarch64 = "/usr/bin/qemu-aarch64"
 qemu-riscv64 = "/usr/bin/qemu-riscv64"
 ```
+
+`backend_profiles` supplies the default profile subset for an individual
+backend when generation otherwise requests every machine profile. It is useful
+when one generated package cannot contain two separately gated profiles with
+the same target predicate. An explicit global `--profiles` filter bypasses
+these configured defaults, while `--backend-profiles BACKEND=PROFILE,...`
+overrides the configured entry for that backend. The repository configuration
+uses the reviewed v1 Rust coexistence scope; oneAPI-gated Rust profiles remain
+available through an explicit, separate generation request.
 
 The generated C++/Rust library, the Python compiler, and the VS Code extension
 are independently versioned components. In this repository configuration the

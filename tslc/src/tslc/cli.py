@@ -316,14 +316,24 @@ def _generation_command_settings(
             args.compiler_capabilities, "--compiler-capabilities"
         ),
     )
-    backend_profiles = {
+    command_line_backend_profiles = {
         backend_id: split_csv(value)
         for backend_id, value in parse_assignments(
             args.backend_profiles, "--backend-profiles"
         ).items()
     }
-    if any(not profiles for profiles in backend_profiles.values()):
+    if any(not profiles for profiles in command_line_backend_profiles.values()):
         raise ValueError("--backend-profiles requires at least one profile per backend")
+    backend_profiles = (
+        {
+            backend_id: profiles
+            for backend_id, profiles in project.backend_profiles.items()
+            if backend_id in backends
+        }
+        if project is not None and args.profiles is None
+        else {}
+    )
+    backend_profiles.update(command_line_backend_profiles)
     runner_paths = dict(project.runner_paths) if project is not None else {}
     runner_paths.update(parse_assignments(args.runner, "--runner"))
     tool_paths = dict(project.tool_paths) if project is not None else {}

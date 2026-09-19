@@ -239,6 +239,8 @@ def test_project_config_paths_are_relative_to_config(tmp_path: Path) -> None:
                 'backends = ["cpp"]',
                 'authoring_profiles = ["scalar"]',
                 'output_root = "out"',
+                "[tslc.backend_profiles]",
+                'rust = ["scalar", "avx2"]',
                 "[tslc.rust_package]",
                 'name = "custom-tsl"',
                 'version = "1.2.3"',
@@ -269,6 +271,7 @@ def test_project_config_paths_are_relative_to_config(tmp_path: Path) -> None:
     assert config.machine_profiles == (tmp_path / "profiles.json").resolve()
     assert config.output_root == (tmp_path / "out").resolve()
     assert config.authoring_profiles == ("scalar",)
+    assert config.backend_profiles == {"rust": ("scalar", "avx2")}
     assert config.toolchains["cpp"].compiler == ("clang++",)
     assert config.toolchains["cpp"].compiler_capabilities == (
         "elementwise_clzg",
@@ -281,6 +284,47 @@ def test_project_config_paths_are_relative_to_config(tmp_path: Path) -> None:
     assert rust_package.edition == "2024"
     assert rust_package.rust_version == "1.85"
     assert rust_package.readme == "CRATE.md"
+
+
+@pytest.mark.parametrize(
+    ("profile_section", "message"),
+    (
+        ('backend_profiles = "invalid"', "tslc.backend_profiles must be a table"),
+        (
+            "[tslc.backend_profiles]\nrust = []",
+            "tslc.backend_profiles.rust must be a non-empty string array",
+        ),
+        (
+            '[tslc.backend_profiles]\nrust = ["scalar", 7]',
+            "tslc.backend_profiles.rust must be a non-empty string array",
+        ),
+    ),
+)
+def test_backend_profile_defaults_are_validated(
+    tmp_path: Path,
+    profile_section: str,
+    message: str,
+) -> None:
+    config_path = tmp_path / "tslc.toml"
+    config_path.write_text(
+        "\n".join(
+            (
+                "[tslc]",
+                'sources = ["data"]',
+                'machine_profiles = "profiles.json"',
+                'backends = ["rust"]',
+                profile_section,
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError) as caught:
+        load_project_config(config_path)
+
+    assert str(config_path.resolve()) in str(caught.value)
+    assert message in str(caught.value)
 
 
 @pytest.mark.parametrize(

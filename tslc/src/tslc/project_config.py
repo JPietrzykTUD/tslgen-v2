@@ -24,6 +24,7 @@ class ProjectConfig:
     machine_profiles: Path
     backends: tuple[str, ...]
     authoring_profiles: tuple[str, ...] = ()
+    backend_profiles: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     output_root: Path | None = None
     toolchains: Mapping[str, BackendToolchain] = field(default_factory=dict)
     runner_paths: Mapping[str, str] = field(default_factory=dict)
@@ -31,6 +32,11 @@ class ProjectConfig:
     render_config: ProjectRenderConfig = DEFAULT_PROJECT_RENDER_CONFIG
 
     def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "backend_profiles",
+            MappingProxyType(dict(sorted(self.backend_profiles.items()))),
+        )
         object.__setattr__(
             self, "toolchains", MappingProxyType(dict(sorted(self.toolchains.items())))
         )
@@ -71,6 +77,7 @@ def load_project_config(path: Path | str | None = None) -> ProjectConfig | None:
     profiles = _string(root, "machine_profiles", required=True)
     backends = _string_list(root, "backends", required=True)
     authoring_profiles = _optional_string_list(root, "authoring_profiles")
+    backend_profiles = _backend_profile_defaults(selected, root)
     output = _string(root, "output_root", required=False)
     toolchain_table = root.get("toolchains", {})
     if not isinstance(toolchain_table, dict):
@@ -112,6 +119,7 @@ def load_project_config(path: Path | str | None = None) -> ProjectConfig | None:
         machine_profiles=_resolve(base, profiles),
         backends=tuple(backends),
         authoring_profiles=authoring_profiles,
+        backend_profiles=backend_profiles,
         output_root=_resolve(base, output) if output is not None else None,
         toolchains=toolchains,
         runner_paths={str(key): str(value) for key, value in runners.items()},
@@ -142,6 +150,31 @@ def _backend_render_config(
         if value is not None:
             entries.append((capability.backend_id, value))
     return ProjectRenderConfig.create(entries)
+
+
+def _backend_profile_defaults(
+    path: Path, root: dict[str, object]
+) -> Mapping[str, tuple[str, ...]]:
+    raw = root.get("backend_profiles", {})
+    if not isinstance(raw, dict):
+        raise ValueError(f"{path}: tslc.backend_profiles must be a table")
+    profiles: dict[str, tuple[str, ...]] = {}
+    for backend_id, values in raw.items():
+        if not isinstance(backend_id, str) or not backend_id.strip():
+            raise ValueError(
+                f"{path}: tslc.backend_profiles keys must be non-empty strings"
+            )
+        if not (
+            isinstance(values, list)
+            and values
+            and all(isinstance(value, str) and value.strip() for value in values)
+        ):
+            raise ValueError(
+                f"{path}: tslc.backend_profiles.{backend_id} must be a "
+                "non-empty string array"
+            )
+        profiles[backend_id] = tuple(values)
+    return profiles
 
 
 def _resolve(base: Path, value: str) -> Path:
