@@ -208,6 +208,11 @@ def test_rust_release_quality_runs_msrv_and_current_stable() -> None:
     assert "./dev.sh test" in section
     assert "ARG RUST_MSRV=1.89.0" in dockerfile
     assert 'rustup toolchain install "${RUST_MSRV}"' in dockerfile
+    msrv_targets = dockerfile.split(
+        'rustup target add --toolchain "${RUST_MSRV}"', 1
+    )[1].split(";", 1)[0]
+    assert "aarch64-unknown-linux-musl" in msrv_targets
+    assert "wasm32-wasip1" in msrv_targets
 
 
 def test_scalable_showcase_is_a_required_generated_profile_gate() -> None:
