@@ -33,6 +33,61 @@ def test_generated_workflows_reuse_content_addressed_images() -> None:
         assert "-tslc-ci:${GITHUB_SHA}" not in workflow
 
 
+def test_generated_package_runs_reference_and_bundle_work_in_parallel() -> None:
+    workflow = _workflow("generated-package.yml")
+    reference_job = workflow.split(
+        "\n  reference-generated-output:\n", 1
+    )[1].split("\n  package-generated-output:\n", 1)[0]
+    package_job = workflow.split("\n  package-generated-output:\n", 1)[1].split(
+        "\n  docs:\n", 1
+    )[0]
+    docs_job = workflow.split("\n  docs:\n", 1)[1].split("\n  deploy:\n", 1)[0]
+
+    assert "timeout-minutes: 90" in reference_job
+    assert "generate_release_reference_project.sh" in reference_job
+    assert "verify_generated_consumers.sh" in reference_job
+    assert "build_release_bundles.py" not in reference_job
+    assert "package-generated-output" not in reference_job
+    assert "name: tsl-generated-reference-${{ github.sha }}" in reference_job
+    assert "ci-logs-generated-reference" in reference_job
+
+    assert "timeout-minutes: 90" in package_job
+    assert "build_release_bundles.py" in package_job
+    assert "verify_release_archive_consumers.sh" in package_job
+    assert "generate_release_reference_project.sh" not in package_job
+    assert "reference-generated-output" not in package_job
+    assert "name: tsl-generated-${{ github.sha }}" in package_job
+    assert "tsl-generated-reference-${{ github.sha }}" not in package_job
+
+    assert "- reference-generated-output" in docs_job
+    assert "- package-generated-output" not in docs_job
+    assert "tsl-generated-reference-${{ github.sha }}" in docs_job
+
+
+def test_coverage_ratchets_run_as_independent_matrix_shards() -> None:
+    workflow = _workflow("coverage-ratchet.yml")
+    ratchet_job = workflow.split("\n  coverage-ratchet:\n", 1)[1].split(
+        "\n  required-coverage:\n", 1
+    )[0]
+    required_job = workflow.split("\n  required-coverage:\n", 1)[1]
+
+    for shard in (
+        "coverage",
+        "target-support",
+        "implementation-quality",
+        "benchmark",
+        "benchmark-rust",
+    ):
+        assert f"          - {shard}\n" in ratchet_job
+    assert "fail-fast: false" in ratchet_job
+    assert 'case "${TSLC_RATCHET}" in' in ratchet_job
+    assert "bash dev.sh target-ratchet --require-complete" in ratchet_job
+    assert "bash dev.sh benchmark-ratchet --backend rust" in ratchet_job
+    assert "ci-logs-coverage-ratchet-${{ matrix.ratchet }}" in ratchet_job
+    assert "coverage-ratchet" in required_job
+    assert "needs['coverage-ratchet'].result" in required_job
+
+
 def test_generated_values_subsume_the_profile_build_matrix() -> None:
     values = _workflow("generated-values.yml")
     value_test_job = values.split("\n  generated-value-tests:\n", 1)[1].split(

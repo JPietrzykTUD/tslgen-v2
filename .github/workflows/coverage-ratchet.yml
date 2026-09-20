@@ -22,12 +22,22 @@ jobs:
     uses: ./.github/workflows/ci-scope.yml
 
   coverage-ratchet:
-    name: Coverage ratchet
+    name: Coverage ratchet (${{ matrix.ratchet }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs:
       - scope
     if: needs.scope.outputs.coverage == 'true'
+
+    strategy:
+      fail-fast: false
+      matrix:
+        ratchet:
+          - coverage
+          - target-support
+          - implementation-quality
+          - benchmark
+          - benchmark-rust
 
     steps:
       - name: Check out repository
@@ -45,7 +55,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           bash .github/scripts/run_with_log.sh \
-            "tslctmp/ci-logs/coverage-ratchet/install.log" \
+            "tslctmp/ci-logs/coverage-ratchet-${{ matrix.ratchet }}/install.log" \
             bash -lc '
               set -e
               python -m pip install --upgrade pip
@@ -53,42 +63,29 @@ jobs:
               python -m pip install --no-deps -e ./tslc
             '
 
-      - name: Run coverage ratchet
+      - name: Run ${{ matrix.ratchet }} ratchet
+        env:
+          TSLC_RATCHET: ${{ matrix.ratchet }}
         run: |
+          set -euo pipefail
+          case "${TSLC_RATCHET}" in
+            coverage) command=(bash dev.sh ratchet) ;;
+            target-support) command=(bash dev.sh target-ratchet --require-complete) ;;
+            implementation-quality) command=(bash dev.sh implementation-ratchet) ;;
+            benchmark) command=(bash dev.sh benchmark-ratchet) ;;
+            benchmark-rust) command=(bash dev.sh benchmark-ratchet --backend rust) ;;
+            *) echo "unknown ratchet shard: ${TSLC_RATCHET}" >&2; exit 2 ;;
+          esac
           bash .github/scripts/run_with_log.sh \
-            "tslctmp/ci-logs/coverage-ratchet/ratchet.log" \
-            bash dev.sh ratchet
-
-      - name: Run exact release-target support ratchet
-        run: |
-          bash .github/scripts/run_with_log.sh \
-            "tslctmp/ci-logs/coverage-ratchet/target-ratchet.log" \
-            bash dev.sh target-ratchet --require-complete
-
-      - name: Run exact implementation-slot quality ratchet
-        run: |
-          bash .github/scripts/run_with_log.sh \
-            "tslctmp/ci-logs/coverage-ratchet/implementation-ratchet.log" \
-            bash dev.sh implementation-ratchet
-
-      - name: Run benchmark coverage ratchet
-        run: |
-          bash .github/scripts/run_with_log.sh \
-            "tslctmp/ci-logs/coverage-ratchet/benchmark-ratchet.log" \
-            bash dev.sh benchmark-ratchet
-
-      - name: Run Rust benchmark coverage ratchet
-        run: |
-          bash .github/scripts/run_with_log.sh \
-            "tslctmp/ci-logs/coverage-ratchet/benchmark-rust-ratchet.log" \
-            bash dev.sh benchmark-ratchet --backend rust
+            "tslctmp/ci-logs/coverage-ratchet-${TSLC_RATCHET}/ratchet.log" \
+            "${command[@]}"
 
       - name: Upload coverage ratchet logs
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ci-logs-coverage-ratchet
-          path: tslctmp/ci-logs/coverage-ratchet
+          name: ci-logs-coverage-ratchet-${{ matrix.ratchet }}
+          path: tslctmp/ci-logs/coverage-ratchet-${{ matrix.ratchet }}
           if-no-files-found: ignore
           retention-days: 14
 

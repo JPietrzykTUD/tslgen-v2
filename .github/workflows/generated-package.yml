@@ -53,6 +53,91 @@ jobs:
           push: "true"
           reuse-existing: "true"
 
+  reference-generated-output:
+    name: Generate documentation and validation reference
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    needs:
+      - scope
+      - ci-image
+    if: needs.scope.outputs.package == 'true' || needs.scope.outputs.docs == 'true'
+    permissions:
+      contents: read
+      packages: read
+
+    env:
+      TSLC_CI_IMAGE: ${{ needs.scope.outputs.ci_image }}
+      TSLC_CI_REFERENCE: ./tslctmp/ci-generated-reference
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull CI image
+        run: |
+          bash .github/scripts/run_with_log.sh \
+            "tslctmp/ci-logs/generated-reference/docker-pull.log" \
+            docker pull "${TSLC_CI_IMAGE}"
+
+      - name: Generate full documentation and validation reference
+        run: |
+          bash .github/scripts/run_with_log.sh \
+            "tslctmp/ci-logs/generated-reference/generate-reference.log" \
+            bash supplementary/ci/run_tslc_ci_container.sh \
+              -e TSLC_CI_REFERENCE="${TSLC_CI_REFERENCE}" \
+              -- \
+              bash -lc \
+                'bash .github/scripts/generate_release_reference_project.sh \
+                  "${TSLC_CI_REFERENCE}"'
+
+      - name: Verify generated consumers and examples
+        run: |
+          bash .github/scripts/run_with_log.sh \
+            "tslctmp/ci-logs/generated-reference/verify-consumers.log" \
+            bash supplementary/ci/run_tslc_ci_container.sh \
+              -e TSLC_CI_REFERENCE="${TSLC_CI_REFERENCE}" \
+              -- \
+              bash -lc 'bash supplementary/ci/verify_generated_consumers.sh \
+                "${TSLC_CI_REFERENCE}"'
+
+      - name: Package internal documentation reference
+        run: |
+          bash .github/scripts/run_with_log.sh \
+            "tslctmp/ci-logs/generated-reference/package.log" \
+            bash -lc '
+              set -e
+              mkdir -p tslctmp/artifacts
+              source_epoch="$(git show -s --format=%ct "${GITHUB_SHA}")"
+              python .github/scripts/release_production.py archive \
+                --kind generated \
+                --source "${TSLC_CI_REFERENCE}" \
+                --output "tslctmp/artifacts/tsl-generated-reference-${GITHUB_SHA}.tar.gz" \
+                --epoch "${source_epoch}"
+            '
+
+      - name: Upload internal documentation reference
+        uses: actions/upload-artifact@v7
+        with:
+          name: tsl-generated-reference-${{ github.sha }}
+          path: tslctmp/artifacts/tsl-generated-reference-${{ github.sha }}.tar.gz
+          if-no-files-found: error
+
+      - name: Upload reference logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-logs-generated-reference
+          path: tslctmp/ci-logs/generated-reference
+          if-no-files-found: ignore
+          retention-days: 14
+
   package-generated-output:
     name: Package generated output
     runs-on: ubuntu-latest
@@ -68,7 +153,6 @@ jobs:
     env:
       TSLC_CI_IMAGE: ${{ needs.scope.outputs.ci_image }}
       TSLC_CI_OUTPUT: ./tslctmp/ci-release-bundles
-      TSLC_CI_REFERENCE: ./tslctmp/ci-generated-reference
 
     steps:
       - name: Check out repository
@@ -86,27 +170,6 @@ jobs:
           bash .github/scripts/run_with_log.sh \
             "tslctmp/ci-logs/generated-package/docker-pull.log" \
             docker pull "${TSLC_CI_IMAGE}"
-
-      - name: Generate full documentation and validation reference
-        run: |
-          bash .github/scripts/run_with_log.sh \
-            "tslctmp/ci-logs/generated-package/generate-reference.log" \
-            bash supplementary/ci/run_tslc_ci_container.sh \
-              -e TSLC_CI_REFERENCE="${TSLC_CI_REFERENCE}" \
-              -- \
-              bash -lc \
-                'bash .github/scripts/generate_release_reference_project.sh \
-                  "${TSLC_CI_REFERENCE}"'
-
-      - name: Verify generated consumers and examples
-        run: |
-          bash .github/scripts/run_with_log.sh \
-            "tslctmp/ci-logs/generated-package/verify-consumers.log" \
-            bash supplementary/ci/run_tslc_ci_container.sh \
-              -e TSLC_CI_REFERENCE="${TSLC_CI_REFERENCE}" \
-              -- \
-              bash -lc 'bash supplementary/ci/verify_generated_consumers.sh \
-                "${TSLC_CI_REFERENCE}"'
 
       - name: Generate deployment-oriented release bundles
         run: |
@@ -140,11 +203,6 @@ jobs:
               cmp \
                 "tslctmp/artifacts/tsl-generated-${GITHUB_SHA}.tar.gz" \
                 "tslctmp/artifacts/tsl-generated-${GITHUB_SHA}-repro.tar.gz"
-              python .github/scripts/release_production.py archive \
-                --kind generated \
-                --source "${TSLC_CI_REFERENCE}" \
-                --output "tslctmp/artifacts/tsl-generated-reference-${GITHUB_SHA}.tar.gz" \
-                --epoch "${source_epoch}"
             '
 
       - name: Consume the packaged archive from clean projects
@@ -176,13 +234,6 @@ jobs:
           path: tslctmp/artifacts/tsl-generated-${{ github.sha }}.tar.gz
           if-no-files-found: error
 
-      - name: Upload internal documentation reference
-        uses: actions/upload-artifact@v7
-        with:
-          name: tsl-generated-reference-${{ github.sha }}
-          path: tslctmp/artifacts/tsl-generated-reference-${{ github.sha }}.tar.gz
-          if-no-files-found: error
-
       - name: Upload package logs
         if: always()
         uses: actions/upload-artifact@v7
@@ -193,13 +244,13 @@ jobs:
           retention-days: 14
 
   docs:
-    name: Build docs from packaged output
+    name: Build docs from generated reference
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs:
       - scope
       - ci-image
-      - package-generated-output
+      - reference-generated-output
     if: needs.scope.outputs.docs == 'true'
     permissions:
       contents: read
@@ -214,13 +265,13 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v5
 
-      - name: Download generated package
+      - name: Download generated reference
         uses: actions/download-artifact@v8
         with:
           name: tsl-generated-reference-${{ github.sha }}
           path: tslctmp/docs-input
 
-      - name: Extract generated package
+      - name: Extract generated reference
         run: |
           mkdir -p "${TSLC_CI_OUTPUT}"
           tar -xzf "tslctmp/docs-input/tsl-generated-reference-${GITHUB_SHA}.tar.gz" \
