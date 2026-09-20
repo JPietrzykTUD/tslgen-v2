@@ -9,6 +9,14 @@ export interface ProfileChoice {
   readonly value: string;
 }
 
+export function previewDocumentPath(
+  kind: string,
+  title: string,
+  suffix: string,
+): string {
+  return `/${kind}/${encodeURIComponent(title)}.${suffix}`;
+}
+
 export function profileChoices(
   slots: readonly ProfileSlot[],
   preferred?: string,

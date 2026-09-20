@@ -5,6 +5,29 @@ backends = ["cpp", "rust"]
 authoring_profiles = ["scalar", "avx2"]
 output_root = "tslctmp/generated"
 
+[tslc.backend_profiles]
+rust = [
+  "scalar",
+  "sse",
+  "sse2",
+  "sse3",
+  "avx",
+  "avx2",
+  "knl",
+  "kml",
+  "skylake",
+  "cannonlake",
+  "cascadelake",
+  "cooperlake",
+  "icelake_rockerlake",
+  "tigerlake",
+  "zen4",
+  "sapphire_emerald_granite_rapids",
+  "zen5",
+  "neon",
+  "wasm32-simd128",
+]
+
 [tslc.rust_package]
 name = "tsl"
 version = "1.0.0"

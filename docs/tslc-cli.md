@@ -30,6 +30,9 @@ backends = ["cpp", "rust"]
 authoring_profiles = ["scalar", "avx2"]
 output_root = "tslctmp/generated"
 
+[tslc.backend_profiles]
+rust = ["scalar", "avx2"]
+
 [tslc.rust_package]
 name = "tsl"
 version = "1.0.0"
@@ -51,6 +54,15 @@ qemu-aarch64 = "/usr/bin/qemu-aarch64"
 qemu-riscv64 = "/usr/bin/qemu-riscv64"
 ```
 
+`backend_profiles` supplies the default profile subset for an individual
+backend when generation otherwise requests every machine profile. It is useful
+when one generated package cannot contain two separately gated profiles with
+the same target predicate. An explicit global `--profiles` filter bypasses
+these configured defaults, while `--backend-profiles BACKEND=PROFILE,...`
+overrides the configured entry for that backend. The repository configuration
+uses the reviewed v1 Rust coexistence scope; oneAPI-gated Rust profiles remain
+available through an explicit, separate generation request.
+
 The generated C++/Rust library, the Python compiler, and the VS Code extension
 are independently versioned components. In this repository configuration the
 generated library is `1.0.0`, while `tslc --version` reports the compiler's
@@ -59,9 +71,11 @@ Changing the generated Cargo version does not rename or imply a matching
 compiler/editor release. The exact current versions are projected into the
 [generated-library support contract](tsl-v1-support.md).
 
-The Rust package table is optional as a whole; when present, it supplies the
-complete release metadata rendered into the generated Cargo package. Toolchain
-and runner tables are optional. CLI `--compiler`, `--target`, `--linker`,
+The Rust backend registers and parses the optional Rust package table; when
+present, it supplies the complete release metadata rendered into the generated
+Cargo package. Other backends may register their own typed configuration tables
+without adding fields to the generic project configuration model. Toolchain and
+runner tables are optional. CLI `--compiler`, `--target`, `--linker`,
 `--compiler-capabilities cpp=elementwise_clzg`, and `--runner` assignments
 override configured values. Capability names are backend-owned facts, not
 compiler-version aliases.

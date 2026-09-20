@@ -16,6 +16,7 @@ from tslc.catalog.machine_profiles import (
     load_machine_profiles_checked,
 )
 from tslc.catalog.target_families import (
+    BackendProfileFamily,
     ProfileFamilyCapability,
     TargetFamilyCatalog,
     TargetFeatureCapability,
@@ -115,6 +116,49 @@ def _base_source(extra: str = "") -> str:
 
 def test_valid_tiny_catalog_has_no_validation_diagnostics() -> None:
     assert _diagnostics(_base_source()) == ()
+
+
+def test_indexed_pointer_load_requires_indexed_lane_extent() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "prim<v:=(cptr,cptr,sImm)> indexed_pointer_load(base_ptr, index_ptr, scale):\n"
+            "  operation load\n"
+            "  operand_roles:\n"
+            "    memory_source base_ptr\n"
+            "    index index_ptr\n"
+            "    scale scale\n"
+            "  memory:\n"
+            "    access read\n"
+            "    addressing indexed\n"
+        )
+    )
+
+    diagnostic = next(
+        item
+        for item in diagnostics
+        if item.code == "TSL-CATALOG-MISSING-MEMORY-INDEXED-LANES"
+    )
+    assert diagnostic.span is not None
+    assert diagnostic.span.path.name == "catalog_validation_fixture.tsl"
+
+
+def test_pointer_index_operand_remains_specific_to_indexed_loads() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "prim<s:=(v,cptr)> extract_by_pointer(data, index_ptr):\n"
+            "  operation extract_lane\n"
+            "  operand_roles:\n"
+            "    primary data\n"
+            "    index index_ptr\n"
+        )
+    )
+
+    diagnostic = next(
+        item
+        for item in diagnostics
+        if item.code == "TSL-CATALOG-INCOMPATIBLE-OPERATION-SIGNATURE"
+    )
+    assert "role 'index' to signature kind 'cptr'" in diagnostic.message
 
 
 def test_invalid_primitive_portability_is_diagnosed() -> None:
@@ -2645,6 +2689,70 @@ def test_machine_profile_backend_flags_are_validated(tmp_path: Path) -> None:
 
     assert result.profiles["neon"].flags_for_backend("cpp") == ()
     assert "TSL-PROFILE-MALFORMED-FIELD" in {d.code for d in result.diagnostics}
+
+
+def test_machine_profile_backend_selection_priorities_are_typed(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "machine_profiles.json"
+    path.write_text(
+        '{"x86": [{"name": "ordered", "target_features": "sse", '
+        '"backend_selection_priority": {"rust": 20}}]}\n',
+        encoding="utf-8",
+    )
+
+    result = load_machine_profiles_checked(path, _target_family_catalog())
+
+    assert result.diagnostics == ()
+    assert result.profiles["ordered"].selection_priority_for_backend("rust") == 20
+    assert result.profiles["ordered"].selection_priority_for_backend("cpp") is None
+
+
+@pytest.mark.parametrize("priority", ['"high"', "true", "-1", "[]"])
+def test_machine_profile_backend_selection_priorities_are_validated(
+    tmp_path: Path,
+    priority: str,
+) -> None:
+    path = tmp_path / "machine_profiles.json"
+    path.write_text(
+        '{"x86": [{"name": "bad", "target_features": "sse", '
+        '"backend_selection_priority": {"rust": '
+        + priority
+        + '}}]}\n',
+        encoding="utf-8",
+    )
+
+    result = load_machine_profiles_checked(path, _target_family_catalog())
+
+    assert result.profiles["bad"].selection_priority_for_backend("rust") is None
+    assert "TSL-PROFILE-MALFORMED-FIELD" in {
+        diagnostic.code for diagnostic in result.diagnostics
+    }
+
+
+def test_machine_profile_backend_selection_priority_rejects_unknown_backend(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "machine_profiles.json"
+    path.write_text(
+        '{"x86": [{"name": "bad", "target_features": "sse", '
+        '"backend_selection_priority": {"unknown": 1}}]}\n',
+        encoding="utf-8",
+    )
+
+    families = TargetFamilyCatalog(
+        profile_families={
+            "x86": ProfileFamilyCapability(
+                "x86",
+                backends={"rust": BackendProfileFamily(target_arch="x86_64")},
+            )
+        }
+    )
+    result = load_machine_profiles_checked(path, families)
+
+    assert "TSL-PROFILE-UNKNOWN-BACKEND" in {
+        diagnostic.code for diagnostic in result.diagnostics
+    }
 
 
 def test_machine_profile_compiler_roles_and_build_fallback_are_typed(

@@ -77,6 +77,25 @@ def test_plan_has_exact_supported_and_report_only_keys(rust_selection_result) ->
         assert "overloaded" in coverage[primitive_name].reason
 
 
+def test_policy_selection_uses_injected_extension_header_group(
+    rust_selection_result,
+) -> None:
+    plan = plan_rust_policy_selection(
+        rust_selection_result.emitted_profiles,
+        RUST_POLICY_MANIFEST,
+        lambda extension: "future_group" if extension is not None else None,
+    )
+    profile = plan.profile("sse2")
+    assert profile is not None
+    assert profile.selections == ()
+    mul = next(
+        entry for entry in profile.coverage if entry.key.primitive_name == "mul"
+    )
+    assert mul.key.header_group == "future_group"
+    assert mul.status == "report_only"
+    assert "header-group" in mul.reason
+
+
 def test_forced_override_is_validated_and_immutable(rust_selection_result) -> None:
     default = plan_rust_policy_selection(
         rust_selection_result.emitted_profiles, RUST_POLICY_MANIFEST

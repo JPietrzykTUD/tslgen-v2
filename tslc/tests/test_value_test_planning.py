@@ -10,6 +10,13 @@ import pytest
 import tslc.pipeline as pipeline_module
 from tslc.api import generate_project
 from tslc.catalog.machine_profiles import MachineProfile
+from tslc.catalog.memory import (
+    MemoryAccess,
+    MemoryAddressing,
+    MemoryIndexedLaneExtent,
+    MemoryPayloadExtent,
+    PrimitiveMemoryContract,
+)
 from tslc.catalog.model import (
     BackendExtensionMetadata,
     Catalog,
@@ -29,7 +36,15 @@ from tslc.catalog.preconditions import (
     PreconditionKind,
     PrimitivePrecondition,
 )
-from tslc.catalog.semantics import OperandBinding, OperandRole
+from tslc.catalog.semantics import (
+    RUNTIME_LANE_EXTRACT_REQUIREMENT,
+    VECTOR_ZERO_REQUIREMENT,
+    OperandBinding,
+    OperandRole,
+    PrimitiveOperation,
+    PrimitiveSemanticContract,
+    ResolvedPrimitiveProvider,
+)
 from tslc.compiler_assets import RenderAssets
 from tslc.diagnostics import Diagnostic, SourceSpan
 from tslc.lower.lowerer import LoweredSpecialization
@@ -39,6 +54,7 @@ from tslc.lower.target_vectors import TargetVector
 from tslc.backend.emitted_names import finalize_emitted_names
 from tslc.target_text import LoweredBody
 from tslc.backend.emitted_profile import EmittedProfile
+from tslc.backend.helper_requirements import BackendHelperPlan
 from tslc.render.project import render_project
 from tslc.value_tests.coverage import (
     ValueTestCaseDrop,
@@ -224,25 +240,89 @@ def test_emitted_profile_freezes_backend_mappings() -> None:
         profile.specializations("cpp")["late"] = ()  # type: ignore[index]
 
 
-def test_harness_discovery_uses_signatures_not_names() -> None:
-    catalog = _catalog(
-        Primitive("lane_in", "v:=s[]", ("data",), (), ()),
-        Primitive("lane_out", "s[]:=v", ("data",), (), ()),
-        Primitive("mask_bits", "im:=m", ("mask",), (), ()),
-        Primitive("mask_from_bits", "m:=im", ("bits",), (), ()),
-        Primitive("load", "v:=cptr", ("ptr",), (), ()),
-        Primitive("store", "void:=(ptr,v)", ("ptr", "data"), (), ()),
+def test_harness_discovery_uses_semantics_not_names_or_source_order() -> None:
+    renamed_names = (
+        "build_vector",
+        "materialize_vector",
+        "pack_mask",
+        "unpack_mask",
+        "read_vector",
+        "write_vector",
     )
+    primitives = tuple(
+        replace(primitive, name=name)
+        for primitive, name in zip(
+            _harness_primitives(), renamed_names, strict=True
+        )
+    )
+    catalog = _catalog(*primitives)
 
     harness = discover_harness_primitives(catalog)
+    reversed_harness = discover_harness_primitives(_catalog(*reversed(primitives)))
+
+    assert harness.from_array == "build_vector"
+    assert harness.to_array == "materialize_vector"
+    assert harness.to_integral == "pack_mask"
+    assert harness.to_mask == "unpack_mask"
+    assert harness.load == "read_vector"
+    assert harness.store == "write_vector"
+    assert harness.diagnostics == ()
+    assert reversed_harness == harness
+
+
+def test_harness_discovery_ignores_same_signature_different_operation() -> None:
+    primitives = _harness_primitives()
+    from_array = primitives[0]
+    decoy = replace(
+        from_array,
+        name="unrelated_same_shape",
+        operation=PrimitiveSemanticContract(
+            PrimitiveOperation.CONVERT,
+            (OperandBinding(OperandRole.VALUE, "data", 0, "s[]"),),
+        ),
+    )
+
+    harness = discover_harness_primitives(_catalog(*primitives, decoy))
 
     assert harness.from_array == "lane_in"
-    assert harness.to_array == "lane_out"
-    assert harness.to_integral == "mask_bits"
-    assert harness.to_mask == "mask_from_bits"
-    assert harness.load == "load"
-    assert harness.store == "store"
     assert harness.diagnostics == ()
+
+
+def test_harness_discovery_fails_closed_on_ambiguous_semantic_provider() -> None:
+    primitives = _harness_primitives()
+    duplicate = replace(primitives[0], name="another_lane_in")
+
+    harness = discover_harness_primitives(_catalog(duplicate, *reversed(primitives)))
+    reordered = discover_harness_primitives(_catalog(*primitives, duplicate))
+
+    assert harness.from_array is None
+    assert len(harness.diagnostics) == 1
+    diagnostic = harness.diagnostics[0]
+    assert diagnostic.severity == "error"
+    assert diagnostic.code == "TSL-VALUE-TEST-HARNESS-AMBIGUOUS"
+    assert diagnostic.message.index("another_lane_in") < diagnostic.message.index(
+        "lane_in"
+    )
+    assert reordered == harness
+
+
+def test_harness_discovery_reports_missing_semantic_providers_as_warnings() -> None:
+    harness = discover_harness_primitives(_catalog())
+
+    assert (
+        harness.from_array,
+        harness.to_array,
+        harness.to_integral,
+        harness.to_mask,
+        harness.load,
+        harness.store,
+    ) == (None, None, None, None, None, None)
+    assert len(harness.diagnostics) == 6
+    assert all(
+        diagnostic.severity == "warning"
+        and diagnostic.code == "TSL-VALUE-TEST-HARNESS-MISSING"
+        for diagnostic in harness.diagnostics
+    )
 
 
 def test_runtime_failure_cases_plan_and_render_for_both_backends(
@@ -2035,6 +2115,7 @@ def test_planner_warns_for_each_unsupported_authored_case() -> None:
 
 def test_render_project_consumes_prebuilt_value_test_plan(
     render_assets: RenderAssets,
+    cpp_helper_plan: BackendHelperPlan,
 ) -> None:
     primitive = Primitive(
         "neg",
@@ -2064,7 +2145,13 @@ def test_render_project_consumes_prebuilt_value_test_plan(
             ),
         )
     )
-    rendered = render_project((profile,), ("cpp",), plan, assets=render_assets)
+    rendered = render_project(
+        (profile,),
+        ("cpp",),
+        plan,
+        assets=render_assets,
+        helper_plans={"cpp": cpp_helper_plan},
+    )
 
     assert [diagnostic.code for diagnostic in plan.diagnostics] == [
         "TSL-VALUE-TEST-UNSUPPORTED-CASE"
@@ -3529,6 +3616,119 @@ def test_scalable_lane_conversion_tests_success_and_checked_mismatch(
     assert "tsl::convert_lanes_checked<Vec, ToVec>(v0, error)" in source
     assert "precondition_error::lane_count_mismatch" in source
 
+
+def test_scalable_indexed_checked_cases_follow_checked_api_admission() -> None:
+    def indexed_primitive(name: str, index_kind: str) -> Primitive:
+        return Primitive(
+            name,
+            f"v:=(cptr,{index_kind},sImm)",
+            ("base", "index", "scale"),
+            (),
+            (),
+            tests=(
+                TslTestCase(
+                    name=f"{name}_basic",
+                    type_tag="si32",
+                    tags=("basic",),
+                    lanes=4,
+                    extension="sve",
+                    scale=4,
+                    inputs=(
+                        TslTestArg("vector", values=("10", "20", "30", "40")),
+                        TslTestArg("vector", values=("0", "1", "2", "3")),
+                    ),
+                    expected=("10", "20", "30", "40"),
+                ),
+            ),
+        )
+
+    def indexed_spec(name: str, index_kind: str) -> LoweredSpecialization:
+        bindings = (
+            OperandBinding(OperandRole.MEMORY_SOURCE, "p0", 0, "cptr"),
+            OperandBinding(OperandRole.INDEX, "p1", 1, index_kind),
+            OperandBinding(OperandRole.SCALE, "p2", 2, "sImm"),
+        )
+        semantics = LoweredPrimitiveSemantics(
+            operation=PrimitiveSemanticContract(PrimitiveOperation.LOAD, bindings),
+            preconditions=(
+                PrimitivePrecondition(
+                    PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID,
+                    bindings,
+                ),
+            ),
+            memory=PrimitiveMemoryContract(
+                MemoryAccess.READ,
+                MemoryAddressing.INDEXED,
+                MemoryPayloadExtent.VECTOR,
+                MemoryIndexedLaneExtent.VECTOR,
+            ),
+        )
+        return replace(
+            _spec(
+                name,
+                name,
+                param_kinds=("cptr", index_kind, "sImm"),
+                immediate=("scale", "std::size_t"),
+                extension_name="sve",
+                uses_sized_vector=False,
+                lane_parameter=None,
+                primitive_semantics=semantics,
+            ),
+            checked_primitive_providers=(
+                ResolvedPrimitiveProvider(
+                    RUNTIME_LANE_EXTRACT_REQUIREMENT,
+                    "read_runtime_lane",
+                ),
+            ),
+            checked_failure_provider=ResolvedPrimitiveProvider(
+                VECTOR_ZERO_REQUIREMENT,
+                "zero_vector",
+            ),
+        )
+
+    vector_indexed = indexed_primitive("vector_indexed", "vidx")
+    pointer_indexed = indexed_primitive("pointer_indexed", "cptr")
+    catalog = Catalog(
+        primitives=(vector_indexed, pointer_indexed, *_harness_primitives()),
+        type_groups={},
+        extensions={"sve": _scalable_test_extension()},
+        type_spellings={},
+        translations={},
+    )
+    plan = ValueTestPlanner(catalog, (CPP_VALUE_TEST_SUPPORT,)).plan(
+        (
+            ValueTestBackendProfileInput(
+                "cpp",
+                "sve",
+                {
+                    "vector_indexed": (indexed_spec("vector_indexed", "vidx"),),
+                    "pointer_indexed": (
+                        indexed_spec("pointer_indexed", "cptr"),
+                    ),
+                },
+            ),
+        )
+    )
+
+    assert not plan.diagnostics
+    scalable = tuple(
+        case for case in plan.profiles[0].cases if case.scalable is not None
+    )
+    assert {
+        case.call_name for case in scalable if case.kind == "scalable_indexed_load"
+    } == {"vector_indexed", "pointer_indexed"}
+    checked = tuple(case for case in scalable if case.kind == "checked_precondition")
+    assert {case.call_name for case in checked} == {"vector_indexed"}
+    assert {
+        case.checked_precondition.error
+        for case in checked
+        if case.checked_precondition is not None
+    } == {
+        PreconditionErrorKind.INDEX_OUT_OF_BOUNDS,
+        PreconditionErrorKind.MISALIGNED,
+    }
+
+
 def test_scalable_indexed_lane_uses_one_runtime_lane() -> None:
     insert_value = Primitive(
         "insert_value",
@@ -4482,12 +4682,94 @@ def _catalog(*primitives: Primitive) -> Catalog:
 
 def _harness_primitives() -> tuple[Primitive, ...]:
     return (
-        Primitive("lane_in", "v:=s[]", ("data",), (), ()),
-        Primitive("lane_out", "s[]:=v", ("data",), (), ()),
-        Primitive("mask_bits", "im:=m", ("mask",), (), ()),
-        Primitive("mask_from_bits", "m:=im", ("bits",), (), ()),
-        Primitive("load", "v:=cptr", ("ptr",), (), ()),
-        Primitive("store", "void:=(ptr,v)", ("ptr", "data"), (), ()),
+        _harness_primitive(
+            "lane_in",
+            "v:=s[]",
+            ("data",),
+            PrimitiveOperation.VECTOR_FROM_ARRAY,
+            ((OperandRole.VALUE, "s[]"),),
+        ),
+        _harness_primitive(
+            "lane_out",
+            "s[]:=v",
+            ("data",),
+            PrimitiveOperation.VECTOR_TO_ARRAY,
+            ((OperandRole.PRIMARY, "v"),),
+        ),
+        _harness_primitive(
+            "mask_bits",
+            "im:=m",
+            ("mask",),
+            PrimitiveOperation.MASK_TO_INTEGRAL,
+            ((OperandRole.PRIMARY, "m"),),
+        ),
+        _harness_primitive(
+            "mask_from_bits",
+            "m:=im",
+            ("bits",),
+            PrimitiveOperation.MASK_FROM_INTEGRAL,
+            ((OperandRole.VALUE, "im"),),
+        ),
+        _harness_primitive(
+            "load",
+            "v:=cptr",
+            ("ptr",),
+            PrimitiveOperation.LOAD,
+            ((OperandRole.MEMORY_SOURCE, "cptr"),),
+            aligned=False,
+        ),
+        _harness_primitive(
+            "store",
+            "void:=(ptr,v)",
+            ("ptr", "data"),
+            PrimitiveOperation.STORE,
+            (
+                (OperandRole.MEMORY_DESTINATION, "ptr"),
+                (OperandRole.VALUE, "v"),
+            ),
+            aligned=False,
+        ),
+    )
+
+
+def _harness_primitive(
+    name: str,
+    signature: str,
+    parameters: tuple[str, ...],
+    operation: PrimitiveOperation,
+    roles: tuple[tuple[OperandRole, str], ...],
+    *,
+    aligned: bool | None = None,
+) -> Primitive:
+    return Primitive(
+        name,
+        signature,
+        parameters,
+        ("aligned",) if aligned is not None else (),
+        (),
+        attributes=(
+            {"aligned": str(aligned).lower()} if aligned is not None else {}
+        ),
+        operation=PrimitiveSemanticContract(
+            operation,
+            tuple(
+                OperandBinding(role, parameters[index], index, parameter_kind)
+                for index, (role, parameter_kind) in enumerate(roles)
+            ),
+        ),
+        memory=(
+            PrimitiveMemoryContract(
+                (
+                    MemoryAccess.READ
+                    if operation is PrimitiveOperation.LOAD
+                    else MemoryAccess.WRITE
+                ),
+                MemoryAddressing.CONTIGUOUS,
+                MemoryPayloadExtent.VECTOR,
+            )
+            if aligned is not None
+            else None
+        ),
     )
 
 

@@ -93,14 +93,45 @@ def test_release_profiles_are_projections_of_typed_machine_capabilities() -> Non
     }
 
     rust = contract.backend("rust")
-    assert tuple(profile.name for profile in rust.profiles) == (
-        "avx",
-        "avx2",
-        "knl",
-        "sse",
-        "sse2",
-        "sse3",
+    eligible_rust = tuple(
+        sorted(
+            profile.name
+            for profile in profiles.values()
+            if profile.supports_backend("rust")
+            and profile.auto_detect_gate is None
+        )
     )
+    assert {profile.name for profile in rust.profiles} == set(eligible_rust)
+    assert len(rust.profiles) == len(eligible_rust)
+    hardware_rust = tuple(
+        profiles[name]
+        for name in eligible_rust
+        if not profiles[name].default_build_fallback
+    )
+    assert all(
+        profile.selection_priority_for_backend("rust") is not None
+        for profile in hardware_rust
+    )
+    for family in {profile.family for profile in hardware_rust}:
+        priorities = tuple(
+            profile.selection_priority_for_backend("rust")
+            for profile in hardware_rust
+            if profile.family == family
+        )
+        assert len(priorities) == len(set(priorities))
+    assert {
+        "scalar",
+        "cannonlake",
+        "sapphire_emerald_granite_rapids",
+        "zen5",
+        "neon",
+        "wasm32-simd128",
+    } <= set(eligible_rust)
+    assert not {
+        profile.name
+        for profile in profiles.values()
+        if profile.auto_detect_gate is not None
+    } & set(eligible_rust)
     assert not {"sve", "sve128", "sve256", "sve512", "rvv"} & {
         profile.name for profile in rust.profiles
     }

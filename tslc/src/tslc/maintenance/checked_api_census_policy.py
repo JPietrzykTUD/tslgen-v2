@@ -51,7 +51,8 @@ ABI_EVIDENCE = {
 VALIDATION_LIMITS = {
     "all_profile_rust_render": (
         "not a valid census input: the current all-profile Rust request reports "
-        "TSL-BACKEND-RUST-AMBIGUOUS-TARGET-PROFILES before artifact rendering"
+        "TSL-BACKEND-RUST-DUPLICATE-TARGET-PROFILES for equal normal/OneAPI "
+        "target predicates before artifact rendering"
     ),
     "census_strategy": (
         "scan canonical source bodies, render assets, and emitters; obtain public "

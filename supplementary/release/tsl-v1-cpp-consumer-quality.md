@@ -119,11 +119,11 @@ passed in 42.76 seconds on the local CI image.
 The v1 API ratchet no longer hard-codes scalar/AVX2. It derives its scope from
 `supplementary/release/tsl-v1-policy.json` and freezes:
 
-- 29 C++ release profiles with 8,015 exact declaration records;
-- six Rust release profiles with 7,201 exact declaration records.
+- 29 C++ release profiles with 8,001 exact declaration records;
+- 19 Rust release profiles with 12,951 exact declaration records.
 
 The baseline stays semantic and inspectable: it records typed declaration
-fields and does not hash rendered C++ or Rust source. Its size is 27 MiB.
+fields and does not hash rendered C++ or Rust source. Its size is 50 MiB.
 
 ## Size and compile-time audit
 
@@ -161,16 +161,15 @@ documentation/stress artifact. A compiler-header deduplication refactor is not
 justified for v1: it would change the generated architecture despite the
 measured consumer translation units completing in roughly two to three seconds.
 
-The complete Slice 15 package build generated and formatted all 30 deployment
-bundles in approximately 29.5 minutes. The deterministic archive was 56,997,715
-bytes; its aggregate audit extraction was 2,177,610,277 bytes because common
-generated support is intentionally repeated across standalone projects. Normal
-C++ extraction is bounded to one 53,080,305–78,546,574-byte profile bundle; the
-combined six-profile Rust crate is 192,807,970 bytes. Two independently written
-archives were byte-identical. Clean selectively extracted CMake/Cargo consumers
-passed, and the packaged `cpp-sve`/`cpp-rvv` showcase passed all six QEMU vector-
-length executions. This closes the distribution concern without presenting the
-aggregate audit extraction as the installation path.
+The earlier Slice 15 package build generated and formatted all 30 deployment
+bundles in approximately 29.5 minutes. Its then-current deterministic archive
+was 56,997,715 bytes, and normal C++ extraction was bounded to one
+53,080,305–78,546,574-byte profile bundle. The current combined 19-profile Rust
+crate is larger in source form: Cargo 1.89.0 and 1.98.0 each packaged 437 files,
+924.6 MiB uncompressed and 18.3 MiB compressed. Clean selectively extracted
+CMake/Cargo consumers and the packaged `cpp-sve`/`cpp-rvv` showcase remain the
+distribution evidence; a fresh whole-product archive-size measurement is not
+claimed by the Rust profile-selection rollout.
 
 ## Reproduction
 

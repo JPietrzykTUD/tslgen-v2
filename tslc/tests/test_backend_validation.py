@@ -33,7 +33,11 @@ from tslc.catalog.model import (
     ImplementationSafety,
 )
 from tslc.catalog.preconditions import PreconditionKind, PrimitivePrecondition
-from tslc.catalog.semantics import OperandBinding, OperandRole
+from tslc.catalog.semantics import (
+    OperandBinding,
+    OperandRole,
+    ResolvedPrimitiveProvider,
+)
 from tslc.catalog.target_families import (
     BackendProfileFamily,
     ExtensionFamilyCapability,
@@ -59,6 +63,8 @@ class _Specialization:
     source: SourceSpan | None = None
     safety: ImplementationSafety = ImplementationSafety()
     primitive_semantics: LoweredPrimitiveSemantics = LoweredPrimitiveSemantics()
+    checked_primitive_providers: tuple[ResolvedPrimitiveProvider, ...] = ()
+    checked_failure_provider: ResolvedPrimitiveProvider | None = None
     unavailable_checked_dependency_origins: tuple[CallDependencyOrigin, ...] = ()
     unresolved_call_preconditions: tuple[CallPreconditionObligation, ...] = ()
 

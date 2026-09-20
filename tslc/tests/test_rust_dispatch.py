@@ -19,7 +19,10 @@ from tslc.backend.rust_dispatch import (
     plan_rust_dispatch,
     validate_rust_dispatch_plan,
 )
-from tslc.backend.rust_static_selection import plan_rust_static_selection
+from tslc.backend.rust_static_selection import (
+    RustTargetRequirement,
+    plan_rust_static_selection,
+)
 from tslc.catalog.arithmetic import ArithmeticOperation
 from tslc.diagnostics import has_errors
 
@@ -95,8 +98,10 @@ def test_dispatch_plan_carries_complete_typed_surface(
 
 
 def test_dispatch_plan_orders_guarded_hardware_before_mandatory_generic(
+    rust_dispatch_inputs,
     rust_dispatch_plan: RustDispatchPlan,
 ) -> None:
+    _result, static, _facade = rust_dispatch_inputs
     representative = rust_dispatch_plan.representative_slots
     assert representative is not None
     builtin, _stateful = representative
@@ -108,6 +113,9 @@ def test_dispatch_plan_orders_guarded_hardware_before_mandatory_generic(
 
     assert len(builtin.ordered_candidates) == 2
     avx2, sse2 = builtin.ordered_candidates
+    assert tuple(
+        candidate.profile_name for candidate in builtin.ordered_candidates
+    ) == tuple(selection.profile_name for selection in static.profiles)
     assert avx2.entry_index == 1
     assert avx2.profile_name == "avx2"
     assert avx2.requirement is not None
@@ -127,6 +135,46 @@ def test_dispatch_plan_orders_guarded_hardware_before_mandatory_generic(
     assert sse2.entry_index == 2
     assert sse2.profile_name == "sse2"
     assert sse2.mapping.extension_name == "sse"
+
+
+def test_dispatch_plan_reuses_incomparable_static_priority_order(
+    rust_dispatch_inputs,
+) -> None:
+    result, static, _facade = rust_dispatch_inputs
+    sse2 = static.profile("sse2")
+    avx2 = static.profile("avx2")
+    assert sse2 is not None
+    assert avx2 is not None
+    preferred_requirement = RustTargetRequirement(
+        "x86_64",
+        ("aes", "sse", "sse2"),
+    )
+    priority_plan = replace(
+        static,
+        profiles=(
+            replace(
+                sse2,
+                requirement=preferred_requirement,
+                higher_priority_requirements=(),
+                selection_priority=20,
+            ),
+            replace(
+                avx2,
+                higher_priority_requirements=(preferred_requirement,),
+                selection_priority=10,
+            ),
+        ),
+    )
+    facade = plan_rust_facade(result.emitted_profiles, priority_plan)
+
+    plan = plan_rust_dispatch(result.emitted_profiles, priority_plan, facade)
+
+    representative = plan.representative_slots
+    assert representative is not None
+    builtin, _stateful = representative
+    assert tuple(
+        candidate.profile_name for candidate in builtin.ordered_candidates
+    ) == ("sse2", "avx2")
 
 
 def test_dispatch_planning_uses_semantics_not_source_primitive_name(

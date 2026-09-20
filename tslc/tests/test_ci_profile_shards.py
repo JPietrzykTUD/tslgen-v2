@@ -4,22 +4,31 @@ from __future__ import annotations
 
 from collections import Counter
 import json
+from pathlib import Path
 import shutil
 import subprocess
-from pathlib import Path
+import tomllib
 
 import pytest
 
-_RUST_COEXISTENCE_NAME = "rust-x86-coexistence"
+_RUST_COEXISTENCE_NAME = "rust-release-coexistence"
 _RELEASE_POLICY_PATH = Path("supplementary/release/tsl-v1-policy.json")
 _RELEASE_POLICY = json.loads(_RELEASE_POLICY_PATH.read_text(encoding="utf-8"))
 _RUST_COEXISTENCE_PROFILES = tuple(
     _RELEASE_POLICY["backend_profiles"]["rust"]["profiles"]
 )
+_RUST_RELEASE_QUALITY_CHUNK_SIZE = 4
+_ROOT_CONFIG = tomllib.loads(Path("tslc.toml").read_text(encoding="utf-8"))
 _REFERENCE_GENERATOR = (
     "bash .github/scripts/generate_release_reference_project.sh"
 )
 _BUNDLE_GENERATOR = "python .github/scripts/build_release_bundles.py"
+
+
+def test_project_default_rust_scope_matches_release_coexistence_policy() -> None:
+    assert tuple(_ROOT_CONFIG["tslc"]["backend_profiles"]["rust"]) == (
+        _RUST_COEXISTENCE_PROFILES
+    )
 
 
 def test_generated_profile_shards_preserve_exhaustive_and_coexistence_lanes(
@@ -56,8 +65,33 @@ def test_generated_profile_shards_preserve_exhaustive_and_coexistence_lanes(
             "purpose": "coexistence",
         }
     ]
+    rust_release_quality_shards = [
+        shard for shard in shards if shard.get("purpose") == "release-quality"
+    ]
+    expected_quality_profiles = [
+        _RUST_COEXISTENCE_PROFILES[index : index + _RUST_RELEASE_QUALITY_CHUNK_SIZE]
+        for index in range(
+            0,
+            len(_RUST_COEXISTENCE_PROFILES),
+            _RUST_RELEASE_QUALITY_CHUNK_SIZE,
+        )
+    ]
+    assert [shard["name"] for shard in rust_release_quality_shards] == [
+        f"rust-release-quality-{index}"
+        for index in range(len(expected_quality_profiles))
+    ]
+    assert all(
+        shard["backend"] == "rust"
+        and len(shard["profiles"].split(","))
+        <= _RUST_RELEASE_QUALITY_CHUNK_SIZE
+        for shard in rust_release_quality_shards
+    )
+    assert [
+        tuple(shard["profiles"].split(","))
+        for shard in rust_release_quality_shards
+    ] == expected_quality_profiles
     exhaustive_shards = [
-        shard for shard in shards if shard.get("purpose") != "coexistence"
+        shard for shard in shards if "purpose" not in shard
     ]
     assert all("purpose" not in shard for shard in exhaustive_shards)
     shard_profiles = {
@@ -140,7 +174,7 @@ def test_generated_profile_shards_preserve_exhaustive_and_coexistence_lanes(
     ]
     assert rust_profile_counts == Counter(
         {
-            profile: 2 if profile in _RUST_COEXISTENCE_PROFILES else 1
+            profile: 3 if profile in _RUST_COEXISTENCE_PROFILES else 1
             for profile in rust_supported_profiles
         }
     )
@@ -189,17 +223,31 @@ def test_rust_release_quality_runs_msrv_and_current_stable() -> None:
     )[0]
     dockerfile = Path(".devcontainer/Dockerfile").read_text(encoding="utf-8")
 
-    assert "rust_release_profiles:" in workflow
-    assert ".backend_profiles.rust" in workflow
-    assert '.profiles | join(",")' in workflow
+    assert "rust_release_quality_shards:" in workflow
+    assert 'select(.purpose != "release-quality")' in workflow
+    assert 'select(.purpose == "release-quality")' in workflow
+    assert (
+        "profile_shard: "
+        "${{ fromJson(needs['profile-shards'].outputs.rust_release_quality_shards) }}"
+        in section
+    )
     assert "name: stable" in section
     assert "name: 1.89.0" in section
     assert 'RUSTUP_TOOLCHAIN="${{ matrix.toolchain.name }}"' in section
+    assert (
+        'TSLC_RUST_RELEASE_PROFILES="${{ matrix.profile_shard.profiles }}"'
+        in section
+    )
     assert '--profiles "${TSLC_RUST_RELEASE_PROFILES}"' in section
     assert "--quality" in section
     assert "./dev.sh test" in section
     assert "ARG RUST_MSRV=1.89.0" in dockerfile
     assert 'rustup toolchain install "${RUST_MSRV}"' in dockerfile
+    msrv_targets = dockerfile.split(
+        'rustup target add --toolchain "${RUST_MSRV}"', 1
+    )[1].split(";", 1)[0]
+    assert "aarch64-unknown-linux-musl" in msrv_targets
+    assert "wasm32-wasip1" in msrv_targets
 
 
 def test_scalable_showcase_is_a_required_generated_profile_gate() -> None:
@@ -308,6 +356,10 @@ def test_package_and_docs_generate_contract_owned_reference_and_bundles() -> Non
     assert "./dev.sh document" not in package_workflow
     assert "python -m tslc.maintenance.documentation" in package_workflow
     assert "tsl-generated-reference-${{ github.sha }}" in package_workflow
+    docs_extract_step = package_workflow.split("      - name: Extract generated package\n", 1)[
+        1
+    ].split("\n      - name:", 1)[0]
+    assert "--strip-components=1" in docs_extract_step
 
     consumer_verifier = Path(
         "supplementary/ci/verify_generated_consumers.sh"

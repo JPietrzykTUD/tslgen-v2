@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 import re
 from urllib.parse import urlsplit
+
+from tslc.project_render import BackendRenderInput
 
 _PACKAGE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
 _VERSION = re.compile(
@@ -17,7 +19,7 @@ _RUST_VERSION = re.compile(r"^1\.[0-9]+(?:\.[0-9]+)?$")
 
 
 @dataclass(frozen=True, slots=True)
-class RustPackageConfig:
+class RustPackageConfig(BackendRenderInput):
     name: str
     version: str
     description: str
@@ -90,5 +92,49 @@ DEFAULT_RUST_PACKAGE_CONFIG = RustPackageConfig(
     readme="README.md",
 )
 
+_RUST_PACKAGE_FIELDS = frozenset(
+    {
+        "name",
+        "version",
+        "description",
+        "edition",
+        "rust_version",
+        "license",
+        "repository",
+        "documentation",
+        "readme",
+    }
+)
 
-__all__ = ("DEFAULT_RUST_PACKAGE_CONFIG", "RustPackageConfig")
+
+def parse_rust_package_config(path: Path, value: object) -> RustPackageConfig:
+    """Promote the optional ``[tslc.rust_package]`` table."""
+
+    if value is None:
+        return DEFAULT_RUST_PACKAGE_CONFIG
+    if not isinstance(value, dict):
+        raise ValueError(f"{path}: tslc.rust_package must be a table")
+    unknown = sorted(set(value) - _RUST_PACKAGE_FIELDS)
+    if unknown:
+        raise ValueError(
+            f"{path}: unknown tslc.rust_package field(s): {', '.join(unknown)}"
+        )
+    fields: dict[str, str] = {}
+    for key in sorted(_RUST_PACKAGE_FIELDS):
+        field_value = value.get(key)
+        if not isinstance(field_value, str) or not field_value.strip():
+            raise ValueError(
+                f"{path}: tslc.rust_package.{key} must be a non-empty string"
+            )
+        fields[key] = field_value
+    try:
+        return RustPackageConfig(**fields)
+    except ValueError as error:
+        raise ValueError(f"{path}: {error}") from error
+
+
+__all__ = (
+    "DEFAULT_RUST_PACKAGE_CONFIG",
+    "RustPackageConfig",
+    "parse_rust_package_config",
+)

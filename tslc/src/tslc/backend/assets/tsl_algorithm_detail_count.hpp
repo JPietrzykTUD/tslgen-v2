@@ -20,14 +20,14 @@ inline std::size_t count_unary_loop(
     std::size_t produced = 0;
     std::size_t i = 0;
     for (std::size_t chunk = 0; chunk < chunk_count; ++chunk, i += lanes) {
-        auto x = ::tsl::load<Vec, input_aligned>(input + i);
+        auto x = ::tsl::@{algorithm_helper_contiguous_read}<Vec, input_aligned>(input + i);
         auto active = invoke_op<Vec>(predicate, x);
-        produced += ::tsl::mask_population_count<Vec>(active);
+        produced += ::tsl::@{algorithm_helper_mask_population_count}<Vec>(active);
     }
     for (; i < count; ++i) {
-        auto x = ::tsl::load<scalar_vec, false>(input + i);
+        auto x = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(input + i);
         auto active = invoke_op<scalar_vec>(predicate, x);
-        if (::tsl::to_integral<scalar_vec>(active) != 0) {
+        if (::tsl::@{algorithm_helper_integral_mask}<scalar_vec>(active) != 0) {
             produced += 1;
         }
     }
@@ -58,16 +58,16 @@ inline std::size_t count_binary_loop(
     std::size_t produced = 0;
     std::size_t i = 0;
     for (std::size_t chunk = 0; chunk < chunk_count; ++chunk, i += lanes) {
-        auto x = ::tsl::load<Vec, left_aligned>(left + i);
-        auto y = ::tsl::load<Vec, right_aligned>(right + i);
+        auto x = ::tsl::@{algorithm_helper_contiguous_read}<Vec, left_aligned>(left + i);
+        auto y = ::tsl::@{algorithm_helper_contiguous_read}<Vec, right_aligned>(right + i);
         auto active = invoke_op<Vec>(predicate, x, y);
-        produced += ::tsl::mask_population_count<Vec>(active);
+        produced += ::tsl::@{algorithm_helper_mask_population_count}<Vec>(active);
     }
     for (; i < count; ++i) {
-        auto x = ::tsl::load<scalar_vec, false>(left + i);
-        auto y = ::tsl::load<scalar_vec, false>(right + i);
+        auto x = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(left + i);
+        auto y = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(right + i);
         auto active = invoke_op<scalar_vec>(predicate, x, y);
-        if (::tsl::to_integral<scalar_vec>(active) != 0) {
+        if (::tsl::@{algorithm_helper_integral_mask}<scalar_vec>(active) != 0) {
             produced += 1;
         }
     }
@@ -93,20 +93,20 @@ inline std::size_t count_masked_unary_loop(
     std::size_t i = 0;
     for (std::size_t chunk = 0; chunk < chunk_count; ++chunk, i += lanes) {
         auto input_active = load_mask_storage<MaskLayout, Vec>(masks, chunk, i);
-        auto x = ::tsl::load<Vec, input_aligned>(input + i);
+        auto x = ::tsl::@{algorithm_helper_contiguous_read}<Vec, input_aligned>(input + i);
         auto predicate_active = invoke_op<Vec>(predicate, x);
         auto active =
-            ::tsl::mask_binary_and<Vec>(input_active, predicate_active);
-        produced += ::tsl::mask_population_count<Vec>(active);
+            ::tsl::@{algorithm_helper_mask_intersection}<Vec>(input_active, predicate_active);
+        produced += ::tsl::@{algorithm_helper_mask_population_count}<Vec>(active);
     }
     for (std::size_t lane = 0; i < count; ++i, ++lane) {
         if (!mask_storage_lane_active<MaskLayout, Vec>(
                 masks, chunk_count, i, lane)) {
             continue;
         }
-        auto x = ::tsl::load<scalar_vec, false>(input + i);
+        auto x = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(input + i);
         auto active = invoke_op<scalar_vec>(predicate, x);
-        if (::tsl::to_integral<scalar_vec>(active) != 0) {
+        if (::tsl::@{algorithm_helper_integral_mask}<scalar_vec>(active) != 0) {
             produced += 1;
         }
     }
@@ -141,22 +141,22 @@ inline std::size_t count_masked_binary_loop(
     std::size_t i = 0;
     for (std::size_t chunk = 0; chunk < chunk_count; ++chunk, i += lanes) {
         auto input_active = load_mask_storage<MaskLayout, Vec>(masks, chunk, i);
-        auto x = ::tsl::load<Vec, left_aligned>(left + i);
-        auto y = ::tsl::load<Vec, right_aligned>(right + i);
+        auto x = ::tsl::@{algorithm_helper_contiguous_read}<Vec, left_aligned>(left + i);
+        auto y = ::tsl::@{algorithm_helper_contiguous_read}<Vec, right_aligned>(right + i);
         auto predicate_active = invoke_op<Vec>(predicate, x, y);
         auto active =
-            ::tsl::mask_binary_and<Vec>(input_active, predicate_active);
-        produced += ::tsl::mask_population_count<Vec>(active);
+            ::tsl::@{algorithm_helper_mask_intersection}<Vec>(input_active, predicate_active);
+        produced += ::tsl::@{algorithm_helper_mask_population_count}<Vec>(active);
     }
     for (std::size_t lane = 0; i < count; ++i, ++lane) {
         if (!mask_storage_lane_active<MaskLayout, Vec>(
                 masks, chunk_count, i, lane)) {
             continue;
         }
-        auto x = ::tsl::load<scalar_vec, false>(left + i);
-        auto y = ::tsl::load<scalar_vec, false>(right + i);
+        auto x = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(left + i);
+        auto y = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(right + i);
         auto active = invoke_op<scalar_vec>(predicate, x, y);
-        if (::tsl::to_integral<scalar_vec>(active) != 0) {
+        if (::tsl::@{algorithm_helper_integral_mask}<scalar_vec>(active) != 0) {
             produced += 1;
         }
     }
@@ -179,10 +179,10 @@ inline std::size_t count_selected_unary_loop(
     std::size_t produced = 0;
     if constexpr (std::is_same<Vec, scalar_vec>::value) {
         for (std::size_t i = 0; i < selected_count; ++i) {
-            auto x = ::tsl::load<scalar_vec, false>(
+            auto x = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(
                 selected_row_pointer<T, IndexT, Scale>(input, indices[i]));
             auto active = invoke_op<scalar_vec>(predicate, x);
-            if (::tsl::to_integral<scalar_vec>(active) != 0) {
+            if (::tsl::@{algorithm_helper_integral_mask}<scalar_vec>(active) != 0) {
                 produced += 1;
             }
         }
@@ -195,13 +195,13 @@ inline std::size_t count_selected_unary_loop(
             auto x = load_selected_vector<Vec, T, IndexT, Scale>(
                 input, indices + i);
             auto active = invoke_op<Vec>(predicate, x);
-            produced += ::tsl::mask_population_count<Vec>(active);
+            produced += ::tsl::@{algorithm_helper_mask_population_count}<Vec>(active);
         }
         for (; i < selected_count; ++i) {
-            auto x = ::tsl::load<scalar_vec, false>(
+            auto x = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(
                 selected_row_pointer<T, IndexT, Scale>(input, indices[i]));
             auto active = invoke_op<scalar_vec>(predicate, x);
-            if (::tsl::to_integral<scalar_vec>(active) != 0) {
+            if (::tsl::@{algorithm_helper_integral_mask}<scalar_vec>(active) != 0) {
                 produced += 1;
             }
         }
@@ -226,12 +226,12 @@ inline std::size_t count_selected_binary_loop(
     std::size_t produced = 0;
     if constexpr (std::is_same<Vec, scalar_vec>::value) {
         for (std::size_t i = 0; i < selected_count; ++i) {
-            auto x = ::tsl::load<scalar_vec, false>(
+            auto x = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(
                 selected_row_pointer<T, IndexT, Scale>(left, indices[i]));
-            auto y = ::tsl::load<scalar_vec, false>(
+            auto y = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(
                 selected_row_pointer<T, IndexT, Scale>(right, indices[i]));
             auto active = invoke_op<scalar_vec>(predicate, x, y);
-            if (::tsl::to_integral<scalar_vec>(active) != 0) {
+            if (::tsl::@{algorithm_helper_integral_mask}<scalar_vec>(active) != 0) {
                 produced += 1;
             }
         }
@@ -246,15 +246,15 @@ inline std::size_t count_selected_binary_loop(
             auto y = load_selected_vector<Vec, T, IndexT, Scale>(
                 right, indices + i);
             auto active = invoke_op<Vec>(predicate, x, y);
-            produced += ::tsl::mask_population_count<Vec>(active);
+            produced += ::tsl::@{algorithm_helper_mask_population_count}<Vec>(active);
         }
         for (; i < selected_count; ++i) {
-            auto x = ::tsl::load<scalar_vec, false>(
+            auto x = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(
                 selected_row_pointer<T, IndexT, Scale>(left, indices[i]));
-            auto y = ::tsl::load<scalar_vec, false>(
+            auto y = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(
                 selected_row_pointer<T, IndexT, Scale>(right, indices[i]));
             auto active = invoke_op<scalar_vec>(predicate, x, y);
-            if (::tsl::to_integral<scalar_vec>(active) != 0) {
+            if (::tsl::@{algorithm_helper_integral_mask}<scalar_vec>(active) != 0) {
                 produced += 1;
             }
         }

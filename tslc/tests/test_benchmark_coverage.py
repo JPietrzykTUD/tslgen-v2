@@ -10,6 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 from tslc.api import generate_project
+from tslc.backend.rust_capability import rust_policy_mapping_renderer
 from tslc.backend.rust_policy_consumption import (
     plan_rust_policy_coverage,
 )
@@ -80,6 +81,7 @@ def _rust_audit(catalog: Catalog, result, *, plan=None):
         plan_rust_policy_selection(
             result.emitted_profiles, RUST_POLICY_MANIFEST
         ),
+        mapping_renderer=rust_policy_mapping_renderer,
     )
     return audit_benchmark_coverage(
         catalog,
@@ -417,7 +419,11 @@ def test_rust_audit_detects_planner_slot_identity_drift(
     selection = plan_rust_policy_selection(
         result.emitted_profiles, RUST_POLICY_MANIFEST
     )
-    policy_coverage = plan_rust_policy_coverage(plan, selection)
+    policy_coverage = plan_rust_policy_coverage(
+        plan,
+        selection,
+        mapping_renderer=rust_policy_mapping_renderer,
+    )
     baseline_audit = _rust_audit(catalog, result)
     baseline = rust_benchmark_coverage_baseline(baseline_audit)
 
@@ -528,7 +534,11 @@ def test_rust_policy_gap_issue_baseline_round_trips(
         for profile in plan.profiles
     )
     broken = replace(plan, profiles=broken_profiles)
-    policy_coverage = plan_rust_policy_coverage(broken, selections)
+    policy_coverage = plan_rust_policy_coverage(
+        broken,
+        selections,
+        mapping_renderer=rust_policy_mapping_renderer,
+    )
 
     audit = audit_benchmark_coverage(
         catalog,
@@ -789,14 +799,20 @@ def test_rust_benchmark_audit_generates_unordered_profiles_independently(
     )
     policy_inputs: dict[str, object] = {}
 
-    def fake_policy_selection(emitted_profiles, manifest):
+    def fake_policy_selection(
+        emitted_profiles,
+        manifest,
+        extension_header_group,
+    ):
         policy_inputs["emitted"] = emitted_profiles
         policy_inputs["manifest"] = manifest
+        policy_inputs["extension_header_group"] = extension_header_group
         return "selection"
 
-    def fake_policy_coverage(benchmarks, selection):
+    def fake_policy_coverage(benchmarks, selection, *, mapping_renderer):
         policy_inputs["benchmarks"] = benchmarks
         policy_inputs["selection"] = selection
+        policy_inputs["mapping_renderer"] = mapping_renderer
         return "coverage"
 
     monkeypatch.setattr(
@@ -846,6 +862,10 @@ def test_rust_benchmark_audit_generates_unordered_profiles_independently(
     emitted = audit_inputs["emitted_profiles"]
     assert tuple(item.profile.name for item in emitted) == ("left", "right")
     assert policy_inputs["selection"] == "selection"
+    extension_header_group = policy_inputs["extension_header_group"]
+    assert callable(extension_header_group)
+    assert extension_header_group(None) is None
+    assert policy_inputs["mapping_renderer"] is rust_policy_mapping_renderer
     assert policy_inputs["benchmarks"] is merged
 
 

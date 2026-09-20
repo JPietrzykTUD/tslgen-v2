@@ -589,6 +589,31 @@
       "profile_selection": "explicit",
       "profiles": [
         {
+          "name": "neon",
+          "family": "aarch64",
+          "features": [
+            "neon"
+          ],
+          "compile_modes": [],
+          "auto_detect_gate": null
+        },
+        {
+          "name": "scalar",
+          "family": "generic",
+          "features": [],
+          "compile_modes": [],
+          "auto_detect_gate": null
+        },
+        {
+          "name": "wasm32-simd128",
+          "family": "wasm32",
+          "features": [
+            "simd128"
+          ],
+          "compile_modes": [],
+          "auto_detect_gate": null
+        },
+        {
           "name": "avx",
           "family": "x86",
           "features": [
@@ -619,6 +644,123 @@
           "auto_detect_gate": null
         },
         {
+          "name": "cannonlake",
+          "family": "x86",
+          "features": [
+            "avx",
+            "avx2",
+            "avx512bw",
+            "avx512cd",
+            "avx512dq",
+            "avx512f",
+            "avx512ifma",
+            "avx512vbmi",
+            "avx512vl",
+            "rdrand",
+            "sse",
+            "sse2",
+            "sse4_1",
+            "sse4_2",
+            "ssse3"
+          ],
+          "compile_modes": [],
+          "auto_detect_gate": null
+        },
+        {
+          "name": "cascadelake",
+          "family": "x86",
+          "features": [
+            "avx",
+            "avx2",
+            "avx512_vnni",
+            "avx512bw",
+            "avx512cd",
+            "avx512dq",
+            "avx512f",
+            "avx512vl",
+            "rdrand",
+            "sse",
+            "sse2",
+            "sse4_1",
+            "sse4_2",
+            "ssse3"
+          ],
+          "compile_modes": [],
+          "auto_detect_gate": null
+        },
+        {
+          "name": "cooperlake",
+          "family": "x86",
+          "features": [
+            "avx",
+            "avx2",
+            "avx512_bf16",
+            "avx512_vnni",
+            "avx512bw",
+            "avx512cd",
+            "avx512dq",
+            "avx512f",
+            "avx512vl",
+            "rdrand",
+            "sse",
+            "sse2",
+            "sse4_1",
+            "sse4_2",
+            "ssse3"
+          ],
+          "compile_modes": [],
+          "auto_detect_gate": null
+        },
+        {
+          "name": "icelake_rockerlake",
+          "family": "x86",
+          "features": [
+            "avx",
+            "avx2",
+            "avx512_bitalg",
+            "avx512_gfni",
+            "avx512_vaes",
+            "avx512_vbmi2",
+            "avx512_vnni",
+            "avx512_vpclmulqdq",
+            "avx512_vpopcntdq",
+            "avx512bw",
+            "avx512cd",
+            "avx512dq",
+            "avx512f",
+            "avx512ifma",
+            "avx512vbmi",
+            "avx512vl",
+            "rdrand",
+            "sse",
+            "sse2",
+            "sse4_1",
+            "sse4_2",
+            "ssse3"
+          ],
+          "compile_modes": [],
+          "auto_detect_gate": null
+        },
+        {
+          "name": "kml",
+          "family": "x86",
+          "features": [
+            "avx",
+            "avx2",
+            "avx512_vpopcntdq",
+            "avx512cd",
+            "avx512f",
+            "rdrand",
+            "sse",
+            "sse2",
+            "sse4_1",
+            "sse4_2",
+            "ssse3"
+          ],
+          "compile_modes": [],
+          "auto_detect_gate": null
+        },
+        {
           "name": "knl",
           "family": "x86",
           "features": [
@@ -626,6 +768,59 @@
             "avx2",
             "avx512cd",
             "avx512f",
+            "rdrand",
+            "sse",
+            "sse2",
+            "sse4_1",
+            "sse4_2",
+            "ssse3"
+          ],
+          "compile_modes": [],
+          "auto_detect_gate": null
+        },
+        {
+          "name": "sapphire_emerald_granite_rapids",
+          "family": "x86",
+          "features": [
+            "avx",
+            "avx2",
+            "avx512_bf16",
+            "avx512_bitalg",
+            "avx512_fp16",
+            "avx512_gfni",
+            "avx512_vaes",
+            "avx512_vbmi2",
+            "avx512_vnni",
+            "avx512_vpclmulqdq",
+            "avx512_vpopcntdq",
+            "avx512bw",
+            "avx512cd",
+            "avx512dq",
+            "avx512f",
+            "avx512ifma",
+            "avx512vbmi",
+            "avx512vl",
+            "rdrand",
+            "sse",
+            "sse2",
+            "sse4_1",
+            "sse4_2",
+            "ssse3"
+          ],
+          "compile_modes": [],
+          "auto_detect_gate": null
+        },
+        {
+          "name": "skylake",
+          "family": "x86",
+          "features": [
+            "avx",
+            "avx2",
+            "avx512bw",
+            "avx512cd",
+            "avx512dq",
+            "avx512f",
+            "avx512vl",
             "rdrand",
             "sse",
             "sse2",
@@ -661,6 +856,100 @@
           "features": [
             "sse",
             "sse2",
+            "ssse3"
+          ],
+          "compile_modes": [],
+          "auto_detect_gate": null
+        },
+        {
+          "name": "tigerlake",
+          "family": "x86",
+          "features": [
+            "avx",
+            "avx2",
+            "avx512_bitalg",
+            "avx512_gfni",
+            "avx512_vaes",
+            "avx512_vbmi2",
+            "avx512_vnni",
+            "avx512_vp2intersect",
+            "avx512_vpclmulqdq",
+            "avx512_vpopcntdq",
+            "avx512bw",
+            "avx512cd",
+            "avx512dq",
+            "avx512f",
+            "avx512ifma",
+            "avx512vbmi",
+            "avx512vl",
+            "rdrand",
+            "sse",
+            "sse2",
+            "sse4_1",
+            "sse4_2",
+            "ssse3"
+          ],
+          "compile_modes": [],
+          "auto_detect_gate": null
+        },
+        {
+          "name": "zen4",
+          "family": "x86",
+          "features": [
+            "avx",
+            "avx2",
+            "avx512_bf16",
+            "avx512_bitalg",
+            "avx512_gfni",
+            "avx512_vaes",
+            "avx512_vbmi2",
+            "avx512_vnni",
+            "avx512_vpclmulqdq",
+            "avx512_vpopcntdq",
+            "avx512bw",
+            "avx512cd",
+            "avx512dq",
+            "avx512f",
+            "avx512ifma",
+            "avx512vbmi",
+            "avx512vl",
+            "rdrand",
+            "sse",
+            "sse2",
+            "sse4_1",
+            "sse4_2",
+            "ssse3"
+          ],
+          "compile_modes": [],
+          "auto_detect_gate": null
+        },
+        {
+          "name": "zen5",
+          "family": "x86",
+          "features": [
+            "avx",
+            "avx2",
+            "avx512_bf16",
+            "avx512_bitalg",
+            "avx512_gfni",
+            "avx512_vaes",
+            "avx512_vbmi2",
+            "avx512_vnni",
+            "avx512_vp2intersect",
+            "avx512_vpclmulqdq",
+            "avx512_vpopcntdq",
+            "avx512bw",
+            "avx512cd",
+            "avx512dq",
+            "avx512f",
+            "avx512ifma",
+            "avx512vbmi",
+            "avx512vl",
+            "rdrand",
+            "sse",
+            "sse2",
+            "sse4_1",
+            "sse4_2",
             "ssse3"
           ],
           "compile_modes": [],
@@ -1498,10 +1787,13 @@
         "attributes": {},
         "result_target": [],
         "overload": null,
-        "checked_companion": false,
-        "semantic_categories": [],
+        "checked_companion": true,
+        "semantic_categories": [
+          "operation",
+          "memory"
+        ],
         "fixed_shape_only": false,
-        "source_contract_sha256": "751e47ccd6acda579af75e458d6775e3961c8b71be7390278fe4ad3380638433"
+        "source_contract_sha256": "49f8c1b16b679e486539557a2087c2aa59032458f266c68a3eb184ab91b0b02b"
       },
       {
         "identity": "gather_narrow_partial#v:=(cptr,vidx,sImm)",
@@ -3828,10 +4120,10 @@
     "public_api_baseline": {
       "path": "coverage/tsl-v1-public-api.json",
       "schema_version": 4,
-      "sha256": "e42e58051f0bce23ece37b43f91d5b7e8bdfe6de68eec5918102eb4923a02bdf",
+      "sha256": "4aa3f8dd2b458e9c9ba967efdcf820a87279a0ab50b4fa20c87e2163fcac6744",
       "exact_declaration_counts": {
         "cpp": 8001,
-        "rust": 7274
+        "rust": 12951
       }
     }
   },

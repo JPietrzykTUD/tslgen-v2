@@ -13,6 +13,7 @@ from tslc.backend.cpp_profile_model import (
     CppProjectRenderModel,
     cpp_project_render_model,
 )
+from tslc.backend.helper_requirements import BackendHelperPlan
 from tslc.backend.cpp_public_declarations import CppPublicDeclaration
 from tslc.backend.cpp_static_public_declarations import (
     CPP_CORE_PUBLIC_IDENTITIES,
@@ -235,11 +236,15 @@ def cpp_public_api_manifest(
     profiles: tuple[EmittedProfile, ...],
     *,
     model: CppProjectRenderModel | None = None,
+    helper_plan: BackendHelperPlan | None = None,
 ) -> BackendPublicApiManifest:
     """Plan the exact C++ manifest from the same primitive declaration planner."""
 
     backend = CppBackend()
-    model = model or cpp_project_render_model(profiles)
+    if model is None:
+        if helper_plan is None:
+            raise ValueError("C++ public API planning requires a backend helper plan")
+        model = cpp_project_render_model(profiles, helper_plan)
     declarations: list[CppPublicDeclaration] = list(
         cpp_static_public_declarations(
             supports_algorithm=model.algorithm.supported,

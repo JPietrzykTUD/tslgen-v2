@@ -7,6 +7,12 @@ from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
 
+from tslc.catalog.memory import (
+    MemoryAccess,
+    MemoryAddressing,
+    MemoryIndexedLaneExtent,
+    MemoryPayloadExtent,
+)
 from tslc.diagnostics import SourceSpan
 
 
@@ -71,6 +77,78 @@ class OperandRole(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class PrimitiveProviderRequirement:
+    """Language-neutral shape required from one source primitive provider."""
+
+    operation: PrimitiveOperation
+    result_kind: str
+    parameter_kinds: tuple[str, ...]
+    operand_roles: tuple[OperandRole, ...]
+    required_attributes: tuple[tuple[str, str], ...] = ()
+    memory_access: MemoryAccess | None = None
+    memory_addressing: MemoryAddressing | None = None
+    memory_payload_extent: MemoryPayloadExtent | None = None
+    memory_indexed_lane_extent: MemoryIndexedLaneExtent | None = None
+
+    def __post_init__(self) -> None:
+        if not self.result_kind:
+            raise ValueError("primitive provider result kind must not be empty")
+        if len(self.operand_roles) != len(self.parameter_kinds):
+            raise ValueError(
+                "primitive provider operand roles must match parameter arity"
+            )
+        if any(not kind for kind in self.parameter_kinds):
+            raise ValueError("primitive provider parameter kinds must not be empty")
+        if any(not key or not value for key, value in self.required_attributes):
+            raise ValueError("primitive provider attributes must not be empty")
+        if len({key for key, _value in self.required_attributes}) != len(
+            self.required_attributes
+        ):
+            raise ValueError("primitive provider attributes must have unique names")
+        if self.required_attributes != tuple(sorted(self.required_attributes)):
+            raise ValueError("primitive provider attributes must be sorted")
+        if self.memory_access is None:
+            if any(
+                value is not None
+                for value in (
+                    self.memory_addressing,
+                    self.memory_payload_extent,
+                    self.memory_indexed_lane_extent,
+                )
+            ):
+                raise ValueError(
+                    "primitive provider memory constraints require an access"
+                )
+        elif self.memory_addressing is None or self.memory_payload_extent is None:
+            raise ValueError(
+                "primitive provider memory constraints require addressing and payload"
+            )
+        if (self.memory_addressing is MemoryAddressing.INDEXED) != (
+            self.memory_indexed_lane_extent is not None
+        ):
+            raise ValueError(
+                "indexed primitive provider memory requires exactly one lane extent"
+            )
+
+    @property
+    def signature_shape(self) -> str:
+        parameters = ",".join(self.parameter_kinds)
+        return f"{self.result_kind}:=({parameters})"
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedPrimitiveProvider:
+    """A semantic requirement bound to its source-owned primitive name."""
+
+    requirement: PrimitiveProviderRequirement
+    primitive_name: str
+
+    def __post_init__(self) -> None:
+        if not self.primitive_name:
+            raise ValueError("resolved primitive provider name must not be empty")
+
+
+@dataclass(frozen=True, slots=True)
 class OperandBinding:
     role: OperandRole
     parameter_name: str
@@ -95,6 +173,132 @@ class PrimitiveSemanticContract:
             (binding for binding in self.operand_bindings if binding.role is role),
             None,
         )
+
+
+CONTIGUOUS_VECTOR_LOAD_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.LOAD,
+    "v",
+    ("cptr",),
+    (OperandRole.MEMORY_SOURCE,),
+    required_attributes=(("aligned", "false"),),
+    memory_access=MemoryAccess.READ,
+    memory_addressing=MemoryAddressing.CONTIGUOUS,
+    memory_payload_extent=MemoryPayloadExtent.VECTOR,
+)
+CONTIGUOUS_VECTOR_STORE_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.STORE,
+    "void",
+    ("ptr", "v"),
+    (OperandRole.MEMORY_DESTINATION, OperandRole.VALUE),
+    required_attributes=(("aligned", "false"),),
+    memory_access=MemoryAccess.WRITE,
+    memory_addressing=MemoryAddressing.CONTIGUOUS,
+    memory_payload_extent=MemoryPayloadExtent.VECTOR,
+)
+CONTIGUOUS_MASKED_VECTOR_STORE_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.STORE,
+    "void",
+    ("m", "ptr", "v"),
+    (
+        OperandRole.CONTROL_MASK,
+        OperandRole.MEMORY_DESTINATION,
+        OperandRole.VALUE,
+    ),
+    required_attributes=(("aligned", "false"), ("mask", "pass_through")),
+    memory_access=MemoryAccess.WRITE,
+    memory_addressing=MemoryAddressing.CONTIGUOUS,
+    memory_payload_extent=MemoryPayloadExtent.VECTOR,
+)
+COMPACTED_VECTOR_STORE_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.STORE,
+    "void",
+    ("m", "ptr", "v"),
+    (
+        OperandRole.CONTROL_MASK,
+        OperandRole.MEMORY_DESTINATION,
+        OperandRole.VALUE,
+    ),
+    required_attributes=(("aligned", "true"),),
+    memory_access=MemoryAccess.WRITE,
+    memory_addressing=MemoryAddressing.COMPACTED,
+    memory_payload_extent=MemoryPayloadExtent.ACTIVE_LANES,
+)
+INDEXED_POINTER_VECTOR_LOAD_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.LOAD,
+    "v",
+    ("cptr", "cptr", "sImm"),
+    (OperandRole.MEMORY_SOURCE, OperandRole.INDEX, OperandRole.SCALE),
+    memory_access=MemoryAccess.READ,
+    memory_addressing=MemoryAddressing.INDEXED,
+    memory_payload_extent=MemoryPayloadExtent.VECTOR,
+    memory_indexed_lane_extent=MemoryIndexedLaneExtent.VECTOR,
+)
+MASK_TO_INTEGRAL_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.MASK_TO_INTEGRAL,
+    "im",
+    ("m",),
+    (OperandRole.PRIMARY,),
+)
+MASK_FROM_INTEGRAL_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.MASK_FROM_INTEGRAL,
+    "m",
+    ("im",),
+    (OperandRole.VALUE,),
+)
+COMPARE_EQUAL_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.COMPARE_EQUAL,
+    "m",
+    ("v", "v"),
+    (OperandRole.PRIMARY, OperandRole.SECONDARY),
+)
+MASK_AND_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.MASK_AND,
+    "m",
+    ("m", "m"),
+    (OperandRole.PRIMARY, OperandRole.SECONDARY),
+)
+MASK_ALL_FALSE_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.MASK_ALL_FALSE,
+    "m",
+    (),
+    (),
+)
+MASK_POPULATION_COUNT_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.MASK_POPULATION_COUNT,
+    "usize",
+    ("m",),
+    (OperandRole.PRIMARY,),
+)
+MASK_SET_LANE_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.MASK_SET_LANE,
+    "m",
+    ("m", "usize", "usize"),
+    (OperandRole.PRIMARY, OperandRole.INDEX, OperandRole.VALUE),
+)
+RUNTIME_LANE_EXTRACT_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.EXTRACT_LANE,
+    "s",
+    ("v", "usize"),
+    (OperandRole.PRIMARY, OperandRole.INDEX),
+)
+VECTOR_ZERO_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.VECTOR_ZERO,
+    "v",
+    (),
+    (),
+)
+VECTOR_FROM_ARRAY_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.VECTOR_FROM_ARRAY,
+    "v",
+    ("s[]",),
+    (OperandRole.VALUE,),
+)
+VECTOR_TO_ARRAY_REQUIREMENT = PrimitiveProviderRequirement(
+    PrimitiveOperation.VECTOR_TO_ARRAY,
+    "s[]",
+    ("v",),
+    (OperandRole.PRIMARY,),
+)
 
 
 PRIMITIVE_OPERATION_DESCRIPTIONS: Mapping[PrimitiveOperation, str] = MappingProxyType(
@@ -184,7 +388,9 @@ OPERAND_ROLE_DESCRIPTIONS: Mapping[OperandRole, str] = MappingProxyType(
     {
         OperandRole.CONTROL_MASK: "The mask controlling active lanes.",
         OperandRole.COUNT: "The uniform or per-lane count operand.",
-        OperandRole.INDEX: "The runtime logical lane index operand.",
+        OperandRole.INDEX: (
+            "The runtime logical lane index or indexed-memory offset operand."
+        ),
         OperandRole.MEMORY_DESTINATION: "The memory destination written by the operation.",
         OperandRole.MEMORY_SOURCE: "The memory source read by the operation.",
         OperandRole.PASS_THROUGH: "The value preserved where a control mask is inactive.",
@@ -205,12 +411,30 @@ def operand_role_values() -> tuple[str, ...]:
 
 
 __all__ = (
+    "COMPARE_EQUAL_REQUIREMENT",
+    "COMPACTED_VECTOR_STORE_REQUIREMENT",
+    "CONTIGUOUS_MASKED_VECTOR_STORE_REQUIREMENT",
+    "CONTIGUOUS_VECTOR_LOAD_REQUIREMENT",
+    "CONTIGUOUS_VECTOR_STORE_REQUIREMENT",
+    "INDEXED_POINTER_VECTOR_LOAD_REQUIREMENT",
+    "MASK_ALL_FALSE_REQUIREMENT",
+    "MASK_AND_REQUIREMENT",
+    "MASK_FROM_INTEGRAL_REQUIREMENT",
+    "MASK_POPULATION_COUNT_REQUIREMENT",
+    "MASK_SET_LANE_REQUIREMENT",
+    "MASK_TO_INTEGRAL_REQUIREMENT",
     "OPERAND_ROLE_DESCRIPTIONS",
     "PRIMITIVE_OPERATION_DESCRIPTIONS",
     "OperandBinding",
     "OperandRole",
     "PrimitiveOperation",
+    "PrimitiveProviderRequirement",
     "PrimitiveSemanticContract",
+    "ResolvedPrimitiveProvider",
+    "RUNTIME_LANE_EXTRACT_REQUIREMENT",
+    "VECTOR_FROM_ARRAY_REQUIREMENT",
+    "VECTOR_TO_ARRAY_REQUIREMENT",
+    "VECTOR_ZERO_REQUIREMENT",
     "operand_role_values",
     "primitive_operation_values",
 )

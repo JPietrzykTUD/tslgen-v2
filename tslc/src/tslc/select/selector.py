@@ -23,41 +23,41 @@ explicit `supersedes`; base extension bodies self-gate via `requires`.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import StrEnum
-from itertools import product
-from typing import assert_never
 
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import (
-    BaseWidthRelation,
     Catalog,
     Extension,
-    GenericParam,
     Implementation,
     Primitive,
     PrimitivePortability,
     RESULT_DIM_BASE,
     RESULT_DIM_EXTENSION,
 )
-from tslc.catalog.scalar_types import scalar_bit_width
 from tslc.catalog.signatures import parse_signature
 from tslc.catalog.target_families import ExtensionFamilyCapability
-from tslc.diagnostics import Diagnostic, diagnostic_at
-from tslc.support_policy import DEFAULT_SUPPORT_POLICY, SupportPolicy
-from tslc.support_policy_views import (
-    concrete_target_candidates,
-    selectable_variants,
+from tslc.diagnostics import Diagnostic
+from tslc.select.candidates import (
+    CandidateEvaluation,
+    RANKING_KEYS,
+    RankedCandidate,
+    RejectedCandidate,
+    _compiler_capability_frontier,
+    best_bodies,
+    evaluate_candidates,
+    fixed_width_fallback,
 )
-
-
-@dataclass(frozen=True, slots=True)
-class SimdTypeBaseBinding:
-    """A selected associated-base case for a free ``kind simd_type`` parameter."""
-
-    param_name: str
-    base_tag: str
+from tslc.select.slots import (
+    SelectionSlot as _SelectionSlot,
+    SimdTypeBaseBinding,
+    monomorphized_lanes,
+    selection_slots,
+    simd_type_base_binding_sets,
+)
+from tslc.support_policy import DEFAULT_SUPPORT_POLICY, SupportPolicy
+from tslc.support_policy_views import selectable_variants
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,78 +161,6 @@ class SelectionSlotResult:
             )
 
 
-@dataclass(frozen=True, slots=True)
-class _BestBody:
-    implementation: Implementation
-    required_features: frozenset[str]
-    required_compiler_capabilities: frozenset[str]
-
-
-@dataclass(frozen=True, slots=True)
-class _SelectionSlot:
-    extension_name: str
-    type_tag: str
-    to_target: str | None
-    target_resolved: bool = True
-
-
-@dataclass(frozen=True, slots=True)
-class RankedCandidate:
-    """A usable implementation body for one ``(extension, type, to_target)`` slot, carrying the
-    principled ranking keys so callers (selection, and the ``explain`` tool) can see *why*
-    one body outranks another. ``sort_key`` is the exact tuple selection minimizes."""
-
-    implementation: Implementation
-    required_features: frozenset[str]
-    required_compiler_capabilities: frozenset[str]
-    distance: int  # (a) position in the extension chain; own extension (0) before inherited
-    specificity: int  # (b) type-group member count; fewer = more specific
-    flag_count: int  # (c) applicable target-feature count; more = more specialized
-    compiler_capability_count: int  # (d) compiler requirements; more = more specialized
-    source_order: int  # (e) first occurrence in source
-
-    @property
-    def sort_key(self) -> tuple[int, int, int, int, int]:
-        return (
-            self.distance,
-            self.specificity,
-            -self.flag_count,
-            -self.compiler_capability_count,
-            self.source_order,
-        )
-
-
-@dataclass(frozen=True, slots=True)
-class RejectedCandidate:
-    """An implementation on the extension chain that could *not* serve this slot, with why."""
-
-    implementation: Implementation
-    reason: str
-
-
-@dataclass(frozen=True, slots=True)
-class CandidateEvaluation:
-    """The full candidate field for one slot: usable bodies (best-first) and the rejected ones."""
-
-    extension_known: bool
-    ranked: tuple[RankedCandidate, ...]
-    rejected: tuple[RejectedCandidate, ...]
-
-
-# Ranking keys, by the order selection applies them; surfaced by ``explain`` to name the decisive
-# tiebreak between the winner and the runner-up.
-RANKING_KEYS: tuple[tuple[str, str], ...] = (
-    ("distance", "own extension before an inherited one"),
-    ("specificity", "more specific type-group (fewer members)"),
-    ("flag_count", "more required target features (more specialized)"),
-    (
-        "compiler_capability_count",
-        "more required compiler capabilities (more specialized)",
-    ),
-    ("source_order", "earlier in source (arbitrary final tiebreak)"),
-)
-
-
 class Selector:
     def __init__(self, support: SupportPolicy = DEFAULT_SUPPORT_POLICY) -> None:
         self.support = support
@@ -293,8 +221,13 @@ class Selector:
                 if collect_slots:
                     evaluated_slots.extend(free_slots)
                 continue
-            for slot in self._selection_slots(
-                catalog, profile, primitive, emitted_extensions, type_tags
+            for slot in selection_slots(
+                catalog,
+                profile,
+                primitive,
+                emitted_extensions,
+                type_tags,
+                self.support,
             ):
                 extension = catalog.extensions[slot.extension_name]
                 fixed_shape_kinds = (
@@ -387,8 +320,13 @@ class Selector:
             ).free_function_owner
         ]
         evaluated: list[SelectionSlotResult] = []
-        for slot in self._selection_slots(
-            catalog, profile, primitive, owner_extensions, type_tags
+        for slot in selection_slots(
+            catalog,
+            profile,
+            primitive,
+            owner_extensions,
+            type_tags,
+            self.support,
         ):
             slot_selected = (
                 self._select_slot(
@@ -426,42 +364,6 @@ class Selector:
                 return slot_selected, tuple(evaluated)
         return (), tuple(evaluated)
 
-    def _selection_slots(
-        self,
-        catalog: Catalog,
-        profile: MachineProfile,
-        primitive: Primitive,
-        extension_names: list[str],
-        type_tags: tuple[str, ...],
-    ) -> Iterator[_SelectionSlot]:
-        """Enumerate the literal extension/type/representation target axis."""
-
-        for extension_name in extension_names:
-            for type_tag in type_tags:
-                if not any(
-                    catalog.type_group_contains(
-                        implementation.type_group, type_tag
-                    )
-                    for implementation in primitive.implementations
-                ):
-                    continue
-                targets = concrete_target_candidates(
-                    catalog,
-                    primitive,
-                    extension_name,
-                    type_tag,
-                    self.support,
-                    profile=profile,
-                )
-                for to_target in targets:
-                    yield _SelectionSlot(extension_name, type_tag, to_target)
-                if primitive.result_target is not None and not targets:
-                    yield _SelectionSlot(
-                        extension_name,
-                        type_tag,
-                        None,
-                        target_resolved=False,
-                    )
 
     def _select_slot(
         self,
@@ -474,7 +376,7 @@ class Selector:
         compiler_capabilities: frozenset[str] | None,
         warnings: dict[str, Diagnostic],
     ) -> tuple[SelectedImplementation, ...]:
-        best_bodies = self._best_bodies(
+        selected_bodies = best_bodies(
             catalog,
             profile,
             primitive,
@@ -485,11 +387,11 @@ class Selector:
             compiler_capabilities,
             warnings,
         )
-        if not best_bodies:
+        if not selected_bodies:
             return ()
         extension = catalog.extensions[slot.extension_name]
         fallback = (
-            self._fixed_width_fallback(
+            fixed_width_fallback(
                 catalog,
                 profile,
                 primitive,
@@ -504,7 +406,7 @@ class Selector:
             else None
         )
         native_fallback = (
-            self._fixed_width_fallback(
+            fixed_width_fallback(
                 catalog,
                 profile,
                 primitive,
@@ -532,7 +434,7 @@ class Selector:
                 ),
                 compiler_alternative_rank=(
                     rank
-                    if compiler_capabilities is None and len(best_bodies) > 1
+                    if compiler_capabilities is None and len(selected_bodies) > 1
                     else None
                 ),
                 to_target=slot.to_target,
@@ -542,99 +444,17 @@ class Selector:
                 fixed_native_fallback_extension=native_fallback,
                 extension_family_capability=family,
             )
-            for rank, best in enumerate(best_bodies)
-            for lanes in self._monomorphized_lanes(
-                extension, best.implementation, slot.type_tag
+            for rank, best in enumerate(selected_bodies)
+            for lanes in monomorphized_lanes(
+                self.support,
+                extension,
+                best.implementation,
+                slot.type_tag,
             )
-            for bindings in _simd_type_base_binding_sets(
+            for bindings in simd_type_base_binding_sets(
                 catalog, primitive, slot.type_tag
             )
         )
-
-    def _fixed_width_fallback(
-        self,
-        catalog: Catalog,
-        profile: MachineProfile,
-        primitive: Primitive,
-        source: Extension,
-        type_tag: str,
-        to_target: str | None,
-        emitted_extensions: list[str],
-        backend_id: str,
-        compiler_capabilities: frozenset[str] | None,
-        *,
-        require_native: bool = False,
-    ) -> Extension | None:
-        """Best backend-emitted substrate for the source extension's exact width.
-
-        The result remains concrete so call dependency closure can prove the
-        fallback specialization exists. Backend overlays opt out through their
-        extension metadata.
-        """
-
-        if source.vector_bits <= 0 or source.vector_bits_kind != "fixed":
-            return None
-        source_backend = source.metadata.backend.get(backend_id)
-        if (
-            source_backend is None
-            or source_backend.participates_in_dataparallel_inference
-        ):
-            return None
-        candidates: list[tuple[tuple[int, int, str], Extension]] = []
-        for name in emitted_extensions:
-            extension = catalog.extensions[name]
-            if extension.name == source.name:
-                continue
-            if extension.vector_bits != source.vector_bits:
-                continue
-            if extension.vector_bits_kind != "fixed":
-                continue
-            backend_metadata = extension.metadata.backend.get(backend_id)
-            if (
-                backend_metadata is not None
-                and not backend_metadata.participates_in_dataparallel_inference
-            ):
-                continue
-            if not extension.supports_backend(backend_id):
-                continue
-            if not _extension_declares_type(
-                catalog, extension, type_tag, backend_id
-            ):
-                continue
-            ranked = self.evaluate_candidates(
-                catalog,
-                profile,
-                primitive,
-                name,
-                type_tag,
-                to_target,
-                backend_id,
-                compiler_capabilities,
-            ).ranked
-            if not ranked:
-                continue
-            if require_native and "intrinsic" not in (
-                ranked[0].implementation.safety.reasons
-            ):
-                continue
-            if compiler_capabilities is None and not any(
-                not candidate.required_compiler_capabilities
-                for candidate in _compiler_capability_frontier(ranked)
-            ):
-                continue
-            candidates.append(
-                (
-                    (
-                        extension.metadata.native_sort_order or 0,
-                        extension.vector_bits,
-                        extension.isa_name,
-                    ),
-                    extension,
-                )
-            )
-        if not candidates:
-            return None
-        return max(candidates, key=lambda item: item[0])[1]
 
     def _emit_extensions(self, catalog: Catalog, profile: MachineProfile) -> list[str]:
         """Extensions to emit for a profile.
@@ -714,131 +534,9 @@ class Selector:
         backend_id: str | None = None,
         compiler_capabilities: frozenset[str] | None = None,
     ) -> CandidateEvaluation:
-        """The candidate field for one ``(extension, type, to_target)`` slot.
+        """Return ranked and rejected candidates for one typed slot."""
 
-        Gathers bodies from the extension and the ancestors it inherits from (e.g. avx2_vl
-        borrows avx2's body where it has none of its own), splits them into usable
-        :class:`RankedCandidate` (best-first by the principled keys) and
-        :class:`RejectedCandidate` (with the reason each on-chain body was dropped), and
-        single-sources selection so both :meth:`_best_bodies` and the ``explain`` tool
-        agree on the ranking. Off-chain bodies are not reported — they belong to other slots.
-        """
-
-        chain = catalog.extension_chain(extension_name)
-        distance = {name: index for index, name in enumerate(chain)}
-        ranked: list[RankedCandidate] = []
-        rejected: list[RejectedCandidate] = []
-        for implementation in primitive.implementations:
-            if implementation.extension not in distance:
-                continue  # belongs to a different extension's slot, not this one
-            if not catalog.type_group_contains(implementation.type_group, type_tag):
-                rejected.append(
-                    RejectedCandidate(
-                        implementation,
-                        f"type-group {implementation.type_group!r} does not contain {type_tag}",
-                    )
-                )
-                continue
-            # Second-axis match: a body with a `to_target_group` is kept only if that group contains
-            # the target (the `==`/`*` markers contain no concrete tag, so they stay unselected). A
-            # body with NO `to_target_group` is a target-generic catch-all (it spells the target
-            # symbolically via `as_base`/`window_base`) and matches ANY target — a fallback behind
-            # the more type-specific dedicated bodies.
-            if (
-                to_target is not None
-                and implementation.to_target_group is not None
-                and not catalog.type_group_contains(implementation.to_target_group, to_target)
-            ):
-                rejected.append(
-                    RejectedCandidate(
-                        implementation,
-                        f"to-target-group {implementation.to_target_group!r} does not contain "
-                        f"target {to_target!r}",
-                    )
-                )
-                continue
-            if to_target is not None and implementation.target_constraint is not None:
-                source_extension = catalog.extensions[extension_name]
-                target_extension = catalog.extensions.get(to_target)
-                if target_extension is None or not implementation.target_constraint.matches(
-                    source_extension, target_extension
-                ):
-                    rejected.append(
-                        RejectedCandidate(
-                            implementation,
-                            f"target constraint does not admit target {to_target!r}",
-                        )
-                    )
-                    continue
-            requirements = _applicable_requirements(
-                catalog,
-                implementation,
-                type_tag,
-                backend_id,
-            )
-            if requirements is None:
-                rejected.append(
-                    RejectedCandidate(
-                        implementation,
-                        f"no requires clause applies to {type_tag} for backend {backend_id!r}",
-                    )
-                )
-                continue
-            flags, required_capabilities = requirements
-            if not (flags <= profile.features):
-                missing = ", ".join(sorted(flags - profile.features))
-                rejected.append(
-                    RejectedCandidate(
-                        implementation,
-                        f"requires [{', '.join(sorted(flags))}] not satisfied by profile "
-                        f"{profile.name!r} (missing: {missing})",
-                    )
-                )
-                continue
-            if compiler_capabilities is not None and not (
-                required_capabilities <= compiler_capabilities
-            ):
-                missing = ", ".join(sorted(required_capabilities - compiler_capabilities))
-                rejected.append(
-                    RejectedCandidate(
-                        implementation,
-                        f"requires compiler capabilities [{', '.join(sorted(required_capabilities))}] "
-                        f"for backend {backend_id!r} (missing: {missing})",
-                    )
-                )
-                continue
-            ranked.append(
-                RankedCandidate(
-                    implementation=implementation,
-                    required_features=flags,
-                    required_compiler_capabilities=required_capabilities,
-                    distance=distance[implementation.extension],
-                    specificity=catalog.type_group_specificity(implementation.type_group),
-                    flag_count=len(flags),
-                    compiler_capability_count=len(required_capabilities),
-                    source_order=implementation.source_order,
-                )
-            )
-        ranked.sort(key=lambda candidate: candidate.sort_key)
-        return CandidateEvaluation(
-            extension_known=bool(chain),
-            ranked=tuple(ranked),
-            rejected=tuple(rejected),
-        )
-
-    def _best_bodies(
-        self,
-        catalog: Catalog,
-        profile: MachineProfile,
-        primitive: Primitive,
-        extension_name: str,
-        type_tag: str,
-        to_target: str | None,
-        backend_id: str | None,
-        compiler_capabilities: frozenset[str] | None,
-        warnings: dict[str, Diagnostic],
-    ) -> tuple[_BestBody, ...]:
-        ranked = self.evaluate_candidates(
+        return evaluate_candidates(
             catalog,
             profile,
             primitive,
@@ -847,91 +545,7 @@ class Selector:
             to_target,
             backend_id,
             compiler_capabilities,
-        ).ranked
-        if not ranked:
-            return ()
-        best = ranked[0]
-        best_impl = best.implementation
-        # Ambiguity guard: warn only when the pick is genuinely *arbitrary* — two
-        # bodies on the same extension that tie on distance, type-group
-        # specificity, target-feature count, and compiler-capability count, yet
-        # use different type groups. Equal-size different groups are necessarily
-        # incomparable (a proper subset has strictly fewer members), so neither
-        # is more type-specific and only source order decides. Feature or
-        # compiler-capability differences are principled specialization
-        # tiebreaks, so they do not warn.
-        rival_groups = {
-            candidate.implementation.type_group
-            for candidate in ranked
-            if candidate.distance == best.distance
-            and candidate.specificity == best.specificity
-            and candidate.flag_count == best.flag_count
-            and candidate.compiler_capability_count == best.compiler_capability_count
-            and candidate.implementation.type_group != best_impl.type_group
-        }
-        if rival_groups:
-            groups = ", ".join(sorted({best_impl.type_group, *rival_groups}))
-            message = (
-                f"{primitive.name!r} on {extension_name}: type-groups {{{groups}}} are equally "
-                f"specific and incomparable (both match overlapping types); the body is chosen "
-                f"by source order — disambiguate the corpus selectors"
-            )
-            warnings.setdefault(
-                message,
-                diagnostic_at(
-                    severity="warning",
-                    code="TSL-SELECT-AMBIGUOUS-SPECIFICITY",
-                    message=message,
-                    source=best_impl.selector_source or best_impl.source or primitive.source,
-                ),
-            )
-        selected = (
-            _compiler_capability_frontier(ranked)
-            if compiler_capabilities is None
-            else (best,)
         )
-        # Automatic package generation keeps compiler-gated bodies only as
-        # optimizations over an unconditional implementation. Capability-only
-        # APIs remain available through explicit capability selection.
-        if compiler_capabilities is None and not any(
-            not candidate.required_compiler_capabilities
-            for candidate in selected
-        ):
-            return ()
-        return tuple(
-            _BestBody(
-                candidate.implementation,
-                candidate.required_features,
-                candidate.required_compiler_capabilities,
-            )
-            for candidate in selected
-        )
-
-    def _monomorphized_lanes(
-        self, extension: Extension, implementation: Implementation, type_tag: str
-    ) -> tuple[int | None, ...]:
-        """The concrete lane counts to monomorphize this body at, or ``(None,)`` for the
-        ordinary single ``LANES``-parametric slot.
-
-        A sized-vector body with ``unroll_variants`` effective-true and a non-empty
-        ``size_bits`` emits one slot per size, lanes = size // type-bit-width — so a
-        size-changing body is concrete per size (stable Rust can spell the changed-width
-        output) rather than a const-generic-expression template. Everything else (fixed-width
-        extensions, non-unrolled sized bodies) keeps the single ``None`` slot, byte-identical
-        to before."""
-
-        if not self.support.uses_sized_vector(extension) or not extension.size_bits:
-            return (None,)
-        unroll = (
-            implementation.unroll_variants
-            if implementation.unroll_variants is not None
-            else extension.unroll_variants
-        )
-        if not unroll:
-            return (None,)
-        type_bits = self.support.type_bit_width_or_default(type_tag)
-        return tuple(size // type_bits for size in extension.size_bits if size >= type_bits)
-
 
 def _slot_disposition(
     primitive: Primitive,
@@ -959,150 +573,3 @@ def _slot_disposition(
             SelectionSlotInapplicability.TARGET_SPECIFIC_UNAVAILABLE,
         )
     return SelectionSlotDisposition.ABSENT, None
-
-
-def _compiler_capability_frontier(
-    ranked: tuple[RankedCandidate, ...],
-) -> tuple[RankedCandidate, ...]:
-    """Candidates that win for at least one downstream capability set."""
-
-    winners: list[RankedCandidate] = []
-    for candidate in ranked:
-        if any(
-            earlier.required_compiler_capabilities
-            <= candidate.required_compiler_capabilities
-            for earlier in winners
-        ):
-            continue
-        winners.append(candidate)
-    return tuple(winners)
-
-
-def _applicable_requirements(
-    catalog: Catalog,
-    implementation: Implementation,
-    type_tag: str,
-    backend_id: str | None,
-) -> tuple[frozenset[str], frozenset[str]] | None:
-    """The requirement-clause flags that apply to ``type_tag`` (None if none apply).
-
-    The *union* of every applicable clause's flags: a body's requirements may be the
-    selector ancestors' clauses plus its own (e.g. `?i?`'s ``[avx512f]`` + a `ToExtension:
-    avx2`'s ``[avx512dq]``), all of which must hold. Mutually-exclusive type-group clauses in
-    a `requires` map still contribute only the one that matches the type, so this is
-    equivalent to the former first-match for single/disjoint clauses."""
-
-    if not implementation.requirements:
-        return frozenset(), frozenset()
-    flags: set[str] = set()
-    compiler_capabilities: set[str] = set()
-    matched = False
-    for clause in implementation.requirements:
-        if clause.extension is not None and clause.extension != implementation.extension:
-            continue
-        if clause.type_group is not None and not catalog.type_group_contains(
-            clause.type_group, type_tag
-        ):
-            continue
-        flags |= clause.flags
-        if clause.compiler:
-            matching = tuple(
-                requirement
-                for requirement in clause.compiler
-                if requirement.backend_id == backend_id
-            )
-            if not matching:
-                return None
-            for requirement in matching:
-                compiler_capabilities |= requirement.capabilities
-        matched = True
-    if not matched:
-        return None
-    return frozenset(flags), frozenset(compiler_capabilities)
-
-
-def _extension_declares_type(
-    catalog: Catalog,
-    extension: Extension,
-    type_tag: str,
-    backend_id: str,
-) -> bool:
-    return any(
-        extension.direct_vector_register_type(backend_id, group) is not None
-        and catalog.type_group_contains(group, type_tag)
-        for group in extension.vector_register_types
-    )
-
-
-def _simd_type_base_binding_sets(
-    catalog: Catalog, primitive: Primitive, type_tag: str
-) -> tuple[tuple[SimdTypeBaseBinding, ...], ...]:
-    params = tuple(
-        generic_param
-        for generic_param in primitive.generic_params
-        if generic_param.kind == "simd_type" and generic_param.specialize_base
-    )
-    if not params:
-        return ((),)
-
-    choices: list[tuple[SimdTypeBaseBinding, ...]] = []
-    for param in params:
-        base_tags = tuple(
-            base_tag
-            for base_tag in _concrete_base_tags(catalog, param.base_type_constraints)
-            if _base_width_constraints_match(param, base_tag, type_tag)
-        )
-        if not base_tags:
-            return ()
-        choices.append(
-            tuple(
-                SimdTypeBaseBinding(param.name, base_tag)
-                for base_tag in base_tags
-            )
-        )
-    return tuple(tuple(item for item in combination) for combination in product(*choices))
-
-
-def _concrete_base_tags(
-    catalog: Catalog, constraints: tuple[str, ...]
-) -> tuple[str, ...]:
-    seen: set[str] = set()
-    members: list[str] = []
-    for constraint in constraints:
-        for member in catalog.type_group_members(constraint):
-            if member in seen:
-                continue
-            seen.add(member)
-            members.append(member)
-    return tuple(members)
-
-
-def _base_width_constraints_match(
-    param: GenericParam,
-    base_tag: str,
-    type_tag: str,
-) -> bool:
-    if not param.base_width_constraints:
-        return True
-    base_width = scalar_bit_width(base_tag)
-    input_width = scalar_bit_width(type_tag)
-    if base_width is None or input_width is None:
-        return False
-    return all(
-        _compare_widths(base_width, constraint.relation, input_width)
-        for constraint in param.base_width_constraints
-    )
-
-
-def _compare_widths(left: int, relation: BaseWidthRelation, right: int) -> bool:
-    """Exhaustive over BaseWidthRelation: catalog promotion diagnoses unknown
-    relations, so an unhandled member here is a programming error, not a
-    silently-empty selection."""
-
-    if relation == ">=":
-        return left >= right
-    if relation == ">":
-        return left > right
-    if relation == "==":
-        return left == right
-    assert_never(relation)

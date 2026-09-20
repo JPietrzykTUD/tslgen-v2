@@ -1,31 +1,38 @@
-"""Typed primitive requirements for backend-supplied helper surfaces."""
+"""Semantic primitive requirements for backend-supplied helper surfaces."""
 
 from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import TYPE_CHECKING
 
-from tslc.catalog.model import PrimitiveMaskMode
-
-if TYPE_CHECKING:
-    from tslc.catalog.model import Catalog
-    from tslc.lower.lowerer import LoweredSpecialization
+from tslc.catalog.model import Catalog, PrimitiveMaskMode
+from tslc.catalog.semantics import (
+    COMPACTED_VECTOR_STORE_REQUIREMENT,
+    CONTIGUOUS_MASKED_VECTOR_STORE_REQUIREMENT,
+    CONTIGUOUS_VECTOR_LOAD_REQUIREMENT,
+    CONTIGUOUS_VECTOR_STORE_REQUIREMENT,
+    INDEXED_POINTER_VECTOR_LOAD_REQUIREMENT,
+    MASK_AND_REQUIREMENT,
+    MASK_FROM_INTEGRAL_REQUIREMENT,
+    MASK_POPULATION_COUNT_REQUIREMENT,
+    MASK_TO_INTEGRAL_REQUIREMENT,
+    VECTOR_FROM_ARRAY_REQUIREMENT,
+    VECTOR_TO_ARRAY_REQUIREMENT,
+    VECTOR_ZERO_REQUIREMENT,
+    PrimitiveProviderRequirement,
+    ResolvedPrimitiveProvider,
+)
+from tslc.diagnostics import Diagnostic
+from tslc.lower.lowerer import LoweredSpecialization
 
 
 @dataclass(frozen=True, slots=True)
 class PrimitiveRequirement:
-    """One source primitive form required by a backend helper feature."""
+    """One semantic primitive form required by a backend helper feature."""
 
-    source_name: str
+    provider: PrimitiveProviderRequirement
     mask_policy: PrimitiveMaskMode | None = None
-
-    def is_satisfied_by(self, specialization: LoweredSpecialization) -> bool:
-        return (
-            specialization.source_primitive_name == self.source_name
-            and specialization.mask_policy == self.mask_policy
-        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,7 +45,7 @@ class HelperFeature:
 
 @dataclass(frozen=True, slots=True)
 class BackendHelperManifest:
-    """Backend helper requirements shared by closure and render admission."""
+    """Static semantic helper requirements declared by one backend."""
 
     backend_id: str
     features: tuple[HelperFeature, ...]
@@ -51,31 +58,16 @@ class BackendHelperManifest:
         object.__setattr__(self, "_by_name", MappingProxyType(by_name))
 
     @property
-    def source_primitives(self) -> tuple[str, ...]:
-        """Unique closure roots in deterministic manifest order."""
+    def provider_requirements(self) -> tuple[PrimitiveProviderRequirement, ...]:
+        """Unique provider shapes in deterministic manifest order."""
 
-        ordered: list[str] = []
-        seen: set[str] = set()
-        for feature in self.features:
-            for requirement in feature.requirements:
-                if requirement.source_name not in seen:
-                    seen.add(requirement.source_name)
-                    ordered.append(requirement.source_name)
-        return tuple(ordered)
-
-    def closure_seed_primitives(self, catalog: Catalog) -> tuple[str, ...]:
         return tuple(
-            source_name
-            for source_name in self.source_primitives
-            if catalog.primitives_named(source_name, unmasked=False)
+            dict.fromkeys(
+                requirement.provider
+                for feature in self.features
+                for requirement in feature.requirements
+            )
         )
-
-    def supports(
-        self,
-        feature_name: str,
-        by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
-    ) -> bool:
-        return not self.missing_requirements(feature_name, by_primitive)
 
     def requirements(self, feature_name: str) -> tuple[PrimitiveRequirement, ...]:
         feature = self._by_name.get(feature_name)
@@ -85,16 +77,122 @@ class BackendHelperManifest:
             )
         return feature.requirements
 
+
+@dataclass(frozen=True, slots=True)
+class BackendHelperPlan:
+    """One catalog-resolved helper plan shared by closure and backend planning."""
+
+    manifest: BackendHelperManifest
+    providers: tuple[ResolvedPrimitiveProvider, ...]
+    unresolved: tuple[tuple[PrimitiveProviderRequirement, Diagnostic], ...]
+
+    def __post_init__(self) -> None:
+        required = self.manifest.provider_requirements
+        resolved_requirements = tuple(
+            provider.requirement for provider in self.providers
+        )
+        unresolved_requirements = tuple(
+            requirement for requirement, _ in self.unresolved
+        )
+        if len(set(resolved_requirements)) != len(resolved_requirements):
+            raise ValueError("backend helper providers must be unique")
+        if len(set(unresolved_requirements)) != len(unresolved_requirements):
+            raise ValueError("backend helper unresolved requirements must be unique")
+        if set(resolved_requirements) & set(unresolved_requirements):
+            raise ValueError(
+                "backend helper requirements cannot be both resolved and unresolved"
+            )
+        if set((*resolved_requirements, *unresolved_requirements)) != set(required):
+            raise ValueError(
+                "backend helper plan must resolve every manifest requirement"
+            )
+        resolved_set = set(resolved_requirements)
+        if tuple(
+            requirement for requirement in required if requirement in resolved_set
+        ) != resolved_requirements:
+            raise ValueError("backend helper providers must follow manifest order")
+        unresolved_set = set(unresolved_requirements)
+        if tuple(
+            requirement for requirement in required if requirement in unresolved_set
+        ) != unresolved_requirements:
+            raise ValueError("backend helper diagnostics must follow manifest order")
+
+    @classmethod
+    def resolve(
+        cls,
+        manifest: BackendHelperManifest,
+        catalog: Catalog,
+    ) -> BackendHelperPlan:
+        providers: list[ResolvedPrimitiveProvider] = []
+        unresolved: list[tuple[PrimitiveProviderRequirement, Diagnostic]] = []
+        for requirement in manifest.provider_requirements:
+            result = catalog.resolve_primitive_provider(requirement)
+            if isinstance(result, Diagnostic):
+                unresolved.append((requirement, result))
+            else:
+                providers.append(ResolvedPrimitiveProvider(requirement, result.name))
+        return cls(manifest, tuple(providers), tuple(unresolved))
+
+    @property
+    def backend_id(self) -> str:
+        return self.manifest.backend_id
+
+    @property
+    def diagnostics(self) -> tuple[Diagnostic, ...]:
+        return tuple(diagnostic for _requirement, diagnostic in self.unresolved)
+
+    @property
+    def ambiguity_diagnostics(self) -> tuple[Diagnostic, ...]:
+        return tuple(
+            diagnostic
+            for diagnostic in self.diagnostics
+            if diagnostic.code == "TSL-CATALOG-AMBIGUOUS-PRIMITIVE-PROVIDER"
+        )
+
+    @property
+    def closure_seed_primitives(self) -> tuple[str, ...]:
+        return tuple(
+            dict.fromkeys(provider.primitive_name for provider in self.providers)
+        )
+
+    def provider(
+        self, requirement: PrimitiveRequirement
+    ) -> ResolvedPrimitiveProvider | None:
+        return next(
+            (
+                provider
+                for provider in self.providers
+                if provider.requirement == requirement.provider
+            ),
+            None,
+        )
+
+    def unresolved_diagnostic(
+        self, requirement: PrimitiveRequirement
+    ) -> Diagnostic | None:
+        return next(
+            (
+                diagnostic
+                for provider_requirement, diagnostic in self.unresolved
+                if provider_requirement == requirement.provider
+            ),
+            None,
+        )
+
     def matching_specializations(
         self,
         requirement: PrimitiveRequirement,
         by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
     ) -> tuple[LoweredSpecialization, ...]:
+        provider = self.provider(requirement)
+        if provider is None:
+            return ()
         return tuple(
             specialization
             for group in by_primitive.values()
             for specialization in group
-            if requirement.is_satisfied_by(specialization)
+            if specialization.source_primitive_name == provider.primitive_name
+            and specialization.mask_policy == requirement.mask_policy
         )
 
     def missing_requirements(
@@ -104,7 +202,7 @@ class BackendHelperManifest:
     ) -> tuple[PrimitiveRequirement, ...]:
         return tuple(
             requirement
-            for requirement in self.requirements(feature_name)
+            for requirement in self.manifest.requirements(feature_name)
             if not self.matching_specializations(requirement, by_primitive)
         )
 
@@ -114,39 +212,44 @@ CPP_HELPER_MANIFEST = BackendHelperManifest(
     (
         HelperFeature(
             "contiguous_read",
-            (PrimitiveRequirement("load"),),
+            (PrimitiveRequirement(CONTIGUOUS_VECTOR_LOAD_REQUIREMENT),),
         ),
         HelperFeature(
             "contiguous_write",
-            (PrimitiveRequirement("store"),),
+            (PrimitiveRequirement(CONTIGUOUS_VECTOR_STORE_REQUIREMENT),),
         ),
         HelperFeature(
             "masked_write",
-            (PrimitiveRequirement("store", PrimitiveMaskMode.PASS_THROUGH),),
+            (
+                PrimitiveRequirement(
+                    CONTIGUOUS_MASKED_VECTOR_STORE_REQUIREMENT,
+                    PrimitiveMaskMode.PASS_THROUGH,
+                ),
+            ),
         ),
         HelperFeature(
             "selected_read",
-            (PrimitiveRequirement("gather_narrow"),),
+            (PrimitiveRequirement(INDEXED_POINTER_VECTOR_LOAD_REQUIREMENT),),
         ),
         HelperFeature(
             "integral_mask",
-            (PrimitiveRequirement("to_integral"),),
+            (PrimitiveRequirement(MASK_TO_INTEGRAL_REQUIREMENT),),
         ),
         HelperFeature(
             "mask_from_integral",
-            (PrimitiveRequirement("to_mask"),),
+            (PrimitiveRequirement(MASK_FROM_INTEGRAL_REQUIREMENT),),
         ),
         HelperFeature(
             "compaction",
-            (PrimitiveRequirement("compress_store"),),
+            (PrimitiveRequirement(COMPACTED_VECTOR_STORE_REQUIREMENT),),
         ),
         HelperFeature(
             "mask_population_count",
-            (PrimitiveRequirement("mask_population_count"),),
+            (PrimitiveRequirement(MASK_POPULATION_COUNT_REQUIREMENT),),
         ),
         HelperFeature(
             "mask_intersection",
-            (PrimitiveRequirement("mask_binary_and"),),
+            (PrimitiveRequirement(MASK_AND_REQUIREMENT),),
         ),
     ),
 )
@@ -158,41 +261,46 @@ RUST_HELPER_MANIFEST = BackendHelperManifest(
         HelperFeature(
             "contiguous_memory",
             (
-                PrimitiveRequirement("load"),
-                PrimitiveRequirement("store"),
+                PrimitiveRequirement(CONTIGUOUS_VECTOR_LOAD_REQUIREMENT),
+                PrimitiveRequirement(CONTIGUOUS_VECTOR_STORE_REQUIREMENT),
             ),
         ),
         HelperFeature(
             "masked_store",
-            (PrimitiveRequirement("store", PrimitiveMaskMode.PASS_THROUGH),),
+            (
+                PrimitiveRequirement(
+                    CONTIGUOUS_MASKED_VECTOR_STORE_REQUIREMENT,
+                    PrimitiveMaskMode.PASS_THROUGH,
+                ),
+            ),
         ),
         HelperFeature(
             "selected_load",
             (
-                PrimitiveRequirement("set_zero"),
-                PrimitiveRequirement("to_array"),
-                PrimitiveRequirement("from_array"),
+                PrimitiveRequirement(VECTOR_ZERO_REQUIREMENT),
+                PrimitiveRequirement(VECTOR_TO_ARRAY_REQUIREMENT),
+                PrimitiveRequirement(VECTOR_FROM_ARRAY_REQUIREMENT),
             ),
         ),
         HelperFeature(
             "gather_narrow",
-            (PrimitiveRequirement("gather_narrow"),),
+            (PrimitiveRequirement(INDEXED_POINTER_VECTOR_LOAD_REQUIREMENT),),
         ),
         HelperFeature(
             "compress_store",
-            (PrimitiveRequirement("compress_store"),),
+            (PrimitiveRequirement(COMPACTED_VECTOR_STORE_REQUIREMENT),),
         ),
         HelperFeature(
             "mask_population_count",
-            (PrimitiveRequirement("mask_population_count"),),
+            (PrimitiveRequirement(MASK_POPULATION_COUNT_REQUIREMENT),),
         ),
         HelperFeature(
             "integral_mask",
-            (PrimitiveRequirement("to_integral"),),
+            (PrimitiveRequirement(MASK_TO_INTEGRAL_REQUIREMENT),),
         ),
         HelperFeature(
             "mask_from_integral",
-            (PrimitiveRequirement("to_mask"),),
+            (PrimitiveRequirement(MASK_FROM_INTEGRAL_REQUIREMENT),),
         ),
     ),
 )
@@ -203,6 +311,7 @@ EMPTY_HELPER_MANIFEST = BackendHelperManifest("none", ())
 
 __all__ = (
     "BackendHelperManifest",
+    "BackendHelperPlan",
     "CPP_HELPER_MANIFEST",
     "EMPTY_HELPER_MANIFEST",
     "HelperFeature",

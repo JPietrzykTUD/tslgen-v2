@@ -1,0 +1,18 @@
+{% extends "!layout.html" %}
+
+{% block document %}
+  <header class="tslcSiteHeader">
+    <a class="tslcSiteBrand" href="{{ pathto('index') }}" aria-label="TSL documentation home">
+      <img class="tslcSiteLogo" src="{{ pathto('_static/tsl_logo_grey.svg', 1) }}" alt="">
+      <span class="tslcSiteBrandText">
+        <strong>Template SIMD Library</strong>
+        <small>Generated reference</small>
+      </span>
+    </a>
+    <nav class="tslcSiteNav" aria-label="Documentation">
+        @SITE_NAV_LINKS@
+    </nav>
+    <span class="tslcSiteMeta">Generated docs</span>
+  </header>
+  {{ super() }}
+{% endblock %}

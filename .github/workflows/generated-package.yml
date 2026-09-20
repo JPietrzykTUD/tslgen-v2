@@ -224,7 +224,8 @@ jobs:
         run: |
           mkdir -p "${TSLC_CI_OUTPUT}"
           tar -xzf "tslctmp/docs-input/tsl-generated-reference-${GITHUB_SHA}.tar.gz" \
-            -C "${TSLC_CI_OUTPUT}"
+            -C "${TSLC_CI_OUTPUT}" \
+            --strip-components=1
 
       - name: Log in to GHCR
         uses: docker/login-action@v4

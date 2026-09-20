@@ -8,13 +8,18 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
 
+import pytest
 from lsprotocol import types
 from pygls.lsp.server import LanguageServer
 
+from tslc.backend.cpp_capability import CPP_BACKEND
+from tslc.backend.rust_capability import RUST_BACKEND
+from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.selector_paths import selector_head_extensions
-from tslc.diagnostics import SourceSpan
 from tslc.compiler_assets import load_default_tsl_grammar
+from tslc.diagnostics import SourceSpan
 from tslc.ir.region_registry import TSIL_REGION_KEYWORDS
+from tslc.lsp.backend_selection import select_authoring_backend
 from tslc.lsp.features import (
     completions,
     definition_locations,
@@ -31,7 +36,6 @@ from tslc.lsp.positions import (
     source_position,
     span_to_range,
 )
-from tslc.catalog.machine_profiles import MachineProfile
 from tslc.lsp.primitive_explorer import (
     PrimitiveExplorerCache,
     _selected_profile,
@@ -73,6 +77,39 @@ def test_primitive_explorer_fallback_is_profile_role_driven() -> None:
     }
 
     assert _selected_profile(profiles, None, ()) == "renamed_base"
+
+
+def test_authoring_backend_selection_preserves_configured_and_registry_order(
+    monkeypatch,
+) -> None:
+    from tslc.backend import registry
+
+    assert select_authoring_backend(("rust", "cpp"), None) is RUST_BACKEND
+    assert select_authoring_backend(("rust", "cpp"), "cpp") is CPP_BACKEND
+    assert select_authoring_backend(("rust", "cpp"), "stale") is RUST_BACKEND
+
+    future = replace(
+        CPP_BACKEND,
+        backend_id="future",
+        root_path="future",
+        artifact_media_type="text/future",
+        preview_file_suffix="future",
+    )
+    monkeypatch.setattr(registry, "BACKEND_CAPABILITIES", (future,))
+    monkeypatch.setattr(registry, "_BY_ID", {"future": future})
+
+    assert select_authoring_backend((), None) is future
+    assert select_authoring_backend(("future",), "cpp") is future
+
+
+def test_authoring_backend_selection_rejects_an_empty_registry(monkeypatch) -> None:
+    from tslc.backend import registry
+
+    monkeypatch.setattr(registry, "BACKEND_CAPABILITIES", ())
+    monkeypatch.setattr(registry, "_BY_ID", {})
+
+    with pytest.raises(ValueError, match="at least one registered backend"):
+        select_authoring_backend((), None)
 
 
 def test_index_requests_wait_for_a_completed_initial_check() -> None:
@@ -310,6 +347,8 @@ def test_specialization_context_uses_cursor_scope_and_selector_slots(
     )
 
     assert exact.primitive == "add"
+    assert exact.backend == "cpp"
+    assert exact.preview_file_suffix == "hpp"
     assert exact.extension == "sse"
     assert exact.type_tag == "f32"
     assert any(
@@ -539,6 +578,8 @@ def test_primitive_explorer_projects_file_slots_counts_and_dependencies(
         cache=cache,
     )
 
+    assert explorer.backend == "cpp"
+    assert explorer.preview_file_suffix == "hpp"
     names = {primitive.name for primitive in explorer.primitives}
     assert "add" in names
     assert "load" not in names

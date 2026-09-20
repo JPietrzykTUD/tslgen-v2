@@ -16,6 +16,11 @@ from tslc.backend.cpp_public_api import (
     CPP_CORE_PUBLIC_IDENTITIES,
     cpp_public_api_manifest,
 )
+from tslc.backend.helper_requirements import (
+    BackendHelperPlan,
+    CPP_HELPER_MANIFEST,
+    RUST_HELPER_MANIFEST,
+)
 from tslc.backend.precondition_error_rendering import (
     cpp_precondition_error,
     rust_precondition_error,
@@ -36,7 +41,8 @@ from tslc.catalog.preconditions import (
     PRECONDITION_DESCRIPTORS,
     PreconditionErrorKind,
 )
-from tslc.catalog.semantics import OperandBinding
+from tslc.catalog.semantics import OperandBinding, PrimitiveProviderRequirement
+from tslc.diagnostics import Diagnostic
 from tslc.maintenance import _repo_context
 from tslc.maintenance._catalog import load_repository_catalog
 from tslc.maintenance._repo_context import RepoContext
@@ -259,7 +265,9 @@ def _checked_algorithm_contracts() -> list[dict[str, object]]:
     ]
 
 
-def _checked_precondition_contracts() -> list[dict[str, object]]:
+def _checked_precondition_contracts(
+    catalog: Catalog,
+) -> list[dict[str, object]]:
     """Freeze every compiler-owned fact that defines one checked condition."""
 
     return [
@@ -292,10 +300,12 @@ def _checked_precondition_contracts() -> list[dict[str, object]]:
                 descriptor.checkable_arithmetic_binding_kinds
             ),
             "check_primitives": [
-                primitive.value for primitive in descriptor.check_primitives
+                _resolved_provider_name(catalog, requirement)
+                for requirement in descriptor.check_primitives
             ],
             "masked_check_primitives": [
-                primitive.value for primitive in descriptor.masked_check_primitives
+                _resolved_provider_name(catalog, requirement)
+                for requirement in descriptor.masked_check_primitives
             ],
             "compatible_memory_accesses": sorted(
                 access.value for access in descriptor.compatible_memory_accesses
@@ -310,6 +320,16 @@ def _checked_precondition_contracts() -> list[dict[str, object]]:
             key=lambda item: item.kind.value,
         )
     ]
+
+
+def _resolved_provider_name(
+    catalog: Catalog,
+    requirement: PrimitiveProviderRequirement,
+) -> str:
+    provider = catalog.resolve_primitive_provider(requirement)
+    if isinstance(provider, Diagnostic):
+        raise ValueError(provider.message)
+    return provider.name
 
 
 def _checked_error_contract() -> dict[str, object]:
@@ -396,7 +416,11 @@ def _exact_backend_declarations(
             + "; ".join(item.message for item in errors)
         )
     static_selection = plan_rust_static_selection(result.emitted_profiles)
-    algorithm = plan_rust_algorithm(result.emitted_profiles, static_selection)
+    cpp_helpers = BackendHelperPlan.resolve(CPP_HELPER_MANIFEST, catalog)
+    rust_helpers = BackendHelperPlan.resolve(RUST_HELPER_MANIFEST, catalog)
+    algorithm = plan_rust_algorithm(
+        result.emitted_profiles, static_selection, rust_helpers
+    )
     facade = plan_rust_facade(result.emitted_profiles, static_selection)
     dispatch = plan_rust_dispatch(result.emitted_profiles, static_selection, facade)
     return {
@@ -404,7 +428,9 @@ def _exact_backend_declarations(
             backend_id: list(profiles_by_backend[backend_id])
             for backend_id in _EXACT_DECLARATION_BACKENDS
         },
-        "cpp": cpp_public_api_manifest(result.emitted_profiles).payload(),
+        "cpp": cpp_public_api_manifest(
+            result.emitted_profiles, helper_plan=cpp_helpers
+        ).payload(),
         "rust": rust_public_api_manifest(
             result.emitted_profiles,
             static_selection,
@@ -451,7 +477,7 @@ def build_public_api_baseline(context: RepoContext) -> dict[str, object]:
             for identity in RUST_ROOT_PUBLIC_IDENTITIES
         ],
         "primitive_callable_families": primitives,
-        "checked_precondition_contracts": _checked_precondition_contracts(),
+        "checked_precondition_contracts": _checked_precondition_contracts(catalog),
         "checked_error_contract": _checked_error_contract(),
         "algorithm_callable_families": sorted(ALGORITHM_PUBLIC_FAMILIES),
         "checked_algorithm_contracts": _checked_algorithm_contracts(),

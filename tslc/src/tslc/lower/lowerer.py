@@ -6,9 +6,11 @@ Pieces, each with one job:
   body-local aliases, diagnostics, and the ``unsafe`` flag.
 - :class:`ExpressionRenderer` walks a body's segment sequence: raw text passes
   through, regions dispatch to per-keyword :class:`RegionLowerer` handlers.
-- :class:`Lowerer` is the orchestrator: read the signature kinds, locate the
-  return statement, render the body, and assemble a :class:`LoweredSpecialization`
-  (a not-yet-lowerable construct skips the specialization rather than failing).
+- :class:`ImplementationBodyLowerer` scans and lowers default/variant bodies,
+  collecting their safety, diagnostics, implementation state, and dependencies.
+- :class:`Lowerer` orchestrates signature/type resolution, body lowering, and
+  delegates final validation/assembly to ``specialization_assembly`` (a
+  not-yet-lowerable construct skips the specialization rather than failing).
 
 Growth is by registering more region lowerers / query functions, not by editing
 this file.
@@ -21,33 +23,21 @@ from dataclasses import replace
 from tslc.backend import translation_common
 from tslc.backend.translation import BackendDialect
 from tslc.catalog.arithmetic import ArithmeticOperandRole, ArithmeticOperation
-from tslc.catalog.memory import resolve_memory_alignment
 from tslc.catalog.model import (
-    BOOLEAN_WILDCARD_ATTRIBUTES,
     Catalog,
     ImmediateParam,
     ImmediateRangeUpperKind,
     ImmediateValueRange,
-    Primitive,
-    RESULT_DIM_VECTOR,
 )
 from tslc.catalog.scalar_types import SCALAR_TYPE_INFOS, scalar_bit_width_or_default
-from tslc.catalog.preconditions import (
-    PRECONDITION_DESCRIPTORS,
-    PreconditionHazard,
-    precondition_applies_to_type,
-)
 from tslc.catalog.signatures import SignatureShape, parse_signature
-from tslc.diagnostics import Diagnostic, SourceSpan, sort_diagnostics
-from tslc.documentation import primitive_documentation
-from tslc.ir.scan import scan
+from tslc.diagnostics import Diagnostic, SourceSpan
 from tslc.ir.segments import Segment
-from tslc.lower.body_rendering import body_context, render_body
+from tslc.lower.body_rendering import body_context
 from tslc.lower.context import (
     LaneListParameter,
     LoweringEnv,
     LoweringScope,
-    LoweringSession,
 )
 from tslc.lower.catalog_facts import (
     LowererCatalogFacts as _LowererCatalogFacts,
@@ -59,21 +49,7 @@ from tslc.lower._diagnostics import (
     lowering_skip_diagnostic,
     primitive_signature_source as _primitive_signature_source,
 )
-from tslc.lower.dependencies import (
-    CallDependency,
-    CallDependencyOrigin,
-    CallDependencyOriginKind,
-    GenericVectorReference,
-    VectorIdentity,
-    origin_sort_key,
-    symbolic_call_dependency_error,
-)
-from tslc.lower.fixed_native import lower_preferred_fixed_native
-from tslc.lower.region_handlers import (
-    DEFAULT_REGION_LOWERERS,
-    RegionLowerer,
-)
-from tslc.lower.implementation_state import ImplementationState
+from tslc.lower.implementation_bodies import ImplementationBodyLowerer
 from tslc.lower.model import (
     LoweredArithmeticPrecondition,
     LoweredArithmeticPreconditionKind,
@@ -82,16 +58,19 @@ from tslc.lower.model import (
     LoweredTypeParam,
     LoweringResult,
 )
-from tslc.lower.primitive_semantics import (
-    LoweredMemoryAlignment,
-    LoweredPrimitiveSemantics,
-)
 from tslc.lower.param_types import (
     effective_param_types,
     param_type_overrides as _param_type_overrides,
 )
+from tslc.lower.region_handlers import (
+    DEFAULT_REGION_LOWERERS,
+    RegionLowerer,
+)
+from tslc.lower.specialization_assembly import (
+    ResolvedSpecializationSignature,
+    assemble_specialization,
+)
 from tslc.lower.target_vectors import TargetVector, resolve_target_vector
-from tslc.target_text import LoweredBody
 from tslc.select.selector import SelectedImplementation
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY, SupportPolicy
 
@@ -105,6 +84,7 @@ class Lowerer:
         support: SupportPolicy = DEFAULT_SUPPORT_POLICY,
     ) -> None:
         self._region_lowerers = region_lowerers
+        self._body_lowerer = ImplementationBodyLowerer(region_lowerers)
         self._support = support
         self._catalog_facts_catalog: Catalog | None = None
         self._catalog_facts: _LowererCatalogFacts | None = None
@@ -320,260 +300,45 @@ class Lowerer:
             self._region_lowerers,
         )
 
-        segments = (
-            body_segments
-            if body_segments is not None
-            else scan(
-                selected.implementation.body_text,
-                source=selected.implementation.body_source,
-            )
-        )
-
-        default_body = lower_preferred_fixed_native(
-            selected,
-            shape,
-            context,
+        bodies, body_diagnostics = self._body_lowerer.lower(
+            selected=selected,
+            shape=shape,
+            context=context,
+            scope=scope,
             current_register_spelling=register_spelling,
             target=target,
+            body_segments=body_segments,
         )
-        if default_body is None:
-            default_body = render_body(
-                selected=selected,
-                shape=shape,
-                context=context,
-                segments=segments,
-                region_lowerers=self._region_lowerers,
-            )
-        if default_body.rendered is None:
+        if bodies is None:
             return LoweringResult(
                 specialization=None,
-                diagnostics=sort_diagnostics(default_body.diagnostics),
+                diagnostics=body_diagnostics,
             )
-        safety = selected.implementation.safety.merge(default_body.safety)
-        body = LoweredBody.from_render_text(
-            default_body.rendered,
-            unsafe_block_renderer=backend.syntax.render_unsafe_block,
-            requires_unsafe=safety.internal_unsafe,
-        )
-
-        variant_sources = tuple(
-            (
-                variant,
-                scan(variant.body_text, source=variant.body_source),
-            )
-            for variant in selected.implementation.variants
-        )
-        variant_bodies: list[LoweredImplementationVariant] = []
-        effective_safety = safety
-        diagnostics = [*default_body.diagnostics]
-        call_dependency_origins = set(context.effects.call_dependency_origins)
-        call_dependency_origins.update(
-            _checked_precondition_dependencies(
-                selected,
-                backend_id=backend.backend_id,
-                result_kind=shape.result_kind,
-                target=target,
-            )
-        )
-        for variant, variant_segments in variant_sources:
-            variant_context = body_context(
-                replace(
-                    env,
-                    dependency_origin=f"implementation variant {variant.name!r}",
-                ),
-                scope,
-            )
-            rendered_variant = render_body(
-                selected=selected,
-                shape=shape,
-                context=variant_context,
-                segments=variant_segments,
-                region_lowerers=self._region_lowerers,
-                variant_name=variant.name,
-                variant_source=variant.body_source,
-            )
-            if rendered_variant.rendered is None:
-                return LoweringResult(
-                    specialization=None,
-                    diagnostics=sort_diagnostics(rendered_variant.diagnostics),
-                )
-            variant_safety = (
-                selected.implementation.safety
-                .merge(variant.safety)
-                .merge(rendered_variant.safety)
-            )
-            effective_safety = effective_safety.merge(variant_safety)
-            diagnostics.extend(rendered_variant.diagnostics)
-            call_dependency_origins.update(
-                variant_context.effects.call_dependency_origins
-            )
-            variant_bodies.append(
-                LoweredImplementationVariant(
-                    name=variant.name,
-                    body=LoweredBody.from_render_text(
-                        rendered_variant.rendered,
-                        unsafe_block_renderer=backend.syntax.render_unsafe_block,
-                        requires_unsafe=variant_safety.internal_unsafe,
-                    ),
-                    implementation_state=rendered_variant.implementation_state,
-                    safety=variant_safety,
-                )
-            )
-
-        type_param_segments = (segments, *(item[1] for item in variant_sources))
-        type_params = tuple(
-            LoweredTypeParam(
-                name=gp.name,
-                bounds=tuple(
-                    sorted(
-                        {
-                            bound
-                            for body in type_param_segments
-                            for bound in _type_param_bounds(
-                                body,
-                                gp.name,
-                                catalog_facts.primitive_type_param_bounds,
-                                selected.extension.name,
-                            )
-                        }
-                    )
-                ),
-                base_type_constraints=gp.base_type_constraints,
-                specialize_base=gp.specialize_base,
-                base_type_binding=context.env.simd_type_param_base_bindings.get(
-                    gp.name
-                ),
-                base_type_binding_spelling=(
-                    backend.types.scalar_spelling(binding)
-                    if (
-                        binding := context.env.simd_type_param_base_bindings.get(
-                            gp.name
-                        )
-                    )
-                    is not None
-                    else None
-                ),
-            )
-            for gp in selected.primitive.generic_params
-            if gp.kind == "simd_type"
-        )
-        type_param_bounds = {
-            type_param.name: type_param.bounds for type_param in type_params
-        }
-        ordered_dependency_origins = tuple(
-            sorted(call_dependency_origins, key=origin_sort_key)
-        )
-        for origin in ordered_dependency_origins:
-            if (
-                message := symbolic_call_dependency_error(
-                    origin.dependency,
-                    type_param_bounds,
-                )
-            ) is not None:
-                return _error(
-                    "TSL-LOWER-INVALID-SYMBOLIC-CALL-DEPENDENCY",
-                    message,
-                    source=_implementation_source(selected),
-                )
-
-        specialization = LoweredSpecialization(
-            backend_id=backend.backend_id,
-            primitive_name=selected.primitive.name,
-            source_primitive_name=selected.primitive.name,
-            # Emit the ISA name (avx2), not the internal block name (avx2_vl):
-            # the `_vl` distinction only steers selection, never the generated type.
-            extension_name=context.env.extension.isa_name,
-            type_tag=context.env.type_tag,
+        resolved_signature = ResolvedSpecializationSignature(
+            shape=shape,
+            parameters=parameters,
             base_type_spelling=base_type_spelling,
             register_spelling=register_spelling,
-            result_kind=shape.result_kind,
-            param_names=parameters,
-            param_kinds=shape.param_kinds,
-            body=body,
-            source_signature=selected.primitive.signature,
-            source_attributes=tuple(
-                sorted(selected.primitive.attributes.items())
-            ),
-            primitive_semantics=LoweredPrimitiveSemantics(
-                overload=catalog.resolve_primitive_overload(selected.primitive),
-                arithmetic=selected.primitive.arithmetic,
-                operation=selected.primitive.operation,
-                preconditions=selected.primitive.preconditions,
-                memory=selected.primitive.memory,
-                memory_alignment=_lowered_memory_alignment(
-                    selected.primitive
-                ),
-                conversion=selected.primitive.conversion,
-                shift=selected.primitive.shift,
-            ),
-            param_identity_tokens=tuple(
-                self._support.overload_identity_token(
-                    kind,
-                    register_is_base=self._support.register_is_base(
-                        context.env.extension
-                    ),
-                )
-                for kind in shape.param_kinds
-            ),
             param_type_overrides=param_type_overrides,
             vector_spelling=vector_spelling,
             index_register_spelling=index_register_spelling,
             native_register_spelling=native_register_spelling,
             uses_sized_vector=uses_sized_vector,
             lane_parameter=lane_parameter,
-            axis=tuple(
-                (key, selected.primitive.attributes[key])
-                for key in sorted(selected.primitive.attributes)
-                if key in BOOLEAN_WILDCARD_ATTRIBUTES
-            ),
+            target=target,
             immediate=immediate,
             immediate_range=immediate_range,
             immediate_valid_range=immediate_valid_range,
             arithmetic_preconditions=arithmetic_preconditions,
-            # `generic_params` split by kind: `bool`/`int` are non-type (const) params; a
-            # `simd_type` is a free type param (see `type_params`).
-            generic_params=tuple(
-                (gp.name, backend.types.const_param_type(gp.kind), gp.default)
-                for gp in selected.primitive.generic_params
-                if gp.kind != "simd_type"
-            ),
-            type_params=type_params,
-            result_vector_param=(
-                selected.primitive.result_target[1]
-                if selected.primitive.result_target is not None
-                and selected.primitive.result_target[0] == RESULT_DIM_VECTOR
-                else None
-            ),
-            # True only when the extension declares its register type as the base type.
-            # Other zero-width/sized vectors may still use array-backed registers, so this is
-            # a source capability, not a vector_bits shortcut.
-            register_is_base=self._support.register_is_base(context.env.extension),
-            target=target,
-            mask_policy=selected.primitive.mask_mode,
-            lane_list_params=tuple(context.env.lane_list_params.values()),
-            required_features=selected.required_features,
-            required_compiler_capabilities=(
-                selected.required_compiler_capabilities
-            ),
-            call_dependency_origins=ordered_dependency_origins,
-            unresolved_call_preconditions=tuple(
-                obligation
-                for origin in ordered_dependency_origins
-                for obligation in origin.unresolved_preconditions
-            ),
-            implementation_state=default_body.implementation_state,
-            safety=effective_safety,
-            variant_bodies=tuple(variant_bodies),
-            documentation=primitive_documentation(
-                brief=selected.primitive.brief_description,
-                detailed=selected.primitive.detailed_description,
-                semantics=selected.primitive.semantics,
-            ),
-            source=_implementation_source(selected),
         )
-        return LoweringResult(
-            specialization=specialization,
-            diagnostics=sort_diagnostics(diagnostics),
+        return assemble_specialization(
+            selected=selected,
+            env=context.env,
+            resolved=resolved_signature,
+            bodies=bodies,
+            primitive_type_param_bounds=(
+                catalog_facts.primitive_type_param_bounds
+            ),
         )
 
     def _facts_for(self, catalog: Catalog) -> _LowererCatalogFacts:
@@ -609,75 +374,6 @@ def _arithmetic_preconditions(
             lane_bit_width=info.bit_width,
         ),
     )
-
-
-def _checked_precondition_dependencies(
-    selected: SelectedImplementation,
-    *,
-    backend_id: str,
-    result_kind: str,
-    target: TargetVector | None,
-) -> tuple[CallDependencyOrigin, ...]:
-    current = VectorIdentity(selected.type_tag, selected.extension.isa_name)
-    dependencies: list[CallDependencyOrigin] = []
-    has_checked_condition = False
-    for precondition in selected.primitive.preconditions:
-        descriptor = PRECONDITION_DESCRIPTORS[precondition.kind]
-        if not precondition_applies_to_type(precondition, selected.type_tag):
-            continue
-        if descriptor.hazard is PreconditionHazard.CATASTROPHIC:
-            has_checked_condition = True
-        check_primitives = descriptor.check_primitives
-        if selected.primitive.mask_mode is not None:
-            check_primitives += descriptor.masked_check_primitives
-        dependencies.extend(
-            CallDependencyOrigin(
-                dependency=CallDependency(
-                    primitive=primitive.value,
-                    mask_policy=None,
-                    source=current,
-                ),
-                origin=f"checked precondition {precondition.kind.value!r}",
-                kind=CallDependencyOriginKind.CHECKED_GUARD,
-                source=precondition.source,
-            )
-            for primitive in check_primitives
-        )
-    if (
-        backend_id == "cpp"
-        and has_checked_condition
-        and result_kind in {"v", "vidx", "m"}
-    ):
-        result_vector: GenericVectorReference | VectorIdentity
-        result_target = selected.primitive.result_target
-        if result_target is not None and result_target[0] == RESULT_DIM_VECTOR:
-            base_binding = next(
-                (
-                    binding.base_tag
-                    for binding in selected.simd_type_base_bindings
-                    if binding.param_name == result_target[1]
-                ),
-                None,
-            )
-            result_vector = GenericVectorReference(result_target[1], base_binding)
-        elif target is not None:
-            result_vector = VectorIdentity(target.base_tag, target.extension_isa)
-        else:
-            result_vector = current
-        placeholder_primitive = "mask_false" if result_kind == "m" else "set_zero"
-        dependencies.append(
-            CallDependencyOrigin(
-                dependency=CallDependency(
-                    primitive=placeholder_primitive,
-                    mask_policy=None,
-                    source=result_vector,
-                ),
-                origin="C++ checked failure value",
-                kind=CallDependencyOriginKind.CHECKED_GUARD,
-                source=selected.primitive.source,
-            )
-        )
-    return tuple(dependencies)
 
 
 def _resolve_immediate_range(
@@ -811,19 +507,6 @@ def varying_positions(specs: tuple[LoweredSpecialization, ...]) -> tuple[int, ..
     arity = len(specs[0].param_kinds)
     return tuple(
         i for i in range(arity) if len({spec.param_kinds[i] for spec in specs}) > 1
-    )
-
-
-def _lowered_memory_alignment(
-    primitive: Primitive,
-) -> LoweredMemoryAlignment | None:
-    if primitive.memory is None:
-        return None
-    resolved = resolve_memory_alignment(primitive.attributes)
-    return (
-        None
-        if resolved is None
-        else LoweredMemoryAlignment(axis_name=resolved[0], mode=resolved[1])
     )
 
 

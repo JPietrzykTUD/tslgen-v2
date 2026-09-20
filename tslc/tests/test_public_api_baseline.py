@@ -78,12 +78,25 @@ def test_public_api_matches_reviewed_v1_baseline() -> None:
     profiles_by_backend = exact["profiles_by_backend"]
     assert set(profiles_by_backend) == {"cpp", "rust"}
     assert profiles_by_backend["rust"] == [
+        "neon",
+        "scalar",
+        "wasm32-simd128",
         "avx",
         "avx2",
+        "cannonlake",
+        "cascadelake",
+        "cooperlake",
+        "icelake_rockerlake",
+        "kml",
         "knl",
+        "sapphire_emerald_granite_rapids",
+        "skylake",
         "sse",
         "sse2",
         "sse3",
+        "tigerlake",
+        "zen4",
+        "zen5",
     ]
     assert {"scalar", "sve", "sve128", "sve256", "sve512", "rvv"} <= set(
         profiles_by_backend["cpp"]

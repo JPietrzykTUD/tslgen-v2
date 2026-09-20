@@ -18,10 +18,10 @@ from tslc.render.rust_static_selection import (
 )
 from tslc.value_tests.model import ValueTestProjectPlan
 from tslc.value_tests.compile_failure import (
-    compile_failure_target_name,
     render_cpp_compile_failure,
     render_rust_compile_failure,
 )
+from tslc.value_tests.identity import compile_failure_target_name
 from tslc.value_tests.render_cpp import render_cpp_values_runner
 from tslc.value_tests.render_rust import render_rust_values_file
 

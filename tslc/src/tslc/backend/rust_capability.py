@@ -6,14 +6,19 @@ from typing import TYPE_CHECKING
 
 from tslc.backend.capability import (
     BackendCapability,
+    BackendProjectConfigSpec,
     BackendPolicyInputs,
     BackendDocumentationFormatter,
     DocumentationSiteInput,
+    ExtensionHeaderGroupProjector,
     GeneratedDocumentationBuilder,
     GeneratedDocumentationSpec,
     GeneratedFormatSpec,
 )
-from tslc.backend.helper_requirements import RUST_HELPER_MANIFEST
+from tslc.backend.helper_requirements import (
+    BackendHelperPlan,
+    RUST_HELPER_MANIFEST,
+)
 from tslc.backend.rust import RustBackend
 from tslc.backend.rust_algorithm_plan import plan_rust_algorithm
 from tslc.backend.rust_api_planner import (
@@ -22,6 +27,7 @@ from tslc.backend.rust_api_planner import (
 )
 from tslc.backend.rust_dispatch import plan_rust_dispatch
 from tslc.backend.rust_policy_selection import (
+    RustPolicySelectionProfile,
     plan_rust_policy_selection,
     validate_rust_policy_manifest_profiles,
 )
@@ -29,17 +35,26 @@ from tslc.backend.rust_policy_manifest import (
     RustPolicyManifest,
     load_rust_policy_manifest,
 )
+from tslc.backend.rust_package import (
+    DEFAULT_RUST_PACKAGE_CONFIG,
+    RustPackageConfig,
+    parse_rust_package_config,
+)
 from tslc.backend.rust_static_selection import (
     RustStaticSelectionPlan,
     plan_rust_static_selection,
 )
-from tslc.backend.rust_policy_consumption import plan_rust_policy_consumption
+from tslc.backend.rust_policy_consumption import (
+    RustPolicyMappingRenderer,
+    plan_rust_policy_consumption,
+)
 from tslc.backend.rust_translation import RustBackendDialect
 from tslc.backend.rust_verification import (
     rust_verify_profile,
     rust_verify_profiles,
 )
 from tslc.backend.rust_validation import validate_rust_profiles
+from tslc.benchmark.identity import benchmark_slot_identity_hash
 from tslc.benchmark.planner import BenchmarkPlanner
 from tslc.benchmark.render_rust import rust_benchmark_artifacts
 from tslc.catalog.model import Catalog
@@ -80,7 +95,9 @@ def rust_policy_inventory_validation(
     policy_inputs: BackendPolicyInputs,
 ) -> tuple[Diagnostic, ...]:
     return validate_rust_policy_manifest_profiles(
-        profiles, _rust_policy_manifest(policy_inputs)
+        profiles,
+        _rust_policy_manifest(policy_inputs),
+        RUST_BACKEND.extension_header_group,
     )
 
 
@@ -117,6 +134,7 @@ def rust_benchmark_plan(
     profiles: tuple[EmittedProfile, ...],
     value_tests: ValueTestProjectPlan,
     policy_inputs: BackendPolicyInputs,
+    extension_header_group: ExtensionHeaderGroupProjector,
 ) -> BenchmarkProjectPlan:
     return BenchmarkPlanner(
         catalog,
@@ -124,7 +142,17 @@ def rust_benchmark_plan(
         supported_admissions=(
             _rust_policy_manifest(policy_inputs).benchmark_admission_set
         ),
+        slot_identity=benchmark_slot_identity_hash,
+        extension_header_group=extension_header_group,
     ).plan(profiles, value_tests)
+
+
+def rust_policy_mapping_renderer(
+    profile: RustPolicySelectionProfile,
+) -> RustPolicyMappingRenderer:
+    """Create the profile-bound renderer for Rust policy mappings."""
+
+    return RustBackend(policy_selection=profile).render_policy_selection_impl
 
 
 def rust_backend_artifacts(
@@ -135,14 +163,23 @@ def rust_backend_artifacts(
     media_type: str,
     config: ProjectRenderConfig,
     policy_inputs: BackendPolicyInputs,
+    helper_plan: BackendHelperPlan,
 ) -> list[Artifact]:
     """Render Rust from one frozen selection/consumption projection."""
 
+    package_config = (
+        config.get(_BACKEND_ID, RustPackageConfig)
+        or DEFAULT_RUST_PACKAGE_CONFIG
+    )
     selection_plan = plan_rust_policy_selection(
-        profiles, _rust_policy_manifest(policy_inputs)
+        profiles,
+        _rust_policy_manifest(policy_inputs),
+        RUST_BACKEND.extension_header_group,
     )
     static_selection_plan = plan_rust_static_selection(profiles)
-    algorithm_plan = plan_rust_algorithm(profiles, static_selection_plan)
+    algorithm_plan = plan_rust_algorithm(
+        profiles, static_selection_plan, helper_plan
+    )
     facade_plan = plan_rust_facade(profiles, static_selection_plan)
     dispatch_plan = plan_rust_dispatch(
         profiles,
@@ -150,7 +187,11 @@ def rust_backend_artifacts(
         facade_plan,
     )
     consumption_plan = plan_rust_policy_consumption_render(
-        plan_rust_policy_consumption(benchmarks, selection_plan),
+        plan_rust_policy_consumption(
+            benchmarks,
+            selection_plan,
+            mapping_renderer=rust_policy_mapping_renderer,
+        ),
         static_selection_plan,
     )
     benchmark_layout_plan = plan_rust_benchmark_layout(
@@ -168,14 +209,14 @@ def rust_backend_artifacts(
             dispatch_plan=dispatch_plan,
             consumption_plan=consumption_plan,
             benchmark_layout_plan=benchmark_layout_plan,
-            package_config=config.rust_package,
+            package_config=package_config,
         ),
         *rust_test_artifacts(
             value_tests,
             assets,
             media_type=media_type,
             static_selection_plan=static_selection_plan,
-            package_config=config.rust_package,
+            package_config=package_config,
         ),
         *rust_benchmark_artifacts(
             benchmarks,
@@ -205,6 +246,7 @@ def rust_primitive_preview(
     policy_selection = plan_rust_policy_selection(
         (profile,),
         _rust_policy_manifest(policy_inputs),
+        RUST_BACKEND.extension_header_group,
     ).profile(
         profile.profile.name
     )
@@ -223,6 +265,7 @@ RUST_BACKEND = BackendCapability(
     backend_id="rust",
     root_path="rust",
     artifact_media_type="text/rust",
+    preview_file_suffix="rs",
     dialect_factory=create_rust_dialect,
     artifact_renderer=rust_backend_artifacts,
     verify_profiles=rust_profile_verification,
@@ -231,6 +274,10 @@ RUST_BACKEND = BackendCapability(
     verify_machine_profile=rust_verify_profile,
     toolchain_commands=rust_toolchain_commands,
     documentation_formatter_factory=rust_documentation_formatter,
+    project_config=BackendProjectConfigSpec(
+        table_name="rust_package",
+        parse=parse_rust_package_config,
+    ),
     benchmark_plan_builder=rust_benchmark_plan,
     helper_manifest=RUST_HELPER_MANIFEST,
     additional_closure_seeds=rust_facade_closure_seed_primitives,
@@ -259,6 +306,7 @@ __all__ = [
     "create_rust_dialect",
     "create_rust_verify_driver",
     "rust_profile_verification",
+    "rust_policy_mapping_renderer",
     "rust_benchmark_plan",
     "rust_documentation_formatter",
     "rust_value_test_artifacts",

@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from tslc.lsp.backend_selection import select_authoring_backend
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog
 from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS, SCALAR_TYPE_ORDER
@@ -39,6 +40,8 @@ class SpecializationSlot:
 @dataclass(frozen=True, slots=True)
 class SpecializationContext:
     primitive: str | None
+    backend: str
+    preview_file_suffix: str
     contextual_extensions: tuple[str, ...]
     contextual_types: tuple[str, ...]
     profiles: tuple[str, ...]
@@ -60,6 +63,8 @@ class SpecializationContext:
     def payload(self) -> dict[str, object]:
         return {
             "primitive": self.primitive,
+            "backend": self.backend,
+            "previewFileSuffix": self.preview_file_suffix,
             "extension": self.extension,
             "type": self.type_tag,
             "contextualExtensions": list(self.contextual_extensions),
@@ -82,18 +87,28 @@ def specialization_context(
     parsed: OuterTslParseResult | None,
     profiles: Mapping[str, MachineProfile],
     *,
-    backend: str,
+    backend: str | None,
+    backends: tuple[str, ...] = (),
     path: Path | None = None,
     line: int | None = None,
     column: int | None = None,
 ) -> SpecializationContext:
     """Return cursor facts and selector-valid slots without lowering or rendering."""
 
+    selected_backend = select_authoring_backend(backends, backend)
     profile_names = tuple(sorted(profiles))
     scope = _source_scope(parsed, path, line, column)
     primitive = scope.primitive
     if primitive is None:
-        return SpecializationContext(None, (), (), profile_names, ())
+        return SpecializationContext(
+            primitive=None,
+            backend=selected_backend.backend_id,
+            preview_file_suffix=selected_backend.preview_file_suffix,
+            contextual_extensions=(),
+            contextual_types=(),
+            profiles=profile_names,
+            slots=(),
+        )
 
     contextual_extensions = _contextual_extensions(catalog, scope.selector_path)
     contextual_types = _contextual_types(catalog, primitive, scope.selector_path)
@@ -105,7 +120,7 @@ def specialization_context(
             profiles[profile_name],
             primitive.name,
             DEFAULT_SCALAR_TYPE_TAGS,
-            backend_id=backend,
+            backend_id=selected_backend.backend_id,
             compiler_capabilities=None,
         )
         slots.update(
@@ -138,12 +153,14 @@ def specialization_context(
         )
     )
     return SpecializationContext(
-        primitive.name,
-        contextual_extensions,
-        contextual_types,
-        profile_names,
-        ordered,
-        (
+        primitive=primitive.name,
+        backend=selected_backend.backend_id,
+        preview_file_suffix=selected_backend.preview_file_suffix,
+        contextual_extensions=contextual_extensions,
+        contextual_types=contextual_types,
+        profiles=profile_names,
+        slots=ordered,
+        implementation_source=(
             _source_span(scope.implementation_source)
             if scope.implementation_source is not None
             else None

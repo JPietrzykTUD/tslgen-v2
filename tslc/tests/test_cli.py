@@ -259,6 +259,61 @@ def test_cli_backend_profile_scopes_are_forwarded(monkeypatch, capsys) -> None:
     assert capsys.readouterr().err == ""
 
 
+@pytest.mark.parametrize(
+    ("arguments", "expected"),
+    (
+        ((), {"rust": ("scalar", "avx2")}),
+        (("--profiles", "scalar"), {}),
+        (
+            ("--backend-profiles", "rust=skylake-oneapi"),
+            {"rust": ("skylake-oneapi",)},
+        ),
+        (("--backends", "cpp"), {}),
+    ),
+)
+def test_cli_resolves_configured_backend_profile_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    arguments: tuple[str, ...],
+    expected: dict[str, tuple[str, ...]],
+) -> None:
+    (tmp_path / "tslc.toml").write_text(
+        "\n".join(
+            (
+                "[tslc]",
+                'sources = ["data"]',
+                'machine_profiles = "profiles.json"',
+                'backends = ["cpp", "rust"]',
+                "[tslc.backend_profiles]",
+                'rust = ["scalar", "avx2"]',
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+    calls: dict[str, object] = {}
+
+    def fake_generate_project(source_paths, **kwargs):
+        calls["generate"] = (source_paths, kwargs)
+        return SimpleNamespace(
+            diagnostics=(),
+            coverage=(),
+            artifacts=SimpleNamespace(artifacts=()),
+            rendered=None,
+        )
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(cli, "generate_project", fake_generate_project)
+
+    rc = cli.main(["generate", *arguments, "--no-format"])
+
+    assert rc == 0
+    _, generate_kwargs = calls["generate"]
+    assert generate_kwargs.get("backend_profiles", {}) == expected
+    assert capsys.readouterr().err == ""
+
+
 def test_legacy_cli_resolves_omitted_backends_from_live_registry(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

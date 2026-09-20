@@ -30,6 +30,7 @@ from tslc.backend.rust_static_public_declarations import (
     rust_static_declaration_holes,
 )
 from tslc.backend.registry import create_backend_dialect
+from tslc.backend.translation import BackendLoweringPolicy
 from tslc.catalog.call_preconditions import (
     CallPreconditionObligation,
     CallPreconditionObligationStatus,
@@ -43,16 +44,55 @@ from tslc.catalog.memory import (
 )
 from tslc.catalog.model import Catalog, ImplementationSafety, PrimitiveMaskMode
 from tslc.catalog.preconditions import (
-    PreconditionCheckPrimitive,
     PreconditionErrorKind,
     PreconditionKind,
 )
-from tslc.diagnostics import has_errors
+from tslc.catalog.semantics import (
+    COMPARE_EQUAL_REQUIREMENT,
+    MASK_ALL_FALSE_REQUIREMENT,
+    MASK_AND_REQUIREMENT,
+    MASK_POPULATION_COUNT_REQUIREMENT,
+    MASK_SET_LANE_REQUIREMENT,
+    RUNTIME_LANE_EXTRACT_REQUIREMENT,
+    VECTOR_ZERO_REQUIREMENT,
+    PrimitiveProviderRequirement,
+    ResolvedPrimitiveProvider,
+)
+from tslc.diagnostics import Diagnostic, has_errors
 from tslc.lower.lowerer import LoweredSpecialization, LoweredTypeParam, Lowerer
 from tslc.select.selector import Selector
 
 
 _FIXTURES = Path(__file__).parent / "fixtures" / "checked_api"
+
+_CHECKED_PROVIDER_RENAMES: tuple[
+    tuple[PrimitiveProviderRequirement, str], ...
+] = (
+    (VECTOR_ZERO_REQUIREMENT, "semantic_zero"),
+    (COMPARE_EQUAL_REQUIREMENT, "semantic_equal"),
+    (MASK_AND_REQUIREMENT, "semantic_mask_and"),
+    (MASK_ALL_FALSE_REQUIREMENT, "semantic_mask_false"),
+    (MASK_POPULATION_COUNT_REQUIREMENT, "semantic_mask_population"),
+    (MASK_SET_LANE_REQUIREMENT, "semantic_mask_set_lane"),
+    (RUNTIME_LANE_EXTRACT_REQUIREMENT, "semantic_runtime_extract"),
+)
+
+
+def _renamed_checked_provider_catalog(catalog: Catalog) -> Catalog:
+    names_by_identity: dict[int, str] = {}
+    for requirement, name in _CHECKED_PROVIDER_RENAMES:
+        provider = catalog.resolve_primitive_provider(requirement)
+        assert not isinstance(provider, Diagnostic), provider
+        names_by_identity[id(provider)] = name
+    return replace(
+        catalog,
+        primitives=tuple(
+            replace(primitive, name=names_by_identity[id(primitive)])
+            if id(primitive) in names_by_identity
+            else primitive
+            for primitive in catalog.primitives
+        ),
+    )
 
 
 def test_checked_memory_conditions_require_one_complete_shared_binding() -> None:
@@ -65,7 +105,12 @@ def test_checked_memory_conditions_require_one_complete_shared_binding() -> None
         parameter_name="memory",
         parameter_index=1,
         applicable_type_tags=("si32",),
-        check_primitives=(PreconditionCheckPrimitive.MASK_POPULATION_COUNT,),
+        check_primitives=(
+            ResolvedPrimitiveProvider(
+                MASK_POPULATION_COUNT_REQUIREMENT,
+                "mask_population_count",
+            ),
+        ),
         mask_parameter_name="mask",
         mask_parameter_index=0,
         memory_access=MemoryAccess.WRITE,
@@ -242,7 +287,7 @@ def test_convert_lanes_checked_uses_typed_lane_count_and_scalable_placeholder(
     assert "error = ::tsl::precondition_error::lane_count_mismatch;" in cpp
     assert "return ::tsl::set_zero<ToVec>();" in cpp
     assert any(
-        origin.origin == "C++ checked failure value"
+        origin.origin == "checked failure value"
         and origin.dependency.primitive == "set_zero"
         and getattr(origin.dependency.source, "parameter_name", None) == "ToVec"
         for origin in cpp_spec.call_dependency_origins
@@ -278,6 +323,54 @@ def test_total_integral_mask_test_gets_no_checked_twin_or_unsafe_surface(
     assert "test_imask_checked" not in rendered
     assert "pub unsafe fn test_imask" not in rendered
     assert "pub fn test_imask" in rendered
+
+
+def test_checked_failure_dependencies_follow_backend_policy_not_backend_name(
+    catalog: Catalog,
+    machine_profiles: Mapping[str, MachineProfile],
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["scalar"],
+            "div",
+            ("si32",),
+            backend_id="rust",
+        )
+        .selected
+        if len(selected.primitive.parameters) == 2
+    )
+    rust = create_backend_dialect(catalog, "rust")
+    ordinary = Lowerer().lower(slot, catalog, rust).specialization
+    assert ordinary is not None
+    assert not any(
+        origin.origin == "checked failure value"
+        for origin in ordinary.call_dependency_origins
+    )
+
+    policy = BackendLoweringPolicy(
+        checked_vector_failure_requirement=VECTOR_ZERO_REQUIREMENT,
+        checked_mask_failure_requirement=MASK_ALL_FALSE_REQUIREMENT,
+    )
+    opted_in = Lowerer().lower(
+        slot,
+        catalog,
+        replace(rust, lowering_policy=policy),
+    ).specialization
+
+    assert opted_in is not None
+    assert any(
+        origin.origin == "checked failure value"
+        and origin.dependency.primitive == "set_zero"
+        for origin in opted_in.call_dependency_origins
+    )
+    assert (
+        policy.checked_failure_requirement("m")
+        == MASK_ALL_FALSE_REQUIREMENT
+    )
+    assert policy.checked_failure_requirement("void") is None
 
 
 def test_empty_specialization_group_has_no_checked_or_unsafe_api() -> None:
@@ -318,7 +411,7 @@ def test_insert_and_mask_set_follow_the_same_declared_lane_contract(
         )
         assert f"return {placeholder};" in cpp
         assert any(
-            origin.origin == "C++ checked failure value"
+            origin.origin == "checked failure value"
             and origin.dependency.primitive in {"set_zero", "mask_false"}
             for origin in cpp_spec.call_dependency_origins
         )
@@ -437,6 +530,123 @@ def test_checked_divisor_dependencies_are_typed_and_domain_specific(
     assert "pub fn div<" in floating_public
     assert "pub unsafe fn div<" not in floating_public
     assert "div_checked" not in floating_public
+
+
+def test_checked_helpers_use_semantically_resolved_provider_names(
+    catalog: Catalog,
+    machine_profiles: Mapping[str, MachineProfile],
+) -> None:
+    renamed = _renamed_checked_provider_catalog(catalog)
+    cpp_div = _lowered(
+        renamed,
+        machine_profiles,
+        "div",
+        "cpp",
+        mask_mode=PrimitiveMaskMode.ZERO,
+        extension_name="generic",
+    )
+    cpp_gather = _lowered(
+        renamed,
+        machine_profiles,
+        "gather",
+        "cpp",
+        mask_mode=PrimitiveMaskMode.PASS_THROUGH,
+    )
+    rust_div = _lowered(
+        renamed,
+        machine_profiles,
+        "div",
+        "rust",
+        mask_mode=PrimitiveMaskMode.ZERO,
+        extension_name="generic",
+    )
+    rust_gather = _lowered(
+        renamed,
+        machine_profiles,
+        "gather",
+        "rust",
+        mask_mode=PrimitiveMaskMode.PASS_THROUGH,
+    )
+
+    cpp = "\n".join(
+        (
+            CppBackend().render_checked_wrappers("div_maskz", (cpp_div,)),
+            CppBackend().render_checked_wrappers("gather_mask", (cpp_gather,)),
+        )
+    )
+    rust = "\n".join(
+        (
+            RustBackend().render_primitive("div_maskz", (rust_div,)),
+            RustBackend().render_primitive("gather_mask", (rust_gather,)),
+        )
+    )
+
+    for _requirement, name in _CHECKED_PROVIDER_RENAMES:
+        assert name in cpp
+    for name in (
+        "semantic_zero",
+        "semantic_equal",
+        "semantic_mask_and",
+        "semantic_mask_population",
+        "semantic_runtime_extract",
+    ):
+        assert name in rust
+    assert "semantic_runtime_extract::<IndicesType>" in rust
+    assert "extract_value::<IndicesType>" not in rust
+    checked_dependencies = {
+        origin.dependency.primitive
+        for spec in (cpp_div, cpp_gather, rust_div, rust_gather)
+        for origin in spec.call_dependency_origins
+        if origin.kind.value == "checked_guard"
+    }
+    assert {name for _requirement, name in _CHECKED_PROVIDER_RENAMES} <= (
+        checked_dependencies
+    )
+
+
+@pytest.mark.parametrize("ambiguous", (False, True))
+def test_checked_lowering_reports_invalid_semantic_provider_catalogs(
+    catalog: Catalog,
+    machine_profiles: Mapping[str, MachineProfile],
+    ambiguous: bool,
+) -> None:
+    provider = catalog.resolve_primitive_provider(COMPARE_EQUAL_REQUIREMENT)
+    assert not isinstance(provider, Diagnostic), provider
+    if ambiguous:
+        primitives = (*catalog.primitives, replace(provider, name="other_equal"))
+        expected_code = "TSL-CATALOG-AMBIGUOUS-PRIMITIVE-PROVIDER"
+    else:
+        primitives = tuple(
+            replace(primitive, operation=None)
+            if primitive is provider
+            else primitive
+            for primitive in catalog.primitives
+        )
+        expected_code = "TSL-CATALOG-MISSING-PRIMITIVE-PROVIDER"
+    invalid = replace(catalog, primitives=primitives)
+    selected = Selector().select_profile(
+        invalid,
+        machine_profiles["avx2"],
+        "div",
+        ("si32",),
+        backend_id="cpp",
+    )
+    assert selected.diagnostics == ()
+    slot = next(
+        item
+        for item in selected.selected
+        if item.extension.name == "avx2" and item.primitive.mask_mode is None
+    )
+
+    result = Lowerer().lower(
+        slot,
+        invalid,
+        create_backend_dialect(invalid, "cpp"),
+    )
+
+    assert result.specialization is None
+    assert [diagnostic.code for diagnostic in result.diagnostics] == [expected_code]
+    assert result.diagnostics[0].span == slot.primitive.preconditions[0].source
 
 
 @pytest.mark.parametrize("primitive_name", ("div", "mod"))
@@ -692,7 +902,10 @@ def test_indexed_memory_checked_twins_use_typed_address_facts(
         PreconditionErrorKind.MISALIGNED,
     )
     assert condition.check_primitives == (
-        PreconditionCheckPrimitive.VECTOR_EXTRACT_LANE,
+        ResolvedPrimitiveProvider(
+            RUNTIME_LANE_EXTRACT_REQUIREMENT,
+            "extract_value_at",
+        ),
     )
 
     cpp = CppBackend().render_checked_wrappers("gather", (gather,))
@@ -768,6 +981,27 @@ def test_indexed_memory_checked_twins_use_typed_address_facts(
     )
     assert "IndicesType::lane_count() > S::lane_count()" in partial_rust
     assert "0..IndicesType::lane_count()" in partial_rust
+
+
+def test_index_pointer_gather_does_not_publish_an_uncheckable_twin(
+    catalog: Catalog,
+    machine_profiles: Mapping[str, MachineProfile],
+) -> None:
+    cpp = _lowered(catalog, machine_profiles, "gather_narrow", "cpp")
+    rust = _lowered(catalog, machine_profiles, "gather_narrow", "rust")
+
+    assert cpp.primitive_semantics.preconditions
+    assert rust.primitive_semantics.preconditions
+    assert cpp.checked_primitive_providers == ()
+    assert rust.checked_primitive_providers == ()
+    assert checked_api_plan((cpp,)) is None
+    assert checked_api_plan((rust,)) is None
+    assert "gather_narrow_checked" not in CppBackend().render_checked_wrappers(
+        "gather_narrow", (cpp,)
+    )
+    assert "gather_narrow_checked" not in RustBackend().render_primitive_public(
+        "gather_narrow", (rust,)
+    )
 
 
 def test_indexed_checked_backends_reject_ambiguous_vector_type_ownership(

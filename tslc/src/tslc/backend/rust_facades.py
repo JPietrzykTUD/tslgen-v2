@@ -23,13 +23,13 @@ from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 @dataclass(frozen=True, slots=True)
 class RustAlgorithmPrimitiveFacade:
-    """One fully classified primitive facade ready for Rust formatting."""
+    """Finalized Rust primitive names with an optional public facade shape."""
 
     primitive_name: str
     function_name: str
     trait_name: str
     caller_unsafe: bool
-    kind: DataparallelPrimitiveFacadeKind
+    kind: DataparallelPrimitiveFacadeKind | None
     parameter_names: tuple[str, ...] = ()
     parameter_kinds: tuple[str, ...] = ()
     result_kind: str | None = None
@@ -40,6 +40,19 @@ class RustAlgorithmPrimitiveFacade:
     def __post_init__(self) -> None:
         if not self.primitive_name or not self.function_name or not self.trait_name:
             raise ValueError("Rust primitive facade records require identities")
+        if self.kind is None:
+            if (
+                self.parameter_names
+                or self.parameter_kinds
+                or self.result_kind is not None
+                or self.has_target
+                or self.memory_access is not None
+                or self.overload_parameter_positions
+            ):
+                raise ValueError(
+                    "Rust algorithm helper facades retain only finalized identities"
+                )
+            return
         is_memory = self.kind is DataparallelPrimitiveFacadeKind.CONTIGUOUS_MEMORY
         if is_memory != (self.memory_access is not None):
             raise ValueError("Rust memory facade records require typed memory access")
@@ -69,6 +82,31 @@ class RustAlgorithmPrimitiveFacade:
     @property
     def requires_rebind(self) -> bool:
         return self.has_target
+
+
+def plan_rust_algorithm_helper_facade(
+    specializations: tuple[LoweredSpecialization, ...],
+) -> RustAlgorithmPrimitiveFacade:
+    """Finalize one emitted helper's Rust function and trait identities."""
+
+    if not specializations:
+        raise ValueError("Rust algorithm helper facades require specializations")
+    primitive_names = tuple(
+        sorted({specialization.primitive_name for specialization in specializations})
+    )
+    if len(primitive_names) != 1:
+        raise ValueError(
+            "Rust algorithm helper specializations disagree on their finalized "
+            f"callable name: {list(primitive_names)!r}"
+        )
+    primitive_name = primitive_names[0]
+    return RustAlgorithmPrimitiveFacade(
+        primitive_name=primitive_name,
+        function_name=rust_raw_identifier(primitive_name),
+        trait_name=rust_primitive_trait_name(primitive_name),
+        caller_unsafe=public_call_requires_unsafe(specializations),
+        kind=None,
+    )
 
 
 def plan_rust_algorithm_primitive_facades(
@@ -133,6 +171,10 @@ def rust_algorithm_primitive_facades(
         raise ValueError("Rust primitive facades require a profile module path")
     parts: list[str] = []
     for facade in facades:
+        if facade.kind is None:
+            raise ValueError(
+                "helper-only Rust primitive facades cannot be public policy facades"
+            )
         function_name = facade.function_name
         if facade.kind is DataparallelPrimitiveFacadeKind.CONTIGUOUS_MEMORY:
             parts.append(
@@ -272,6 +314,7 @@ def _rust_facade_param_type(param_kind: str, vec: str, target_vec: str | None) -
 
 __all__ = (
     "RustAlgorithmPrimitiveFacade",
+    "plan_rust_algorithm_helper_facade",
     "plan_rust_algorithm_primitive_facades",
     "rust_algorithm_primitive_facades",
     "rust_primitive_tag_name",

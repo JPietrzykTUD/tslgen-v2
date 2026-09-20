@@ -137,6 +137,7 @@ class _RecordingSyntax:
 class _RecordingDialect:
     def __init__(self, inner, syntax: _RecordingSyntax) -> None:  # noqa: ANN001
         self.backend_id = inner.backend_id
+        self.lowering_policy = inner.lowering_policy
         self.types = inner.types
         self.intrinsics = inner.intrinsics
         self.templates = inner.templates

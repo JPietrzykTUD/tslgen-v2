@@ -209,11 +209,11 @@ inline typename Vec::register_type load_selected_vector(
         "selection-vector input indices must use an unsigned integral row-id type");
 
     if constexpr (std::is_same<Vec, scalar_vec>::value) {
-        return ::tsl::load<scalar_vec, false>(
+        return ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(
             selected_row_pointer<T, IndexT, Scale>(input, indices[0]));
     } else if constexpr (selected_index_can_use_gather_narrow<IndexT>()) {
         using index_vec = typename Vec::template with_base_type<IndexT>;
-        return ::tsl::gather_narrow<
+        return ::tsl::@{algorithm_helper_selected_read}<
             Vec,
             index_vec,
             selected_row_scale<T, Scale>()>(input, indices);

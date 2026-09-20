@@ -10,41 +10,49 @@
     {
       "name": "sse",
       "target_features": "sse",
+      "backend_selection_priority": {"rust": 100},
       "runner": {"kind": "sde", "profile": "mrm"}
     },
     {
       "name": "sse2",
       "target_features": "sse sse2",
+      "backend_selection_priority": {"rust": 200},
       "runner": {"kind": "sde", "profile": "mrm"}
     },
     {
       "name": "sse3",
       "target_features": "sse sse2 ssse3",
+      "backend_selection_priority": {"rust": 300},
       "runner": {"kind": "sde", "profile": "mrm"}
     },
     {
       "name": "avx",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx",
+      "backend_selection_priority": {"rust": 400},
       "runner": {"kind": "sde", "profile": "snb"}
     },
     {
       "name": "avx2",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand",
+      "backend_selection_priority": {"rust": 500},
       "runner": {"kind": "sde", "profile": "hsw"}
     },
     {
       "name": "knl",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd",
+      "backend_selection_priority": {"rust": 600},
       "runner": {"kind": "sde", "profile": "future"}
     },
     {
       "name": "kml",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512_vpopcntdq",
+      "backend_selection_priority": {"rust": 700},
       "runner": {"kind": "sde", "profile": "future"}
     },
     {
       "name": "skylake",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw",
+      "backend_selection_priority": {"rust": 800},
       "runner": {"kind": "sde", "profile": "skx"}
     },
     {
@@ -58,11 +66,13 @@
     {
       "name": "cannonlake",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512ifma avx512vbmi",
+      "backend_selection_priority": {"rust": 900},
       "runner": {"kind": "sde", "profile": "cnl"}
     },
     {
       "name": "cascadelake",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512_vnni",
+      "backend_selection_priority": {"rust": 1000},
       "runner": {"kind": "sde", "profile": "clx"}
     },
     {
@@ -76,6 +86,7 @@
     {
       "name": "cooperlake",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512_vnni avx512_bf16",
+      "backend_selection_priority": {"rust": 1100},
       "runner": {"kind": "sde", "profile": "cpx"}
     },
     {
@@ -89,6 +100,7 @@
     {
       "name": "icelake_rockerlake",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes",
+      "backend_selection_priority": {"rust": 1200},
       "runner": {"kind": "sde", "profile": "icl"}
     },
     {
@@ -102,16 +114,19 @@
     {
       "name": "tigerlake",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes avx512_vp2intersect",
+      "backend_selection_priority": {"rust": 1300},
       "runner": {"kind": "sde", "profile": "tgl"}
     },
     {
       "name": "zen4",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_bf16 avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes",
+      "backend_selection_priority": {"rust": 1400},
       "runner": {"kind": "sde", "profile": "future"}
     },
     {
       "name": "sapphire_emerald_granite_rapids",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_bf16 avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes avx512_fp16",
+      "backend_selection_priority": {"rust": 1500},
       "runner": {"kind": "sde", "profile": "spr"}
     },
     {
@@ -125,6 +140,7 @@
     {
       "name": "zen5",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 rdrand avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_bf16 avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes avx512_vp2intersect",
+      "backend_selection_priority": {"rust": 1600},
       "runner": {"kind": "sde", "profile": "future"}
     }
   ],
@@ -132,6 +148,7 @@
     {
       "name": "neon",
       "target_features": "neon",
+      "backend_selection_priority": {"rust": 100},
       "backend_flags": {"cpp": []},
       "runner": {"kind": "qemu-aarch64", "profile": "cortex-a76"}
     },
@@ -235,6 +252,7 @@
     {
       "name": "wasm32-simd128",
       "target_features": "simd128",
+      "backend_selection_priority": {"rust": 100},
       "backend_flags": {"cpp": []},
       "runner": {"kind": "wasmtime", "profile": "default"}
     }

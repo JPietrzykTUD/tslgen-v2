@@ -161,6 +161,10 @@ gated. Report unavailable generated verification rather than hiding it.
 - `CHARTER.md` is the stable compiler-specific design contract.
 - `DESCRIPTION.md` explains the current architecture and may change as owned
   modules or behavior change.
+- `docs/` owns the curated compiler manual published inside the generated TSL
+  documentation site. Its Python reference documents only the explicit
+  `tslc.api` facade; internal modules are not a public API by virtue of being
+  importable.
 
 Update these files when their claims cease to match active code or workflow,
 not as a substitute for tests or typed ownership.

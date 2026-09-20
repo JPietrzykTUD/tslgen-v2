@@ -26,12 +26,25 @@
     "rust": {
       "selection": "explicit",
       "profiles": [
+        "scalar",
         "sse",
         "sse2",
         "sse3",
         "avx",
         "avx2",
-        "knl"
+        "knl",
+        "kml",
+        "skylake",
+        "cannonlake",
+        "cascadelake",
+        "cooperlake",
+        "icelake_rockerlake",
+        "tigerlake",
+        "zen4",
+        "sapphire_emerald_granite_rapids",
+        "zen5",
+        "neon",
+        "wasm32-simd128"
       ]
     }
   },

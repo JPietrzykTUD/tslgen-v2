@@ -21,7 +21,7 @@ inline std::size_t predicate_unary_loop(
     const std::size_t chunk_count = count / lanes;
     std::size_t i = 0;
     for (std::size_t chunk = 0; chunk < chunk_count; ++chunk, i += lanes) {
-        auto x = ::tsl::load<Vec, input_aligned>(input + i);
+        auto x = ::tsl::@{algorithm_helper_contiguous_read}<Vec, input_aligned>(input + i);
         auto mask = invoke_op<Vec>(op, x);
         store_mask_storage<MaskLayout, Vec>(masks, chunk, i, mask);
     }
@@ -35,22 +35,22 @@ inline std::size_t predicate_unary_loop(
 
     if constexpr (is_row_mask_layout<MaskLayout>()) {
         for (std::size_t lane = 0; i < count; ++i, ++lane) {
-            auto x = ::tsl::load<scalar_vec, false>(input + i);
+            auto x = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(input + i);
             auto active = invoke_op<scalar_vec>(op, x);
             store_tail_mask_storage<MaskLayout, Vec>(
                 masks,
                 chunk_count,
                 i,
                 lane,
-                ::tsl::to_integral<scalar_vec>(active) != 0);
+                ::tsl::@{algorithm_helper_integral_mask}<scalar_vec>(active) != 0);
         }
         return row_mask_storage_count<MaskLayout>(count);
     } else {
         typename Vec::imask_type tail_mask{};
         for (std::size_t lane = 0; i < count; ++i, ++lane) {
-            auto x = ::tsl::load<scalar_vec, false>(input + i);
+            auto x = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(input + i);
             auto active = invoke_op<scalar_vec>(op, x);
-            if (::tsl::to_integral<scalar_vec>(active) != 0) {
+            if (::tsl::@{algorithm_helper_integral_mask}<scalar_vec>(active) != 0) {
                 tail_mask = imask_set_lane<Vec>(tail_mask, lane);
             }
         }
@@ -85,8 +85,8 @@ inline std::size_t predicate_binary_loop(
     const std::size_t chunk_count = count / lanes;
     std::size_t i = 0;
     for (std::size_t chunk = 0; chunk < chunk_count; ++chunk, i += lanes) {
-        auto x = ::tsl::load<Vec, left_aligned>(left + i);
-        auto y = ::tsl::load<Vec, right_aligned>(right + i);
+        auto x = ::tsl::@{algorithm_helper_contiguous_read}<Vec, left_aligned>(left + i);
+        auto y = ::tsl::@{algorithm_helper_contiguous_read}<Vec, right_aligned>(right + i);
         auto mask = invoke_op<Vec>(op, x, y);
         store_mask_storage<MaskLayout, Vec>(masks, chunk, i, mask);
     }
@@ -100,24 +100,24 @@ inline std::size_t predicate_binary_loop(
 
     if constexpr (is_row_mask_layout<MaskLayout>()) {
         for (std::size_t lane = 0; i < count; ++i, ++lane) {
-            auto x = ::tsl::load<scalar_vec, false>(left + i);
-            auto y = ::tsl::load<scalar_vec, false>(right + i);
+            auto x = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(left + i);
+            auto y = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(right + i);
             auto active = invoke_op<scalar_vec>(op, x, y);
             store_tail_mask_storage<MaskLayout, Vec>(
                 masks,
                 chunk_count,
                 i,
                 lane,
-                ::tsl::to_integral<scalar_vec>(active) != 0);
+                ::tsl::@{algorithm_helper_integral_mask}<scalar_vec>(active) != 0);
         }
         return row_mask_storage_count<MaskLayout>(count);
     } else {
         typename Vec::imask_type tail_mask{};
         for (std::size_t lane = 0; i < count; ++i, ++lane) {
-            auto x = ::tsl::load<scalar_vec, false>(left + i);
-            auto y = ::tsl::load<scalar_vec, false>(right + i);
+            auto x = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(left + i);
+            auto y = ::tsl::@{algorithm_helper_contiguous_read}<scalar_vec, false>(right + i);
             auto active = invoke_op<scalar_vec>(op, x, y);
-            if (::tsl::to_integral<scalar_vec>(active) != 0) {
+            if (::tsl::@{algorithm_helper_integral_mask}<scalar_vec>(active) != 0) {
                 tail_mask = imask_set_lane<Vec>(tail_mask, lane);
             }
         }

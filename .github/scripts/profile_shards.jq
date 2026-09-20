@@ -6,6 +6,9 @@ def cpp_profile_chunk_size($name):
   else 6
   end;
 def rust_profile_chunk_size: 1;
+# Cargo keeps a separate target tree per selected profile. Four quality profiles
+# leave bounded headroom on a GitHub-hosted runner while retaining useful shards.
+def rust_release_quality_chunk_size: 4;
 
 def chunks($n):
   . as $items
@@ -17,8 +20,8 @@ def supports_backend($backend):
 def auto_detect_gate:
   .auto_detect_gate // "";
 
-def profile_shards($backend; $name; $profiles; $chunk_size):
-  ($profiles | map(.name) | chunks($chunk_size)) as $chunks
+def named_profile_shards($backend; $name; $profiles; $chunk_size):
+  ($profiles | chunks($chunk_size)) as $chunks
   | $chunks
   | to_entries[]
   | {
@@ -26,6 +29,14 @@ def profile_shards($backend; $name; $profiles; $chunk_size):
       name: ($backend + "-" + $name + "-" + (.key | tostring)),
       profiles: (.value | join(","))
     };
+
+def profile_shards($backend; $name; $profiles; $chunk_size):
+  named_profile_shards(
+    $backend;
+    $name;
+    ($profiles | map(.name));
+    $chunk_size
+  );
 
 def backend_profile_shards($name; $profiles):
   profile_shards(
@@ -41,19 +52,30 @@ def backend_profile_shards($name; $profiles):
     rust_profile_chunk_size
   );
 
-def rust_coexistence_shard($release_policy):
+def rust_release_profiles($release_policy):
   $release_policy.backend_profiles.rust as $rust
   | if $rust.selection != "explicit" or ($rust.profiles | length) == 0
     then error("v1 Rust release profiles must use a non-empty explicit selection")
     else $rust.profiles
-    end
-  | . as $profiles
+    end;
+
+def rust_coexistence_shard($release_policy):
+  rust_release_profiles($release_policy) as $profiles
   | {
     backend: "rust",
-    name: "rust-x86-coexistence",
+    name: "rust-release-coexistence",
     profiles: ($profiles | join(",")),
     purpose: "coexistence"
   };
+
+def rust_release_quality_shards($release_policy):
+  named_profile_shards(
+    "rust";
+    "release-quality";
+    rust_release_profiles($release_policy);
+    rust_release_quality_chunk_size
+  )
+  | . + {purpose: "release-quality"};
 
 [
   (
@@ -67,5 +89,6 @@ def rust_coexistence_shard($release_policy):
         | backend_profile_shards($family + "-" + ($gate | gsub("_"; "-")); .)
       )
   ),
-  rust_coexistence_shard($release_policy[0])
+  rust_coexistence_shard($release_policy[0]),
+  rust_release_quality_shards($release_policy[0])
 ]

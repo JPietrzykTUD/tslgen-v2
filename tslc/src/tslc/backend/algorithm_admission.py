@@ -13,9 +13,12 @@ from tslc.backend.algorithm_surface import (
 )
 from tslc.backend.helper_requirements import (
     BackendHelperManifest,
+    BackendHelperPlan,
     PrimitiveRequirement,
 )
 from tslc.catalog.model import PrimitiveMaskMode
+from tslc.catalog.semantics import ResolvedPrimitiveProvider
+from tslc.diagnostics import Diagnostic
 from tslc.lower.lowerer import LoweredSpecialization
 
 
@@ -130,6 +133,8 @@ class AlgorithmRequirementGap:
     family_name: str
     form_name: str
     requirement: PrimitiveRequirement
+    provider: ResolvedPrimitiveProvider | None
+    provider_diagnostic: Diagnostic | None
 
     def __post_init__(self) -> None:
         if not all(
@@ -142,10 +147,14 @@ class AlgorithmRequirementGap:
             )
         ):
             raise ValueError("algorithm requirement gaps require complete context")
+        if (self.provider is None) == (self.provider_diagnostic is None):
+            raise ValueError(
+                "algorithm requirement gaps require either a provider or a diagnostic"
+            )
 
     @property
-    def primitive_name(self) -> str:
-        return self.requirement.source_name
+    def primitive_name(self) -> str | None:
+        return None if self.provider is None else self.provider.primitive_name
 
     @property
     def mask_policy(self) -> PrimitiveMaskMode | None:
@@ -158,11 +167,22 @@ class AlgorithmRequirementGap:
             if self.requirement.mask_policy is None
             else f"mask policy {self.requirement.mask_policy}"
         )
-        return (
+        context = (
             f"{self.backend_id} profile {self.profile_name!r} algorithm family "
             f"{self.family_name!r} form {self.form_name!r} requires helper "
             f"feature {self.feature_name!r}: "
-            f"missing primitive {self.requirement.source_name!r} ({mask})"
+        )
+        if self.provider is not None:
+            return (
+                context
+                + f"resolved primitive {self.provider.primitive_name!r} has no "
+                + f"profile specialization ({mask})"
+            )
+        assert self.provider_diagnostic is not None
+        return (
+            context
+            + "no semantic provider in the corpus; "
+            + self.provider_diagnostic.message
         )
 
 
@@ -302,21 +322,21 @@ def plan_algorithm_profile_admission(
     profile_name: str,
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
     requirements: BackendAlgorithmRequirements,
+    helper_plan: BackendHelperPlan,
     form_support: Callable[[AlgorithmCallableForm], AlgorithmBackendFormSupport],
-    *,
-    satisfied_requirements: frozenset[PrimitiveRequirement] = frozenset(),
 ) -> AlgorithmProfileAdmission:
     """Apply the same helper groups used for closure to one lowered profile."""
 
+    if helper_plan.manifest != requirements.helpers:
+        raise ValueError("algorithm admission helper plan does not match requirements")
     helpers = tuple(
         AlgorithmHelperAdmission(
             feature.name,
             tuple(
                 requirement
-                for requirement in requirements.helpers.missing_requirements(
+                for requirement in helper_plan.missing_requirements(
                     feature.name, by_primitive
                 )
-                if requirement not in satisfied_requirements
             ),
         )
         for feature in requirements.helpers.features
@@ -332,6 +352,7 @@ def plan_algorithm_profile_admission(
             requirements.family(family.name),
             requirements.mandatory_features,
             missing_by_feature,
+            helper_plan,
             form_support,
         )
         for family in ALGORITHM_SURFACE_FAMILIES
@@ -352,6 +373,7 @@ def _family_admission(
     requirements: AlgorithmFamilyRequirements,
     mandatory_features: tuple[str, ...],
     missing_by_feature: Mapping[str, tuple[PrimitiveRequirement, ...]],
+    helper_plan: BackendHelperPlan,
     form_support: Callable[[AlgorithmCallableForm], AlgorithmBackendFormSupport],
 ) -> AlgorithmFamilyAdmission:
     support = tuple(form_support(form) for form in family.callable_forms)
@@ -367,6 +389,8 @@ def _family_admission(
                 family.name,
                 form.name,
                 requirement,
+                helper_plan.provider(requirement),
+                helper_plan.unresolved_diagnostic(requirement),
             )
             for feature_name in tuple(
                 dict.fromkeys(

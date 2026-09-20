@@ -66,6 +66,7 @@ def _layout(tmp_path: Path | None = None) -> object:
             ("rust", "Cargo.toml"),
         ),
         generated_scope_additions=(("rust", ("fallback",)),),
+        generated_scope_omissions=(),
         shared_artifact_roots=("docs",),
     )
 
@@ -255,6 +256,21 @@ def test_bundle_layout_accepts_an_additive_backend_from_policy() -> None:
 
     assert bundles[-1].bundle_id == "next-portable"
     assert bundles[-1].generated_scope == ("portable",)
+
+
+def test_bundle_plan_applies_declared_scope_omissions_generically() -> None:
+    contract = _contract()
+    rust_backend = contract["backends"][1]
+    rust_backend["profiles"].insert(0, {"name": "scalar"})
+    layout = replace(
+        _layout(),
+        generated_scope_omissions=(("rust", ("scalar",)),),
+    )
+
+    bundles = release_bundles.expected_generated_bundles(contract, layout)
+
+    assert bundles[-1].profiles == ("scalar", "sse", "avx2")
+    assert bundles[-1].generated_scope == ("avx2", "fallback", "sse")
 
 
 @pytest.mark.parametrize(

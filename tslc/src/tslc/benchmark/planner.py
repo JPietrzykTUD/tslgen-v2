@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from hashlib import sha256
 import json
@@ -21,7 +21,6 @@ from tslc.benchmark.correctness import (
     vector_scalar_cases as _vector_scalar_correctness_cases,
 )
 from tslc.benchmark.identity import (
-    benchmark_slot_identity_hash,
     implementation_choice_body_hash,
     specialization_key,
     specialization_stable_id,
@@ -57,6 +56,20 @@ from tslc.value_tests.lane_math import tiling_preserves_lane_semantics, whole_la
 from tslc.value_tests.model import ValueTestCasePlan, ValueTestProjectPlan
 
 BENCHMARK_PROTOCOL_VERSION = 1
+BenchmarkSlotIdentity = Callable[[str, LoweredSpecialization], str]
+ExtensionHeaderGroup = Callable[[Extension | None], str | None]
+
+
+def _no_slot_identity(
+    profile_name: str, specialization: LoweredSpecialization
+) -> str:
+    del profile_name, specialization
+    return ""
+
+
+def _no_extension_header_group(extension: Extension | None) -> str | None:
+    del extension
+    return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,12 +98,18 @@ class BenchmarkPlanner:
         *,
         backend_id: str,
         supported_admissions: frozenset[BenchmarkScenarioAdmission] | None = None,
+        slot_identity: BenchmarkSlotIdentity | None = None,
+        extension_header_group: ExtensionHeaderGroup | None = None,
     ) -> None:
         if not backend_id:
             raise ValueError("benchmark planner requires a backend ID")
         self._catalog = catalog
         self._backend_id = backend_id
         self._supported_admissions = supported_admissions
+        self._slot_identity = slot_identity or _no_slot_identity
+        self._extension_header_group = (
+            extension_header_group or _no_extension_header_group
+        )
         self._harness = discover_harness_primitives(catalog)
 
     def plan(
@@ -127,6 +146,7 @@ class BenchmarkPlanner:
                                 backend_id,
                                 "unsupported",
                                 profile_admission_reason,
+                                self._slot_identity,
                             )
                         )
                         continue
@@ -138,6 +158,7 @@ class BenchmarkPlanner:
                                 backend_id,
                                 "unsupported",
                                 "overloaded selector slots require overload-specific policy identity",
+                                self._slot_identity,
                             )
                         )
                         continue
@@ -172,12 +193,20 @@ class BenchmarkPlanner:
                                 backend_id,
                                 "missing_correctness" if missing_correctness else "unsupported",
                                 reason,
+                                self._slot_identity,
                             )
                         )
                         continue
                     candidate_sets.extend(candidate_sets_for_spec)
                     coverage.append(
-                        _coverage(emitted_profile, spec, backend_id, "emitted", "")
+                        _coverage(
+                            emitted_profile,
+                            spec,
+                            backend_id,
+                            "emitted",
+                            "",
+                            self._slot_identity,
+                        )
                     )
             ordered_sets = tuple(sorted(candidate_sets, key=lambda item: item.stable_id))
             planned_profiles.append(
@@ -224,8 +253,9 @@ class BenchmarkPlanner:
     ) -> tuple[BenchmarkCandidateSet | None, str, bool]:
         primitive = _source_primitive(self._catalog, spec)
         extension = profile.extensions.get(spec.extension_name)
+        header_group = self._extension_header_group(extension)
         reason = _common_unsupported_reason(
-            spec, primitive, extension, self._backend_id
+            spec, primitive, extension, header_group
         )
         if reason is not None:
             return None, reason, False
@@ -237,6 +267,7 @@ class BenchmarkPlanner:
             profile=profile,
             specialization=spec,
             primitive_specializations=by_primitive[spec.primitive_name],
+            header_group=header_group,
             immediate_value=immediate_value,
             simd_type_base_bindings=simd_type_base_bindings,
         )
@@ -537,7 +568,7 @@ def _common_unsupported_reason(
     spec: LoweredSpecialization,
     primitive: Primitive | None,
     extension: Extension | None,
-    backend_id: str,
+    header_group: str | None,
 ) -> str | None:
     if primitive is None:
         return "source primitive is not present in the catalog"
@@ -573,16 +604,7 @@ def _common_unsupported_reason(
         return "only fixed-width hardware vectors are benchmarked"
     if not extension.default_test_target:
         return "extension is not enabled as a native value-test target"
-    from tslc.backend.registry import backend_capability
-
-    try:
-        capability = backend_capability(backend_id)
-    except ValueError:
-        capability = None
-    if (
-        capability is not None
-        and capability.extension_header_group(extension) is not None
-    ):
+    if header_group is not None:
         return "opt-in header-group extensions are not supported by benchmark planning"
     return None
 
@@ -758,6 +780,7 @@ def _coverage(
     backend_id: str,
     status: BenchmarkCoverageStatus,
     reason: str,
+    slot_identity: BenchmarkSlotIdentity,
 ) -> BenchmarkCoverageEntry:
     return BenchmarkCoverageEntry(
         backend_id=backend_id,
@@ -771,11 +794,7 @@ def _coverage(
         mask_policy=spec.mask_policy,
         axis=spec.axis,
         variant_names=spec.variant_names,
-        slot_hash=(
-            benchmark_slot_identity_hash(profile.profile.name, spec)
-            if backend_id == "rust"
-            else ""
-        ),
+        slot_hash=slot_identity(profile.profile.name, spec),
         status=status,
         reason=reason,
     )
@@ -804,4 +823,5 @@ __all__ = (
     "BENCHMARK_PROTOCOL_VERSION",
     "BenchmarkPlanner",
     "BenchmarkScenarioAdmission",
+    "BenchmarkSlotIdentity",
 )

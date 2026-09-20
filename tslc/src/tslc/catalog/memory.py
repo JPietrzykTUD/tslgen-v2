@@ -6,9 +6,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
+from typing import TYPE_CHECKING
 
-from tslc.catalog.semantics import PrimitiveOperation
 from tslc.diagnostics import SourceSpan
+
+if TYPE_CHECKING:
+    from tslc.catalog.semantics import PrimitiveOperation
 
 
 class MemoryAccess(StrEnum):
@@ -61,6 +64,8 @@ def resolve_memory_alignment(
 def memory_operations(access: MemoryAccess) -> frozenset[PrimitiveOperation]:
     """Return the semantic operations admitted by one memory access."""
 
+    from tslc.catalog.semantics import PrimitiveOperation
+
     return {
         MemoryAccess.READ: frozenset(
             {PrimitiveOperation.LOAD, PrimitiveOperation.LOAD_SCALAR}
@@ -81,7 +86,7 @@ MEMORY_ADDRESSING_DESCRIPTIONS: Mapping[MemoryAddressing, str] = MappingProxyTyp
     {
         MemoryAddressing.CONTIGUOUS: "Accesses consecutive elements in memory.",
         MemoryAddressing.INDEXED: (
-            "Accesses per-lane byte offsets computed from an index vector and scale."
+            "Accesses per-lane byte offsets computed from indices and a scale."
         ),
         MemoryAddressing.COMPACTED: (
             "Accesses consecutive elements selected by active mask lanes."
@@ -94,7 +99,7 @@ MEMORY_INDEXED_LANE_EXTENT_DESCRIPTIONS: Mapping[
     {
         MemoryIndexedLaneExtent.VECTOR: (
             "Accesses one index for every logical operation lane; the index "
-            "vector must cover those lanes."
+            "source must cover those lanes."
         ),
         MemoryIndexedLaneExtent.INDEX_VECTOR: (
             "Accesses one element for every supplied index lane; those lanes "

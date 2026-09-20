@@ -62,29 +62,34 @@ KNOWN_IMMEDIATE_PARAM_FIELDS = frozenset(
 )
 KNOWN_RETURN_TYPE_FIELDS = RESULT_DIMENSIONS
 KNOWN_PRIMITIVE_OVERLOAD_FIELDS = frozenset({"axis", "value", "primary"})
-KNOWN_PRIMITIVE_FIELDS = frozenset(
+KNOWN_PRIMITIVE_SEMANTIC_FIELDS = frozenset(
     {
         "arithmetic",
+        "conversion",
+        "memory",
+        "operation",
+        "operand_roles",
+        "preconditions",
+        "shift",
+    }
+)
+KNOWN_PRIMITIVE_FIELDS = frozenset(
+    {
         "benchmarks",
         "brief_description",
-        "conversion",
         "cross_lane",
         "detailed_description",
         "generic_params",
         "impls",
-        "memory",
-        "operation",
-        "operand_roles",
         "overload",
         "portability",
-        "preconditions",
         "param_types",
         "params",
         "return_type",
         "semantics",
-        "shift",
         "sImm_type",
         "tests",
+        *KNOWN_PRIMITIVE_SEMANTIC_FIELDS,
     }
 )
 KNOWN_PRIMITIVE_ATTRIBUTES = {

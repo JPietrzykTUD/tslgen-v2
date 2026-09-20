@@ -1,7 +1,9 @@
+:orphan:
+
 Specialization Explorer
 =======================
 
 The generated specialization explorer is a static, filterable view over the
 typed specialization data emitted for this documentation build.
 
-`Open the specialization explorer <specializations/index.html>`_
+`Open the specialization explorer <index.html>`_

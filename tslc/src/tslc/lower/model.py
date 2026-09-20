@@ -8,6 +8,7 @@ from enum import StrEnum
 from tslc.catalog.arithmetic import ARITHMETIC_INTEGER_IMMEDIATE_ZERO_MARKER
 from tslc.catalog.call_preconditions import CallPreconditionObligation
 from tslc.catalog.model import ImplementationSafety, PrimitiveMaskMode
+from tslc.catalog.semantics import ResolvedPrimitiveProvider
 from tslc.diagnostics import Diagnostic, SourceSpan
 from tslc.documentation import PrimitiveDocumentation
 from tslc.lower.context import LaneListParameter
@@ -118,6 +119,8 @@ class LoweredSpecialization:
     required_compiler_capabilities: frozenset[str] = frozenset()
     compiler_alternatives: tuple[LoweredSpecialization, ...] = ()
     call_dependency_origins: tuple[CallDependencyOrigin, ...] = ()
+    checked_primitive_providers: tuple[ResolvedPrimitiveProvider, ...] = ()
+    checked_failure_provider: ResolvedPrimitiveProvider | None = None
     unavailable_checked_dependency_origins: tuple[CallDependencyOrigin, ...] = ()
     unresolved_call_preconditions: tuple[CallPreconditionObligation, ...] = ()
     implementation_state: ImplementationState = ImplementationState.UNKNOWN

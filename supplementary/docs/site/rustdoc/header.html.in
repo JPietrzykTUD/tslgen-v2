@@ -1,0 +1,28 @@
+<header class="tslcSiteHeader" data-tslc-site-header>
+  <a class="tslcSiteBrand" data-tslc-site-path="" aria-label="TSL documentation home">
+    <img class="tslcSiteLogo" data-tslc-site-src="_static/tsl_logo_grey.svg" alt="">
+    <span class="tslcSiteBrandText">
+      <strong>Template SIMD Library</strong>
+      <small>Generated reference</small>
+    </span>
+  </a>
+  <nav class="tslcSiteNav" aria-label="Documentation">
+        @SITE_NAV_LINKS@
+  </nav>
+  <span class="tslcSiteMeta">Generated docs</span>
+</header>
+<script>
+(() => {
+  const header = document.currentScript.previousElementSibling;
+  const marker = "/rust/";
+  const markerIndex = window.location.pathname.lastIndexOf(marker);
+  if (!header || markerIndex < 0) return;
+  const siteRoot = window.location.pathname.slice(0, markerIndex + 1);
+  header.querySelectorAll("[data-tslc-site-path]").forEach((link) => {
+    link.href = siteRoot + link.dataset.tslcSitePath;
+  });
+  header.querySelectorAll("[data-tslc-site-src]").forEach((asset) => {
+    asset.src = siteRoot + asset.dataset.tslcSiteSrc;
+  });
+})();
+</script>

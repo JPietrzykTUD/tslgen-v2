@@ -307,7 +307,7 @@ pub mod detail {
         pub use super::super::mask::{clz, ctz, imask_extract, imask_insert, popcount};
         pub use super::super::scalar::{
             arith_add, arith_div, arith_mul, arith_rem, arith_sub, lane_get_unchecked,
-            lane_set_unchecked, require_same_lanes, saturating_cast_value, scalar_as_cast_value,
+            lane_set_unchecked, saturating_cast_value, scalar_as_cast_value,
         };
         #[cfg(target_arch = "x86_64")]
         pub use super::super::scalar::random_step_u64;

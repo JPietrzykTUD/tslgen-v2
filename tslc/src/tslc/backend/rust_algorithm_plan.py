@@ -24,6 +24,7 @@ from tslc.backend.algorithm_surface import (
 )
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.backend.helper_requirements import (
+    BackendHelperPlan,
     PrimitiveRequirement,
     RUST_HELPER_MANIFEST,
 )
@@ -34,6 +35,7 @@ from tslc.backend.rust_algorithm_public_declarations import (
 )
 from tslc.backend.rust_facades import (
     RustAlgorithmPrimitiveFacade,
+    plan_rust_algorithm_helper_facade,
     plan_rust_algorithm_primitive_facades,
 )
 from tslc.backend.rust_static_selection import (
@@ -41,6 +43,7 @@ from tslc.backend.rust_static_selection import (
     RustStaticVectorMapping,
 )
 from tslc.catalog.memory import MemoryAccess
+from tslc.catalog.semantics import ResolvedPrimitiveProvider
 from tslc.lower.lowerer import LoweredSpecialization
 
 
@@ -100,6 +103,35 @@ RUST_ALGORITHM_REQUIREMENTS = BackendAlgorithmRequirements(
     mandatory_features=("contiguous_memory",),
     optional_features=("gather_narrow",),
 )
+
+
+@dataclass(frozen=True, slots=True)
+class RustAlgorithmHelperBinding:
+    """One semantic helper bound to its source and emitted Rust identities."""
+
+    feature_name: str
+    requirement: PrimitiveRequirement
+    provider: ResolvedPrimitiveProvider | None
+    facade: RustAlgorithmPrimitiveFacade | None
+
+    def __post_init__(self) -> None:
+        if not self.feature_name:
+            raise ValueError("Rust algorithm helper bindings require a feature")
+        if (
+            self.provider is not None
+            and self.provider.requirement != self.requirement.provider
+        ):
+            raise ValueError("Rust algorithm helper binding has a foreign provider")
+        if self.provider is None and self.facade is not None:
+            raise ValueError(
+                "Rust algorithm helper facade requires a resolved source provider"
+            )
+        if self.facade is not None and self.facade.kind is not None:
+            raise ValueError("Rust algorithm helper bindings require helper-only facades")
+
+    @property
+    def supported(self) -> bool:
+        return self.facade is not None
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,6 +195,7 @@ class RustAlgorithmProfilePlan:
     implementation_targets: tuple[RustAlgorithmImplTarget, ...]
     read_facade: RustAlgorithmPrimitiveFacade | None
     write_facade: RustAlgorithmPrimitiveFacade | None
+    helper_bindings: tuple[RustAlgorithmHelperBinding, ...]
     admission: AlgorithmProfileAdmission
     family_modules: tuple[RustAlgorithmFamilyModulePlan, ...]
     selected_load_targets: tuple[RustAlgorithmSelectedLoadTarget, ...]
@@ -216,6 +249,30 @@ class RustAlgorithmProfilePlan:
             and self.write_facade.memory_access is not MemoryAccess.WRITE
         ):
             raise ValueError("Rust algorithm write binding has the wrong access")
+        expected_helper_keys = tuple(
+            (feature.name, requirement)
+            for feature in RUST_HELPER_MANIFEST.features
+            if feature.name != "contiguous_memory"
+            for requirement in feature.requirements
+        )
+        if tuple(
+            (binding.feature_name, binding.requirement)
+            for binding in self.helper_bindings
+        ) != expected_helper_keys:
+            raise ValueError(
+                "Rust algorithm helper bindings must follow the helper manifest"
+            )
+        for feature in RUST_HELPER_MANIFEST.features:
+            if feature.name == "contiguous_memory":
+                continue
+            bound = all(
+                binding.supported
+                for binding in self.helper_bindings_for(feature.name)
+            )
+            if bound != self.admission.helper(feature.name).supported:
+                raise ValueError(
+                    "Rust algorithm helper binding disagrees with feature admission"
+                )
         selected_mappings = tuple(
             target.mapping for target in self.selected_load_targets
         )
@@ -256,6 +313,27 @@ class RustAlgorithmProfilePlan:
     def helper(self, feature_name: str) -> AlgorithmHelperAdmission:
         return self.admission.helper(feature_name)
 
+    def helper_bindings_for(
+        self, feature_name: str
+    ) -> tuple[RustAlgorithmHelperBinding, ...]:
+        bindings = tuple(
+            binding
+            for binding in self.helper_bindings
+            if binding.feature_name == feature_name
+        )
+        if not bindings:
+            raise KeyError(f"Rust algorithm helper feature {feature_name!r} is unknown")
+        return bindings
+
+    def helper_binding(self, feature_name: str) -> RustAlgorithmHelperBinding:
+        bindings = self.helper_bindings_for(feature_name)
+        if len(bindings) != 1:
+            raise ValueError(
+                f"Rust algorithm helper feature {feature_name!r} does not bind "
+                "exactly one primitive"
+            )
+        return bindings[0]
+
 
 @dataclass(frozen=True, slots=True)
 class RustAlgorithmPlan:
@@ -287,6 +365,7 @@ class RustAlgorithmPlan:
 def plan_rust_algorithm(
     profiles: tuple[EmittedProfile, ...],
     static_selection: RustStaticSelectionPlan,
+    helper_plan: BackendHelperPlan,
 ) -> RustAlgorithmPlan:
     """Finalize algorithm support from lowered facts and exact static mappings."""
 
@@ -314,6 +393,7 @@ def plan_rust_algorithm(
                     else static_selection.fallback_native_mappings
                 ),
                 is_fallback=False,
+                helper_plan=helper_plan,
             )
         )
     fallback_module = static_selection.fallback_module
@@ -323,6 +403,7 @@ def plan_rust_algorithm(
         static_selection.fallback_mappings,
         static_selection.fallback_native_mappings,
         is_fallback=True,
+        helper_plan=helper_plan,
     )
     return RustAlgorithmPlan(tuple(planned_profiles), fallback)
 
@@ -334,21 +415,16 @@ def _plan_profile(
     native_mappings: tuple[RustStaticVectorMapping, ...],
     *,
     is_fallback: bool,
+    helper_plan: BackendHelperPlan,
 ) -> RustAlgorithmProfilePlan:
     memory = plan_contiguous_memory_primitive_facades(by_primitive)
-    semantic_memory_requirements = frozenset(
-        PrimitiveRequirement(
-            "load" if binding.memory_access is MemoryAccess.READ else "store"
-        )
-        for binding in (memory.read, memory.write)
-        if binding is not None
-    )
+    helper_bindings = _rust_algorithm_helper_bindings(by_primitive, helper_plan)
     admission = plan_algorithm_profile_admission(
         profile_name,
         by_primitive,
         RUST_ALGORITHM_REQUIREMENTS,
+        helper_plan,
         rust_algorithm_form_support,
-        satisfied_requirements=semantic_memory_requirements,
     )
     primitive_facades = plan_rust_algorithm_primitive_facades(
         by_primitive,
@@ -375,16 +451,50 @@ def _plan_profile(
         implementation_targets=_implementation_targets(static_mappings),
         read_facade=read_facade,
         write_facade=write_facade,
+        helper_bindings=helper_bindings,
         admission=admission,
         family_modules=_family_modules(admission),
         selected_load_targets=_selected_load_targets(
             static_mappings,
             by_primitive,
             admission.helpers,
+            helper_plan,
         ),
         primitive_facades=primitive_facades,
         requires_rebind=any(facade.requires_rebind for facade in primitive_facades),
     )
+
+
+def _rust_algorithm_helper_bindings(
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
+    helper_plan: BackendHelperPlan,
+) -> tuple[RustAlgorithmHelperBinding, ...]:
+    """Bind each semantic helper form to its finalized profile-local facade."""
+
+    if helper_plan.manifest != RUST_HELPER_MANIFEST:
+        raise ValueError("Rust algorithm planning requires the Rust helper plan")
+    bindings: list[RustAlgorithmHelperBinding] = []
+    for feature in RUST_HELPER_MANIFEST.features:
+        if feature.name == "contiguous_memory":
+            continue
+        for requirement in feature.requirements:
+            specializations = helper_plan.matching_specializations(
+                requirement,
+                by_primitive,
+            )
+            bindings.append(
+                RustAlgorithmHelperBinding(
+                    feature_name=feature.name,
+                    requirement=requirement,
+                    provider=helper_plan.provider(requirement),
+                    facade=(
+                        plan_rust_algorithm_helper_facade(specializations)
+                        if specializations
+                        else None
+                    ),
+                )
+            )
+    return tuple(bindings)
 
 
 def _family_modules(
@@ -449,27 +559,28 @@ def _selected_load_targets(
     mappings: tuple[RustStaticVectorMapping, ...],
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
     admissions: tuple[AlgorithmHelperAdmission, ...],
+    helper_plan: BackendHelperPlan,
 ) -> tuple[RustAlgorithmSelectedLoadTarget, ...]:
     selected_load = next(
         item for item in admissions if item.feature_name == "selected_load"
     )
     if not selected_load.supported:
         return ()
-    gather_requirement = RUST_HELPER_MANIFEST.requirements("gather_narrow")[0]
+    gather_requirement = helper_plan.manifest.requirements("gather_narrow")[0]
     gather_vectors = {
         (spec.extension_name, spec.base_type_spelling)
-        for spec in RUST_HELPER_MANIFEST.matching_specializations(
+        for spec in helper_plan.matching_specializations(
             gather_requirement, by_primitive
         )
     }
     array_vector_sets = [
         {
             (spec.extension_name, spec.base_type_spelling)
-            for spec in RUST_HELPER_MANIFEST.matching_specializations(
+            for spec in helper_plan.matching_specializations(
                 requirement, by_primitive
             )
         }
-        for requirement in RUST_HELPER_MANIFEST.requirements("selected_load")
+        for requirement in helper_plan.manifest.requirements("selected_load")
     ]
     array_vectors = (
         set.intersection(*array_vector_sets) if array_vector_sets else set()
@@ -499,6 +610,7 @@ def _selected_load_targets(
 __all__ = (
     "RUST_ALGORITHM_REQUIREMENTS",
     "RustAlgorithmFamilyModulePlan",
+    "RustAlgorithmHelperBinding",
     "RustAlgorithmImplTarget",
     "RustAlgorithmPlan",
     "RustAlgorithmProfilePlan",

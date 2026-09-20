@@ -15,7 +15,7 @@ This generated maintenance report tracks reviewed evidence for the implemented d
 
 ## Inventory summary
 
-- Exact generated runtime-failure sites: 156
+- Exact generated runtime-failure sites: 153
 - Exact typed public callable identities with at least one `caller_unsafe` implementation: 33
 - Checked source-contract coverage gaps among those identities: 11
 - Applicable source safety-metadata gaps: 138 (26 require caller unsafety)
@@ -24,7 +24,7 @@ Runtime sites by classification:
 
 - dynamic precondition: 6
 - implementation hazard: 8
-- static well-formedness constraint: 23
+- static well-formedness constraint: 20
 - tooling-only validation: 119
 
 ## Reviewed semantic families
@@ -124,21 +124,21 @@ It is not part of a generated runtime API contract.
 - `tslc/src/tslc/benchmark/render_cpp.py:226` — owner `_render_policy_read` — `throw` — `throw std::runtime_error("policy repeats a decision for " + std::string({stable_id}));`
 - `tslc/src/tslc/benchmark/render_cpp.py:224` — owner `_render_policy_read` — `throw` — `throw std::runtime_error("policy has no decision for " + std::string({stable_id}));`
 - `tslc/src/tslc/benchmark/render_cpp_scenarios.py:484` — owner `_render_measure_dispatch` — `throw` — `default: throw std::runtime_error("invalid candidate index");`
-- `tslc/src/tslc/render/rust_dispatch.py:579` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(ENTRY_CALLS.load(Ordering::SeqCst), 2);",`
-- `tslc/src/tslc/render/rust_dispatch.py:599` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(HARDWARE_ENTRY_CALLS.load(Ordering::SeqCst), 0);",`
-- `tslc/src/tslc/render/rust_dispatch.py:566` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(SELECTION_CALLS.load(Ordering::SeqCst), 1);",`
-- `tslc/src/tslc/render/rust_dispatch.py:578` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(SELECTION_CALLS.load(Ordering::SeqCst), 1);",`
-- `tslc/src/tslc/render/rust_dispatch.py:580` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(output, [9 as TestElement; 8]);",`
-- `tslc/src/tslc/render/rust_dispatch.py:598` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(output, [9 as TestElement; 8]);",`
-- `tslc/src/tslc/render/rust_dispatch.py:565` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(detector.detect_calls, 1);",`
-- `tslc/src/tslc/render/rust_dispatch.py:577` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(detector.detect_calls, 1);",`
-- `tslc/src/tslc/render/rust_dispatch.py:529` — owner `_unit_tests` — `assert_eq` — `f" assert_eq!(table.{field}, {entry.entry_index});",`
-- `tslc/src/tslc/render/rust_dispatch.py:521` — owner `_unit_tests` — `expect` — `' let _guard = TEST_LOCK.lock().expect("dispatch test lock");',`
-- `tslc/src/tslc/render/rust_dispatch.py:558` — owner `_unit_tests` — `expect` — `' let _guard = TEST_LOCK.lock().expect("dispatch test lock");',`
-- `tslc/src/tslc/render/rust_dispatch.py:585` — owner `_unit_tests` — `expect` — `' let _guard = TEST_LOCK.lock().expect("dispatch test lock");',`
-- `tslc/src/tslc/render/rust_dispatch.py:571` — owner `_unit_tests` — `unwrap` — `"ops::Add, &left, &right, &mut output).unwrap();"`
-- `tslc/src/tslc/render/rust_dispatch.py:575` — owner `_unit_tests` — `unwrap` — `"ops::Add, &left, &right, &mut output).unwrap();"`
-- `tslc/src/tslc/render/rust_dispatch.py:596` — owner `_unit_tests` — `unwrap` — `"ops::Add, &left, &right, &mut output).unwrap();"`
+- `tslc/src/tslc/render/rust_dispatch.py:578` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(ENTRY_CALLS.load(Ordering::SeqCst), 2);",`
+- `tslc/src/tslc/render/rust_dispatch.py:598` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(HARDWARE_ENTRY_CALLS.load(Ordering::SeqCst), 0);",`
+- `tslc/src/tslc/render/rust_dispatch.py:565` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(SELECTION_CALLS.load(Ordering::SeqCst), 1);",`
+- `tslc/src/tslc/render/rust_dispatch.py:577` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(SELECTION_CALLS.load(Ordering::SeqCst), 1);",`
+- `tslc/src/tslc/render/rust_dispatch.py:579` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(output, [9 as TestElement; 8]);",`
+- `tslc/src/tslc/render/rust_dispatch.py:597` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(output, [9 as TestElement; 8]);",`
+- `tslc/src/tslc/render/rust_dispatch.py:564` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(detector.detect_calls, 1);",`
+- `tslc/src/tslc/render/rust_dispatch.py:576` — owner `_unit_tests` — `assert_eq` — `" assert_eq!(detector.detect_calls, 1);",`
+- `tslc/src/tslc/render/rust_dispatch.py:528` — owner `_unit_tests` — `assert_eq` — `f" assert_eq!(table.{field}, {entry.entry_index});",`
+- `tslc/src/tslc/render/rust_dispatch.py:520` — owner `_unit_tests` — `expect` — `' let _guard = TEST_LOCK.lock().expect("dispatch test lock");',`
+- `tslc/src/tslc/render/rust_dispatch.py:557` — owner `_unit_tests` — `expect` — `' let _guard = TEST_LOCK.lock().expect("dispatch test lock");',`
+- `tslc/src/tslc/render/rust_dispatch.py:584` — owner `_unit_tests` — `expect` — `' let _guard = TEST_LOCK.lock().expect("dispatch test lock");',`
+- `tslc/src/tslc/render/rust_dispatch.py:570` — owner `_unit_tests` — `unwrap` — `"ops::Add, &left, &right, &mut output).unwrap();"`
+- `tslc/src/tslc/render/rust_dispatch.py:574` — owner `_unit_tests` — `unwrap` — `"ops::Add, &left, &right, &mut output).unwrap();"`
+- `tslc/src/tslc/render/rust_dispatch.py:595` — owner `_unit_tests` — `unwrap` — `"ops::Add, &left, &right, &mut output).unwrap();"`
 - `tslc/src/tslc/value_tests/_render_rust_conversion.py:35` — owner `_convert` — `assert` — `f" for i in 0..{target_lanes} {{ assert!(result[i].lane_eq(expected[i]), "`
 - `tslc/src/tslc/value_tests/_render_rust_conversion.py:474` — owner `_differential` — `assert_eq` — `f" for i in 0..{case.lanes} {{ assert_eq!("`
 - `tslc/src/tslc/value_tests/_render_rust_conversion.py:482` — owner `_differential` — `assert` — `" assert!(hw.lane_eq(reference), "`
@@ -179,7 +179,7 @@ It is not part of a generated runtime API contract.
 - `tslc/src/tslc/value_tests/_render_rust_memory.py:70` — owner `_store` — `assert` — `f" for i in 0..{buflen} {{ assert!(buf[i].lane_eq(expected[i]), "`
 - `tslc/src/tslc/value_tests/_render_rust_memory.py:427` — owner `_stream` — `assert_eq` — `f" assert_eq!(result.as_str(), {expected}, \"{case.case_name}\");",`
 
-### `static_representation_or_lane_shape` (20)
+### `static_representation_or_lane_shape` (17)
 
 Sizes, lane counts, and mask-storage capacity are compiler-owned specialization facts.
 
@@ -198,11 +198,8 @@ Sizes, lane counts, and mask-storage capacity are compiler-owned specialization 
 - `tslc/src/tslc/backend/assets/tsl_algorithm_transform.rs:232` — owner `transform_selected_binary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_selected_binary requires a vector with at least one lane", );`
 - `tslc/src/tslc/backend/assets/tsl_algorithm_transform.rs:98` — owner `transform_selected_unary_scaled_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_selected_unary requires a vector with at least one lane", );`
 - `tslc/src/tslc/backend/assets/tsl_algorithm_transform.rs:1332` — owner `transform_unary_raw` — `assert` — `assert!( lanes > 0, "tsl::algo::transform_unary requires a vector with at least one lane", );`
-- `tslc/src/tslc/backend/assets/tsl_core_detail_scalar.hpp:178` — owner `require_same_lanes` — `throw` — `throw std::invalid_argument( "lane-preserving conversion requires equal source and target lane counts" );`
-- `tslc/src/tslc/backend/assets/tsl_core_detail_scalar.hpp:176` — owner `require_same_lanes` — `trap` — `__builtin_trap();`
 - `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:30` — owner `bit_cast` — `assert_eq` — `assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());`
 - `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:44` — owner `reinterpret_unchecked` — `assert_eq` — `assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());`
-- `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:142` — owner `require_same_lanes` — `assert_eq` — `assert_eq!( source_lanes, target_lanes, "lane-preserving conversion requires equal source and target lane counts" );`
 
 ### `static_immediate_nonzero` (2)
 
@@ -237,11 +234,11 @@ The checked signature must establish an addressable extent.
 
 This is a compiler/backend defect if reachable, not invalid caller data.
 
-- `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:474` — owner `saturating_cast_value` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:431` — owner `saturating_from_f64` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:346` — owner `saturating_from_i128` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:389` — owner `saturating_from_u128` — `panic` — `panic!("unsupported saturating cast")`
-- `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:303` — owner `scalar_as_cast_value` — `panic` — `panic!("unsupported scalar-as cast")`
+- `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:466` — owner `saturating_cast_value` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:423` — owner `saturating_from_f64` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:338` — owner `saturating_from_i128` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:381` — owner `saturating_from_u128` — `panic` — `panic!("unsupported saturating cast")`
+- `tslc/src/tslc/backend/assets/tsl_core_scalar.rs:295` — owner `scalar_as_cast_value` — `panic` — `panic!("unsupported scalar-as cast")`
 
 ### `implementation_invariant` (3)
 
@@ -298,7 +295,7 @@ Review: Validation must precede any compress-store output write; an all-inactive
 - `gather v:=(m,cptr,vidx,v,sImm)`; attributes `mask=pass_through`; result target `none`; reasons `intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 22; checked source status `declared`; preconditions `indexed_memory_address_valid`; coverage: source preconditions are available for backend check planning
 - `scatter void:=(m,ptr,vidx,v,sImm)`; attributes `mask=zero`; result target `none`; reasons `intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 30; checked source status `declared`; preconditions `indexed_memory_address_valid`; coverage: source preconditions are available for backend check planning
 - `gather v:=(cptr,vidx,sImm)`; attributes `none`; result target `none`; reasons `intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 30; checked source status `declared`; preconditions `indexed_memory_address_valid`; coverage: source preconditions are available for backend check planning
-- `gather_narrow v:=(cptr,cptr,sImm)`; attributes `none`; result target `none`; reasons `raw_memory, raw_pointer`; caller-unsafe implementations 18; checked source status `coverage_gap`; preconditions `none`; coverage: implemented for vector-index gather/scatter, including partial narrow gather, from a valid base view, typed scale, and active-index validation; pointer-indexed narrow gather remains omitted
+- `gather_narrow v:=(cptr,cptr,sImm)`; attributes `none`; result target `none`; reasons `raw_memory, raw_pointer`; caller-unsafe implementations 18; checked source status `coverage_gap`; preconditions `indexed_memory_address_valid`; coverage: implemented for vector-index gather/scatter, including partial narrow gather, from a valid base view, typed scale, and active-index validation; pointer-indexed narrow gather remains omitted
 - `gather_narrow_partial v:=(cptr,vidx,sImm)`; attributes `none`; result target `none`; reasons `intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 19; checked source status `declared`; preconditions `indexed_memory_address_valid`; coverage: source preconditions are available for backend check planning
 - `scatter void:=(ptr,vidx,v,sImm)`; attributes `none`; result target `none`; reasons `intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 30; checked source status `declared`; preconditions `indexed_memory_address_valid`; coverage: source preconditions are available for backend check planning
 
@@ -356,10 +353,10 @@ The 26 caller-visible gaps are:
 - `tsldata/primitives/load_store/pack_expand.tsl:1063` — load_convert_up [avx2, avx2_vl]/f32/ToBase/f64
 - `tsldata/primitives/load_store/rnd_access.tsl:438` — gather sve/arith
 - `tsldata/primitives/load_store/rnd_access.tsl:828` — gather_narrow_partial sve/[bword, dword]
-- `tsldata/primitives/load_store/rnd_access.tsl:1043` — gather_narrow sve/[bword, dword]
-- `tsldata/primitives/load_store/rnd_access.tsl:1462` — gather sve/arith
-- `tsldata/primitives/load_store/rnd_access.tsl:1900` — scatter sve/arith
-- `tsldata/primitives/load_store/rnd_access.tsl:2441` — scatter sve/arith
+- `tsldata/primitives/load_store/rnd_access.tsl:1053` — gather_narrow sve/[bword, dword]
+- `tsldata/primitives/load_store/rnd_access.tsl:1472` — gather sve/arith
+- `tsldata/primitives/load_store/rnd_access.tsl:1910` — scatter sve/arith
+- `tsldata/primitives/load_store/rnd_access.tsl:2451` — scatter sve/arith
 
 ## Reviewed declaration-shape examples
 
@@ -422,7 +419,7 @@ The maintained probe is `tslc/tests/fixtures/checked_api/abi_probe.cpp`. It comp
 
 ## Validation limits
 
-- All-profile Rust render: not a valid census input: the current all-profile Rust request reports TSL-BACKEND-RUST-AMBIGUOUS-TARGET-PROFILES before artifact rendering.
+- All-profile Rust render: not a valid census input: the current all-profile Rust request reports TSL-BACKEND-RUST-DUPLICATE-TARGET-PROFILES for equal normal/OneAPI target predicates before artifact rendering.
 - Census strategy: scan canonical source bodies, render assets, and emitters; obtain public caller-safety identities from the validated typed catalog.
 
 ## Maintenance

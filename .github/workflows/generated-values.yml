@@ -64,7 +64,7 @@ jobs:
     outputs:
       profile_shards: ${{ steps.shards.outputs.profile_shards }}
       x86_quality_shards: ${{ steps.shards.outputs.x86_quality_shards }}
-      rust_release_profiles: ${{ steps.shards.outputs.rust_release_profiles }}
+      rust_release_quality_shards: ${{ steps.shards.outputs.rust_release_quality_shards }}
 
     steps:
       - name: Check out repository
@@ -73,11 +73,15 @@ jobs:
       - name: Compute generated profile shards
         id: shards
         run: |
-          profile_shards="$(
+          all_profile_shards="$(
             jq -c \
               --slurpfile release_policy supplementary/release/tsl-v1-policy.json \
               -f .github/scripts/profile_shards.jq \
               supplementary/buildsystem/machine_profiles.json
+          )"
+          profile_shards="$(
+            jq -c '[.[] | select(.purpose != "release-quality")]' \
+              <<<"${all_profile_shards}"
           )"
           x86_quality_shards="$(
             jq -c '
@@ -92,21 +96,13 @@ jobs:
               ]
             ' <<<"${profile_shards}"
           )"
-          rust_release_profiles="$(
-            jq -er '
-              .backend_profiles.rust
-              | if .selection != "explicit" then
-                  error("Rust release profiles must use explicit selection")
-                elif (.profiles | length) == 0 then
-                  error("Rust release profile selection cannot be empty")
-                else
-                  .profiles | join(",")
-                end
-            ' supplementary/release/tsl-v1-policy.json
+          rust_release_quality_shards="$(
+            jq -c '[.[] | select(.purpose == "release-quality")]' \
+              <<<"${all_profile_shards}"
           )"
           echo "profile_shards=${profile_shards}" >> "$GITHUB_OUTPUT"
           echo "x86_quality_shards=${x86_quality_shards}" >> "$GITHUB_OUTPUT"
-          echo "rust_release_profiles=${rust_release_profiles}" >> "$GITHUB_OUTPUT"
+          echo "rust_release_quality_shards=${rust_release_quality_shards}" >> "$GITHUB_OUTPUT"
 
   generated-value-tests:
     name: Generated build and values (${{ matrix.profile_shard.name }})
@@ -381,7 +377,7 @@ jobs:
             '
 
   generated-rust-release-quality:
-    name: Generated Rust quality (${{ matrix.toolchain.label }})
+    name: Generated Rust quality (${{ matrix.toolchain.label }}, ${{ matrix.profile_shard.name }})
     runs-on: ubuntu-latest
     timeout-minutes: 120
     needs:
@@ -398,6 +394,7 @@ jobs:
             name: stable
           - label: msrv-1.89
             name: 1.89.0
+        profile_shard: ${{ fromJson(needs['profile-shards'].outputs.rust_release_quality_shards) }}
 
     env:
       TSLC_CI_IMAGE: ${{ needs.scope.outputs.ci_image }}
@@ -419,12 +416,12 @@ jobs:
       - name: Build, test, lint, document, and package the stable Rust surface
         run: |
           bash .github/scripts/run_with_log.sh \
-            "tslctmp/ci-logs/rust-quality-${{ matrix.toolchain.label }}/quality.log" \
+            "tslctmp/ci-logs/rust-quality-${{ matrix.toolchain.label }}-${{ matrix.profile_shard.name }}/quality.log" \
             bash supplementary/ci/run_tslc_ci_container.sh \
               --cap-add=SYS_PTRACE \
               --security-opt seccomp=unconfined \
               -e RUSTUP_TOOLCHAIN="${{ matrix.toolchain.name }}" \
-              -e TSLC_RUST_RELEASE_PROFILES="${{ needs['profile-shards'].outputs.rust_release_profiles }}" \
+              -e TSLC_RUST_RELEASE_PROFILES="${{ matrix.profile_shard.profiles }}" \
               -e TSLC_SDE="/opt/intel-sde/sde64" \
               -- \
               bash -lc '
@@ -436,15 +433,15 @@ jobs:
                   --profiles "${TSLC_RUST_RELEASE_PROFILES}" \
                   --quality \
                   --no-format \
-                  --output-root "./tslctmp/rust-quality-${{ matrix.toolchain.label }}"
+                  --output-root "./tslctmp/rust-quality-${{ matrix.toolchain.label }}-${{ matrix.profile_shard.name }}"
               '
 
       - name: Upload Rust quality logs
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ci-logs-rust-quality-${{ matrix.toolchain.label }}
-          path: tslctmp/ci-logs/rust-quality-${{ matrix.toolchain.label }}
+          name: ci-logs-rust-quality-${{ matrix.toolchain.label }}-${{ matrix.profile_shard.name }}
+          path: tslctmp/ci-logs/rust-quality-${{ matrix.toolchain.label }}-${{ matrix.profile_shard.name }}
           if-no-files-found: ignore
           retention-days: 14
 

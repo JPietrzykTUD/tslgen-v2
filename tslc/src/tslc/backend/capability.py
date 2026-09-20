@@ -6,16 +6,22 @@ from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field, replace
 from enum import Enum
 from hashlib import sha256
+from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Generic, Protocol, TypeVar
 
 from tslc.backend.helper_requirements import (
     BackendHelperManifest,
+    BackendHelperPlan,
     EMPTY_HELPER_MANIFEST,
 )
 from tslc.output.verify_model import VerifyBackend, VerifyCompileFailure
-from tslc.project_render import DEFAULT_PROJECT_RENDER_CONFIG, ProjectRenderConfig
-from tslc.value_tests.compile_failure import compile_failure_target_name
+from tslc.project_render import (
+    DEFAULT_PROJECT_RENDER_CONFIG,
+    BackendRenderInput,
+    ProjectRenderConfig,
+)
+from tslc.value_tests.identity import compile_failure_target_name
 
 if TYPE_CHECKING:
     from tslc.backend.emitted_profile import EmittedProfile
@@ -46,12 +52,14 @@ VerifyMachineProfileProjector = Callable[
 ToolchainCommandsResolver = Callable[
     ["VerifyProfile", "BuildVerifierConfig"], "ToolchainCommands"
 ]
+ExtensionHeaderGroupProjector = Callable[["Extension | None"], str | None]
 BenchmarkPlanBuilder = Callable[
     [
         "Catalog",
         tuple["EmittedProfile", ...],
         "ValueTestProjectPlan",
         "BackendPolicyInputs",
+        ExtensionHeaderGroupProjector,
     ],
     "BenchmarkProjectPlan",
 ]
@@ -65,6 +73,7 @@ BackendArtifactRenderer = Callable[
         str,
         "ProjectRenderConfig",
         "BackendPolicyInputs",
+        "BackendHelperPlan",
     ],
     list["Artifact"],
 ]
@@ -85,6 +94,19 @@ PrimitivePreviewRenderer = Callable[
     ],
     str,
 ]
+ProjectConfigInputParser = Callable[[Path, object], BackendRenderInput | None]
+
+
+@dataclass(frozen=True, slots=True)
+class BackendProjectConfigSpec:
+    """Backend-owned parser for one optional table below ``[tslc]``."""
+
+    table_name: str
+    parse: ProjectConfigInputParser
+
+    def __post_init__(self) -> None:
+        if not self.table_name:
+            raise ValueError("backend project configuration requires a table name")
 
 
 class BackendPolicyInput:
@@ -313,6 +335,7 @@ class BackendCapability:
     backend_id: str
     root_path: str
     artifact_media_type: str
+    preview_file_suffix: str
     dialect_factory: DialectFactory
     artifact_renderer: BackendArtifactRenderer
     verify_profiles: VerifyProfileRenderer
@@ -322,6 +345,7 @@ class BackendCapability:
     toolchain_commands: ToolchainCommandsResolver
     documentation_formatter_factory: DocumentationFormatterFactory
     benchmark_plan_builder: BenchmarkPlanBuilder | None = None
+    project_config: BackendProjectConfigSpec | None = None
     policy_input_loader: Callable[[], BackendPolicyInput] | None = None
     helper_manifest: BackendHelperManifest = EMPTY_HELPER_MANIFEST
     additional_closure_seeds: ClosureSeedProjector = _no_additional_closure_seeds
@@ -337,6 +361,16 @@ class BackendCapability:
     compiler_capabilities: CompilerCapabilityRegistry[CompilerCapability] = (
         EMPTY_COMPILER_CAPABILITY_REGISTRY
     )
+
+    def __post_init__(self) -> None:
+        if not self.preview_file_suffix or any(
+            not (character.isalnum() or character in {"_", "-"})
+            for character in self.preview_file_suffix
+        ):
+            raise ValueError(
+                "backend preview file suffix must contain only letters, digits, "
+                "underscores, or hyphens"
+            )
 
     def load_policy_input(self) -> BackendPolicyInput | None:
         if self.policy_input_loader is None:
@@ -394,9 +428,13 @@ class BackendCapability:
         assets: RenderAssets,
         config: ProjectRenderConfig = DEFAULT_PROJECT_RENDER_CONFIG,
         policy_inputs: BackendPolicyInputs = EMPTY_BACKEND_POLICY_INPUTS,
+        *,
+        helper_plan: BackendHelperPlan,
     ) -> list[Artifact]:
         """Render the backend's complete artifact set from one fact snapshot."""
 
+        if helper_plan.manifest != self.helper_manifest:
+            raise ValueError("backend helper plan does not match its capability")
         return self.artifact_renderer(
             profiles,
             value_tests,
@@ -405,6 +443,7 @@ class BackendCapability:
             self.artifact_media_type,
             config,
             policy_inputs,
+            helper_plan,
         )
 
     def plan_benchmarks(
@@ -417,7 +456,11 @@ class BackendCapability:
         if self.benchmark_plan_builder is None:
             return None
         return self.benchmark_plan_builder(
-            catalog, profiles, value_tests, policy_inputs
+            catalog,
+            profiles,
+            value_tests,
+            policy_inputs,
+            self.extension_header_group,
         )
 
     def documentation_formatter(self) -> BackendDocumentationFormatter:
@@ -475,11 +518,20 @@ class BackendCapability:
     def verify_driver(self) -> VerifyBackendDriver:
         return self.verify_driver_factory()
 
-    def closure_seed_primitives(self, catalog: Catalog) -> tuple[str, ...]:
+    def helper_plan(self, catalog: Catalog) -> BackendHelperPlan:
+        return BackendHelperPlan.resolve(self.helper_manifest, catalog)
+
+    def closure_seed_primitives(
+        self,
+        catalog: Catalog,
+        helper_plan: BackendHelperPlan,
+    ) -> tuple[str, ...]:
+        if helper_plan.manifest != self.helper_manifest:
+            raise ValueError("backend helper plan does not match its capability")
         return tuple(
             dict.fromkeys(
                 (
-                    *self.helper_manifest.closure_seed_primitives(catalog),
+                    *helper_plan.closure_seed_primitives,
                     *self.additional_closure_seeds(catalog),
                 )
             )
@@ -513,11 +565,14 @@ __all__ = [
     "BackendArtifactRenderer",
     "BackendCapability",
     "BackendDocumentationFormatter",
+    "BackendHelperPlan",
     "BackendPolicyInput",
     "BackendPolicyInputs",
+    "BackendProjectConfigSpec",
     "EMPTY_BACKEND_POLICY_INPUTS",
     "DocumentationSiteInput",
     "DocumentationSpec",
+    "ExtensionHeaderGroupProjector",
     "GeneratedDocumentationBuilder",
     "GeneratedDocumentationSpec",
     "GeneratedFormatSpec",

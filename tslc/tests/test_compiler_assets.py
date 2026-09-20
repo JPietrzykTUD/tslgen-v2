@@ -7,7 +7,9 @@ import tomllib
 import pytest
 
 from rust_project_test_support import render_rust_artifacts_for_test
+from tslc.backend.helper_requirements import BackendHelperPlan
 from tslc.backend.algorithm_contracts import ALGORITHM_PUBLIC_FAMILIES
+from tslc.backend.cpp_algorithm import CppAlgorithmHelperForm
 from tslc.backend.cpp_algorithm_public_declarations import (
     cpp_algorithm_declaration_holes,
     cpp_algorithm_public_declarations,
@@ -78,7 +80,6 @@ CPP_CORE_RUNTIME_SYMBOLS = {
         "scalar_as_cast(",
         "lane_get_unchecked(",
         "lane_set_unchecked(",
-        "require_same_lanes(",
         "random_step_u64(",
         "arith_add(",
         "arith_sub(",
@@ -128,7 +129,6 @@ RUST_CORE_RUNTIME_SYMBOLS = {
         "pub(crate) unsafe fn reinterpret_unchecked<",
         "pub trait LaneArith",
         "pub trait BaseTypeDispatch",
-        "pub fn require_same_lanes(",
         "pub unsafe fn random_step_u64(",
         "pub fn arith_add<",
         "pub fn scalar_as_cast_value<",
@@ -401,7 +401,9 @@ def test_boolean_tokens_do_not_capture_identifier_prefixes() -> None:
     assert isinstance(enabled, ParsedTslScalarValue)
     assert enabled.text == "true"
 
-def test_rust_project_renderer_consumes_injected_assets() -> None:
+def test_rust_project_renderer_consumes_injected_assets(
+    rust_helper_plan: BackendHelperPlan,
+) -> None:
     assets = RenderAssets(
         {
             "rustfmt.toml": "# injected rustfmt\n",
@@ -469,6 +471,7 @@ def test_rust_project_renderer_consumes_injected_assets() -> None:
                 (), RUST_POLICY_MANIFEST
             ),
             static_selection_plan=plan_rust_static_selection(()),
+            helper_plan=rust_helper_plan,
         )
     }
 
@@ -537,7 +540,9 @@ def test_rust_project_renderer_consumes_injected_assets() -> None:
     assert 'runtime-dispatch = ["std"]' in rendered["rust/Cargo.toml"]
     assert "[[bench]]" not in rendered["rust/Cargo.toml"]
 
-def test_rust_project_renderer_uses_typed_release_metadata() -> None:
+def test_rust_project_renderer_uses_typed_release_metadata(
+    rust_helper_plan: BackendHelperPlan,
+) -> None:
     package = RustPackageConfig(
         name="custom-tsl",
         version="2.3.4",
@@ -559,6 +564,7 @@ def test_rust_project_renderer_uses_typed_release_metadata() -> None:
                 (), RUST_POLICY_MANIFEST
             ),
             static_selection_plan=plan_rust_static_selection(()),
+            helper_plan=rust_helper_plan,
             package_config=package,
         )
     }
@@ -636,7 +642,9 @@ def test_rust_package_config_rejects_invalid_metadata(
     with pytest.raises(ValueError):
         RustPackageConfig(**metadata)
 
-def test_rust_project_renderer_wires_opt_in_profile_benchmarks() -> None:
+def test_rust_project_renderer_wires_opt_in_profile_benchmarks(
+    rust_helper_plan: BackendHelperPlan,
+) -> None:
     profiles = tuple(
         EmittedProfile(
             MachineProfile(name, "test", frozenset(), {}),
@@ -656,6 +664,7 @@ def test_rust_project_renderer_wires_opt_in_profile_benchmarks() -> None:
                 profiles, RUST_POLICY_MANIFEST
             ),
             static_selection_plan=plan_rust_static_selection(profiles),
+            helper_plan=rust_helper_plan,
         )
     }
 
@@ -760,6 +769,30 @@ def test_algorithm_assets_have_one_typed_declaration_hole_per_record() -> None:
     )
     assert all(cpp_asset.count(f"@{{{name}}}") == 1 for name in cpp_holes)
     assert all(rust_asset.count(f"@{{{name}}}") == 1 for name in rust_holes)
+
+
+def test_cpp_algorithm_detail_helper_holes_cover_bound_forms_exactly() -> None:
+    assets = load_default_render_assets()
+    detail_assets = tuple(
+        name
+        for name in assets.files
+        if name.startswith("tsl_algorithm_detail_") and name.endswith(".hpp")
+    )
+    helper_holes = {
+        match
+        for name in detail_assets
+        for match in re.findall(
+            r"@\{(algorithm_helper_[a-z_]+)\}", assets.text(name)
+        )
+    }
+    expected = {form.template_hole for form in CppAlgorithmHelperForm}
+
+    assert helper_holes == expected
+    replacements = {hole: f"bound_{hole}" for hole in expected}
+    rendered = "\n".join(
+        assets.fill(name, **replacements) for name in detail_assets
+    )
+    assert "@{algorithm_helper_" not in rendered
 
 
 def test_rust_algorithm_names_cover_shared_public_families() -> None:

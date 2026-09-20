@@ -10,6 +10,7 @@ import pytest
 
 from tslc.api import generate_project
 from tslc.backend.emitted_profile import EmittedProfile
+from tslc.backend.helper_requirements import BackendHelperPlan
 from tslc.backend.registry import (
     backend_capability,
     load_backend_policy_inputs,
@@ -32,13 +33,61 @@ from tslc.benchmark.planner import (
     BenchmarkPlanner,
     BenchmarkScenarioAdmission,
 )
-from tslc.catalog.model import Catalog
+from tslc.catalog.model import Catalog, Primitive
+from tslc.catalog.semantics import (
+    CONTIGUOUS_VECTOR_LOAD_REQUIREMENT,
+    CONTIGUOUS_VECTOR_STORE_REQUIREMENT,
+    MASK_FROM_INTEGRAL_REQUIREMENT,
+    MASK_TO_INTEGRAL_REQUIREMENT,
+    VECTOR_FROM_ARRAY_REQUIREMENT,
+    VECTOR_TO_ARRAY_REQUIREMENT,
+)
 from tslc.compiler_assets import load_default_render_assets
 from tslc.diagnostics import has_errors
 from tslc.value_tests.model import ValueTestProjectPlan
 
 RUST_POLICY_INPUTS = load_backend_policy_inputs(("rust",))
 
+
+def test_benchmark_planner_uses_semantically_resolved_harness_names(
+    catalog: Catalog,
+) -> None:
+    requirements = (
+        VECTOR_FROM_ARRAY_REQUIREMENT,
+        VECTOR_TO_ARRAY_REQUIREMENT,
+        MASK_TO_INTEGRAL_REQUIREMENT,
+        MASK_FROM_INTEGRAL_REQUIREMENT,
+        CONTIGUOUS_VECTOR_LOAD_REQUIREMENT,
+        CONTIGUOUS_VECTOR_STORE_REQUIREMENT,
+    )
+    providers = tuple(
+        catalog.resolve_primitive_provider(item) for item in requirements
+    )
+    assert all(isinstance(provider, Primitive) for provider in providers)
+    names_by_identity = {
+        id(provider): f"benchmark_provider_{index}"
+        for index, provider in enumerate(providers)
+    }
+    renamed = replace(
+        catalog,
+        primitives=tuple(
+            replace(primitive, name=names_by_identity[id(primitive)])
+            if id(primitive) in names_by_identity
+            else primitive
+            for primitive in catalog.primitives
+        ),
+    )
+
+    planner = BenchmarkPlanner(renamed, backend_id="rust")
+
+    assert (
+        planner._harness.from_array,
+        planner._harness.to_array,
+        planner._harness.to_integral,
+        planner._harness.to_mask,
+        planner._harness.load,
+        planner._harness.store,
+    ) == tuple(f"benchmark_provider_{index}" for index in range(len(requirements)))
 
 
 @pytest.fixture(scope="module")
@@ -96,6 +145,7 @@ def _mul_candidate_set(
 
 def test_rust_backend_produces_typed_plan_and_report_artifacts(
     rust_benchmark_planning_result,
+    rust_helper_plan: BackendHelperPlan,
 ) -> None:
     result = rust_benchmark_planning_result
     plan = result.rendered.benchmarks
@@ -141,6 +191,7 @@ def test_rust_backend_produces_typed_plan_and_report_artifacts(
         plan,
         load_default_render_assets(),
         policy_inputs=RUST_POLICY_INPUTS,
+        helper_plan=rust_helper_plan,
     )
 
 
@@ -228,6 +279,7 @@ def test_shared_identity_helper_preserves_frozen_backend_keys(
             profile=profile,
             specialization=specialization,
             primitive_specializations=profile.specializations(backend_id)["mul"],
+            header_group=candidate_set.key.header_group,
         )
 
         assert rebuilt == candidate_set.key
@@ -537,3 +589,44 @@ def test_unregistered_backend_can_reuse_planner_without_name_dispatch(
         "default",
         "generic_fallback",
     ]
+    assert all(entry.slot_hash == "" for entry in first.coverage)
+
+    grouped_key = specialization_key(
+        backend_id="future",
+        profile=fake_profile,
+        specialization=candidate_set.specialization,
+        primitive_specializations=fake_profile.specializations("future")["mul"],
+        header_group="future_group",
+    )
+    assert grouped_key.header_group == "future_group"
+    assert specialization_stable_id(grouped_key) != candidate_set.stable_id
+
+    grouped = BenchmarkPlanner(
+        catalog,
+        backend_id="future",
+        extension_header_group=(
+            lambda extension: "future_group" if extension is not None else None
+        ),
+    ).plan((fake_profile,), fake_value_tests)
+    assert not any(entry.status == "emitted" for entry in grouped.coverage)
+    assert {
+        entry.reason
+        for entry in grouped.coverage
+        if entry.primitive_name == "mul"
+    } == {
+        "opt-in header-group extensions are not supported by benchmark planning"
+    }
+
+    identified = BenchmarkPlanner(
+        catalog,
+        backend_id="future",
+        slot_identity=lambda profile_name, spec: (
+            f"future:{profile_name}:{spec.primitive_name}"
+        ),
+    ).plan((fake_profile,), fake_value_tests)
+    assert identified.coverage
+    assert all(
+        entry.slot_hash
+        == f"future:{entry.profile_name}:{entry.primitive_name}"
+        for entry in identified.coverage
+    )

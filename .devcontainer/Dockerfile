@@ -86,6 +86,9 @@ RUN set -eux; \
       x86_64-unknown-linux-musl \
       aarch64-unknown-linux-musl \
       wasm32-wasip1; \
+    rustup target add --toolchain "${RUST_MSRV}" \
+      aarch64-unknown-linux-musl \
+      wasm32-wasip1; \
     cargo install --locked cargo-zigbuild
 
 # Install Wasmtime runtime for executing generated .wasm value-test binaries.

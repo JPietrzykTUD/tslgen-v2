@@ -8,6 +8,12 @@ from typing import Literal
 from tslc.catalog_index_model import IndexedOccurrence, SymbolKind, sorted_spans
 from tslc.diagnostics import SourceSpan, source_subspan as subspan
 from tslc.ir.segments import Region, Segment
+from tslc.semantic_authoring import (
+    BindingSymbolKind,
+    semantic_projection_fields,
+    semantic_scalar_values,
+)
+from tslc.syntax.access import children
 from tslc.syntax.ast import (
     ParsedPrimitiveDeclaration,
     ParsedTslScalarValue,
@@ -55,6 +61,59 @@ def record(
 ) -> None:
     values[kind].setdefault(name, []).append(span)
     occurrences.append(IndexedOccurrence(kind, name, span, definition))
+
+
+def primitive_semantic_occurrences(
+    primitive: ParsedPrimitiveDeclaration,
+    scope: str,
+) -> tuple[IndexedOccurrence, ...]:
+    """Project semantic fields into source-located index occurrences."""
+
+    occurrences: list[IndexedOccurrence] = []
+    bound_names: dict[BindingSymbolKind, set[str]] = {}
+    for descriptor, field in semantic_projection_fields(primitive):
+        if descriptor.value_shape == "parameter-bindings":
+            assert descriptor.symbol_kind is not None
+            assert descriptor.binding_symbol_kind is not None
+            names = bound_names.setdefault(descriptor.binding_symbol_kind, set())
+            for binding in children(field):
+                occurrences.append(
+                    IndexedOccurrence(
+                        descriptor.symbol_kind,
+                        binding.key.text,
+                        source_span(binding.key.source),
+                    )
+                )
+                if not isinstance(binding.value, ParsedTslScalarValue):
+                    continue
+                source = binding.value.payload_source or binding.value.source
+                names.add(binding.value.text)
+                occurrences.append(
+                    IndexedOccurrence(
+                        descriptor.binding_symbol_kind,
+                        binding.value.text,
+                        source_span(source),
+                        scope=scope,
+                    )
+                )
+            continue
+        if descriptor.symbol_kind is None:
+            continue
+        occurrences.extend(
+            IndexedOccurrence(
+                descriptor.symbol_kind,
+                value.text,
+                source_span(value.payload_source or value.source),
+            )
+            for value in semantic_scalar_values(descriptor, field)
+        )
+    for name, span in parameter_spans(primitive):
+        occurrences.extend(
+            IndexedOccurrence(kind, name, span, definition=True, scope=scope)
+            for kind, names in bound_names.items()
+            if name in names
+        )
+    return tuple(occurrences)
 
 
 def regions(segments: Iterable[Segment]) -> Iterable[Region]:
@@ -155,6 +214,7 @@ __all__ = (
     "name_in_source",
     "occurrence_key",
     "parameter_spans",
+    "primitive_semantic_occurrences",
     "record",
     "record_scalar_reference",
     "record_scoped",

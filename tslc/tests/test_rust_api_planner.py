@@ -164,10 +164,36 @@ def test_current_lowered_families_plan_without_reopening_the_catalog(
     expected_native_profiles = {None} | {
         profile.profile_name for profile in static.profiles
     }
+    expected_native_profile_order = (
+        None,
+        *(profile.profile_name for profile in static.profiles),
+    )
     assert all(
         {selection.profile_name for selection in alias.selections}
         == expected_native_profiles
         for alias in plan.native_aliases
+    )
+    assert all(
+        tuple(selection.profile_name for selection in alias.selections)
+        == expected_native_profile_order
+        for alias in plan.native_aliases
+    )
+    static_rank = {
+        profile.profile_name: index
+        for index, profile in enumerate(static.profiles)
+    }
+    assert all(
+        [
+            static_rank[representation.profile_name]
+            for representation in shape.representations
+            if representation.profile_name is not None
+        ]
+        == sorted(
+            static_rank[representation.profile_name]
+            for representation in shape.representations
+            if representation.profile_name is not None
+        )
+        for shape in plan.shapes
     )
     assert {
         trait.rhs_kind

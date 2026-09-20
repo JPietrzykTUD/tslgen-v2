@@ -210,6 +210,8 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
         assert "result" in context_response, context_response
         context = context_response["result"]
         assert context["primitive"] == "add"
+        assert context["backend"] == "cpp"
+        assert context["previewFileSuffix"] == "hpp"
         assert context["extension"] == "sse"
         assert context["type"] == "f32"
         assert context["implementation"]["uri"] == path.as_uri()
@@ -240,6 +242,7 @@ def test_stdio_server_open_change_hover_and_shutdown() -> None:
         assert explorer["mode"] == "resolved"
         assert explorer["profile"] == "avx2"
         assert explorer["backend"] == "cpp"
+        assert explorer["previewFileSuffix"] == "hpp"
         assert explorer["generation"] >= 1
         add_entry = next(
             item for item in explorer["primitives"] if item["name"] == "add"

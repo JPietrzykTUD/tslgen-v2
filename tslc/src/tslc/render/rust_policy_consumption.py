@@ -87,14 +87,25 @@ def plan_rust_policy_consumption_render(
 ) -> RustPolicyConsumptionRenderPlan:
     """Project semantic consumption facts into deterministic Cargo names once."""
 
+    profiles_by_name = {
+        profile.profile_name: profile
+        for profile in plan.profiles
+    }
+    foreign_profiles = set(profiles_by_name) - {
+        selection.profile_name for selection in static_selection_plan.profiles
+    }
+    if foreign_profiles:
+        names = ", ".join(repr(name) for name in sorted(foreign_profiles))
+        raise ValueError(
+            "Rust policy profiles have no compile-target selection: " + names
+        )
+
     profiles = []
-    for profile in plan.profiles:
+    for static_selection in static_selection_plan.profiles:
+        profile = profiles_by_name.get(static_selection.profile_name)
+        if profile is None:
+            continue
         profile_slug = slug(profile.profile_name)
-        static_selection = static_selection_plan.profile(profile.profile_name)
-        if static_selection is None:
-            raise ValueError(
-                f"Rust policy profile {profile.profile_name!r} has no compile-target selection"
-            )
         profiles.append(
             RustPolicyConsumptionRenderProfile(
                 profile=profile,

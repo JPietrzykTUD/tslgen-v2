@@ -18,9 +18,9 @@ from tslc.diagnostics import format_diagnostic, has_errors
 from tslc.output.verify_model import BackendToolchain, BuildVerificationReport
 from tslc.output.writer import ArtifactManifestRefreshReport, ArtifactWriteReport
 from tslc.pipeline import GenerationResult
-from tslc.backend.rust_package import (
-    DEFAULT_RUST_PACKAGE_CONFIG,
-    RustPackageConfig,
+from tslc.project_render import (
+    DEFAULT_PROJECT_RENDER_CONFIG,
+    ProjectRenderConfig,
 )
 
 if TYPE_CHECKING:
@@ -51,7 +51,7 @@ class GenerationCommandSettings:
     toolchains: Mapping[str, BackendToolchain]
     runner_paths: Mapping[str, str]
     tool_paths: Mapping[str, str]
-    rust_package: RustPackageConfig = DEFAULT_RUST_PACKAGE_CONFIG
+    render_config: ProjectRenderConfig = DEFAULT_PROJECT_RENDER_CONFIG
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,7 +92,7 @@ def run_generation_command(
         "test_harness": settings.run_value_tests,
         "value_test_warnings": settings.value_test_warnings or settings.run_value_tests,
         "value_test_fuzz": settings.fuzz,
-        "rust_package": settings.rust_package,
+        "render_config": settings.render_config,
     }
     compiler_capabilities = {
         backend_id: toolchain.compiler_capabilities

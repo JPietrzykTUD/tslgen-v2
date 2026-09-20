@@ -32,6 +32,11 @@ description: Add or update a TSL primitive in tsldata and the tslc compiler. Use
    retain an overlay-owned portable body for profiles without a native leaf.
    Do not set `prefer_fixed_native` on an exact compiler-operation body because
    native delegation runs before the authored body.
+   When compiler-created code needs to call a corpus primitive, describe the
+   required operation, parsed signature shape, operand roles, and necessary
+   constraints with a catalog-owned semantic provider requirement. Resolve
+   exactly one source declaration and carry its resolved name; never hardcode or
+   fall back to a primitive name in generic lowering or backend code.
 6. If rendering or value tests need support, add backend capability checks before render-time surprises.
 7. When a schema, selector, region, or query vocabulary changes, also use
    `extend-tslc-authoring` and prove completion/index/query projection from the

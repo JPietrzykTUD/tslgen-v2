@@ -16,13 +16,21 @@ from tslc.catalog._builder_implementations import _implementations_from_entries
 from tslc.catalog._builder_primitives import _build_primitives
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile
+from tslc.catalog.memory import (
+    MemoryAccess,
+    MemoryAddressing,
+    MemoryIndexedLaneExtent,
+    MemoryPayloadExtent,
+)
 from tslc.catalog.model import (
     Catalog,
     PrimitivePortability,
     PrimitiveValueMode,
     TargetConstraint,
 )
+from tslc.catalog.preconditions import PreconditionKind
 from tslc.catalog.register_shapes import RegisterMultiplicity
+from tslc.catalog.semantics import OperandRole, PrimitiveOperation
 from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.sources import SourceDocument
 from tslc.syntax.parser import TslParser
@@ -122,6 +130,55 @@ def test_insert_value_has_semantic_index_contract(catalog: Catalog) -> None:
     )
 
 
+def test_gather_narrow_has_indexed_pointer_load_contract(catalog: Catalog) -> None:
+    primitive = catalog.primitive("gather_narrow")
+    assert primitive is not None
+    assert primitive.operation is not None
+    assert primitive.operation.kind is PrimitiveOperation.LOAD
+    assert tuple(
+        (
+            binding.role,
+            binding.parameter_name,
+            binding.parameter_index,
+            binding.parameter_kind,
+        )
+        for binding in sorted(
+            primitive.operation.operand_bindings,
+            key=lambda binding: binding.parameter_index,
+        )
+    ) == (
+        (OperandRole.MEMORY_SOURCE, "base_ptr", 0, "cptr"),
+        (OperandRole.INDEX, "index_ptr", 1, "cptr"),
+        (OperandRole.SCALE, "scale", 2, "sImm"),
+    )
+    assert primitive.memory is not None
+    assert (
+        primitive.memory.access,
+        primitive.memory.addressing,
+        primitive.memory.payload_extent,
+        primitive.memory.indexed_lane_extent,
+    ) == (
+        MemoryAccess.READ,
+        MemoryAddressing.INDEXED,
+        MemoryPayloadExtent.VECTOR,
+        MemoryIndexedLaneExtent.VECTOR,
+    )
+    assert tuple(condition.kind for condition in primitive.preconditions) == (
+        PreconditionKind.INDEXED_MEMORY_ADDRESS_VALID,
+    )
+    assert tuple(
+        (binding.role, binding.parameter_name)
+        for binding in sorted(
+            primitive.preconditions[0].operand_bindings,
+            key=lambda binding: binding.parameter_index,
+        )
+    ) == (
+        (OperandRole.MEMORY_SOURCE, "base_ptr"),
+        (OperandRole.INDEX, "index_ptr"),
+        (OperandRole.SCALE, "scale"),
+    )
+
+
 def test_native_extension_register_metadata_promoted(catalog: Catalog) -> None:
     neon = catalog.extensions["neon"]
     assert neon.direct_vector_register_type("cpp", "si32") == "int32x4_t"
@@ -141,6 +198,13 @@ def test_type_spellings_normalized(catalog: Catalog) -> None:
 
 def test_rust_runtime_has_one_asset_owned_source(catalog: Catalog) -> None:
     assert "preamble" not in catalog.translations["rust"]
+
+
+def test_checked_lane_count_contract_has_no_inline_validation_helper(
+    catalog: Catalog,
+) -> None:
+    for backend_id in ("cpp", "rust"):
+        assert "helper_require_same_lanes" not in catalog.translations[backend_id]
 
 
 def test_to_integral_tests_default_to_unqualified_baseline(catalog: Catalog) -> None:

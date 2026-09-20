@@ -46,15 +46,15 @@ def selection_cfg(representation: RustFacadeRepresentation) -> str:
     if representation.requirement is None:
         return fallback_selection_cfg(representation)
     return rust_target_selection_cfg(
-        representation.requirement, representation.stronger_requirements
+        representation.requirement, representation.higher_priority_requirements
     )
 
 
 def native_selection_cfg(selection: RustNativeAliasSelection) -> str:
     if selection.requirement is None:
-        return fallback_cfg(selection.stronger_requirements)
+        return fallback_cfg(selection.higher_priority_requirements)
     return rust_target_selection_cfg(
-        selection.requirement, selection.stronger_requirements
+        selection.requirement, selection.higher_priority_requirements
     )
 
 
@@ -74,7 +74,7 @@ def fallback_selection_cfg(representation: RustFacadeRepresentation) -> str:
     rendered = ", ".join(
         rust_target_selection_cfg(
             exclusion.requirement,
-            exclusion.stronger_requirements,
+            exclusion.higher_priority_requirements,
         )
         for exclusion in representation.fallback_exclusions
     )

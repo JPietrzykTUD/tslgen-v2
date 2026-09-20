@@ -24,9 +24,7 @@ from tslc.backend.rust_facades import (
     RustAlgorithmPrimitiveFacade,
     rust_algorithm_primitive_facades,
 )
-from tslc.backend.rust_names import rust_primitive_trait_name
 from tslc.backend.rust_static_selection import RustStaticVectorMapping
-from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.compiler_assets import RenderAssets
 
 
@@ -114,26 +112,31 @@ def rust_algorithm_support_module(
         parts.append(selected_load_impls)
     parts.append(
         _rust_algorithm_masked_store_impls(
-            impl_targets, plan.helper("masked_store").supported
+            impl_targets,
+            plan.helper_binding("masked_store").facade,
         )
     )
     compress_store_impls = _rust_algorithm_compress_store_impls(
-        impl_targets, plan.helper("compress_store").supported
+        impl_targets,
+        plan.helper_binding("compress_store").facade,
     )
     if compress_store_impls:
         parts.append(compress_store_impls)
     mask_population_count_impls = _rust_algorithm_mask_population_count_impls(
-        impl_targets, plan.helper("mask_population_count").supported
+        impl_targets,
+        plan.helper_binding("mask_population_count").facade,
     )
     if mask_population_count_impls:
         parts.append(mask_population_count_impls)
     integral_mask_impls = _rust_algorithm_integral_mask_impls(
-        impl_targets, plan.helper("integral_mask").supported
+        impl_targets,
+        plan.helper_binding("integral_mask").facade,
     )
     if integral_mask_impls:
         parts.append(integral_mask_impls)
     mask_from_integral_impls = _rust_algorithm_mask_from_integral_impls(
-        impl_targets, plan.helper("mask_from_integral").supported
+        impl_targets,
+        plan.helper_binding("mask_from_integral").facade,
     )
     if mask_from_integral_impls:
         parts.append(mask_from_integral_impls)
@@ -220,10 +223,10 @@ def _rust_algorithm_load_store_impl(
     write_facade: RustAlgorithmPrimitiveFacade,
 ) -> str:
     vector = target.vector
-    read_name = rust_raw_identifier(read_facade.primitive_name)
-    write_name = rust_raw_identifier(write_facade.primitive_name)
-    read_trait = rust_primitive_trait_name(read_facade.primitive_name)
-    write_trait = rust_primitive_trait_name(write_facade.primitive_name)
+    read_name = read_facade.function_name
+    write_name = write_facade.function_name
+    read_trait = read_facade.trait_name
+    write_trait = write_facade.trait_name
     if write_facade.overload_parameter_positions:
         write_bound = (
             f"        <{vector} as SimdVector>::RegisterType:\n"
@@ -256,14 +259,32 @@ def _rust_algorithm_selected_load_impls(
     plan: RustAlgorithmProfilePlan,
     read_facade: RustAlgorithmPrimitiveFacade,
 ) -> str:
-    if not plan.helper("selected_load").supported:
+    vector_zero, vector_to_array, vector_from_array = (
+        binding.facade for binding in plan.helper_bindings_for("selected_load")
+    )
+    array_facades = (vector_zero, vector_to_array, vector_from_array)
+    if any(facade is None for facade in array_facades):
         return ""
+    assert vector_zero is not None
+    assert vector_to_array is not None
+    assert vector_from_array is not None
+    selected_read = plan.helper_binding("gather_narrow").facade
     parts = [
         _rust_algorithm_scalar_selected_load_impl(read_facade),
-        _rust_algorithm_generic_selected_load_impl(),
+        _rust_algorithm_generic_selected_load_impl(
+            vector_zero,
+            vector_to_array,
+            vector_from_array,
+        ),
     ]
     parts.extend(
-        _rust_algorithm_selected_load_impl(target)
+        _rust_algorithm_selected_load_impl(
+            target,
+            selected_read,
+            vector_zero,
+            vector_to_array,
+            vector_from_array,
+        )
         for target in plan.selected_load_targets
     )
     return "\n\n".join(parts)
@@ -273,8 +294,8 @@ def _rust_algorithm_scalar_selected_load_impl(
     read_facade: RustAlgorithmPrimitiveFacade,
 ) -> str:
     vector = "Simd<T, Scalar>"
-    read_name = rust_raw_identifier(read_facade.primitive_name)
-    read_trait = rust_primitive_trait_name(read_facade.primitive_name)
+    read_name = read_facade.function_name
+    read_trait = read_facade.trait_name
     return (
         f"    impl<T, const SCALE: u32> SelectedLoad<{vector}, SCALE> for Profile\n"
         "    where\n"
@@ -295,21 +316,25 @@ def _rust_algorithm_scalar_selected_load_impl(
     )
 
 
-def _rust_algorithm_generic_selected_load_impl() -> str:
+def _rust_algorithm_generic_selected_load_impl(
+    vector_zero: RustAlgorithmPrimitiveFacade,
+    vector_to_array: RustAlgorithmPrimitiveFacade,
+    vector_from_array: RustAlgorithmPrimitiveFacade,
+) -> str:
     vector = "Simd<T, Generic<N>>"
     return (
         f"    impl<T, const N: usize, const SCALE: u32> SelectedLoad<{vector}, SCALE> for Profile\n"
         "    where\n"
         f"        {vector}: StaticSimdVector<BaseType = T>\n"
-        "            + super::super::detail::primitives::Set_zeroImpl\n"
-        "            + super::super::detail::primitives::To_arrayImpl\n"
-        "            + super::super::detail::primitives::From_arrayImpl,\n"
+        f"            + super::super::detail::primitives::{vector_zero.trait_name}\n"
+        f"            + super::super::detail::primitives::{vector_to_array.trait_name}\n"
+        f"            + super::super::detail::primitives::{vector_from_array.trait_name},\n"
         "        T: Copy,\n"
         "    {\n"
         f"        unsafe fn load_selected(input: *const T, indices: *const usize)\n"
         f"            -> <{vector} as SimdVector>::RegisterType {{\n"
         "            unsafe {\n"
-        f"                let mut result = super::super::to_array::<{vector}>(super::super::set_zero::<{vector}>());\n"
+        f"                let mut result = super::super::{vector_to_array.function_name}::<{vector}>(super::super::{vector_zero.function_name}::<{vector}>());\n"
         f"                let lanes = <{vector} as StaticSimdVector>::ELEMENT_COUNT;\n"
         "                let mut lane = 0usize;\n"
         "                while lane < lanes {\n"
@@ -320,7 +345,7 @@ def _rust_algorithm_generic_selected_load_impl() -> str:
         "                    result[lane] = ptr.read();\n"
         "                    lane += 1;\n"
         "                }\n"
-        f"                super::super::from_array::<{vector}>(&result)\n"
+        f"                super::super::{vector_from_array.function_name}::<{vector}>(&result)\n"
         "            }\n"
         "        }\n"
         "    }"
@@ -329,6 +354,10 @@ def _rust_algorithm_generic_selected_load_impl() -> str:
 
 def _rust_algorithm_selected_load_impl(
     target: RustAlgorithmSelectedLoadTarget,
+    selected_read: RustAlgorithmPrimitiveFacade | None,
+    vector_zero: RustAlgorithmPrimitiveFacade,
+    vector_to_array: RustAlgorithmPrimitiveFacade,
+    vector_from_array: RustAlgorithmPrimitiveFacade,
 ) -> str:
     mapping = target.mapping
     base = mapping.base_spelling
@@ -336,27 +365,35 @@ def _rust_algorithm_selected_load_impl(
     default_scale = mapping.total_bits // mapping.lanes // 8
     vector = _rust_algorithm_vector_type(mapping)
     if not target.use_gather_narrow:
-        return _rust_algorithm_array_selected_load_impl(vector, base)
+        return _rust_algorithm_array_selected_load_impl(
+            vector,
+            base,
+            vector_zero,
+            vector_to_array,
+            vector_from_array,
+        )
+    if selected_read is None:
+        raise ValueError("Rust selected-load target has no bound gather helper")
     index_vector = f"Simd<usize, Generic<{lane_count}>>"
     return (
         f"    impl<const SCALE: u32> SelectedLoad<{vector}, SCALE> for Profile\n"
         "    where\n"
         f"        {vector}: StaticSimdVector<BaseType = {base}>\n"
-        f"            + super::super::detail::primitives::Gather_narrowImpl<{index_vector}, "
+        f"            + super::super::detail::primitives::{selected_read.trait_name}<{index_vector}, "
         f"<usize as crate::tsl_core::BaseTypeDispatch>::Key, {default_scale}, 1>\n"
-        f"            + super::super::detail::primitives::Gather_narrowImpl<{index_vector}, "
+        f"            + super::super::detail::primitives::{selected_read.trait_name}<{index_vector}, "
         f"<usize as crate::tsl_core::BaseTypeDispatch>::Key, SCALE, 1>,\n"
         "    {\n"
         f"        unsafe fn load_selected(input: *const {base}, indices: *const usize)\n"
         f"            -> <{vector} as SimdVector>::RegisterType {{\n"
         "            unsafe {\n"
         "                if SCALE == 0 {\n"
-        f"                    super::super::gather_narrow::<{vector}, {index_vector}, {default_scale}, 1>(\n"
+        f"                    super::super::{selected_read.function_name}::<{vector}, {index_vector}, {default_scale}, 1>(\n"
         "                        input,\n"
         "                        indices,\n"
         "                    )\n"
         "                } else {\n"
-        f"                    super::super::gather_narrow::<{vector}, {index_vector}, SCALE, 1>(\n"
+        f"                    super::super::{selected_read.function_name}::<{vector}, {index_vector}, SCALE, 1>(\n"
         "                        input,\n"
         "                        indices,\n"
         "                    )\n"
@@ -367,19 +404,25 @@ def _rust_algorithm_selected_load_impl(
     )
 
 
-def _rust_algorithm_array_selected_load_impl(vector: str, base: str) -> str:
+def _rust_algorithm_array_selected_load_impl(
+    vector: str,
+    base: str,
+    vector_zero: RustAlgorithmPrimitiveFacade,
+    vector_to_array: RustAlgorithmPrimitiveFacade,
+    vector_from_array: RustAlgorithmPrimitiveFacade,
+) -> str:
     return (
         f"    impl<const SCALE: u32> SelectedLoad<{vector}, SCALE> for Profile\n"
         "    where\n"
         f"        {vector}: StaticSimdVector<BaseType = {base}>\n"
-        "            + super::super::detail::primitives::Set_zeroImpl\n"
-        "            + super::super::detail::primitives::To_arrayImpl\n"
-        "            + super::super::detail::primitives::From_arrayImpl,\n"
+        f"            + super::super::detail::primitives::{vector_zero.trait_name}\n"
+        f"            + super::super::detail::primitives::{vector_to_array.trait_name}\n"
+        f"            + super::super::detail::primitives::{vector_from_array.trait_name},\n"
         "    {\n"
         f"        unsafe fn load_selected(input: *const {base}, indices: *const usize)\n"
         f"            -> <{vector} as SimdVector>::RegisterType {{\n"
         "            unsafe {\n"
-        f"                let mut result = super::super::to_array::<{vector}>(super::super::set_zero::<{vector}>());\n"
+        f"                let mut result = super::super::{vector_to_array.function_name}::<{vector}>(super::super::{vector_zero.function_name}::<{vector}>());\n"
         f"                let lanes = <{vector} as StaticSimdVector>::ELEMENT_COUNT;\n"
         "                let mut lane = 0usize;\n"
         "                while lane < lanes {\n"
@@ -390,7 +433,7 @@ def _rust_algorithm_array_selected_load_impl(vector: str, base: str) -> str:
         "                    result[lane] = ptr.read();\n"
         "                    lane += 1;\n"
         "                }\n"
-        f"                super::super::from_array::<{vector}>(&result)\n"
+        f"                super::super::{vector_from_array.function_name}::<{vector}>(&result)\n"
         "            }\n"
         "        }\n"
         "    }"
@@ -399,29 +442,32 @@ def _rust_algorithm_array_selected_load_impl(vector: str, base: str) -> str:
 
 def _rust_algorithm_masked_store_impls(
     targets: tuple[RustAlgorithmImplTarget, ...],
-    supported: bool,
+    facade: RustAlgorithmPrimitiveFacade | None,
 ) -> str:
-    if not supported:
+    if facade is None:
         return ""
     return "\n\n".join(
-        _rust_algorithm_masked_store_impl(target) for target in targets
+        _rust_algorithm_masked_store_impl(target, facade) for target in targets
     )
 
 
-def _rust_algorithm_masked_store_impl(target: RustAlgorithmImplTarget) -> str:
+def _rust_algorithm_masked_store_impl(
+    target: RustAlgorithmImplTarget,
+    facade: RustAlgorithmPrimitiveFacade,
+) -> str:
     vector = target.vector
     return (
         f"    impl<{target.type_parameters}> MaskedStore<{vector}> for Profile\n"
         "    where\n"
         f"        {vector}: StaticSimdVector<BaseType = T>\n"
-        "            + super::super::detail::primitives::Store_maskImpl<false>,\n"
+        f"            + super::super::detail::primitives::{facade.trait_name}<false>,\n"
         "    {\n"
         f"        unsafe fn store_mask_unaligned(\n"
         f"            mask: <{vector} as SimdVector>::MaskType,\n"
         f"            ptr: *mut T,\n"
         f"            value: <{vector} as SimdVector>::RegisterType,\n"
         "        ) {\n"
-        f"            unsafe {{ super::super::store_mask::<{vector}, false>(mask, ptr, value) }}\n"
+        f"            unsafe {{ super::super::{facade.function_name}::<{vector}, false>(mask, ptr, value) }}\n"
         "        }\n"
         "    }"
     )
@@ -429,29 +475,32 @@ def _rust_algorithm_masked_store_impl(target: RustAlgorithmImplTarget) -> str:
 
 def _rust_algorithm_compress_store_impls(
     targets: tuple[RustAlgorithmImplTarget, ...],
-    supported: bool,
+    facade: RustAlgorithmPrimitiveFacade | None,
 ) -> str:
-    if not supported:
+    if facade is None:
         return ""
     return "\n\n".join(
-        _rust_algorithm_compress_store_impl(target) for target in targets
+        _rust_algorithm_compress_store_impl(target, facade) for target in targets
     )
 
 
-def _rust_algorithm_compress_store_impl(target: RustAlgorithmImplTarget) -> str:
+def _rust_algorithm_compress_store_impl(
+    target: RustAlgorithmImplTarget,
+    facade: RustAlgorithmPrimitiveFacade,
+) -> str:
     vector = target.vector
     return (
         f"    impl<{target.type_parameters}> CompressStore<{vector}> for Profile\n"
         "    where\n"
         f"        {vector}: StaticSimdVector<BaseType = T>\n"
-        "            + super::super::detail::primitives::Compress_storeImpl<true>,\n"
+        f"            + super::super::detail::primitives::{facade.trait_name}<true>,\n"
         "    {\n"
         "        unsafe fn compress_store(\n"
         f"            mask: <{vector} as SimdVector>::MaskType,\n"
         "            ptr: *mut T,\n"
         f"            value: <{vector} as SimdVector>::RegisterType,\n"
         "        ) {\n"
-        f"            unsafe {{ super::super::compress_store::<{vector}, true>(mask, ptr, value) }}\n"
+        f"            unsafe {{ super::super::{facade.function_name}::<{vector}, true>(mask, ptr, value) }}\n"
         "        }\n"
         "    }"
     )
@@ -459,27 +508,29 @@ def _rust_algorithm_compress_store_impl(target: RustAlgorithmImplTarget) -> str:
 
 def _rust_algorithm_mask_population_count_impls(
     targets: tuple[RustAlgorithmImplTarget, ...],
-    supported: bool,
+    facade: RustAlgorithmPrimitiveFacade | None,
 ) -> str:
-    if not supported:
+    if facade is None:
         return ""
     return "\n\n".join(
-        _rust_algorithm_mask_population_count_impl(target) for target in targets
+        _rust_algorithm_mask_population_count_impl(target, facade)
+        for target in targets
     )
 
 
 def _rust_algorithm_mask_population_count_impl(
     target: RustAlgorithmImplTarget,
+    facade: RustAlgorithmPrimitiveFacade,
 ) -> str:
     vector = target.vector
     return (
         f"    impl<{target.type_parameters}> MaskPopulationCount<{vector}> for Profile\n"
         "    where\n"
         f"        {vector}: StaticSimdVector\n"
-        "            + super::super::detail::primitives::Mask_population_countImpl,\n"
+        f"            + super::super::detail::primitives::{facade.trait_name},\n"
         "    {\n"
         f"        fn mask_population_count(mask: <{vector} as SimdVector>::MaskType) -> usize {{\n"
-        f"            super::super::mask_population_count::<{vector}>(mask)\n"
+        f"            super::super::{facade.function_name}::<{vector}>(mask)\n"
         "        }\n"
         "    }"
     )
@@ -487,26 +538,29 @@ def _rust_algorithm_mask_population_count_impl(
 
 def _rust_algorithm_integral_mask_impls(
     targets: tuple[RustAlgorithmImplTarget, ...],
-    supported: bool,
+    facade: RustAlgorithmPrimitiveFacade | None,
 ) -> str:
-    if not supported:
+    if facade is None:
         return ""
     return "\n\n".join(
-        _rust_algorithm_integral_mask_impl(target) for target in targets
+        _rust_algorithm_integral_mask_impl(target, facade) for target in targets
     )
 
 
-def _rust_algorithm_integral_mask_impl(target: RustAlgorithmImplTarget) -> str:
+def _rust_algorithm_integral_mask_impl(
+    target: RustAlgorithmImplTarget,
+    facade: RustAlgorithmPrimitiveFacade,
+) -> str:
     vector = target.vector
     return (
         f"    impl<{target.type_parameters}> IntegralMask<{vector}> for Profile\n"
         "    where\n"
         f"        {vector}: StaticSimdVector\n"
-        "            + super::super::detail::primitives::To_integralImpl,\n"
+        f"            + super::super::detail::primitives::{facade.trait_name},\n"
         "    {\n"
         f"        fn to_integral(mask: <{vector} as SimdVector>::MaskType)\n"
         f"            -> <{vector} as SimdVector>::ImaskType {{\n"
-        f"            super::super::to_integral::<{vector}>(mask)\n"
+        f"            super::super::{facade.function_name}::<{vector}>(mask)\n"
         "        }\n"
         "    }"
     )
@@ -514,28 +568,30 @@ def _rust_algorithm_integral_mask_impl(target: RustAlgorithmImplTarget) -> str:
 
 def _rust_algorithm_mask_from_integral_impls(
     targets: tuple[RustAlgorithmImplTarget, ...],
-    supported: bool,
+    facade: RustAlgorithmPrimitiveFacade | None,
 ) -> str:
-    if not supported:
+    if facade is None:
         return ""
     return "\n\n".join(
-        _rust_algorithm_mask_from_integral_impl(target) for target in targets
+        _rust_algorithm_mask_from_integral_impl(target, facade)
+        for target in targets
     )
 
 
 def _rust_algorithm_mask_from_integral_impl(
     target: RustAlgorithmImplTarget,
+    facade: RustAlgorithmPrimitiveFacade,
 ) -> str:
     vector = target.vector
     return (
         f"    impl<{target.type_parameters}> MaskFromIntegral<{vector}> for Profile\n"
         "    where\n"
         f"        {vector}: StaticSimdVector\n"
-        "            + super::super::detail::primitives::To_maskImpl,\n"
+        f"            + super::super::detail::primitives::{facade.trait_name},\n"
         "    {\n"
         f"        fn to_mask(mask: <{vector} as SimdVector>::ImaskType)\n"
         f"            -> <{vector} as SimdVector>::MaskType {{\n"
-        f"            super::super::to_mask::<{vector}>(mask)\n"
+        f"            super::super::{facade.function_name}::<{vector}>(mask)\n"
         "        }\n"
         "    }"
     )

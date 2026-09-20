@@ -6,7 +6,6 @@
 #include <cmath>
 #include <cstring>
 #include <limits>
-#include <stdexcept>
 #include <type_traits>
 
 #if defined(__x86_64__) || defined(_M_X64)
@@ -168,19 +167,6 @@ inline void lane_set_unchecked(
     (*value)[index] = static_cast<Value&&>(lane);
 }
 
-inline void require_same_lanes(std::size_t source_lanes, std::size_t target_lanes) {
-    if (source_lanes != target_lanes) {
-#if defined(__SYCL_DEVICE_ONLY__) || defined(__wasm__) || defined(__wasm32__) || \
-    defined(__wasm64__) || \
-    (!defined(__cpp_exceptions) && !defined(_CPPUNWIND))
-        __builtin_trap();
-#else
-        throw std::invalid_argument(
-            "lane-preserving conversion requires equal source and target lane counts"
-        );
-#endif
-    }
-}
 #if defined(__x86_64__) || defined(_M_X64)
 #if defined(__GNUC__) || defined(__clang__)
 __attribute__((target("rdrnd")))

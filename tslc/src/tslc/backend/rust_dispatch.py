@@ -348,7 +348,7 @@ def plan_rust_dispatch(
             type_tag,
             alias.base_spelling,
             signature,
-            _order_hardware_candidates(candidates),
+            _order_hardware_candidates(candidates, static_selection),
             baseline,
         )
         slots.extend(
@@ -485,7 +485,20 @@ def _hardware_candidate(
 
 def _order_hardware_candidates(
     candidates: list[RustDispatchEntryPoint],
+    static_selection: RustStaticSelectionPlan,
 ) -> tuple[RustDispatchEntryPoint, ...]:
+    rank_by_profile = {
+        selection.profile_name: rank
+        for rank, selection in enumerate(static_selection.profiles)
+    }
+    candidate_names = tuple(
+        _entry_profile_name(candidate) for candidate in candidates
+    )
+    if len(set(candidate_names)) != len(candidate_names):
+        raise ValueError("Rust dispatch candidates must have unique profiles")
+    if any(name not in rank_by_profile for name in candidate_names):
+        raise ValueError("Rust dispatch candidates must belong to static selection")
+
     ordered: list[RustDispatchEntryPoint] = []
     by_arch: dict[str, list[RustDispatchEntryPoint]] = {}
     for candidate in candidates:
@@ -494,19 +507,19 @@ def _order_hardware_candidates(
     for _target_arch, entries in sorted(by_arch.items()):
         ranked = sorted(
             entries,
-            key=lambda entry: (
-                -len(entry.requirement.target_features)
-                if entry.requirement is not None
-                else 0,
-                -entry.mapping.lanes,
-                entry.profile_name or "",
-            ),
+            key=lambda entry: rank_by_profile[_entry_profile_name(entry)],
         )
         ordered.extend(
             replace(entry, entry_index=index)
             for index, entry in enumerate(ranked, start=1)
         )
     return tuple(ordered)
+
+
+def _entry_profile_name(entry: RustDispatchEntryPoint) -> str:
+    if entry.profile_name is None:
+        raise ValueError("Rust dispatch hardware candidates require a profile")
+    return entry.profile_name
 
 
 def _baseline_entry(
