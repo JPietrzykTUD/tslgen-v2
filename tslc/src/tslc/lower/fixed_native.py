@@ -107,6 +107,13 @@ def lower_preferred_fixed_native(
     }:
         return None
 
+    # The delegated mask bridge `to_mask<fixed>(to_integral<overlay>(m))`
+    # typechecks only when the fixed-native integral mask is a scalar bitmask.
+    # SVE/RVV keep masks in predicate registers, so their masked overlay ops
+    # keep the authored body.
+    if _shape_has_mask(shape) and not _fixed_imask_is_scalar(fixed):
+        return None
+
     target_vectors = _target_vectors(selected, context, fixed.isa_name, target)
     if target_vectors is None:
         return None
@@ -222,6 +229,18 @@ class _Unsupported:
 
 
 _UNSUPPORTED = _Unsupported()
+
+
+def _shape_has_mask(shape: SignatureShape) -> bool:
+    return "m" in shape.param_kinds or shape.result_kind == "m"
+
+
+def _fixed_imask_is_scalar(extension: Extension) -> bool:
+    """Whether ``extension``'s integral mask is the scalar bitmask ``to_integral`` yields."""
+
+    if extension.imask_policy.kind in {"lane_bitmask", "unsigned_scalar"}:
+        return True
+    return extension.mask_policy.kind == "native_predicate_by_lanes"
 
 
 def _supports_shape(shape: SignatureShape, has_target: bool) -> bool:
