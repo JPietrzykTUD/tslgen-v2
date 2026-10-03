@@ -185,7 +185,7 @@ def test_generated_profile_shards_preserve_exhaustive_and_coexistence_lanes(
         {
             "backend": "cpp",
             "name": "cpp-riscv-0",
-            "profiles": "rvv",
+            "profiles": "rvv,rvv256m1,rvv512m2,rvv1024m4,rvv1024m1,rvv128mf2",
         }
     ]
     sve_profiles = {"sve", "sve128", "sve256", "sve512"}

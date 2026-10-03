@@ -273,7 +273,7 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
               }
             """
     rvv:
-      arith:
+      ?i8:
         requires [v]
         safety:
           internal_unsafe true
@@ -299,6 +299,42 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
                 offset += 1;
               }
             }
+          """
+      [si16, ui16]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+            var<const_infer>(count, call<primitive=mask_population_count[Vec]>(m));
+            var<const_infer>(packed, intrin<vcompress, build[infix="vm", infix_sep="_"]>(a, m, value(vector::runtime_length)));
+            intrin<vse16, build[infix="v", infix_sep="_"]>(ptr, packed, count);
+          """
+      [si32, ui32, f32]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+            var<const_infer>(count, call<primitive=mask_population_count[Vec]>(m));
+            var<const_infer>(packed, intrin<vcompress, build[infix="vm", infix_sep="_"]>(a, m, value(vector::runtime_length)));
+            intrin<vse32, build[infix="v", infix_sep="_"]>(ptr, packed, count);
+          """
+      [si64, ui64, f64]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+            var<const_infer>(count, call<primitive=mask_population_count[Vec]>(m));
+            var<const_infer>(packed, intrin<vcompress, build[infix="vm", infix_sep="_"]>(a, m, value(vector::runtime_length)));
+            intrin<vse64, build[infix="v", infix_sep="_"]>(ptr, packed, count);
           """
 prim<v:=(m,cptr)>[aligned=true, op=expand] expand_load(m, ptr):
   operation load

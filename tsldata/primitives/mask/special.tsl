@@ -451,12 +451,18 @@ prim<im:=(imt,im,usize)> insert_imask(orig, data, position):
                     value(vector::length), value(generic::length(OutVec))
                   ));
                 """
-    [sve128, sve256, sve512]:
+    [sve128, sve256, sve512, rvv256m1, rvv512m2, rvv1024m4, rvv1024m1, rvv128mf2, rvv512mf2]:
       arith:
         requires:
           sve128 [sve]
           sve256 [sve]
           sve512 [sve]
+          rvv256m1 [v]
+          rvv512m2 [v]
+          rvv1024m4 [v]
+          rvv1024m1 [v]
+          rvv128mf2 [v]
+          rvv512mf2 [v]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -665,12 +671,18 @@ prim<im:=(im,usize)> extract_imask(data, position):
                     value(vector::length), value(generic::length(OutVec))
                   ));
                 """
-    [sve128, sve256, sve512]:
+    [sve128, sve256, sve512, rvv256m1, rvv512m2, rvv1024m4, rvv1024m1, rvv128mf2, rvv512mf2]:
       arith:
         requires:
           sve128 [sve]
           sve256 [sve]
           sve512 [sve]
+          rvv256m1 [v]
+          rvv512m2 [v]
+          rvv1024m4 [v]
+          rvv1024m1 [v]
+          rvv128mf2 [v]
+          rvv512mf2 [v]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1015,7 +1027,7 @@ prim<m:=(m,m)> mask_deinterleave_odd(mask_a, mask_b):
         implementation:
           tsil "complete(intrin<svuzp2_b64>(mask_a, mask_b));"
     rvv:
-      arith:
+      ?i8:
         requires [v]
         safety:
           internal_unsafe true
@@ -1041,5 +1053,33 @@ prim<m:=(m,m)> mask_deinterleave_odd(mask_a, mask_b):
             }
             complete(call<primitive=unequal_zero[Vec]>(
               call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result)
+            ));
+          """
+      # vrgather yields 0 for indices >= VLMAX, so from_a fills the low half and from_b the high half.
+      [si16, ui16, si32, ui32, si64, ui64, f32, f64]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(UBase, base::unsigned_of(base::in));
+            let<type>(UVec, vector::as_base(UBase));
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<const_infer>(ids, intrin<vid, build[infix="v", infix_sep="_", suffix=UBase]>(lanes));
+            var<const_infer>(odd_sources, intrin<vadd, build[infix="vx", infix_sep="_", suffix=UBase]>(
+              intrin<vsll, build[infix="vx", infix_sep="_", suffix=UBase]>(ids, 1, lanes), 1, lanes
+            ));
+            var<const_infer>(from_a, intrin<vrgather, build[infix="vv", infix_sep="_", suffix=UBase]>(
+              call<primitive=to_vector[UVec]>(mask_a), odd_sources, lanes
+            ));
+            var<const_infer>(from_b, intrin<vrgather, build[infix="vv", infix_sep="_", suffix=UBase]>(
+              call<primitive=to_vector[UVec]>(mask_b),
+              intrin<vsub, build[infix="vx", infix_sep="_", suffix=UBase]>(odd_sources, cast<static>(UBase, lanes), lanes),
+              lanes
+            ));
+            complete(call<primitive=unequal_zero[UVec]>(
+              intrin<vor, build[infix="vv", infix_sep="_", suffix=UBase]>(from_a, from_b, lanes)
             ));
           """

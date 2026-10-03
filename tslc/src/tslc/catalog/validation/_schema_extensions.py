@@ -80,7 +80,14 @@ KNOWN_MASK_POLICY_FIELDS = frozenset(
 )
 KNOWN_IMASK_POLICY_FIELDS = frozenset({"kind"})
 KNOWN_INTRINSIC_COMPOSE_FIELDS = frozenset(
-    {"order", "prefix", "require_explicit_suffix", "suffix"}
+    {
+        "mask_suffix",
+        "order",
+        "prefix",
+        "require_explicit_suffix",
+        "single_register_suffix",
+        "suffix",
+    }
 )
 KNOWN_INTRINSIC_SUFFIX_FIELDS = frozenset({"by_type"})
 KNOWN_ACTIVE_WHEN_FIELDS = frozenset({"target_features", "compile_modes"})
@@ -198,14 +205,15 @@ def validate_extension_block(
             validate_backend_key_fields(
                 children(prefix), backend_ids, diagnostics, owner="intrinsic prefix"
             )
-        suffix = child(compose, "suffix")
-        if suffix is not None:
-            validate_known_fields(
-                children(suffix),
-                KNOWN_INTRINSIC_SUFFIX_FIELDS,
-                diagnostics,
-                owner="intrinsic suffix",
-            )
+        for key in ("suffix", "mask_suffix", "single_register_suffix"):
+            suffix = child(compose, key)
+            if suffix is not None:
+                validate_known_fields(
+                    children(suffix),
+                    KNOWN_INTRINSIC_SUFFIX_FIELDS,
+                    diagnostics,
+                    owner=f"intrinsic {key.replace('_', ' ')}",
+                )
         order_field = child(compose, "order")
         order = field_text(order_field)
         known_orders = tuple(item.value for item in IntrinsicNameOrder)

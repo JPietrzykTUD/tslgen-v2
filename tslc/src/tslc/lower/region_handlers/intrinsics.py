@@ -98,7 +98,16 @@ class IntrinLowerer:
                 source=region.source,
             )
             return region.full_text
-        name = self._post_name(selector, name, context)
+        posted = self._post_name(selector, name, context)
+        if posted is None:
+            context.effects.skip(
+                "TSL-LOWER-UNRESOLVED-SUFFIX",
+                f"could not resolve intrinsic post fragment {selector.get('post')!r} "
+                f"for {context.env.extension.name!r}",
+                source=region.source,
+            )
+            return region.full_text
+        name = posted
         # Const-generic immediate bridge: a Rust immediate intrinsic takes the count as a
         # const generic whose type differs across ISAs (avx2 `i32` vs avx512 `u32`), and a
         # single shared const can't satisfy both. When the immediate declares the `literal_match`
@@ -116,7 +125,7 @@ class IntrinLowerer:
 
     def _post_name(
         self, selector: IntrinsicSelector, name: str, context: LoweringSession
-    ) -> str:
+    ) -> str | None:
         post = selector.get("post")
         if post is None:
             return name
@@ -128,6 +137,11 @@ class IntrinLowerer:
             if context.env.extension.mask_policy.kind == "native_predicate_by_lanes":
                 return f"{name}_mask"
             return name
+        if "::" in post:
+            value = self._evaluator.evaluate(post, context)
+            if not isinstance(value, TextValue):
+                return None
+            post = value.as_text()
         return f"{name}_{post}"
 
     def _immediate_forward(

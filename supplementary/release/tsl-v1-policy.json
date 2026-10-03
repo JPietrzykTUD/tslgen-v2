@@ -76,17 +76,29 @@
       "id": "riscv-vector",
       "backend": "cpp",
       "profiles": [
-        "rvv"
+        "rvv",
+        "rvv256m1",
+        "rvv512m2",
+        "rvv1024m4",
+        "rvv1024m1",
+        "rvv128mf2",
+        "rvv512mf2"
       ],
       "runtime_scalable_profiles": [
         "rvv"
       ],
       "profile_extensions": {
-        "rvv": "rvv"
+        "rvv": "rvv",
+        "rvv256m1": "rvv256m1",
+        "rvv512m2": "rvv512m2",
+        "rvv1024m4": "rvv1024m4",
+        "rvv1024m1": "rvv1024m1",
+        "rvv128mf2": "rvv128mf2",
+        "rvv512mf2": "rvv512mf2"
       },
       "excludes": [
         "optional RVV extensions",
-        "LMUL values other than the declared LMUL=1 profile",
+        "LMUL values other than the declared profiles",
         "stable Rust RVV"
       ]
     }
@@ -135,7 +147,24 @@
       "reason": "A fixed-SVE profile emits exactly one fixed-SVE register width, so no distinct same-family source or destination width exists for this representation-change callable."
     },
     {
-      "profiles": ["sve", "sve128", "sve256", "sve512", "rvv"],
+      "profiles": ["rvv256m1", "rvv512m2", "rvv1024m4", "rvv1024m1", "rvv128mf2", "rvv512mf2"],
+      "backend": "cpp",
+      "callable_identities": [
+        "concat#v:=(v,v)->extension:ToExtension",
+        "extract[cast=reinterpret]#v:=(v,sImm)->extension:ToExtension",
+        "extract_imask#im:=(im,usize)->extension:ToExtension",
+        "insert[cast=reinterpret]#v:=(vt,v,sImm)->extension:ToExtension",
+        "insert_imask#im:=(imt,im,usize)->extension:ToExtension",
+        "resize_down#v:=v->extension:ToExtension",
+        "resize_up_undef[value=undef]#v:=v->extension:ToExtension",
+        "resize_up_zero[value=zero]#v:=v->extension:ToExtension"
+      ],
+      "type_tags": [],
+      "reason_id": "TSL-V1-FIXED-RVV-NO-COMPATIBLE-WIDTH",
+      "reason": "A fixed-length RVV profile emits exactly one register-group width, so no distinct same-family source or destination width exists for this representation-change callable."
+    },
+    {
+      "profiles": ["sve", "sve128", "sve256", "sve512", "rvv", "rvv256m1", "rvv512m2", "rvv1024m4", "rvv1024m1"],
       "backend": "cpp",
       "callable_identities": [
         "convert_up[cast=convert,direction=up]#v:=(v,sImm)->base:ToBase",
@@ -146,7 +175,7 @@
       "reason": "The stable scalar domain has no wider target lane type for these source types."
     },
     {
-      "profiles": ["sve128", "sve256", "sve512"],
+      "profiles": ["sve128", "sve256", "sve512", "rvv256m1", "rvv512m2", "rvv1024m4", "rvv1024m1"],
       "backend": "cpp",
       "callable_identities": [
         "extract_imask#im:=(im,usize)->base:ToBase"
@@ -156,7 +185,19 @@
       "reason": "The stable scalar domain has no wider target lane type for these source types."
     },
     {
-      "profiles": ["sve", "sve128", "sve256", "sve512", "rvv"],
+      "profiles": ["rvv128mf2", "rvv512mf2"],
+      "backend": "cpp",
+      "callable_identities": [
+        "convert_up[cast=convert,direction=up]#v:=(v,sImm)->base:ToBase",
+        "extract_imask#im:=(im,usize)->base:ToBase",
+        "load_convert_up#v:=cptr+->base:ToBase"
+      ],
+      "type_tags": ["si32", "ui32", "f32"],
+      "reason_id": "TSL-V1-FRACTIONAL-RVV-NO-64-BIT-LANES",
+      "reason": "An LMUL 1/2 RVV profile has no 64-bit lanes (RVV requires SEW <= LMUL * ELEN), so these 32-bit source types have no wider target lane type."
+    },
+    {
+      "profiles": ["sve", "sve128", "sve256", "sve512", "rvv", "rvv256m1", "rvv512m2", "rvv1024m4", "rvv1024m1", "rvv128mf2", "rvv512mf2"],
       "backend": "cpp",
       "callable_identities": [
         "convert_down[cast=convert,direction=down]#v:=(v,sImm)->base:ToBase"
@@ -166,7 +207,7 @@
       "reason": "The stable scalar domain has no supported narrower target lane type for these source types."
     },
     {
-      "profiles": ["sve128", "sve256", "sve512"],
+      "profiles": ["sve128", "sve256", "sve512", "rvv256m1", "rvv512m2", "rvv1024m4", "rvv1024m1", "rvv128mf2", "rvv512mf2"],
       "backend": "cpp",
       "callable_identities": [
         "insert_imask#im:=(imt,im,usize)->base:ToBase"

@@ -53,6 +53,14 @@ def _resolve_extension_inheritance(
                 **parent.intrinsic_composition.suffix_by_type,
                 **ext.intrinsic_composition.suffix_by_type,
             },
+            mask_suffix_by_type={
+                **parent.intrinsic_composition.mask_suffix_by_type,
+                **ext.intrinsic_composition.mask_suffix_by_type,
+            },
+            single_register_suffix_by_type={
+                **parent.intrinsic_composition.single_register_suffix_by_type,
+                **ext.intrinsic_composition.single_register_suffix_by_type,
+            },
             order=(
                 ext.intrinsic_composition.order
                 if "intrinsic_compose.order" in declared_fields
@@ -68,9 +76,12 @@ def _resolve_extension_inheritance(
             ext,
             family=ext.family or parent.family,
             intrinsic_composition=intrinsic_composition,
-            vector_register_types=_merge_nested_string_maps(
-                parent.vector_register_types,
-                ext.vector_register_types,
+            # A child that declares register types states its whole type set, so a
+            # narrower register (fractional LMUL) can drop types its parent has.
+            vector_register_types=(
+                ext.vector_register_types
+                if "vector_register_types" in declared_fields
+                else parent.vector_register_types
             ),
             backend_headers=_merge_header_maps(parent.backend_headers, ext.backend_headers),
             backend_system_headers=_merge_header_maps(
@@ -219,6 +230,8 @@ def _intrinsic_composition(
 ) -> IntrinsicComposition:
     prefix = _child(field, "prefix")
     suffix = _child(_child(field, "suffix"), "by_type")
+    mask_suffix = _child(_child(field, "mask_suffix"), "by_type")
+    single_register_suffix = _child(_child(field, "single_register_suffix"), "by_type")
     order_text = _field_text(_child(field, "order"))
     order = (
         IntrinsicNameOrder(order_text)
@@ -233,6 +246,14 @@ def _intrinsic_composition(
         suffix_by_type={
             entry.key.text: (_field_text(entry) or "")
             for entry in _children(suffix)
+        },
+        mask_suffix_by_type={
+            entry.key.text: (_field_text(entry) or "")
+            for entry in _children(mask_suffix)
+        },
+        single_register_suffix_by_type={
+            entry.key.text: (_field_text(entry) or "")
+            for entry in _children(single_register_suffix)
         },
         order=order,
         require_explicit_suffix=bool(
@@ -388,17 +409,6 @@ def _backend_list_map(field: ParsedTslField | None) -> dict[str, tuple[str, ...]
         for child in _children(field)
         if (values := _list_text(child))
     }
-
-
-
-def _merge_nested_string_maps(
-    parent: Mapping[str, Mapping[str, str]],
-    child: Mapping[str, Mapping[str, str]],
-) -> dict[str, dict[str, str]]:
-    merged = {key: dict(value) for key, value in parent.items()}
-    for key, value in child.items():
-        merged[key] = {**merged.get(key, {}), **value}
-    return merged
 
 
 

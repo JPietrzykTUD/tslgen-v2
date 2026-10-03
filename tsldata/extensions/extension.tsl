@@ -516,6 +516,18 @@ extension rvv:
         ui16 "u16m1"
         ui32 "u32m1"
         ui64 "u64m1"
+    mask_suffix:
+      by_type:
+        f32 "b32"
+        f64 "b64"
+        si8 "b8"
+        si16 "b16"
+        si32 "b32"
+        si64 "b64"
+        ui8 "b8"
+        ui16 "b16"
+        ui32 "b32"
+        ui64 "b64"
   mask_type_policy:
     kind "native_predicate_by_type"
     backend_spelling_by_type:
@@ -657,6 +669,448 @@ extension sve512:
     kind "native_predicate"
     backend_spelling:
       cpp "svbool_t __attribute__((arm_sve_vector_bits(512)))"
+  integral_mask_type_policy:
+    kind "same_as_mask_type"
+
+# Fixed-length RVV variants for one hardware VLEN, like the fixed SVE ones: types
+# carry riscv_rvv_vector_bits, so a binary needs exactly that VLEN. LMUL > 1
+# widens the register group, LMUL 1/2 halves it and has no 64-bit lanes (RVV
+# needs SEW <= LMUL * ELEN); suffix and mask tables follow the multiplier. Masks
+# stay scalable: clang 22 at -O1+ miscompiles fixed-length vbool16/vbool32
+# values returned from a function.
+extension rvv256m1:
+  extension_name "rvv256m1"
+  inherits "rvv"
+  vector_bits 256
+  native_sort_order 760
+  active_when:
+    target_features ["v"]
+    compile_modes ["rvv_vlen256_lmul1"]
+  supersedes ["rvv"]
+  default_test_target true
+  cpp:
+    compiler_capabilities [rvv_vector_bits_256]
+  vector_register_types:
+    si8:
+      cpp "vint8m1_t __attribute__((riscv_rvv_vector_bits(256)))"
+    ui8:
+      cpp "vuint8m1_t __attribute__((riscv_rvv_vector_bits(256)))"
+    si16:
+      cpp "vint16m1_t __attribute__((riscv_rvv_vector_bits(256)))"
+    ui16:
+      cpp "vuint16m1_t __attribute__((riscv_rvv_vector_bits(256)))"
+    si32:
+      cpp "vint32m1_t __attribute__((riscv_rvv_vector_bits(256)))"
+    ui32:
+      cpp "vuint32m1_t __attribute__((riscv_rvv_vector_bits(256)))"
+    si64:
+      cpp "vint64m1_t __attribute__((riscv_rvv_vector_bits(256)))"
+    ui64:
+      cpp "vuint64m1_t __attribute__((riscv_rvv_vector_bits(256)))"
+    f32:
+      cpp "vfloat32m1_t __attribute__((riscv_rvv_vector_bits(256)))"
+    f64:
+      cpp "vfloat64m1_t __attribute__((riscv_rvv_vector_bits(256)))"
+  register_multiplicity_types:
+    x2:
+      si16:
+        cpp "vint16m2_t __attribute__((riscv_rvv_vector_bits(512)))"
+  mask_type_policy:
+    kind "native_predicate_by_type"
+    backend_spelling_by_type:
+      cpp:
+        si8 "vbool8_t"
+        ui8 "vbool8_t"
+        si16 "vbool16_t"
+        ui16 "vbool16_t"
+        si32 "vbool32_t"
+        ui32 "vbool32_t"
+        si64 "vbool64_t"
+        ui64 "vbool64_t"
+        f32 "vbool32_t"
+        f64 "vbool64_t"
+  integral_mask_type_policy:
+    kind "same_as_mask_type"
+
+extension rvv512m2:
+  extension_name "rvv512m2"
+  inherits "rvv"
+  vector_bits 512
+  native_sort_order 770
+  active_when:
+    target_features ["v"]
+    compile_modes ["rvv_vlen256_lmul2"]
+  supersedes ["rvv"]
+  default_test_target true
+  cpp:
+    compiler_capabilities [rvv_vector_bits_256]
+  vector_register_types:
+    si8:
+      cpp "vint8m2_t __attribute__((riscv_rvv_vector_bits(512)))"
+    ui8:
+      cpp "vuint8m2_t __attribute__((riscv_rvv_vector_bits(512)))"
+    si16:
+      cpp "vint16m2_t __attribute__((riscv_rvv_vector_bits(512)))"
+    ui16:
+      cpp "vuint16m2_t __attribute__((riscv_rvv_vector_bits(512)))"
+    si32:
+      cpp "vint32m2_t __attribute__((riscv_rvv_vector_bits(512)))"
+    ui32:
+      cpp "vuint32m2_t __attribute__((riscv_rvv_vector_bits(512)))"
+    si64:
+      cpp "vint64m2_t __attribute__((riscv_rvv_vector_bits(512)))"
+    ui64:
+      cpp "vuint64m2_t __attribute__((riscv_rvv_vector_bits(512)))"
+    f32:
+      cpp "vfloat32m2_t __attribute__((riscv_rvv_vector_bits(512)))"
+    f64:
+      cpp "vfloat64m2_t __attribute__((riscv_rvv_vector_bits(512)))"
+  register_multiplicity_types:
+    x2:
+      si16:
+        cpp "vint16m4_t __attribute__((riscv_rvv_vector_bits(1024)))"
+  intrinsic_compose:
+    suffix:
+      by_type:
+        f32 "f32m2"
+        f64 "f64m2"
+        si16 "i16m2"
+        si32 "i32m2"
+        si64 "i64m2"
+        si8 "i8m2"
+        ui16 "u16m2"
+        ui32 "u32m2"
+        ui64 "u64m2"
+        ui8 "u8m2"
+    single_register_suffix:
+      by_type:
+        f32 "f32m1"
+        f64 "f64m1"
+        si16 "i16m1"
+        si32 "i32m1"
+        si64 "i64m1"
+        si8 "i8m1"
+        ui16 "u16m1"
+        ui32 "u32m1"
+        ui64 "u64m1"
+        ui8 "u8m1"
+    mask_suffix:
+      by_type:
+        f32 "b16"
+        f64 "b32"
+        si16 "b8"
+        si32 "b16"
+        si64 "b32"
+        si8 "b4"
+        ui16 "b8"
+        ui32 "b16"
+        ui64 "b32"
+        ui8 "b4"
+  mask_type_policy:
+    kind "native_predicate_by_type"
+    backend_spelling_by_type:
+      cpp:
+        si8 "vbool4_t"
+        ui8 "vbool4_t"
+        si16 "vbool8_t"
+        ui16 "vbool8_t"
+        si32 "vbool16_t"
+        ui32 "vbool16_t"
+        si64 "vbool32_t"
+        ui64 "vbool32_t"
+        f32 "vbool16_t"
+        f64 "vbool32_t"
+  integral_mask_type_policy:
+    kind "same_as_mask_type"
+
+extension rvv1024m4:
+  extension_name "rvv1024m4"
+  inherits "rvv"
+  vector_bits 1024
+  native_sort_order 780
+  active_when:
+    target_features ["v"]
+    compile_modes ["rvv_vlen256_lmul4"]
+  supersedes ["rvv"]
+  default_test_target true
+  cpp:
+    compiler_capabilities [rvv_vector_bits_256]
+  vector_register_types:
+    si8:
+      cpp "vint8m4_t __attribute__((riscv_rvv_vector_bits(1024)))"
+    ui8:
+      cpp "vuint8m4_t __attribute__((riscv_rvv_vector_bits(1024)))"
+    si16:
+      cpp "vint16m4_t __attribute__((riscv_rvv_vector_bits(1024)))"
+    ui16:
+      cpp "vuint16m4_t __attribute__((riscv_rvv_vector_bits(1024)))"
+    si32:
+      cpp "vint32m4_t __attribute__((riscv_rvv_vector_bits(1024)))"
+    ui32:
+      cpp "vuint32m4_t __attribute__((riscv_rvv_vector_bits(1024)))"
+    si64:
+      cpp "vint64m4_t __attribute__((riscv_rvv_vector_bits(1024)))"
+    ui64:
+      cpp "vuint64m4_t __attribute__((riscv_rvv_vector_bits(1024)))"
+    f32:
+      cpp "vfloat32m4_t __attribute__((riscv_rvv_vector_bits(1024)))"
+    f64:
+      cpp "vfloat64m4_t __attribute__((riscv_rvv_vector_bits(1024)))"
+  register_multiplicity_types:
+    x2:
+      si16:
+        cpp "vint16m8_t __attribute__((riscv_rvv_vector_bits(2048)))"
+  intrinsic_compose:
+    suffix:
+      by_type:
+        f32 "f32m4"
+        f64 "f64m4"
+        si16 "i16m4"
+        si32 "i32m4"
+        si64 "i64m4"
+        si8 "i8m4"
+        ui16 "u16m4"
+        ui32 "u32m4"
+        ui64 "u64m4"
+        ui8 "u8m4"
+    single_register_suffix:
+      by_type:
+        f32 "f32m1"
+        f64 "f64m1"
+        si16 "i16m1"
+        si32 "i32m1"
+        si64 "i64m1"
+        si8 "i8m1"
+        ui16 "u16m1"
+        ui32 "u32m1"
+        ui64 "u64m1"
+        ui8 "u8m1"
+    mask_suffix:
+      by_type:
+        f32 "b8"
+        f64 "b16"
+        si16 "b4"
+        si32 "b8"
+        si64 "b16"
+        si8 "b2"
+        ui16 "b4"
+        ui32 "b8"
+        ui64 "b16"
+        ui8 "b2"
+  mask_type_policy:
+    kind "native_predicate_by_type"
+    backend_spelling_by_type:
+      cpp:
+        si8 "vbool2_t"
+        ui8 "vbool2_t"
+        si16 "vbool4_t"
+        ui16 "vbool4_t"
+        si32 "vbool8_t"
+        ui32 "vbool8_t"
+        si64 "vbool16_t"
+        ui64 "vbool16_t"
+        f32 "vbool8_t"
+        f64 "vbool16_t"
+  integral_mask_type_policy:
+    kind "same_as_mask_type"
+
+extension rvv1024m1:
+  extension_name "rvv1024m1"
+  inherits "rvv"
+  vector_bits 1024
+  native_sort_order 790
+  active_when:
+    target_features ["v"]
+    compile_modes ["rvv_vlen1024_lmul1"]
+  supersedes ["rvv"]
+  default_test_target true
+  cpp:
+    compiler_capabilities [rvv_vector_bits_1024]
+  vector_register_types:
+    si8:
+      cpp "vint8m1_t __attribute__((riscv_rvv_vector_bits(1024)))"
+    ui8:
+      cpp "vuint8m1_t __attribute__((riscv_rvv_vector_bits(1024)))"
+    si16:
+      cpp "vint16m1_t __attribute__((riscv_rvv_vector_bits(1024)))"
+    ui16:
+      cpp "vuint16m1_t __attribute__((riscv_rvv_vector_bits(1024)))"
+    si32:
+      cpp "vint32m1_t __attribute__((riscv_rvv_vector_bits(1024)))"
+    ui32:
+      cpp "vuint32m1_t __attribute__((riscv_rvv_vector_bits(1024)))"
+    si64:
+      cpp "vint64m1_t __attribute__((riscv_rvv_vector_bits(1024)))"
+    ui64:
+      cpp "vuint64m1_t __attribute__((riscv_rvv_vector_bits(1024)))"
+    f32:
+      cpp "vfloat32m1_t __attribute__((riscv_rvv_vector_bits(1024)))"
+    f64:
+      cpp "vfloat64m1_t __attribute__((riscv_rvv_vector_bits(1024)))"
+  register_multiplicity_types:
+    x2:
+      si16:
+        cpp "vint16m2_t __attribute__((riscv_rvv_vector_bits(2048)))"
+  mask_type_policy:
+    kind "native_predicate_by_type"
+    backend_spelling_by_type:
+      cpp:
+        si8 "vbool8_t"
+        ui8 "vbool8_t"
+        si16 "vbool16_t"
+        ui16 "vbool16_t"
+        si32 "vbool32_t"
+        ui32 "vbool32_t"
+        si64 "vbool64_t"
+        ui64 "vbool64_t"
+        f32 "vbool32_t"
+        f64 "vbool64_t"
+  integral_mask_type_policy:
+    kind "same_as_mask_type"
+
+extension rvv128mf2:
+  extension_name "rvv128mf2"
+  inherits "rvv"
+  vector_bits 128
+  native_sort_order 800
+  active_when:
+    target_features ["v"]
+    compile_modes ["rvv_vlen256_lmulf2"]
+  supersedes ["rvv"]
+  default_test_target true
+  cpp:
+    compiler_capabilities [rvv_vector_bits_256]
+  vector_register_types:
+    si8:
+      cpp "vint8mf2_t __attribute__((riscv_rvv_vector_bits(128)))"
+    ui8:
+      cpp "vuint8mf2_t __attribute__((riscv_rvv_vector_bits(128)))"
+    si16:
+      cpp "vint16mf2_t __attribute__((riscv_rvv_vector_bits(128)))"
+    ui16:
+      cpp "vuint16mf2_t __attribute__((riscv_rvv_vector_bits(128)))"
+    si32:
+      cpp "vint32mf2_t __attribute__((riscv_rvv_vector_bits(128)))"
+    ui32:
+      cpp "vuint32mf2_t __attribute__((riscv_rvv_vector_bits(128)))"
+    f32:
+      cpp "vfloat32mf2_t __attribute__((riscv_rvv_vector_bits(128)))"
+  register_multiplicity_types:
+    x2:
+      si16:
+        cpp "vint16m1_t __attribute__((riscv_rvv_vector_bits(256)))"
+  intrinsic_compose:
+    suffix:
+      by_type:
+        f32 "f32mf2"
+        si16 "i16mf2"
+        si32 "i32mf2"
+        si8 "i8mf2"
+        ui16 "u16mf2"
+        ui32 "u32mf2"
+        ui8 "u8mf2"
+    single_register_suffix:
+      by_type:
+        f32 "f32m1"
+        si16 "i16m1"
+        si32 "i32m1"
+        si8 "i8m1"
+        ui16 "u16m1"
+        ui32 "u32m1"
+        ui8 "u8m1"
+    mask_suffix:
+      by_type:
+        f32 "b64"
+        si16 "b32"
+        si32 "b64"
+        si8 "b16"
+        ui16 "b32"
+        ui32 "b64"
+        ui8 "b16"
+  mask_type_policy:
+    kind "native_predicate_by_type"
+    backend_spelling_by_type:
+      cpp:
+        si8 "vbool16_t"
+        ui8 "vbool16_t"
+        si16 "vbool32_t"
+        ui16 "vbool32_t"
+        si32 "vbool64_t"
+        ui32 "vbool64_t"
+        f32 "vbool64_t"
+  integral_mask_type_policy:
+    kind "same_as_mask_type"
+
+extension rvv512mf2:
+  extension_name "rvv512mf2"
+  inherits "rvv"
+  vector_bits 512
+  native_sort_order 810
+  active_when:
+    target_features ["v"]
+    compile_modes ["rvv_vlen1024_lmulf2"]
+  supersedes ["rvv"]
+  default_test_target true
+  cpp:
+    compiler_capabilities [rvv_vector_bits_1024]
+  vector_register_types:
+    si8:
+      cpp "vint8mf2_t __attribute__((riscv_rvv_vector_bits(512)))"
+    ui8:
+      cpp "vuint8mf2_t __attribute__((riscv_rvv_vector_bits(512)))"
+    si16:
+      cpp "vint16mf2_t __attribute__((riscv_rvv_vector_bits(512)))"
+    ui16:
+      cpp "vuint16mf2_t __attribute__((riscv_rvv_vector_bits(512)))"
+    si32:
+      cpp "vint32mf2_t __attribute__((riscv_rvv_vector_bits(512)))"
+    ui32:
+      cpp "vuint32mf2_t __attribute__((riscv_rvv_vector_bits(512)))"
+    f32:
+      cpp "vfloat32mf2_t __attribute__((riscv_rvv_vector_bits(512)))"
+  register_multiplicity_types:
+    x2:
+      si16:
+        cpp "vint16m1_t __attribute__((riscv_rvv_vector_bits(1024)))"
+  intrinsic_compose:
+    suffix:
+      by_type:
+        f32 "f32mf2"
+        si16 "i16mf2"
+        si32 "i32mf2"
+        si8 "i8mf2"
+        ui16 "u16mf2"
+        ui32 "u32mf2"
+        ui8 "u8mf2"
+    single_register_suffix:
+      by_type:
+        f32 "f32m1"
+        si16 "i16m1"
+        si32 "i32m1"
+        si8 "i8m1"
+        ui16 "u16m1"
+        ui32 "u32m1"
+        ui8 "u8m1"
+    mask_suffix:
+      by_type:
+        f32 "b64"
+        si16 "b32"
+        si32 "b64"
+        si8 "b16"
+        ui16 "b32"
+        ui32 "b64"
+        ui8 "b16"
+  mask_type_policy:
+    kind "native_predicate_by_type"
+    backend_spelling_by_type:
+      cpp:
+        si8 "vbool16_t"
+        ui8 "vbool16_t"
+        si16 "vbool32_t"
+        ui16 "vbool32_t"
+        si32 "vbool64_t"
+        ui32 "vbool64_t"
+        f32 "vbool64_t"
   integral_mask_type_policy:
     kind "same_as_mask_type"
 

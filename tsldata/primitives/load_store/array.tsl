@@ -151,9 +151,11 @@ prim<s[]:=v> to_array(a):
               call<primitive=store, discharge[contiguous_memory_extent]>(tmp.data(), a);
                complete(tmp) ;
             """
-    sve:
+    [sve, rvv]:
       arith:
-        requires [sve]
+        requires:
+          sve [sve]
+          rvv [v]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -269,9 +271,11 @@ prim<v:=s[]> from_array(data):
             mem<copy>(&result, data.as_ptr(), sizeof(result));
             complete(result);
           """
-    sve:
+    [sve, rvv]:
       arith:
-        requires [sve]
+        requires:
+          sve [sve]
+          rvv [v]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -888,7 +892,7 @@ prim<s:=(v,usize)> extract_value_at(data, index):
           caller_unsafe false
           reasons [intrinsic, unchecked_index]
         implementation:
-          tsil "complete(intrin<__riscv_vmv_x_s_i8m1_i8>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
+          tsil "complete(intrin<vmv_x_s, build[post=i8]>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
       ui8:
         requires [v]
         safety:
@@ -896,7 +900,7 @@ prim<s:=(v,usize)> extract_value_at(data, index):
           caller_unsafe false
           reasons [intrinsic, unchecked_index]
         implementation:
-          tsil "complete(intrin<__riscv_vmv_x_s_u8m1_u8>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
+          tsil "complete(intrin<vmv_x_s, build[post=u8]>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
       si16:
         requires [v]
         safety:
@@ -904,7 +908,7 @@ prim<s:=(v,usize)> extract_value_at(data, index):
           caller_unsafe false
           reasons [intrinsic, unchecked_index]
         implementation:
-          tsil "complete(intrin<__riscv_vmv_x_s_i16m1_i16>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
+          tsil "complete(intrin<vmv_x_s, build[post=i16]>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
       ui16:
         requires [v]
         safety:
@@ -912,7 +916,7 @@ prim<s:=(v,usize)> extract_value_at(data, index):
           caller_unsafe false
           reasons [intrinsic, unchecked_index]
         implementation:
-          tsil "complete(intrin<__riscv_vmv_x_s_u16m1_u16>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
+          tsil "complete(intrin<vmv_x_s, build[post=u16]>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
       si32:
         requires [v]
         safety:
@@ -920,7 +924,7 @@ prim<s:=(v,usize)> extract_value_at(data, index):
           caller_unsafe false
           reasons [intrinsic, unchecked_index]
         implementation:
-          tsil "complete(intrin<__riscv_vmv_x_s_i32m1_i32>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
+          tsil "complete(intrin<vmv_x_s, build[post=i32]>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
       ui32:
         requires [v]
         safety:
@@ -928,7 +932,7 @@ prim<s:=(v,usize)> extract_value_at(data, index):
           caller_unsafe false
           reasons [intrinsic, unchecked_index]
         implementation:
-          tsil "complete(intrin<__riscv_vmv_x_s_u32m1_u32>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
+          tsil "complete(intrin<vmv_x_s, build[post=u32]>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
       si64:
         requires [v]
         safety:
@@ -936,7 +940,7 @@ prim<s:=(v,usize)> extract_value_at(data, index):
           caller_unsafe false
           reasons [intrinsic, unchecked_index]
         implementation:
-          tsil "complete(intrin<__riscv_vmv_x_s_i64m1_i64>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
+          tsil "complete(intrin<vmv_x_s, build[post=i64]>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
       ui64:
         requires [v]
         safety:
@@ -944,7 +948,7 @@ prim<s:=(v,usize)> extract_value_at(data, index):
           caller_unsafe false
           reasons [intrinsic, unchecked_index]
         implementation:
-          tsil "complete(intrin<__riscv_vmv_x_s_u64m1_u64>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
+          tsil "complete(intrin<vmv_x_s, build[post=u64]>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
       f32:
         requires [v]
         safety:
@@ -952,7 +956,7 @@ prim<s:=(v,usize)> extract_value_at(data, index):
           caller_unsafe false
           reasons [intrinsic, unchecked_index]
         implementation:
-          tsil "complete(intrin<__riscv_vfmv_f_s_f32m1_f32>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
+          tsil "complete(intrin<vfmv_f_s, build[post=f32]>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
       f64:
         requires [v]
         safety:
@@ -960,7 +964,7 @@ prim<s:=(v,usize)> extract_value_at(data, index):
           caller_unsafe false
           reasons [intrinsic, unchecked_index]
         implementation:
-          tsil "complete(intrin<__riscv_vfmv_f_s_f64m1_f64>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
+          tsil "complete(intrin<vfmv_f_s, build[post=f64]>(intrin<vrgather, build[infix=\"vx\", infix_sep=\"_\"]>(data, index, value(vector::runtime_length))));"
     [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, oneapi_fpga_rtl, avx512, avx2_vl, avx2, sse_vl, sse, neon, sve, wasm128]:
       arith:
         prefer_fixed_native true

@@ -1470,6 +1470,63 @@ def test_rvv_catalog_is_scalable_lmul1_cpp_only(catalog, machine_profiles) -> No
     assert cpp.cmake_system_processor == "riscv64"
     assert not cpp.pass_target_to_compiler
 
+def test_fixed_rvv_profiles_follow_the_register_group(catalog, machine_profiles) -> None:
+    lmul1 = catalog.extensions["rvv256m1"]
+    lmul2 = catalog.extensions["rvv512m2"]
+
+    for extension, lmul in ((lmul1, 1), (lmul2, 2)):
+        assert extension.inherits == "rvv"
+        assert extension.vector_bits_kind == "fixed"
+        assert extension.vector_bits == 256 * lmul
+        assert machine_profiles[extension.name].compile_modes == frozenset(
+            {f"rvv_vlen256_lmul{lmul}"}
+        )
+    assert lmul1.direct_vector_register_type("cpp", "si32") == (
+        "vint32m1_t __attribute__((riscv_rvv_vector_bits(256)))"
+    )
+    assert lmul1.compose_suffix_by_type["si32"] == "i32m1"
+    assert lmul1.intrinsic_composition.mask_suffix_by_type["si32"] == "b32"
+
+    composition = lmul2.intrinsic_composition
+    assert lmul2.direct_vector_register_type("cpp", "si32") == (
+        "vint32m2_t __attribute__((riscv_rvv_vector_bits(512)))"
+    )
+    assert lmul2.compose_suffix_by_type["si32"] == "i32m2"
+    assert composition.mask_suffix_by_type["si8"] == "b4"
+    assert composition.mask_suffix_by_type["si32"] == "b16"
+    assert composition.single_register_suffix_by_type["si32"] == "i32m1"
+    assert lmul2.mask_policy.spelling_for_type("cpp", "si32") == "vbool16_t"
+
+    lmul4 = catalog.extensions["rvv1024m4"]
+    assert lmul4.compose_suffix_by_type["si32"] == "i32m4"
+    assert lmul4.intrinsic_composition.mask_suffix_by_type["si32"] == "b8"
+    assert lmul4.intrinsic_composition.single_register_suffix_by_type["si32"] == "i32m1"
+    assert machine_profiles["rvv1024m4"].compile_modes == frozenset({"rvv_vlen256_lmul4"})
+
+    vlen1024 = catalog.extensions["rvv1024m1"]
+    assert vlen1024.direct_vector_register_type("cpp", "si32") == (
+        "vint32m1_t __attribute__((riscv_rvv_vector_bits(1024)))"
+    )
+    assert vlen1024.compose_suffix_by_type["si32"] == "i32m1"
+    assert machine_profiles["rvv1024m1"].compile_modes == frozenset({"rvv_vlen1024_lmul1"})
+
+    for name, vlen in (("rvv128mf2", 256), ("rvv512mf2", 1024)):
+        half = catalog.extensions[name]
+        assert half.vector_bits == vlen // 2
+        assert half.direct_vector_register_type("cpp", "si32") == (
+            f"vint32mf2_t __attribute__((riscv_rvv_vector_bits({vlen // 2})))"
+        )
+        assert half.compose_suffix_by_type["si32"] == "i32mf2"
+        assert half.intrinsic_composition.mask_suffix_by_type["si32"] == "b64"
+        assert half.intrinsic_composition.single_register_suffix_by_type["si32"] == "i32m1"
+        assert machine_profiles[name].compile_modes == frozenset({f"rvv_vlen{vlen}_lmulf2"})
+        # LMUL 1/2 has no SEW 64, so the profile drops its parent's 64-bit types.
+        assert [
+            tag for tag in ("si32", "si64", "ui64", "f64")
+            if catalog.extension_offers_type(half, tag)
+        ] == ["si32"]
+
+
 
 def test_rvv_core_operations_lower_exact_intrinsics_and_emits_no_rust_profile(
     data_root: Path,

@@ -168,7 +168,30 @@ prim<v:=v>[cast=reinterpret] reinterpret(data):
                   if<generation>(type::is_same(base::in, ToBase)) {
                     complete(data);
                   } else {
-                    complete(intrin<vreinterpret, build[infix=base::in, infix_sep="_v_", suffix=ToBase]>(data));
+                    if<generation>(type::same_size(base::in, ToBase)) {
+                      complete(intrin<vreinterpret, build[infix=base::in, infix_sep="_v_", suffix=ToBase]>(data));
+                    } else {
+                      let<type>(SignedIn, base::signed_of(base::in));
+                      let<type>(SignedTo, base::signed_of(ToBase));
+                      if<generation>(type::is_same(base::in, SignedIn)) {
+                        if<generation>(type::is_same(ToBase, SignedTo)) {
+                          complete(intrin<vreinterpret, build[infix=SignedIn, infix_sep="_v_", suffix=SignedTo]>(data));
+                        } else {
+                          complete(intrin<vreinterpret, build[infix=SignedTo, infix_sep="_v_", suffix=ToBase]>(
+                            intrin<vreinterpret, build[infix=SignedIn, infix_sep="_v_", suffix=SignedTo]>(data)
+                          ));
+                        }
+                      } else {
+                        var<const_infer>(as_signed, intrin<vreinterpret, build[infix=base::in, infix_sep="_v_", suffix=SignedIn]>(data));
+                        if<generation>(type::is_same(ToBase, SignedTo)) {
+                          complete(intrin<vreinterpret, build[infix=SignedIn, infix_sep="_v_", suffix=SignedTo]>(as_signed));
+                        } else {
+                          complete(intrin<vreinterpret, build[infix=SignedTo, infix_sep="_v_", suffix=ToBase]>(
+                            intrin<vreinterpret, build[infix=SignedIn, infix_sep="_v_", suffix=SignedTo]>(as_signed)
+                          ));
+                        }
+                      }
+                    }
                   }
                 """
     [generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, scalar, wasm128]:

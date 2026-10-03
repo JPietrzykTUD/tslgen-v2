@@ -56,7 +56,7 @@ def render_markdown(contract: ReleaseContract) -> str:
             f"| `{backend.backend_id}` | `{backend.selection.value}` | "
             f"`{profile.name}` | `{profile.family}` | "
             f"{_profile_shape(contract, backend.backend_id, profile.name)} | "
-            + ", ".join(f"`{tag}`" for tag in DEFAULT_SCALAR_TYPE_TAGS)
+            + ", ".join(f"`{tag}`" for tag in profile.scalar_types)
             + " |"
             for backend in contract.backends
             for profile in backend.profiles

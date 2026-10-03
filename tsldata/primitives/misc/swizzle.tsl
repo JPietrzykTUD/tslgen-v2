@@ -737,7 +737,7 @@ prim<v:=(v,v)> interleave_lo(left, right):
               complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
             """
     rvv:
-      arith:
+      ?i8:
         requires [v]
         safety:
           internal_unsafe true
@@ -757,6 +757,29 @@ prim<v:=(v,v)> interleave_lo(left, right):
               else { result[i] = right_lanes[i / 2]; }
             }
             complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
+          """
+      # 8-bit lanes keep the array body: their gather indices overflow beyond 256 lanes.
+      [si16, ui16, si32, ui32, si64, ui64, f32, f64]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(UBase, base::unsigned_of(base::in));
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<const_infer>(ids, intrin<vid, build[infix="v", infix_sep="_", suffix=UBase]>(lanes));
+            var<const_infer>(sources, intrin<vsrl, build[infix="vx", infix_sep="_", suffix=UBase]>(ids, 1, lanes));
+            var<const_infer>(odd, intrin<vmsne, build[infix="vx", infix_sep="_", suffix=UBase, post=intrin::mask_suffix]>(
+              intrin<vand, build[infix="vx", infix_sep="_", suffix=UBase]>(ids, 1, lanes), 0, lanes
+            ));
+            complete(intrin<vmerge, build[infix="vvm", infix_sep="_"]>(
+              intrin<vrgather, build[infix="vv", infix_sep="_"]>(left, sources, lanes),
+              intrin<vrgather, build[infix="vv", infix_sep="_"]>(right, sources, lanes),
+              odd,
+              lanes
+            ));
           """
 prim<v:=(v)> reverse(data):
   brief_description "Reverses the order of all lanes across the whole register."
@@ -926,7 +949,7 @@ prim<v:=(v)> reverse(data):
               complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
             """
     rvv:
-      arith:
+      ?i8:
         requires [v]
         safety:
           internal_unsafe true
@@ -943,6 +966,21 @@ prim<v:=(v)> reverse(data):
               result[i] = source_lanes[lanes - 1 - i];
             }
             complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
+          """
+      # 8-bit lanes keep the array body: their gather indices overflow beyond 256 lanes.
+      [si16, ui16, si32, ui32, si64, ui64, f32, f64]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(UBase, base::unsigned_of(base::in));
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<const_infer>(ids, intrin<vid, build[infix="v", infix_sep="_", suffix=UBase]>(lanes));
+            var<const_infer>(sources, intrin<vrsub, build[infix="vx", infix_sep="_", suffix=UBase]>(ids, cast<static>(UBase, lanes - 1), lanes));
+            complete(intrin<vrgather, build[infix="vv", infix_sep="_"]>(data, sources, lanes));
           """
 
 prim<v:=(v,sImm)> permute_lanes(data, control):
@@ -1775,7 +1813,7 @@ prim<v:=(v,vidx)> permute_lanes(data, indexes):
             complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
           """
     rvv:
-      arith:
+      ?i8:
         requires [v]
         safety:
           internal_unsafe true
@@ -1796,6 +1834,23 @@ prim<v:=(v,vidx)> permute_lanes(data, indexes):
               result[i] = input[source];
             }
             complete(call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result));
+          """
+      # 8-bit lanes keep the array body: their gather indices overflow beyond 256 lanes.
+      [si16, ui16, si32, ui32, si64, ui64, f32, f64]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(UBase, base::unsigned_of(base::in));
+            let<type>(UVec, vector::as_base(UBase));
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<const_infer>(sources, intrin<vand, build[infix="vx", infix_sep="_", suffix=UBase]>(
+              call<primitive=reinterpret[IndicesType, UVec]>(indexes), cast<static>(UBase, lanes - 1), lanes
+            ));
+            complete(intrin<vrgather, build[infix="vv", infix_sep="_"]>(data, sources, lanes));
           """
 
 prim<v:=(m,v,v,vidx)>[mask=pass_through] permute_lanes(mask, src, data, indexes):

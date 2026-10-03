@@ -180,6 +180,45 @@ class IntrinSuffixQuery:
         return None
 
 
+class IntrinMaskSuffixQuery:
+    """``intrin::mask_suffix`` -> the selected type's predicate suffix (RVV ``b32``)."""
+
+    head = "intrin::mask_suffix"
+    descriptor = query_function("text")
+
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
+        if args:
+            return None
+        fragment = context.env.extension.intrinsic_composition.mask_suffix_by_type.get(
+            context.env.type_tag
+        )
+        return TextValue(fragment) if fragment is not None else None
+
+
+class IntrinSingleRegisterSuffixQuery:
+    """``intrin::single_register_suffix`` -> the type suffix of one physical register.
+
+    Differs from ``intrin::suffix`` only on grouped registers (RVV LMUL > 1), where
+    reductions read the group but write a single register.
+    """
+
+    head = "intrin::single_register_suffix"
+    descriptor = query_function("text")
+
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
+        if args:
+            return None
+        composition = context.env.extension.intrinsic_composition
+        fragment = composition.single_register_suffix_by_type.get(
+            context.env.type_tag
+        ) or composition.suffix_by_type.get(context.env.type_tag)
+        return TextValue(fragment) if fragment is not None else None
+
+
 class IsSameQuery:
     """``type::is_same(a, b)`` -> generation-time boolean."""
 

@@ -215,11 +215,19 @@ def concrete_target_candidates(
                 )
             )
         )
+    extension = catalog.extensions.get(extension_name)
+    if dim == RESULT_DIM_BASE and extension is not None:
+        # The result is a register of the same extension, so its base must be one
+        # the extension has registers for.
+        targets = {
+            target
+            for target in targets
+            if catalog.extension_offers_type(extension, target)
+        }
     if (
         dim == RESULT_DIM_BASE
         and primitive.cast_mode is PrimitiveCastMode.REINTERPRET
     ):
-        extension = catalog.extensions.get(extension_name)
         # Scalar and lane-count-parametric vectors preserve their lane count
         # when rebased, so a different scalar width would change total
         # storage and cannot be a bit reinterpretation. Fixed/scalable
