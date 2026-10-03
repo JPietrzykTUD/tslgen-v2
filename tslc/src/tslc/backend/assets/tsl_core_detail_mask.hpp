@@ -128,6 +128,30 @@ inline std::uint32_t clz(ac_int<W, S> v) {
     return static_cast<std::uint32_t>(W);
 }
 #endif
+// Left-pack lane indices of an integer mask (used by `compress`): byte k is the lane of the
+// k-th set bit among the low eight bits, 0xFF once the set bits run out. A table, because
+// computing the row per call costs more than the shuffle that consumes it.
+struct compress_lane_index_table {
+    std::uint64_t rows[256];
+    constexpr compress_lane_index_table() : rows{} {
+        for (unsigned mask = 0; mask < 256; ++mask) {
+            std::uint64_t row = ~std::uint64_t{0};
+            unsigned out = 0;
+            for (unsigned lane = 0; lane < 8; ++lane) {
+                if (((mask >> lane) & 1u) != 0) {
+                    row &= ~(std::uint64_t{0xFF} << (8 * out));
+                    row |= std::uint64_t{lane} << (8 * out);
+                    ++out;
+                }
+            }
+            rows[mask] = row;
+        }
+    }
+};
+inline constexpr compress_lane_index_table compress_lane_index_rows{};
+inline std::uint64_t compress_lane_indices(std::uint64_t imask) {
+    return compress_lane_index_rows.rows[imask & 0xFFu];
+}
 inline constexpr std::uint64_t imask_low_bits(std::size_t count) {
     return count >= 64
         ? std::numeric_limits<std::uint64_t>::max()

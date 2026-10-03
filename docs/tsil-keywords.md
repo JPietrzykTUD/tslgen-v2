@@ -183,7 +183,7 @@ helper<name, template_arg, ...>(args)
 Shared helper IDs:
 
 ```text
-arith_add  arith_mul  arith_rem  popcount  clz  ctz
+arith_add  arith_mul  arith_rem  popcount  clz  ctz  compress_lane_indices
 ```
 
 C++ also supports `clz_recursive` with selector template arguments.

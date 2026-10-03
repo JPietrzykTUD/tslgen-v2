@@ -39,6 +39,11 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
     - {tags [edge], type "f32", case {inputs [15, [1.0, 2.0, 3.0, 4.0]], expected [1.0, 2.0, 3.0, 4.0]}}
     - {tags [basic], type "f64", case {inputs [2, [1.0, 2.0]], expected [2.0, 0.0]}}
     - {tags [edge], type "f64", case {inputs [3, [1.0, 2.0]], expected [1.0, 2.0]}}
+    - {tags [sparse], type "si16", case {inputs [129, [-1, -2, -3, -4, -5, -6, -7, -8]], expected [-1, -8, 0, 0, 0, 0, 0, 0]}}
+    - {tags [zero], type "si32", case {inputs [0, [-1, -2, -3, -4, -5, -6, -7, -8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [single, msb], type "si64", case {inputs [8, [-1, -2, -3, -4]], expected [-4, 0, 0, 0]}}
+    - {tags [wide], type "f32", case {inputs [178, [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]], expected [2.0, 5.0, 6.0, 8.0, 0.0, 0.0, 0.0, 0.0]}}
+    - {tags [wide], type "f64", case {inputs [9, [1.0, 2.0, 3.0, 4.0]], expected [1.0, 4.0, 0.0, 0.0]}}
   impls:
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -182,6 +187,142 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
             }
             complete(result);
           """
+    avx2:
+      [?i32, f32]:
+        requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+              let<type>(IndexVec, vector::as_base(si32));
+              var<const_infer>(rows, helper<compress_lane_indices>(
+                cast<static>(scalar::ui64, call<primitive=to_integral[Vec]>(mask))
+              ));
+              var<const_infer>(indexes, intrin<_mm256_cvtepi8_epi32>(
+                intrin<_mm_cvtsi64_si128>(cast<static>(scalar::si64, rows))
+              ));
+              var<const_infer>(packed, call<primitive=permute_lanes[IndexVec, IndexVec]>(
+                call<primitive=reinterpret[Vec, IndexVec]>(data),
+                indexes
+              ));
+              var<const_infer>(filled, call<primitive=greater_than[IndexVec]>(
+                indexes,
+                call<primitive=set1[IndexVec]>(cast<static>(scalar::si32, -1))
+              ));
+              complete(call<primitive=reinterpret[IndexVec, Vec]>(
+                call<primitive=select[IndexVec]>(filled, packed, call<primitive=set_zero[IndexVec]>())
+              ));
+            """
+      [?i64, f64]:
+        requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+              let<type>(IndexVec, vector::as_base(si32));
+              var<const_infer>(rows, helper<compress_lane_indices>(
+                cast<static>(scalar::ui64, call<primitive=to_integral[Vec]>(mask))
+              ));
+              var<const_infer>(lanes, intrin<_mm_shuffle_epi8>(
+                intrin<_mm_cvtsi64_si128>(cast<static>(scalar::si64, rows)),
+                intrin<_mm_setr_epi8>(0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7)
+              ));
+              var<const_infer>(indexes, intrin<_mm256_cvtepi8_epi32>(intrin<_mm_add_epi8>(
+                intrin<_mm_add_epi8>(lanes, lanes),
+                intrin<_mm_setr_epi8>(0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1)
+              )));
+              var<const_infer>(packed, call<primitive=permute_lanes[IndexVec, IndexVec]>(
+                call<primitive=reinterpret[Vec, IndexVec]>(data),
+                indexes
+              ));
+              var<const_infer>(filled, call<primitive=greater_than[IndexVec]>(
+                indexes,
+                call<primitive=set1[IndexVec]>(cast<static>(scalar::si32, -1))
+              ));
+              complete(call<primitive=reinterpret[IndexVec, Vec]>(
+                call<primitive=select[IndexVec]>(filled, packed, call<primitive=set_zero[IndexVec]>())
+              ));
+            """
+    sse:
+      ?i16:
+        requires [sse, sse2, ssse3]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+              let<type>(ByteVec, vector::as_base(si8));
+              var<const_infer>(rows, helper<compress_lane_indices>(
+                cast<static>(scalar::ui64, call<primitive=to_integral[Vec]>(mask))
+              ));
+              var<const_infer>(lanes, intrin<_mm_shuffle_epi8>(
+                intrin<_mm_cvtsi64_si128>(cast<static>(scalar::si64, rows)),
+                intrin<_mm_setr_epi8>(0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7)
+              ));
+              var<const_infer>(control, intrin<_mm_add_epi8>(
+                intrin<_mm_add_epi8>(lanes, lanes),
+                intrin<_mm_setr_epi8>(0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1)
+              ));
+              complete(call<primitive=reinterpret[ByteVec, Vec]>(
+                intrin<_mm_shuffle_epi8>(call<primitive=reinterpret[Vec, ByteVec]>(data), control)
+              ));
+            """
+      [?i32, f32]:
+        requires [sse, sse2, ssse3]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+              let<type>(ByteVec, vector::as_base(si8));
+              var<const_infer>(rows, helper<compress_lane_indices>(
+                cast<static>(scalar::ui64, call<primitive=to_integral[Vec]>(mask))
+              ));
+              var<const_infer>(lanes, intrin<_mm_shuffle_epi8>(
+                intrin<_mm_cvtsi64_si128>(cast<static>(scalar::si64, rows)),
+                intrin<_mm_setr_epi8>(0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3)
+              ));
+              var<const_infer>(doubled, intrin<_mm_add_epi8>(lanes, lanes));
+              var<const_infer>(control, intrin<_mm_add_epi8>(
+                intrin<_mm_add_epi8>(doubled, doubled),
+                intrin<_mm_setr_epi8>(0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3)
+              ));
+              complete(call<primitive=reinterpret[ByteVec, Vec]>(
+                intrin<_mm_shuffle_epi8>(call<primitive=reinterpret[Vec, ByteVec]>(data), control)
+              ));
+            """
+      [?i64, f64]:
+        requires [sse, sse2, ssse3]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+              let<type>(ByteVec, vector::as_base(si8));
+              var<const_infer>(rows, helper<compress_lane_indices>(
+                cast<static>(scalar::ui64, call<primitive=to_integral[Vec]>(mask))
+              ));
+              var<const_infer>(lanes, intrin<_mm_shuffle_epi8>(
+                intrin<_mm_cvtsi64_si128>(cast<static>(scalar::si64, rows)),
+                intrin<_mm_setr_epi8>(0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1)
+              ));
+              var<const_infer>(doubled, intrin<_mm_add_epi8>(lanes, lanes));
+              var<const_infer>(quadrupled, intrin<_mm_add_epi8>(doubled, doubled));
+              var<const_infer>(control, intrin<_mm_add_epi8>(
+                intrin<_mm_add_epi8>(quadrupled, quadrupled),
+                intrin<_mm_setr_epi8>(0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7)
+              ));
+              complete(call<primitive=reinterpret[ByteVec, Vec]>(
+                intrin<_mm_shuffle_epi8>(call<primitive=reinterpret[Vec, ByteVec]>(data), control)
+              ));
+            """
     [avx2, sse, neon, wasm128]:
       arith:
         requires:

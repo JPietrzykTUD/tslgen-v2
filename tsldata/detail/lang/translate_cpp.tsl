@@ -89,6 +89,7 @@ translation cpp:
   helper_arith_rem "::tsl::detail::helpers::arith_rem({args})"
   helper_popcount "::tsl::detail::helpers::popcount({args})"
   helper_ctz "::tsl::detail::helpers::ctz({args})"
+  helper_compress_lane_indices "::tsl::detail::helpers::compress_lane_indices({args})"
   helper_clz "::tsl::detail::helpers::clz({args})"
   helper_clz_recursive "::tsl::detail::helpers::clz_recursive{template}({args})"
   helper_random_step_u64 "::tsl::detail::helpers::random_step_u64({args})"

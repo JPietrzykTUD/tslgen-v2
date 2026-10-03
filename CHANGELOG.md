@@ -38,6 +38,9 @@ VS Code extension have independent version lines.
   (and through it `mask_interleave_lo`), and `mask_deinterleave_odd` use
   `vcompress`/`vrgather` instead of per-call array fallbacks for 16- to 64-bit
   lanes.
+- AVX2 `compress` for 32- and 64-bit lanes and SSSE3 `compress` for 16- to
+  64-bit lanes shuffle with a left-pack index table (`vpermd`/`pshufb`) instead
+  of a per-lane branch loop through memory.
 
 ### Changed
 
