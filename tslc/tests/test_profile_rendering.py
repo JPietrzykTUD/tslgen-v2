@@ -382,7 +382,7 @@ def test_representative_project_shape_is_byte_stable(
         "cpp/include/tsl_algorithm_detail_transform.hpp": "bae76ac37791a9be0ee51e59bb925da891e4b55208533cd6053196cc4cac1434",
         "cpp/include/tsl_primitives.hpp": "1ed6539e2285a7af59dbd5212e32e931b19620fa96387c833dacb882d986d743",
         "cpp/include/tsl_scalar.hpp": "34d4f8d5f6082976c8210042bb85573c59b350508381b7c932cd0903159a5b09",
-        "cpp/tests/smoke_scalar.cpp": "43046adfe06468b6eb75f351dc8883cb1e35635e66f40fc3f033d41651554a1e",
+        "cpp/tests/smoke_scalar.cpp": "e00ba6104d94ed3157854bee0eadda04274ff3eab5e220fe8da212d3b23affd6",
         "rust/Cargo.toml": "994e9d912db23d0ba8d6f4763b54bdea83c838f6b8427af8e038be42b2f5f860",
         "rust/src/lib.rs": "0a57fa83b8458be54a2313e7ffc3b77c798accc546089acfda6c41f1421e25ad",
         "rust/src/tsl_documentation.rs": "7d655b6e86aeeb71d59e0ff01eb80d8b24ab12b5da8f046924e94928a973620f",
