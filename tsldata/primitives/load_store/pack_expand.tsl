@@ -304,7 +304,7 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
         requires [v]
         safety:
           internal_unsafe true
-          caller_unsafe false
+          caller_unsafe true
           reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
@@ -316,7 +316,7 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
         requires [v]
         safety:
           internal_unsafe true
-          caller_unsafe false
+          caller_unsafe true
           reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
@@ -328,7 +328,7 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
         requires [v]
         safety:
           internal_unsafe true
-          caller_unsafe false
+          caller_unsafe true
           reasons [intrinsic, raw_pointer]
         implementation:
           tsil """

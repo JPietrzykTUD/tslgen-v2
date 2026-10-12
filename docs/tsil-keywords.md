@@ -1013,6 +1013,8 @@ Its source of truth is `DEFAULT_QUERY_FUNCTIONS` in
 | `select` | `select(BOOL, THEN, ELSE)`: select equal-kind values. |
 | `intrin::prefix` | `intrin::prefix`: selected intrinsic prefix. |
 | `intrin::suffix` | `intrin::suffix` or `intrin::suffix(TYPE_OR_NAME)`: intrinsic suffix. |
+| `intrin::mask_suffix` | `intrin::mask_suffix`: selected type's predicate suffix. |
+| `intrin::single_register_suffix` | `intrin::single_register_suffix`: one-register suffix; `intrin::suffix` outside register groups. |
 | `type::is_same` | `type::is_same(TYPE, TYPE)`: type equality. |
 | `type::size_bytes` | `type::size_bytes(TYPE)`: scalar byte width. |
 | `type::size_bits` | `type::size_bits(TYPE)`: scalar bit width. |

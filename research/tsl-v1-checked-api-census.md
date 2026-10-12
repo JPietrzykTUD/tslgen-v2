@@ -286,7 +286,7 @@ Review: Packed, register-lane, axis-selected, and scalable mask representations 
 ### `selected_memory_contract` (2)
 
 - `expand_load v:=(m,cptr)`; attributes `aligned=true, op=expand`; result target `none`; reasons `intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 21; checked source status `declared`; preconditions `compacted_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
-- `compress_store void:=(m,ptr,v)`; attributes `aligned=true, op=pack`; result target `none`; reasons `intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 23; checked source status `declared`; preconditions `compacted_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
+- `compress_store void:=(m,ptr,v)`; attributes `aligned=true, op=pack`; result target `none`; reasons `intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 26; checked source status `declared`; preconditions `compacted_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
 
 Review: Validation must precede any compress-store output write; an all-inactive operation accesses no memory and does not reject an empty unaligned view.
 
