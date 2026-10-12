@@ -69,9 +69,9 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
     assert provenance["command"] == CANONICAL_FULL_EXPORT_COMMAND
     assert actual["summary"] == {
         "documents": 206,
-        "definitions": 17_186,
-        "skips": 38_934,
-        "nominal_definition_identities": 16_866,
+        "definitions": 20_398,
+        "skips": 42_511,
+        "nominal_definition_identities": 20_078,
         "definition_identity_collisions": {
             "groups": 320,
             "entries": 640,
@@ -80,13 +80,13 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
             "exact_duplicate_only_groups": 0,
         },
         "languages": {
-            "cpp": {"documents": 103, "definitions": 10_261, "skips": 28_093},
-            "rust": {"documents": 103, "definitions": 6_925, "skips": 10_841},
+            "cpp": {"documents": 103, "definitions": 13_473, "skips": 31_662},
+            "rust": {"documents": 103, "definitions": 6_925, "skips": 10_849},
         },
     }
     artifacts = actual["artifacts"]
     assert artifacts["ordered_content_sha256"] == (
-        "4069b8fd135e5c74de150bfba00540b5b832ca33803c21f332d34254ddbe664e"
+        "c542cdf8277e16b80ba16cf2cf797f5bbce31478e004872aa00f617d3dbcbdca"
     )
     assert actual["skip_category_scheme"] == "reason-prefix-v1"
     assert actual["unclassified_skip_count"] == 0
@@ -94,13 +94,13 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
     for item in actual["skips_by_language_and_category"]:
         category_counts[item["category"]] += item["count"]
     assert category_counts == {
-        "callee_resolution": 288,
-        "forwarded_call_arguments": 3_838,
-        "local_declaration": 900,
-        "residual_target_text": 12_510,
-        "schema_conflict": 650,
-        "signature_admissibility": 13_476,
-        "specialization_admissibility": 7_272,
+        "callee_resolution": 308,
+        "forwarded_call_arguments": 4_340,
+        "local_declaration": 1_286,
+        "residual_target_text": 13_944,
+        "schema_conflict": 820,
+        "signature_admissibility": 15_633,
+        "specialization_admissibility": 6_180,
     }
     assert actual["skip_fields"] == [
         "language",
@@ -123,7 +123,7 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
     ]
     skip_records = actual["skips"]
     assert skip_records == sorted(skip_records, key=_canonical_json)
-    assert sum(record[-1] for record in skip_records) == 38_934
+    assert sum(record[-1] for record in skip_records) == 42_511
     assert all(len(record) == len(actual["skip_fields"]) for record in skip_records)
     assert all(
         record[6] is None
@@ -151,7 +151,7 @@ def test_full_corpus_export_matches_exact_manifest() -> None:
         )
     ).hexdigest() == actual["skip_location_inventory_sha256"]
     assert actual["skip_semantic_inventory_sha256"] == (
-        "c20502005cc8c4df61f9c01271a3a0e1f535f343a68d95d2576096585c2cb8e6"
+        "299e4d79541d4ddea3503cbf56a0f2fe5a222594e8bdade9c7ca9e7b7cdd6aac"
     )
 
 
@@ -165,18 +165,19 @@ def _assert_complete_body_census(
         "rust",
     )
     assert tuple(len(census.entries) for census in result.body_censuses) == (
-        10_261,
+        13_473,
         6_925,
     )
     assert tuple(census.multi_statement_count for census in result.body_censuses) == (
-        2_967,
+        4_657,
         1_593,
     )
     assert tuple(census.category_counts for census in result.body_censuses) == (
         (
-            ("call_and_local", 77),
-            ("call_only", 2_890),
-            ("native_leaf", 4_168),
+            ("call_and_local", 273),
+            ("call_only", 4_342),
+            ("local_only", 42),
+            ("native_leaf", 5_690),
             ("synthetic_fixed", 3_126),
         ),
         (
@@ -193,13 +194,14 @@ def _assert_complete_body_census(
         if entry.category is not None
     ) == {
         "synthetic_fixed": 6_252,
-        "native_leaf": 6_374,
-        "call_only": 4_478,
-        "call_and_local": 82,
+        "native_leaf": 7_896,
+        "call_only": 5_930,
+        "call_and_local": 278,
+        "local_only": 42,
     }
     assert sum(
         census.multi_statement_count for census in result.body_censuses
-    ) == 4_560
+    ) == 6_250
     assert all(census.failures == () for census in result.body_censuses)
     assert all(
         body.body is not None
