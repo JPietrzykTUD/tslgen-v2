@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
+import re
 from urllib.parse import unquote, urlparse
 
 from lsprotocol import types
 
 from tslc.diagnostics import SourceSpan
+
+_DRIVE_LETTER_URI_PATH = re.compile(r"/[A-Za-z]:")
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,13 +47,21 @@ def path_to_uri(path: Path) -> str:
 
 
 def uri_to_path(uri: str) -> Path:
+    return Path(_uri_path_text(uri, windows=os.name == "nt")).resolve()
+
+
+def _uri_path_text(uri: str, *, windows: bool) -> str:
     parsed = urlparse(uri)
     if parsed.scheme != "file":
         raise ValueError(f"TSL language server supports only file URIs, got {uri!r}")
     value = unquote(parsed.path)
     if parsed.netloc:
-        value = f"//{parsed.netloc}{value}"
-    return Path(value).resolve()
+        return f"//{parsed.netloc}{value}"
+    if windows and _DRIVE_LETTER_URI_PATH.match(value):
+        # file:///C:/x puts a slash before the drive; Windows reads "/C:/x" as
+        # a directory "C:" under the current drive's root.
+        return value[1:]
+    return value
 
 
 def source_position(text: str, position: types.Position) -> tuple[int, int]:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import replace
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from types import SimpleNamespace
 from typing import cast
 
@@ -31,10 +31,13 @@ from tslc.lsp.features import (
 )
 from tslc.lsp.implementation_preview import implementation_preview_sites
 from tslc.lsp.positions import (
+    _uri_path_text,
     offset_position,
+    path_to_uri,
     position_offset,
     source_position,
     span_to_range,
+    uri_to_path,
 )
 from tslc.lsp.primitive_explorer import (
     PrimitiveExplorerCache,
@@ -191,6 +194,22 @@ def test_utf16_position_round_trip() -> None:
     assert source_position(text, range_.end) == (1, 8)
     assert offset_position(text, 7) == range_.end
     assert position_offset(text, range_.end) == 7
+
+
+def test_file_uris_map_to_drive_paths_on_windows_and_root_paths_on_posix(
+    data_root: Path,
+) -> None:
+    drive_path = _uri_path_text("file:///D:/a/tsl%20gen", windows=True)
+    assert drive_path == "D:/a/tsl gen"
+    assert PureWindowsPath(drive_path).drive == "D:"
+    assert PureWindowsPath(drive_path).is_absolute()
+    assert _uri_path_text("file:///d%3A/a/b", windows=True) == "d:/a/b"
+    assert _uri_path_text("file://server/share/a", windows=True) == "//server/share/a"
+    assert _uri_path_text("file:///D:/a", windows=False) == "/D:/a"
+    assert _uri_path_text("file:///home/a/b", windows=False) == "/home/a/b"
+    with pytest.raises(ValueError, match="only file URIs"):
+        _uri_path_text("untitled:Untitled-1", windows=True)
+    assert uri_to_path(path_to_uri(data_root)) == data_root.resolve()
 
 
 def test_workspace_reuses_unchanged_documents_and_suppresses_stale_results(
