@@ -82,6 +82,22 @@ _CPP_COMPILER_CAPABILITIES = (
         for bits in (128, 256, 512)
     ),
     *(
+        CppCompilerCapability(
+            capability_id=f"rvv_vector_bits_{bits}",
+            condition_macro=f"TSL_COMPILER_HAS_RVV_VECTOR_BITS_{bits}",
+            preprocessor_probe=(
+                "defined(__riscv_v_fixed_vlen) && "
+                f"(__riscv_v_fixed_vlen == {bits})"
+            ),
+            compile_probe_source=None,
+            diagnostic=(
+                f"TSL fixed-length rvv profiles for VLEN {bits} require "
+                f"-mrvv-vector-bits=zvl with Zvl{bits}b"
+            ),
+        )
+        for bits in (256, 1024)
+    ),
+    *(
         _builtin_capability(capability_id, builtin)
         for capability_id, builtin in (
             ("convertvector", "__builtin_convertvector"),

@@ -451,12 +451,18 @@ prim<im:=(imt,im,usize)> insert_imask(orig, data, position):
                     value(vector::length), value(generic::length(OutVec))
                   ));
                 """
-    [sve128, sve256, sve512]:
+    [sve128, sve256, sve512, rvv256m1, rvv512m2, rvv1024m4, rvv1024m1, rvv128mf2, rvv512mf2]:
       arith:
         requires:
           sve128 [sve]
           sve256 [sve]
           sve512 [sve]
+          rvv256m1 [v]
+          rvv512m2 [v]
+          rvv1024m4 [v]
+          rvv1024m1 [v]
+          rvv128mf2 [v]
+          rvv512mf2 [v]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -665,12 +671,18 @@ prim<im:=(im,usize)> extract_imask(data, position):
                     value(vector::length), value(generic::length(OutVec))
                   ));
                 """
-    [sve128, sve256, sve512]:
+    [sve128, sve256, sve512, rvv256m1, rvv512m2, rvv1024m4, rvv1024m1, rvv128mf2, rvv512mf2]:
       arith:
         requires:
           sve128 [sve]
           sve256 [sve]
           sve512 [sve]
+          rvv256m1 [v]
+          rvv512m2 [v]
+          rvv1024m4 [v]
+          rvv1024m1 [v]
+          rvv128mf2 [v]
+          rvv512mf2 [v]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -772,8 +784,19 @@ prim<m:=(m,m)> mask_interleave_lo(mask_a, mask_b):
     - {tags [interleave, wide, both], extension "generic", type "ui32", lane_count 16, case {inputs [255, 255], expected 65535}}
     - {tags [interleave, wide, a_only], extension "generic", type "ui32", lane_count 16, case {inputs [255, 0], expected 21845}}
     - {tags [interleave, wide, b_only], extension "generic", type "ui32", lane_count 16, case {inputs [0, 255], expected 43690}}
+    - {tags [interleave, scalable, both], extension "sve", type "ui32", lane_count 4, case {inputs [15, 15], expected 15}}
+    - {tags [interleave, scalable, a_only], extension "sve", type "ui32", lane_count 4, case {inputs [15, 0], expected 5}}
+    - {tags [interleave, scalable, b_only], extension "sve", type "ui32", lane_count 4, case {inputs [0, 15], expected 10}}
+    - {tags [interleave, scalable, both], extension "sve", type "ui64", lane_count 2, case {inputs [3, 3], expected 3}}
+    - {tags [interleave, scalable, a_only], extension "sve", type "ui64", lane_count 2, case {inputs [3, 0], expected 1}}
+    - {tags [interleave, scalable, b_only], extension "sve", type "ui64", lane_count 2, case {inputs [0, 3], expected 2}}
+    - {tags [interleave, scalable, lane_order], extension "sve", type "ui8", lane_count 16, case {inputs [257, 514], expected 9}}
+    - {tags [interleave, scalable, lane_order], extension "sve", type "ui16", lane_count 8, case {inputs [17, 34], expected 9}}
+    - {tags [interleave, scalable, lane_order], extension "sve", type "ui32", lane_count 4, case {inputs [5, 10], expected 9}}
+    - {tags [interleave, scalable, lane_order], extension "sve", type "si32", lane_count 4, case {inputs [5, 10], expected 9}}
+    - {tags [interleave, scalable, lane_order], extension "sve", type "f32", lane_count 4, case {inputs [5, 10], expected 9}}
   impls:
-    [scalar, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, avx512, avx2, sse, neon, sve, wasm128]:
+    [scalar, generic, clang_v128, clang_v256, clang_v512, clang_v128_bool, clang_v256_bool, clang_v512_bool, oneapi_fpga, avx512, avx2, sse, neon, wasm128]:
       arith:
         requires:
           scalar []
@@ -789,7 +812,6 @@ prim<m:=(m,m)> mask_interleave_lo(mask_a, mask_b):
           avx2 [avx2]
           sse [sse2]
           neon [neon]
-          sve [sve]
           wasm128 [simd128]
         safety:
           internal_unsafe false
@@ -804,6 +826,55 @@ prim<m:=(m,m)> mask_interleave_lo(mask_a, mask_b):
               )
             ));
           """
+    sve:
+      ?i8:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<svzip1_b8>(mask_a, mask_b));"
+      ?i16:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<svzip1_b16>(mask_a, mask_b));"
+      ?i32:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<svzip1_b32>(mask_a, mask_b));"
+      ?i64:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<svzip1_b64>(mask_a, mask_b));"
+      f32:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<svzip1_b32>(mask_a, mask_b));"
+      f64:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<svzip1_b64>(mask_a, mask_b));"
     rvv:
       arith:
         requires [v]
@@ -848,6 +919,20 @@ prim<m:=(m,m)> mask_deinterleave_odd(mask_a, mask_b):
     - {tags [deinterleave, wide, a_odds], extension "generic", type "ui32", lane_count 16, case {inputs [43690, 0], expected 255}}
     - {tags [deinterleave, wide, b_odds], extension "generic", type "ui32", lane_count 16, case {inputs [0, 43690], expected 65280}}
     - {tags [deinterleave, wide, even_ignored], extension "generic", type "ui32", lane_count 16, case {inputs [21845, 0], expected 0}}
+    - {tags [deinterleave, scalable, both], extension "sve", type "ui32", lane_count 4, case {inputs [10, 10], expected 15}}
+    - {tags [deinterleave, scalable, even_ignored], extension "sve", type "ui32", lane_count 4, case {inputs [5, 5], expected 0}}
+    - {tags [deinterleave, scalable, both], extension "sve", type "ui64", lane_count 2, case {inputs [2, 2], expected 3}}
+    - {tags [deinterleave, scalable, even_ignored], extension "sve", type "ui64", lane_count 2, case {inputs [1, 1], expected 0}}
+    - {tags [deinterleave, scalable, odd_lane1], extension "sve", type "ui8", lane_count 16, case {inputs [2, 2], expected 257}}
+    - {tags [deinterleave, scalable, odd_lane3], extension "sve", type "ui8", lane_count 16, case {inputs [8, 8], expected 514}}
+    - {tags [deinterleave, scalable, odd_lane1], extension "sve", type "ui16", lane_count 8, case {inputs [2, 2], expected 17}}
+    - {tags [deinterleave, scalable, odd_lane3], extension "sve", type "ui16", lane_count 8, case {inputs [8, 8], expected 34}}
+    - {tags [deinterleave, scalable, odd_lane1], extension "sve", type "ui32", lane_count 4, case {inputs [2, 2], expected 5}}
+    - {tags [deinterleave, scalable, odd_lane3], extension "sve", type "ui32", lane_count 4, case {inputs [8, 8], expected 10}}
+    - {tags [deinterleave, scalable, odd_lane1], extension "sve", type "si32", lane_count 4, case {inputs [2, 2], expected 5}}
+    - {tags [deinterleave, scalable, odd_lane3], extension "sve", type "si32", lane_count 4, case {inputs [8, 8], expected 10}}
+    - {tags [deinterleave, scalable, odd_lane1], extension "sve", type "f32", lane_count 4, case {inputs [2, 2], expected 5}}
+    - {tags [deinterleave, scalable, odd_lane3], extension "sve", type "f32", lane_count 4, case {inputs [8, 8], expected 10}}
   impls:
     scalar:
       arith:
@@ -893,8 +978,57 @@ prim<m:=(m,m)> mask_deinterleave_odd(mask_a, mask_b):
             complete(call<primitive=unequal_zero[Vec]>(call<primitive=from_array[Vec]>(result)));
           """
     sve:
-      arith:
+      ?i8:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<svuzp2_b8>(mask_a, mask_b));"
+      ?i16:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<svuzp2_b16>(mask_a, mask_b));"
+      ?i32:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<svuzp2_b32>(mask_a, mask_b));"
+      ?i64:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<svuzp2_b64>(mask_a, mask_b));"
+      f32:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<svuzp2_b32>(mask_a, mask_b));"
+      f64:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<svuzp2_b64>(mask_a, mask_b));"
+    rvv:
+      ?i8:
+        requires [v]
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -921,32 +1055,31 @@ prim<m:=(m,m)> mask_deinterleave_odd(mask_a, mask_b):
               call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result)
             ));
           """
-    rvv:
-      arith:
+      # vrgather yields 0 for indices >= VLMAX, so from_a fills the low half and from_b the high half.
+      [si16, ui16, si32, ui32, si64, ui64, f32, f64]:
         requires [v]
         safety:
           internal_unsafe true
           caller_unsafe false
-          reasons [raw_memory]
+          reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(Base, base::in);
+            let<type>(UBase, base::unsigned_of(base::in));
+            let<type>(UVec, vector::as_base(UBase));
             var<const_infer>(lanes, value(vector::runtime_length));
-            var<const_infer>(a_vec, call<primitive=to_vector[Vec]>(mask_a));
-            var<const_infer>(b_vec, call<primitive=to_vector[Vec]>(mask_b));
-            var<runtime_array>(Base, a_lanes, lanes);
-            var<runtime_array>(Base, b_lanes, lanes);
-            var<runtime_array>(Base, result, lanes);
-            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(a_lanes, a_vec);
-            call<primitive=store[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(b_lanes, b_vec);
-            loop<backend>(i, 0, lanes, 1) {
-              if ((2 * i) < lanes) {
-                result[i] = a_lanes[2 * i + 1];
-              } else {
-                result[i] = b_lanes[2 * i - lanes + 1];
-              }
-            }
-            complete(call<primitive=unequal_zero[Vec]>(
-              call<primitive=load[Vec], attrs[aligned=false], discharge[contiguous_memory_extent]>(result)
+            var<const_infer>(ids, intrin<vid, build[infix="v", infix_sep="_", suffix=UBase]>(lanes));
+            var<const_infer>(odd_sources, intrin<vadd, build[infix="vx", infix_sep="_", suffix=UBase]>(
+              intrin<vsll, build[infix="vx", infix_sep="_", suffix=UBase]>(ids, 1, lanes), 1, lanes
+            ));
+            var<const_infer>(from_a, intrin<vrgather, build[infix="vv", infix_sep="_", suffix=UBase]>(
+              call<primitive=to_vector[UVec]>(mask_a), odd_sources, lanes
+            ));
+            var<const_infer>(from_b, intrin<vrgather, build[infix="vv", infix_sep="_", suffix=UBase]>(
+              call<primitive=to_vector[UVec]>(mask_b),
+              intrin<vsub, build[infix="vx", infix_sep="_", suffix=UBase]>(odd_sources, cast<static>(UBase, lanes), lanes),
+              lanes
+            ));
+            complete(call<primitive=unequal_zero[UVec]>(
+              intrin<vor, build[infix="vv", infix_sep="_", suffix=UBase]>(from_a, from_b, lanes)
             ));
           """

@@ -857,9 +857,11 @@ prim<v:=(lanes<s>)> set(values):
             }
             complete(result);
           """
-    sve:
+    [sve, rvv]:
       arith:
-        requires [sve]
+        requires:
+          sve [sve]
+          rvv [v]
         safety:
           internal_unsafe false
           caller_unsafe false

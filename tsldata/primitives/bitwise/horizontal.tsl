@@ -413,6 +413,24 @@ prim<s:=v> hand(vec):
               call<primitive=reinterpret[Vec, BitVec]>(vec)
             )));
           """
+    [rvv512m2, rvv1024m4, rvv128mf2, rvv512mf2]:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(first, call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(vec, 0));
+            var<const_infer>(seed, intrin<vmv_s_x, build[suffix=intrin::single_register_suffix]>(first, 1));
+            var<const_infer>(reduced, intrin<vredand, build[infix=base::in, infix_sep="_vs_", suffix=intrin::single_register_suffix]>(
+              vec,
+              seed,
+              value(vector::runtime_length)
+            ));
+            complete(intrin<__riscv_vmv_x>(reduced));
+          """
 
 prim<s:=v> hor(vec):
   operation horizontal_bit_or
@@ -825,6 +843,24 @@ prim<s:=v> hor(vec):
             complete(cast<bitcast>(base::in, call<primitive=@self[BitVec]>(
               call<primitive=reinterpret[Vec, BitVec]>(vec)
             )));
+          """
+    [rvv512m2, rvv1024m4, rvv128mf2, rvv512mf2]:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(first, call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(vec, 0));
+            var<const_infer>(seed, intrin<vmv_s_x, build[suffix=intrin::single_register_suffix]>(first, 1));
+            var<const_infer>(reduced, intrin<vredor, build[infix=base::in, infix_sep="_vs_", suffix=intrin::single_register_suffix]>(
+              vec,
+              seed,
+              value(vector::runtime_length)
+            ));
+            complete(intrin<__riscv_vmv_x>(reduced));
           """
 
 prim<s:=(m,v)> hand(mask, vec):

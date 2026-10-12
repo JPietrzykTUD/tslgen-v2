@@ -17,10 +17,50 @@ namespace tsl {
     namespace detail {
       namespace rvv_detail {
 
+        // LMUL of Vec's registers; 0 stands for LMUL 1/2.
+        template <class Vec>
+        constexpr std::size_t register_group() {
+#if defined(__riscv_v_fixed_vlen)
+          if constexpr (Vec::has_static_lane_count_v) {
+            return Vec::lane_count_v * sizeof(typename Vec::base_type) * 8 /
+                   __riscv_v_fixed_vlen;
+          }
+#endif
+          return 1;
+        }
+
         template <class Vec>
         inline typename Vec::mask_type empty_predicate(std::size_t lanes) {
           using Base = typename Vec::base_type;
-          if constexpr (sizeof(Base) == 1) {
+          if constexpr (register_group<Vec>() == 0) {
+            if constexpr (sizeof(Base) == 1) {
+              return __riscv_vmclr_m_b16(lanes);
+            } else if constexpr (sizeof(Base) == 2) {
+              return __riscv_vmclr_m_b32(lanes);
+            } else {
+              return __riscv_vmclr_m_b64(lanes);
+            }
+          } else if constexpr (register_group<Vec>() == 4) {
+            if constexpr (sizeof(Base) == 1) {
+              return __riscv_vmclr_m_b2(lanes);
+            } else if constexpr (sizeof(Base) == 2) {
+              return __riscv_vmclr_m_b4(lanes);
+            } else if constexpr (sizeof(Base) == 4) {
+              return __riscv_vmclr_m_b8(lanes);
+            } else {
+              return __riscv_vmclr_m_b16(lanes);
+            }
+          } else if constexpr (register_group<Vec>() == 2) {
+            if constexpr (sizeof(Base) == 1) {
+              return __riscv_vmclr_m_b4(lanes);
+            } else if constexpr (sizeof(Base) == 2) {
+              return __riscv_vmclr_m_b8(lanes);
+            } else if constexpr (sizeof(Base) == 4) {
+              return __riscv_vmclr_m_b16(lanes);
+            } else {
+              return __riscv_vmclr_m_b32(lanes);
+            }
+          } else if constexpr (sizeof(Base) == 1) {
             return __riscv_vmclr_m_b8(lanes);
           } else if constexpr (sizeof(Base) == 2) {
             return __riscv_vmclr_m_b16(lanes);
@@ -35,7 +75,46 @@ namespace tsl {
         inline typename Vec::mask_type lane_predicate(std::size_t lane,
                                                       std::size_t lanes) {
           using Base = typename Vec::base_type;
-          if constexpr (sizeof(Base) == 1) {
+          if constexpr (register_group<Vec>() == 0) {
+            if constexpr (sizeof(Base) == 1) {
+              return __riscv_vmseq(__riscv_vid_v_u8mf2(lanes),
+                                   static_cast<std::uint8_t>(lane), lanes);
+            } else if constexpr (sizeof(Base) == 2) {
+              return __riscv_vmseq(__riscv_vid_v_u16mf2(lanes),
+                                   static_cast<std::uint16_t>(lane), lanes);
+            } else {
+              return __riscv_vmseq(__riscv_vid_v_u32mf2(lanes),
+                                   static_cast<std::uint32_t>(lane), lanes);
+            }
+          } else if constexpr (register_group<Vec>() == 4) {
+            if constexpr (sizeof(Base) == 1) {
+              return __riscv_vmseq(__riscv_vid_v_u8m4(lanes),
+                                   static_cast<std::uint8_t>(lane), lanes);
+            } else if constexpr (sizeof(Base) == 2) {
+              return __riscv_vmseq(__riscv_vid_v_u16m4(lanes),
+                                   static_cast<std::uint16_t>(lane), lanes);
+            } else if constexpr (sizeof(Base) == 4) {
+              return __riscv_vmseq(__riscv_vid_v_u32m4(lanes),
+                                   static_cast<std::uint32_t>(lane), lanes);
+            } else {
+              return __riscv_vmseq(__riscv_vid_v_u64m4(lanes),
+                                   static_cast<std::uint64_t>(lane), lanes);
+            }
+          } else if constexpr (register_group<Vec>() == 2) {
+            if constexpr (sizeof(Base) == 1) {
+              return __riscv_vmseq(__riscv_vid_v_u8m2(lanes),
+                                   static_cast<std::uint8_t>(lane), lanes);
+            } else if constexpr (sizeof(Base) == 2) {
+              return __riscv_vmseq(__riscv_vid_v_u16m2(lanes),
+                                   static_cast<std::uint16_t>(lane), lanes);
+            } else if constexpr (sizeof(Base) == 4) {
+              return __riscv_vmseq(__riscv_vid_v_u32m2(lanes),
+                                   static_cast<std::uint32_t>(lane), lanes);
+            } else {
+              return __riscv_vmseq(__riscv_vid_v_u64m2(lanes),
+                                   static_cast<std::uint64_t>(lane), lanes);
+            }
+          } else if constexpr (sizeof(Base) == 1) {
             const vuint8m1_t indexes = __riscv_vid_v_u8m1(lanes);
             return __riscv_vmseq_vx_u8m1_b8(
                 indexes, static_cast<std::uint8_t>(lane), lanes);
@@ -59,7 +138,9 @@ namespace tsl {
                                                typename Vec::mask_type right,
                                                std::size_t lanes) {
           using Base = typename Vec::base_type;
-          if constexpr (sizeof(Base) == 1) {
+          if constexpr (register_group<Vec>() != 1) {
+            return __riscv_vmor(left, right, lanes);
+          } else if constexpr (sizeof(Base) == 1) {
             return __riscv_vmor_mm_b8(left, right, lanes);
           } else if constexpr (sizeof(Base) == 2) {
             return __riscv_vmor_mm_b16(left, right, lanes);
@@ -75,7 +156,9 @@ namespace tsl {
                                                 typename Vec::mask_type right,
                                                 std::size_t lanes) {
           using Base = typename Vec::base_type;
-          if constexpr (sizeof(Base) == 1) {
+          if constexpr (register_group<Vec>() != 1) {
+            return __riscv_vmand(left, right, lanes);
+          } else if constexpr (sizeof(Base) == 1) {
             return __riscv_vmand_mm_b8(left, right, lanes);
           } else if constexpr (sizeof(Base) == 2) {
             return __riscv_vmand_mm_b16(left, right, lanes);
@@ -90,7 +173,9 @@ namespace tsl {
         inline std::size_t mask_population_count(typename Vec::mask_type mask,
                                                  std::size_t lanes) {
           using Base = typename Vec::base_type;
-          if constexpr (sizeof(Base) == 1) {
+          if constexpr (register_group<Vec>() != 1) {
+            return __riscv_vcpop(mask, lanes);
+          } else if constexpr (sizeof(Base) == 1) {
             return __riscv_vcpop_m_b8(mask, lanes);
           } else if constexpr (sizeof(Base) == 2) {
             return __riscv_vcpop_m_b16(mask, lanes);
@@ -146,6 +231,42 @@ namespace tsl {
       template <class Base>
       struct mask_bits_adapter<::tsl::simd<Base, ::tsl::rvv>>
           : rvv_mask_bits_adapter<::tsl::simd<Base, ::tsl::rvv>> {};
+#endif
+
+#if defined(TSL_PROFILE_RVV256M1)
+      template <class Base>
+      struct mask_bits_adapter<::tsl::simd<Base, ::tsl::rvv256m1>>
+          : rvv_mask_bits_adapter<::tsl::simd<Base, ::tsl::rvv256m1>> {};
+#endif
+
+#if defined(TSL_PROFILE_RVV512M2)
+      template <class Base>
+      struct mask_bits_adapter<::tsl::simd<Base, ::tsl::rvv512m2>>
+          : rvv_mask_bits_adapter<::tsl::simd<Base, ::tsl::rvv512m2>> {};
+#endif
+
+#if defined(TSL_PROFILE_RVV1024M4)
+      template <class Base>
+      struct mask_bits_adapter<::tsl::simd<Base, ::tsl::rvv1024m4>>
+          : rvv_mask_bits_adapter<::tsl::simd<Base, ::tsl::rvv1024m4>> {};
+#endif
+
+#if defined(TSL_PROFILE_RVV1024M1)
+      template <class Base>
+      struct mask_bits_adapter<::tsl::simd<Base, ::tsl::rvv1024m1>>
+          : rvv_mask_bits_adapter<::tsl::simd<Base, ::tsl::rvv1024m1>> {};
+#endif
+
+#if defined(TSL_PROFILE_RVV128MF2)
+      template <class Base>
+      struct mask_bits_adapter<::tsl::simd<Base, ::tsl::rvv128mf2>>
+          : rvv_mask_bits_adapter<::tsl::simd<Base, ::tsl::rvv128mf2>> {};
+#endif
+
+#if defined(TSL_PROFILE_RVV512MF2)
+      template <class Base>
+      struct mask_bits_adapter<::tsl::simd<Base, ::tsl::rvv512mf2>>
+          : rvv_mask_bits_adapter<::tsl::simd<Base, ::tsl::rvv512mf2>> {};
 #endif
 
     }  // namespace detail

@@ -438,9 +438,11 @@ def _cpp_smoke(
     for index, instantiation in enumerate(smoke):
         if instantiation.template_arguments:
             arguments = ", ".join(instantiation.template_arguments)
-            use_line = f"auto* _tsl_use_{index} = &{instantiation.symbol}<{arguments}>;"
+            address = f"&{instantiation.symbol}<{arguments}>"
         else:
-            use_line = f"auto* _tsl_use_{index} = &{instantiation.symbol};"
+            address = f"&{instantiation.symbol}"
+        # GCC 15 drops riscv_rvv_vector_bits from an auto-deduced function type.
+        use_line = f"decltype({address}) _tsl_use_{index} = {address};"
         reference = f"  (void)_tsl_use_{index};"
         if instantiation.condition is not None:
             use_line = f"#if {instantiation.condition}\n{use_line}\n#endif"

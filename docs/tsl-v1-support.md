@@ -34,6 +34,12 @@ exclusions below remain authoritative for those cases.
 | `cpp` | `all_supported` | `sve512` | `aarch64` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
 | `cpp` | `all_supported` | `scalar` | `generic` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
 | `cpp` | `all_supported` | `rvv` | `riscv` | runtime-scalable | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `rvv1024m1` | `riscv` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `rvv1024m4` | `riscv` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `rvv128mf2` | `riscv` | fixed/static | `si8`, `si16`, `si32`, `ui8`, `ui16`, `ui32`, `f32` |
+| `cpp` | `all_supported` | `rvv256m1` | `riscv` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `rvv512m2` | `riscv` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
+| `cpp` | `all_supported` | `rvv512mf2` | `riscv` | fixed/static | `si8`, `si16`, `si32`, `ui8`, `ui16`, `ui32`, `f32` |
 | `cpp` | `all_supported` | `wasm32-simd128` | `wasm32` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
 | `cpp` | `all_supported` | `avx` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
 | `cpp` | `all_supported` | `avx2` | `x86` | fixed/static | `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, `f64` |
@@ -88,7 +94,7 @@ extensions or LMULs, or stable Rust SVE/RVV.
 | Scope | Backend | Profile → target extension | Runtime-scalable profiles | Excludes |
 | --- | --- | --- | --- | --- |
 | `arm-sve` | `cpp` | `sve` → `sve`, `sve128` → `sve128`, `sve256` → `sve256`, `sve512` → `sve512` | `sve` | SVE2; stable Rust SVE |
-| `riscv-vector` | `cpp` | `rvv` → `rvv` | `rvv` | optional RVV extensions; LMUL values other than the declared LMUL=1 profile; stable Rust RVV |
+| `riscv-vector` | `cpp` | `rvv` → `rvv`, `rvv256m1` → `rvv256m1`, `rvv512m2` → `rvv512m2`, `rvv1024m4` → `rvv1024m4`, `rvv1024m1` → `rvv1024m1`, `rvv128mf2` → `rvv128mf2`, `rvv512mf2` → `rvv512mf2` | `rvv` | optional RVV extensions; LMUL values other than the declared profiles; stable Rust RVV |
 
 ## Stable callable universe
 
@@ -104,7 +110,7 @@ The exact callable-family records below are projected from
 `coverage/tsl-v1-public-api.json`; generated projects also carry their
 scope-exact backend declaration manifests.
 
-Public-API baseline SHA-256: `4aa3f8dd2b458e9c9ba967efdcf820a87279a0ab50b4fa20c87e2163fcac6744`.
+Public-API baseline SHA-256: `2358c16e52c304a1c511ac7cf1b79d0264cb6ea996e0387ea3beccbe0856379c`.
 
 ### Primitive callable families
 
@@ -308,10 +314,12 @@ Public-API baseline SHA-256: `4aa3f8dd2b458e9c9ba967efdcf820a87279a0ab50b4fa20c8
 
 - `TSL-V1-RUNTIME-SCALABLE-FIXED-WIDTH-REPRESENTATION` (sve, rvv/cpp; concat#v:=(v,v)->extension:ToExtension, extract[cast=reinterpret]#v:=(v,sImm)->extension:ToExtension, extract_imask#im:=(im,usize)->base:ToBase, extract_imask#im:=(im,usize)->extension:ToExtension, insert[cast=reinterpret]#v:=(vt,v,sImm)->extension:ToExtension, insert_imask#im:=(imt,im,usize)->base:ToBase, insert_imask#im:=(imt,im,usize)->extension:ToExtension, resize_down#v:=v->extension:ToExtension, resize_up_undef[value=undef]#v:=v->extension:ToExtension, resize_up_zero[value=zero]#v:=v->extension:ToExtension; types all): The callable changes between statically ordered register widths or fixed mask windows and has no truthful meaning for one runtime-scalable register type.
 - `TSL-V1-FIXED-SVE-NO-COMPATIBLE-WIDTH` (sve128, sve256, sve512/cpp; concat#v:=(v,v)->extension:ToExtension, extract[cast=reinterpret]#v:=(v,sImm)->extension:ToExtension, extract_imask#im:=(im,usize)->extension:ToExtension, insert[cast=reinterpret]#v:=(vt,v,sImm)->extension:ToExtension, insert_imask#im:=(imt,im,usize)->extension:ToExtension, resize_down#v:=v->extension:ToExtension, resize_up_undef[value=undef]#v:=v->extension:ToExtension, resize_up_zero[value=zero]#v:=v->extension:ToExtension; types all): A fixed-SVE profile emits exactly one fixed-SVE register width, so no distinct same-family source or destination width exists for this representation-change callable.
-- `TSL-V1-NO-WIDER-SCALAR-TYPE` (sve, sve128, sve256, sve512, rvv/cpp; convert_up[cast=convert,direction=up]#v:=(v,sImm)->base:ToBase, load_convert_up#v:=cptr+->base:ToBase; types si64, ui64, f64): The stable scalar domain has no wider target lane type for these source types.
-- `TSL-V1-NO-WIDER-SCALAR-TYPE` (sve128, sve256, sve512/cpp; extract_imask#im:=(im,usize)->base:ToBase; types si64, ui64, f64): The stable scalar domain has no wider target lane type for these source types.
-- `TSL-V1-NO-NARROWER-SCALAR-TYPE` (sve, sve128, sve256, sve512, rvv/cpp; convert_down[cast=convert,direction=down]#v:=(v,sImm)->base:ToBase; types si8, ui8, f32): The stable scalar domain has no supported narrower target lane type for these source types.
-- `TSL-V1-NO-NARROWER-SCALAR-TYPE` (sve128, sve256, sve512/cpp; insert_imask#im:=(imt,im,usize)->base:ToBase; types si8, ui8): The stable scalar domain has no supported narrower target lane type for these source types.
+- `TSL-V1-FIXED-RVV-NO-COMPATIBLE-WIDTH` (rvv256m1, rvv512m2, rvv1024m4, rvv1024m1, rvv128mf2, rvv512mf2/cpp; concat#v:=(v,v)->extension:ToExtension, extract[cast=reinterpret]#v:=(v,sImm)->extension:ToExtension, extract_imask#im:=(im,usize)->extension:ToExtension, insert[cast=reinterpret]#v:=(vt,v,sImm)->extension:ToExtension, insert_imask#im:=(imt,im,usize)->extension:ToExtension, resize_down#v:=v->extension:ToExtension, resize_up_undef[value=undef]#v:=v->extension:ToExtension, resize_up_zero[value=zero]#v:=v->extension:ToExtension; types all): A fixed-length RVV profile emits exactly one register-group width, so no distinct same-family source or destination width exists for this representation-change callable.
+- `TSL-V1-NO-WIDER-SCALAR-TYPE` (sve, sve128, sve256, sve512, rvv, rvv256m1, rvv512m2, rvv1024m4, rvv1024m1/cpp; convert_up[cast=convert,direction=up]#v:=(v,sImm)->base:ToBase, load_convert_up#v:=cptr+->base:ToBase; types si64, ui64, f64): The stable scalar domain has no wider target lane type for these source types.
+- `TSL-V1-NO-WIDER-SCALAR-TYPE` (sve128, sve256, sve512, rvv256m1, rvv512m2, rvv1024m4, rvv1024m1/cpp; extract_imask#im:=(im,usize)->base:ToBase; types si64, ui64, f64): The stable scalar domain has no wider target lane type for these source types.
+- `TSL-V1-FRACTIONAL-RVV-NO-64-BIT-LANES` (rvv128mf2, rvv512mf2/cpp; convert_up[cast=convert,direction=up]#v:=(v,sImm)->base:ToBase, extract_imask#im:=(im,usize)->base:ToBase, load_convert_up#v:=cptr+->base:ToBase; types si32, ui32, f32): An LMUL 1/2 RVV profile has no 64-bit lanes (RVV requires SEW <= LMUL * ELEN), so these 32-bit source types have no wider target lane type.
+- `TSL-V1-NO-NARROWER-SCALAR-TYPE` (sve, sve128, sve256, sve512, rvv, rvv256m1, rvv512m2, rvv1024m4, rvv1024m1, rvv128mf2, rvv512mf2/cpp; convert_down[cast=convert,direction=down]#v:=(v,sImm)->base:ToBase; types si8, ui8, f32): The stable scalar domain has no supported narrower target lane type for these source types.
+- `TSL-V1-NO-NARROWER-SCALAR-TYPE` (sve128, sve256, sve512, rvv256m1, rvv512m2, rvv1024m4, rvv1024m1, rvv128mf2, rvv512mf2/cpp; insert_imask#im:=(imt,im,usize)->base:ToBase; types si8, ui8): The stable scalar domain has no supported narrower target lane type for these source types.
 
 ## Safety API
 

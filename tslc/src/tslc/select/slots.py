@@ -48,7 +48,10 @@ def selection_slots(
     """Enumerate the literal extension/type/representation target axis."""
 
     for extension_name in extension_names:
+        extension = catalog.extensions[extension_name]
         for type_tag in type_tags:
+            if not catalog.extension_offers_type(extension, type_tag):
+                continue
             if not any(
                 catalog.type_group_contains(
                     implementation.type_group, type_tag
@@ -107,7 +110,7 @@ def monomorphized_lanes(
 
 
 def simd_type_base_binding_sets(
-    catalog: Catalog, primitive: Primitive, type_tag: str
+    catalog: Catalog, primitive: Primitive, extension: Extension, type_tag: str
 ) -> tuple[tuple[SimdTypeBaseBinding, ...], ...]:
     params = tuple(
         generic_param
@@ -123,6 +126,7 @@ def simd_type_base_binding_sets(
             base_tag
             for base_tag in _concrete_base_tags(catalog, param.base_type_constraints)
             if _base_width_constraints_match(param, base_tag, type_tag)
+            and catalog.extension_offers_type(extension, base_tag)
         )
         if not base_tags:
             return ()

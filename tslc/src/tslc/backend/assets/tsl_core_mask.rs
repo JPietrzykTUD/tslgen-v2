@@ -142,6 +142,33 @@ pub fn ctz<T: TslCtz>(v: T) -> u32 {
 pub fn clz<T: TslClz>(v: T) -> u32 {
     v.clz()
 }
+// Left-pack lane indices of an integer mask (used by `compress`): byte k is the lane of the
+// k-th set bit among the low eight bits, 0xFF once the set bits run out. Counterpart to C++
+// `tsl::detail::helpers::compress_lane_indices`.
+const fn compress_lane_index_rows() -> [u64; 256] {
+    let mut rows = [0u64; 256];
+    let mut mask = 0usize;
+    while mask < 256 {
+        let mut row = u64::MAX;
+        let mut out = 0u32;
+        let mut lane = 0u32;
+        while lane < 8 {
+            if (mask >> lane) & 1 != 0 {
+                row &= !(0xFFu64 << (8 * out));
+                row |= (lane as u64) << (8 * out);
+                out += 1;
+            }
+            lane += 1;
+        }
+        rows[mask] = row;
+        mask += 1;
+    }
+    rows
+}
+static COMPRESS_LANE_INDEX_ROWS: [u64; 256] = compress_lane_index_rows();
+pub fn compress_lane_indices(imask: u64) -> u64 {
+    COMPRESS_LANE_INDEX_ROWS[(imask & 0xFF) as usize]
+}
 fn imask_low_bits(count: usize) -> u64 {
     if count >= 64 {
         u64::MAX

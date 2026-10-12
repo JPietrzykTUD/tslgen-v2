@@ -68,7 +68,7 @@ prim<m:=()>[value=zero] mask_false():
         implementation:
           tsil """
             complete(
-              intrin<vmclr, build[infix="m", infix_sep="_", suffix="b8"]>(
+              intrin<vmclr, build[infix="m", infix_sep="_", suffix=intrin::mask_suffix]>(
                 value(vector::runtime_length)
               )
             );
@@ -82,7 +82,7 @@ prim<m:=()>[value=zero] mask_false():
         implementation:
           tsil """
             complete(
-              intrin<vmclr, build[infix="m", infix_sep="_", suffix="b16"]>(
+              intrin<vmclr, build[infix="m", infix_sep="_", suffix=intrin::mask_suffix]>(
                 value(vector::runtime_length)
               )
             );
@@ -96,7 +96,7 @@ prim<m:=()>[value=zero] mask_false():
         implementation:
           tsil """
             complete(
-              intrin<vmclr, build[infix="m", infix_sep="_", suffix="b32"]>(
+              intrin<vmclr, build[infix="m", infix_sep="_", suffix=intrin::mask_suffix]>(
                 value(vector::runtime_length)
               )
             );
@@ -110,7 +110,7 @@ prim<m:=()>[value=zero] mask_false():
         implementation:
           tsil """
             complete(
-              intrin<vmclr, build[infix="m", infix_sep="_", suffix="b64"]>(
+              intrin<vmclr, build[infix="m", infix_sep="_", suffix=intrin::mask_suffix]>(
                 value(vector::runtime_length)
               )
             );
@@ -254,7 +254,7 @@ prim<m:=()>[value=all] mask_true():
         implementation:
           tsil """
             complete(
-              intrin<vmset, build[infix="m", infix_sep="_", suffix="b8"]>(
+              intrin<vmset, build[infix="m", infix_sep="_", suffix=intrin::mask_suffix]>(
                 value(vector::runtime_length)
               )
             );
@@ -268,7 +268,7 @@ prim<m:=()>[value=all] mask_true():
         implementation:
           tsil """
             complete(
-              intrin<vmset, build[infix="m", infix_sep="_", suffix="b16"]>(
+              intrin<vmset, build[infix="m", infix_sep="_", suffix=intrin::mask_suffix]>(
                 value(vector::runtime_length)
               )
             );
@@ -282,7 +282,7 @@ prim<m:=()>[value=all] mask_true():
         implementation:
           tsil """
             complete(
-              intrin<vmset, build[infix="m", infix_sep="_", suffix="b32"]>(
+              intrin<vmset, build[infix="m", infix_sep="_", suffix=intrin::mask_suffix]>(
                 value(vector::runtime_length)
               )
             );
@@ -296,7 +296,7 @@ prim<m:=()>[value=all] mask_true():
         implementation:
           tsil """
             complete(
-              intrin<vmset, build[infix="m", infix_sep="_", suffix="b64"]>(
+              intrin<vmset, build[infix="m", infix_sep="_", suffix=intrin::mask_suffix]>(
                 value(vector::runtime_length)
               )
             );

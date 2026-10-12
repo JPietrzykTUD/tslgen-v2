@@ -246,6 +246,120 @@
           }
         ]
       }
+    },
+    {
+      "name": "rvv256m1",
+      "target_features": "v",
+      "compile_modes": "rvv_vlen256_lmul1",
+      "backend_flags": {
+        "cpp": [
+          "-march=rv64imafdcv_zvl256b",
+          "-mabi=lp64d",
+          "-mrvv-vector-bits=zvl"
+        ]
+      },
+      "supported_backends": ["cpp"],
+      "runner": {
+        "kind": "qemu-riscv64",
+        "name": "vlen256",
+        "profile": "max,v=true,vext_spec=v1.0,vlen=256,elen=64",
+        "vector_bits": 256
+      }
+    },
+    {
+      "name": "rvv512m2",
+      "target_features": "v",
+      "compile_modes": "rvv_vlen256_lmul2",
+      "backend_flags": {
+        "cpp": [
+          "-march=rv64imafdcv_zvl256b",
+          "-mabi=lp64d",
+          "-mrvv-vector-bits=zvl"
+        ]
+      },
+      "supported_backends": ["cpp"],
+      "runner": {
+        "kind": "qemu-riscv64",
+        "name": "vlen256",
+        "profile": "max,v=true,vext_spec=v1.0,vlen=256,elen=64",
+        "vector_bits": 256
+      }
+    },
+    {
+      "name": "rvv1024m4",
+      "target_features": "v",
+      "compile_modes": "rvv_vlen256_lmul4",
+      "backend_flags": {
+        "cpp": [
+          "-march=rv64imafdcv_zvl256b",
+          "-mabi=lp64d",
+          "-mrvv-vector-bits=zvl"
+        ]
+      },
+      "supported_backends": ["cpp"],
+      "runner": {
+        "kind": "qemu-riscv64",
+        "name": "vlen256",
+        "profile": "max,v=true,vext_spec=v1.0,vlen=256,elen=64",
+        "vector_bits": 256
+      }
+    },
+    {
+      "name": "rvv1024m1",
+      "target_features": "v",
+      "compile_modes": "rvv_vlen1024_lmul1",
+      "backend_flags": {
+        "cpp": [
+          "-march=rv64imafdcv_zvl1024b",
+          "-mabi=lp64d",
+          "-mrvv-vector-bits=zvl"
+        ]
+      },
+      "supported_backends": ["cpp"],
+      "runner": {
+        "kind": "qemu-riscv64",
+        "name": "vlen1024",
+        "profile": "max,v=true,vext_spec=v1.0,vlen=1024,elen=64",
+        "vector_bits": 1024
+      }
+    },
+    {
+      "name": "rvv128mf2",
+      "target_features": "v",
+      "compile_modes": "rvv_vlen256_lmulf2",
+      "backend_flags": {
+        "cpp": [
+          "-march=rv64imafdcv_zvl256b",
+          "-mabi=lp64d",
+          "-mrvv-vector-bits=zvl"
+        ]
+      },
+      "supported_backends": ["cpp"],
+      "runner": {
+        "kind": "qemu-riscv64",
+        "name": "vlen256",
+        "profile": "max,v=true,vext_spec=v1.0,vlen=256,elen=64",
+        "vector_bits": 256
+      }
+    },
+    {
+      "name": "rvv512mf2",
+      "target_features": "v",
+      "compile_modes": "rvv_vlen1024_lmulf2",
+      "backend_flags": {
+        "cpp": [
+          "-march=rv64imafdcv_zvl1024b",
+          "-mabi=lp64d",
+          "-mrvv-vector-bits=zvl"
+        ]
+      },
+      "supported_backends": ["cpp"],
+      "runner": {
+        "kind": "qemu-riscv64",
+        "name": "vlen1024",
+        "profile": "max,v=true,vext_spec=v1.0,vlen=1024,elen=64",
+        "vector_bits": 1024
+      }
     }
   ],
   "wasm32": [

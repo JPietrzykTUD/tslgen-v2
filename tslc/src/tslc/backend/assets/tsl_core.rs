@@ -304,7 +304,9 @@ pub(crate) use scalar::{bit_cast, reinterpret_unchecked, ValidBitPattern};
 
 pub mod detail {
     pub mod helpers {
-        pub use super::super::mask::{clz, ctz, imask_extract, imask_insert, popcount};
+        pub use super::super::mask::{
+            clz, compress_lane_indices, ctz, imask_extract, imask_insert, popcount,
+        };
         pub use super::super::scalar::{
             arith_add, arith_div, arith_mul, arith_rem, arith_sub, lane_get_unchecked,
             lane_set_unchecked, saturating_cast_value, scalar_as_cast_value,

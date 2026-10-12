@@ -14,12 +14,33 @@ VS Code extension have independent version lines.
   `Result<_, PreconditionError>` checked APIs.
 - Stable C++ runtime-scalable SVE, fixed SVE128/SVE256/SVE512, and baseline RV64
   Vector 1.0 profiles, with exact exclusions and multi-vector-length tests.
+- Fixed-length C++ RVV profiles `rvv256m1`, `rvv512m2`, and `rvv1024m4` for
+  VLEN 256 (LMUL 1, 2, 4) and `rvv1024m1` for VLEN 1024, so
+  `dataparallel::fixed<N>` maps onto RVV registers. `rvv128mf2` (VLEN 256) and
+  `rvv512mf2` (VLEN 1024) use LMUL 1/2 and cover 8- to 32-bit lanes only; the
+  release contract lists each profile's element types.
 - Stable Rust support for the exact x86 profile set in the generated support
   contract, tested on Rust 1.89 and current stable.
 - Coarse `native | composed | fallback | unknown` implementation-state queries
   in both generated languages and matching compiler/editor analysis.
 - Complete generated C++ Doxygen and Rustdoc entry points, checked-in compiled
   consumer examples, and machine-generated backend/profile/type support docs.
+
+### Fixed
+
+- SVE `mask_interleave_lo` and `mask_deinterleave_odd` use `svzip1`/`svuzp2`
+  instead of per-call heap-allocating fallbacks.
+- Masked clang-overlay operations compile on SVE and RVV: they keep their
+  authored body instead of delegating through a scalar integral-mask bridge.
+- RVV `reinterpret` between element sizes goes through the signed integer
+  types, since RVV only reinterprets across sizes within one signedness.
+- RVV `compress`, `compress_store`, `permute_lanes`, `reverse`, `interleave_lo`
+  (and through it `mask_interleave_lo`), and `mask_deinterleave_odd` use
+  `vcompress`/`vrgather` instead of per-call array fallbacks for 16- to 64-bit
+  lanes.
+- AVX2 `compress` for 32- and 64-bit lanes and SSSE3 `compress` for 16- to
+  64-bit lanes shuffle with a left-pack index table (`vpermd`/`pshufb`) instead
+  of a per-lane branch loop through memory.
 
 ### Changed
 
@@ -45,7 +66,7 @@ VS Code extension have independent version lines.
 
 - Stable Rust SVE and RVV.
 - SVE2, undeclared optional RVV extensions, and RVV LMUL values outside the
-  declared baseline profile.
+  declared profiles.
 - Fixed-shape callable identities on runtime-scalable profiles when no truthful
   runtime-sized signature exists.
 - Checked twins for pointer contracts whose complete capacity, layout,

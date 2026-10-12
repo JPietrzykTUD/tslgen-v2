@@ -141,15 +141,20 @@ class ReleaseProfile:
     features: tuple[str, ...]
     compile_modes: tuple[str, ...]
     auto_detect_gate: str | None
+    scalar_types: tuple[str, ...] = DEFAULT_SCALAR_TYPE_TAGS
 
     def payload(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "name": self.name,
             "family": self.family,
             "features": list(self.features),
             "compile_modes": list(self.compile_modes),
             "auto_detect_gate": self.auto_detect_gate,
         }
+        # Stated only where the profile narrows the support universe.
+        if self.scalar_types != DEFAULT_SCALAR_TYPE_TAGS:
+            payload["scalar_types"] = list(self.scalar_types)
+        return payload
 
 
 @dataclass(frozen=True, slots=True)

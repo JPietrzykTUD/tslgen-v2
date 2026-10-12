@@ -89,6 +89,7 @@ translation rust:
   helper_arith_rem "unsafe { crate::tsl_core::detail::helpers::arith_rem({args}) }"
   helper_popcount "crate::tsl_core::detail::helpers::popcount({args})"
   helper_ctz "crate::tsl_core::detail::helpers::ctz({args})"
+  helper_compress_lane_indices "crate::tsl_core::detail::helpers::compress_lane_indices({args})"
   helper_clz "crate::tsl_core::detail::helpers::clz({args})"
   helper_random_step_u64 "crate::tsl_core::detail::helpers::random_step_u64({args})"
   helper_imask_insert "crate::tsl_core::detail::helpers::imask_insert::{template}({args})"

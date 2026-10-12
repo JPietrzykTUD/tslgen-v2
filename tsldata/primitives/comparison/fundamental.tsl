@@ -277,7 +277,7 @@ prim<m:=(v,v)> equal(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmseq, build[infix="vv", infix_sep="_", post=b8]>(
+              intrin<vmseq, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -293,7 +293,7 @@ prim<m:=(v,v)> equal(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmseq, build[infix="vv", infix_sep="_", post=b16]>(
+              intrin<vmseq, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -309,7 +309,7 @@ prim<m:=(v,v)> equal(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmseq, build[infix="vv", infix_sep="_", post=b32]>(
+              intrin<vmseq, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -325,7 +325,7 @@ prim<m:=(v,v)> equal(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmseq, build[infix="vv", infix_sep="_", post=b64]>(
+              intrin<vmseq, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -341,7 +341,7 @@ prim<m:=(v,v)> equal(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmfeq, build[infix="vv", infix_sep="_", post=b32]>(
+              intrin<vmfeq, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -357,7 +357,7 @@ prim<m:=(v,v)> equal(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmfeq, build[infix="vv", infix_sep="_", post=b64]>(
+              intrin<vmfeq, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -606,7 +606,7 @@ prim<m:=(v,v)> nequal(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmsne, build[infix="vv", infix_sep="_", post=b8]>(
+              intrin<vmsne, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -622,7 +622,7 @@ prim<m:=(v,v)> nequal(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmsne, build[infix="vv", infix_sep="_", post=b16]>(
+              intrin<vmsne, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -638,7 +638,7 @@ prim<m:=(v,v)> nequal(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmsne, build[infix="vv", infix_sep="_", post=b32]>(
+              intrin<vmsne, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -654,7 +654,7 @@ prim<m:=(v,v)> nequal(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmsne, build[infix="vv", infix_sep="_", post=b64]>(
+              intrin<vmsne, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -670,7 +670,7 @@ prim<m:=(v,v)> nequal(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmfne, build[infix="vv", infix_sep="_", post=b32]>(
+              intrin<vmfne, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -686,7 +686,7 @@ prim<m:=(v,v)> nequal(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmfne, build[infix="vv", infix_sep="_", post=b64]>(
+              intrin<vmfne, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -1051,7 +1051,7 @@ prim<m:=(v,v)> less_than(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmslt, build[infix="vv", infix_sep="_", post=b8]>(
+              intrin<vmslt, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -1067,7 +1067,7 @@ prim<m:=(v,v)> less_than(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmsltu, build[infix="vv", infix_sep="_", post=b8]>(
+              intrin<vmsltu, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -1083,7 +1083,7 @@ prim<m:=(v,v)> less_than(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmslt, build[infix="vv", infix_sep="_", post=b16]>(
+              intrin<vmslt, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -1099,7 +1099,7 @@ prim<m:=(v,v)> less_than(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmsltu, build[infix="vv", infix_sep="_", post=b16]>(
+              intrin<vmsltu, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -1115,7 +1115,7 @@ prim<m:=(v,v)> less_than(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmslt, build[infix="vv", infix_sep="_", post=b32]>(
+              intrin<vmslt, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -1131,7 +1131,7 @@ prim<m:=(v,v)> less_than(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmsltu, build[infix="vv", infix_sep="_", post=b32]>(
+              intrin<vmsltu, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -1147,7 +1147,7 @@ prim<m:=(v,v)> less_than(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmslt, build[infix="vv", infix_sep="_", post=b64]>(
+              intrin<vmslt, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -1163,7 +1163,7 @@ prim<m:=(v,v)> less_than(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmsltu, build[infix="vv", infix_sep="_", post=b64]>(
+              intrin<vmsltu, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -1179,7 +1179,7 @@ prim<m:=(v,v)> less_than(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmflt, build[infix="vv", infix_sep="_", post=b32]>(
+              intrin<vmflt, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -1195,7 +1195,7 @@ prim<m:=(v,v)> less_than(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmflt, build[infix="vv", infix_sep="_", post=b64]>(
+              intrin<vmflt, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -1840,7 +1840,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmsle, build[infix="vv", infix_sep="_", post=b8]>(
+              intrin<vmsle, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -1856,7 +1856,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmsleu, build[infix="vv", infix_sep="_", post=b8]>(
+              intrin<vmsleu, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -1872,7 +1872,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmsle, build[infix="vv", infix_sep="_", post=b16]>(
+              intrin<vmsle, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -1888,7 +1888,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmsleu, build[infix="vv", infix_sep="_", post=b16]>(
+              intrin<vmsleu, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -1904,7 +1904,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmsle, build[infix="vv", infix_sep="_", post=b32]>(
+              intrin<vmsle, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -1920,7 +1920,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmsleu, build[infix="vv", infix_sep="_", post=b32]>(
+              intrin<vmsleu, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -1936,7 +1936,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmsle, build[infix="vv", infix_sep="_", post=b64]>(
+              intrin<vmsle, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -1952,7 +1952,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmsleu, build[infix="vv", infix_sep="_", post=b64]>(
+              intrin<vmsleu, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -1968,7 +1968,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmfle, build[infix="vv", infix_sep="_", post=b32]>(
+              intrin<vmfle, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)
@@ -1984,7 +1984,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         implementation:
           tsil """
             complete(
-              intrin<vmfle, build[infix="vv", infix_sep="_", post=b64]>(
+              intrin<vmfle, build[infix="vv", infix_sep="_", post=intrin::mask_suffix]>(
                 left,
                 right,
                 value(vector::runtime_length)

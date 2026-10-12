@@ -1,5 +1,7 @@
 """TSL 1.x public callable-family compatibility ratchet."""
 
+import pytest
+
 from tslc.maintenance import _repo_context
 from tslc.maintenance.public_api_baseline import (
     build_public_api_baseline,
@@ -14,9 +16,14 @@ def test_public_api_matches_reviewed_v1_baseline() -> None:
 
     baseline = build_public_api_baseline(context)
 
-    assert serialize(baseline) == canonical_baseline_path(context).read_text(
+    # pytest's text diff is quadratic and does not finish on this baseline's size.
+    if serialize(baseline) != canonical_baseline_path(context).read_text(
         encoding="utf-8"
-    )
+    ):
+        pytest.fail(
+            "public API differs from the reviewed v1 baseline; review and run "
+            "`python -m tslc.maintenance.public_api_baseline --update` to accept it"
+        )
     assert baseline["cpp_core_identities"]
     assert baseline["rust_root_identities"]
     assert baseline["algorithm_callable_families"]

@@ -286,7 +286,7 @@ Review: Packed, register-lane, axis-selected, and scalable mask representations 
 ### `selected_memory_contract` (2)
 
 - `expand_load v:=(m,cptr)`; attributes `aligned=true, op=expand`; result target `none`; reasons `intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 21; checked source status `declared`; preconditions `compacted_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
-- `compress_store void:=(m,ptr,v)`; attributes `aligned=true, op=pack`; result target `none`; reasons `intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 23; checked source status `declared`; preconditions `compacted_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
+- `compress_store void:=(m,ptr,v)`; attributes `aligned=true, op=pack`; result target `none`; reasons `intrinsic, raw_memory, raw_pointer`; caller-unsafe implementations 26; checked source status `declared`; preconditions `compacted_memory_extent, selected_memory_alignment`; coverage: source preconditions are available for backend check planning
 
 Review: Validation must precede any compress-store output write; an all-inactive operation accesses no memory and does not reject an empty unaligned view.
 
@@ -331,26 +331,26 @@ The existing typed metadata audit finds additional direct body/signature facts w
 
 The 26 caller-visible gaps are:
 
-- `tsldata/primitives/load_store/pack_expand.tsl:659` — load_convert_up avx512/si8/ToBase/si16
-- `tsldata/primitives/load_store/pack_expand.tsl:672` — load_convert_up avx512/si8/ToBase/si32
-- `tsldata/primitives/load_store/pack_expand.tsl:684` — load_convert_up avx512/si8/ToBase/si64
-- `tsldata/primitives/load_store/pack_expand.tsl:704` — load_convert_up avx512/ui8/ToBase/ui16
-- `tsldata/primitives/load_store/pack_expand.tsl:717` — load_convert_up avx512/ui8/ToBase/ui32
-- `tsldata/primitives/load_store/pack_expand.tsl:729` — load_convert_up avx512/ui8/ToBase/ui64
-- `tsldata/primitives/load_store/pack_expand.tsl:749` — load_convert_up avx512/si16/ToBase/si32
-- `tsldata/primitives/load_store/pack_expand.tsl:761` — load_convert_up avx512/si16/ToBase/si64
-- `tsldata/primitives/load_store/pack_expand.tsl:776` — load_convert_up avx512/ui16/ToBase/ui32
-- `tsldata/primitives/load_store/pack_expand.tsl:788` — load_convert_up avx512/ui16/ToBase/ui64
-- `tsldata/primitives/load_store/pack_expand.tsl:803` — load_convert_up avx512/si32/ToBase/si64
-- `tsldata/primitives/load_store/pack_expand.tsl:818` — load_convert_up avx512/ui32/ToBase/ui64
-- `tsldata/primitives/load_store/pack_expand.tsl:833` — load_convert_up avx512/f32/ToBase/f64
-- `tsldata/primitives/load_store/pack_expand.tsl:897` — load_convert_up [avx2, avx2_vl]/si8/ToBase/si16
-- `tsldata/primitives/load_store/pack_expand.tsl:930` — load_convert_up [avx2, avx2_vl]/ui8/ToBase/ui16
-- `tsldata/primitives/load_store/pack_expand.tsl:963` — load_convert_up [avx2, avx2_vl]/si16/ToBase/si32
-- `tsldata/primitives/load_store/pack_expand.tsl:996` — load_convert_up [avx2, avx2_vl]/ui16/ToBase/ui32
-- `tsldata/primitives/load_store/pack_expand.tsl:1029` — load_convert_up [avx2, avx2_vl]/si32/ToBase/si64
-- `tsldata/primitives/load_store/pack_expand.tsl:1046` — load_convert_up [avx2, avx2_vl]/ui32/ToBase/ui64
-- `tsldata/primitives/load_store/pack_expand.tsl:1063` — load_convert_up [avx2, avx2_vl]/f32/ToBase/f64
+- `tsldata/primitives/load_store/pack_expand.tsl:695` — load_convert_up avx512/si8/ToBase/si16
+- `tsldata/primitives/load_store/pack_expand.tsl:708` — load_convert_up avx512/si8/ToBase/si32
+- `tsldata/primitives/load_store/pack_expand.tsl:720` — load_convert_up avx512/si8/ToBase/si64
+- `tsldata/primitives/load_store/pack_expand.tsl:740` — load_convert_up avx512/ui8/ToBase/ui16
+- `tsldata/primitives/load_store/pack_expand.tsl:753` — load_convert_up avx512/ui8/ToBase/ui32
+- `tsldata/primitives/load_store/pack_expand.tsl:765` — load_convert_up avx512/ui8/ToBase/ui64
+- `tsldata/primitives/load_store/pack_expand.tsl:785` — load_convert_up avx512/si16/ToBase/si32
+- `tsldata/primitives/load_store/pack_expand.tsl:797` — load_convert_up avx512/si16/ToBase/si64
+- `tsldata/primitives/load_store/pack_expand.tsl:812` — load_convert_up avx512/ui16/ToBase/ui32
+- `tsldata/primitives/load_store/pack_expand.tsl:824` — load_convert_up avx512/ui16/ToBase/ui64
+- `tsldata/primitives/load_store/pack_expand.tsl:839` — load_convert_up avx512/si32/ToBase/si64
+- `tsldata/primitives/load_store/pack_expand.tsl:854` — load_convert_up avx512/ui32/ToBase/ui64
+- `tsldata/primitives/load_store/pack_expand.tsl:869` — load_convert_up avx512/f32/ToBase/f64
+- `tsldata/primitives/load_store/pack_expand.tsl:933` — load_convert_up [avx2, avx2_vl]/si8/ToBase/si16
+- `tsldata/primitives/load_store/pack_expand.tsl:966` — load_convert_up [avx2, avx2_vl]/ui8/ToBase/ui16
+- `tsldata/primitives/load_store/pack_expand.tsl:999` — load_convert_up [avx2, avx2_vl]/si16/ToBase/si32
+- `tsldata/primitives/load_store/pack_expand.tsl:1032` — load_convert_up [avx2, avx2_vl]/ui16/ToBase/ui32
+- `tsldata/primitives/load_store/pack_expand.tsl:1065` — load_convert_up [avx2, avx2_vl]/si32/ToBase/si64
+- `tsldata/primitives/load_store/pack_expand.tsl:1082` — load_convert_up [avx2, avx2_vl]/ui32/ToBase/ui64
+- `tsldata/primitives/load_store/pack_expand.tsl:1099` — load_convert_up [avx2, avx2_vl]/f32/ToBase/f64
 - `tsldata/primitives/load_store/rnd_access.tsl:438` — gather sve/arith
 - `tsldata/primitives/load_store/rnd_access.tsl:828` — gather_narrow_partial sve/[bword, dword]
 - `tsldata/primitives/load_store/rnd_access.tsl:1053` — gather_narrow sve/[bword, dword]

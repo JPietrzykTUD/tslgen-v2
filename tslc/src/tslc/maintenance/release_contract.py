@@ -114,12 +114,23 @@ def build_release_contract(context: RepoContext) -> ReleaseContract:
             f"policy={sorted(policy_backends)}, catalog={sorted(catalog_backends)}"
         )
 
+    scoped_extensions = {
+        (scope.backend_id, profile): extension
+        for scope in policy.target_scopes
+        for profile, extension in scope.profile_extensions
+    }
     backends = tuple(
         BackendReleaseContract(
             backend_id=item.backend_id,
             selection=item.selection,
             profiles=tuple(
-                _release_profile(profile)
+                _release_profile(
+                    profile,
+                    _profile_scalar_types(
+                        catalog,
+                        scoped_extensions.get((item.backend_id, profile.name)),
+                    ),
+                )
                 for profile in select_release_profiles(item, loaded_profiles.profiles)
             ),
         )
@@ -269,13 +280,33 @@ def build_release_contract(context: RepoContext) -> ReleaseContract:
     )
 
 
-def _release_profile(profile: MachineProfile) -> ReleaseProfile:
+def _release_profile(
+    profile: MachineProfile, scalar_types: tuple[str, ...]
+) -> ReleaseProfile:
     return ReleaseProfile(
         name=profile.name,
         family=profile.family,
         features=tuple(sorted(profile.features)),
         compile_modes=tuple(sorted(profile.compile_modes)),
         auto_detect_gate=profile.auto_detect_gate,
+        scalar_types=scalar_types,
+    )
+
+
+def _profile_scalar_types(
+    catalog: Catalog, extension_name: str | None
+) -> tuple[str, ...]:
+    """The stable scalar types a scoped profile's target extension has registers for."""
+
+    extension = (
+        None if extension_name is None else catalog.extensions.get(extension_name)
+    )
+    if extension is None:
+        return DEFAULT_SCALAR_TYPE_TAGS
+    return tuple(
+        type_tag
+        for type_tag in DEFAULT_SCALAR_TYPE_TAGS
+        if catalog.extension_offers_type(extension, type_tag)
     )
 
 

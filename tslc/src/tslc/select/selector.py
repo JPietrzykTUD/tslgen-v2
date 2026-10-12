@@ -452,7 +452,7 @@ class Selector:
                 slot.type_tag,
             )
             for bindings in simd_type_base_binding_sets(
-                catalog, primitive, slot.type_tag
+                catalog, primitive, extension, slot.type_tag
             )
         )
 

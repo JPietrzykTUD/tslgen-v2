@@ -146,9 +146,10 @@ Runtime-scalable `sve` and `rvv` derive lane counts from the active vector type;
 they do not invent a compile-time width. Fixed-shape callables whose public
 contract requires `lanes<s>`, a fixed `s[]`, ordered fixed register widths, or a
 fixed mask window are excluded when no truthful runtime-sized form exists.
-SVE128/SVE256/SVE512 are separate fixed-width compatibility profiles and do not
-prove vector-length-agnostic behavior. Each such compilation mode emits one
-fixed-SVE width, so operations that require a distinct smaller or larger
+SVE128/SVE256/SVE512, RVV128MF2/RVV256M1/RVV512M2/RVV1024M4 (VLEN 256), and
+RVV512MF2/RVV1024M1 (VLEN 1024) are separate fixed-width compatibility profiles
+and do not prove vector-length-agnostic behavior. Each such compilation mode
+emits one fixed width, so operations that require a distinct smaller or larger
 same-family register have no applicable type pair in that profile. Base-width
 integral-mask extraction/insertion remains available and rebuilds the native
 predicate through reviewed semantic fallback code.

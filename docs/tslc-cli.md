@@ -246,8 +246,20 @@ The `rvv` machine profile targets RV64 Linux with the ratified Vector Extension
 Rust generation intentionally omits this profile because stable
 `core::arch::riscv64` does not expose RVV intrinsics. Vector length is runtime
 state: generated calls pass an explicit `vl`, and lane counts use
-`__riscv_vlenb() / sizeof(T)`. Do not model VLEN as separate fixed-width
-extensions.
+`__riscv_vlenb() / sizeof(T)`.
+
+`rvv<bits>m<lmul>` are fixed-length compatibility profiles, like the fixed SVE
+ones: `rvv256m1`, `rvv512m2`, and `rvv1024m4` for VLEN 256, `rvv1024m1` for
+VLEN 1024. They inherit the `rvv` bodies, spell data registers with
+`riscv_rvv_vector_bits`, and compile with `-march=rv64imafdcv_zvl<VLEN>b
+-mrvv-vector-bits=zvl`, so a binary needs exactly that VLEN. A profile with
+LMUL > 1 groups registers: its `intrinsic_compose` declares the `m<lmul>` type
+suffixes, the predicate suffixes read by `intrin::mask_suffix`, and the
+one-register suffixes read by `intrin::single_register_suffix` for reductions.
+`rvv128mf2` (VLEN 256) and `rvv512mf2` (VLEN 1024) use half a register (LMUL
+1/2). RVV has no 64-bit lanes at that LMUL, so they declare register types only
+for 8- to 32-bit lanes; an extension that declares `vector_register_types`
+states its whole type set, and selection skips the types it leaves out.
 
 The complete catalog surface is selected and build verified for RVV with no
 coverage-gap or policy-deferred slots. Direct RVV intrinsics implement the

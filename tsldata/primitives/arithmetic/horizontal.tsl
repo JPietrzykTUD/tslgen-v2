@@ -461,6 +461,39 @@ prim<s:=v> hadd(vec):
             ));
             complete(call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(reduced, 0));
           """
+    [rvv512m2, rvv1024m4, rvv128mf2, rvv512mf2]:
+      ?i?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(seed, intrin<vmv_s_x, build[suffix=intrin::single_register_suffix]>(cast<static>(base::in, 0), 1));
+            var<const_infer>(reduced, intrin<vredsum, build[infix=base::in, infix_sep="_vs_", suffix=intrin::single_register_suffix]>(
+              vec,
+              seed,
+              value(vector::runtime_length)
+            ));
+            complete(intrin<__riscv_vmv_x>(reduced));
+          """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(seed, intrin<vfmv_s_f, build[suffix=intrin::single_register_suffix]>(cast<static>(base::in, 0), 1));
+            var<const_infer>(reduced, intrin<vfredusum, build[infix=base::in, infix_sep="_vs_", suffix=intrin::single_register_suffix]>(
+              vec,
+              seed,
+              value(vector::runtime_length)
+            ));
+            complete(intrin<__riscv_vfmv_f>(reduced));
+          """
 
 prim<s:=v> hmax(vec):
   operation horizontal_max
@@ -878,6 +911,58 @@ prim<s:=v> hmax(vec):
             ));
             complete(call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(reduced, 0));
           """
+    [rvv512m2, rvv1024m4, rvv128mf2, rvv512mf2]:
+      [si8, si16, si32, si64]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(first, call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(vec, 0));
+            var<const_infer>(seed, intrin<vmv_s_x, build[suffix=intrin::single_register_suffix]>(first, 1));
+            var<const_infer>(reduced, intrin<vredmax, build[infix=base::in, infix_sep="_vs_", suffix=intrin::single_register_suffix]>(
+              vec,
+              seed,
+              value(vector::runtime_length)
+            ));
+            complete(intrin<__riscv_vmv_x>(reduced));
+          """
+      [ui8, ui16, ui32, ui64]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(first, call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(vec, 0));
+            var<const_infer>(seed, intrin<vmv_s_x, build[suffix=intrin::single_register_suffix]>(first, 1));
+            var<const_infer>(reduced, intrin<vredmaxu, build[infix=base::in, infix_sep="_vs_", suffix=intrin::single_register_suffix]>(
+              vec,
+              seed,
+              value(vector::runtime_length)
+            ));
+            complete(intrin<__riscv_vmv_x>(reduced));
+          """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(first, call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(vec, 0));
+            var<const_infer>(seed, intrin<vfmv_s_f, build[suffix=intrin::single_register_suffix]>(first, 1));
+            var<const_infer>(reduced, intrin<vfredmax, build[infix=base::in, infix_sep="_vs_", suffix=intrin::single_register_suffix]>(
+              vec,
+              seed,
+              value(vector::runtime_length)
+            ));
+            complete(intrin<__riscv_vfmv_f>(reduced));
+          """
 
 prim<s:=v> hmin(vec):
   operation horizontal_min
@@ -1294,6 +1379,58 @@ prim<s:=v> hmin(vec):
               value(vector::runtime_length)
             ));
             complete(call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(reduced, 0));
+          """
+    [rvv512m2, rvv1024m4, rvv128mf2, rvv512mf2]:
+      [si8, si16, si32, si64]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(first, call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(vec, 0));
+            var<const_infer>(seed, intrin<vmv_s_x, build[suffix=intrin::single_register_suffix]>(first, 1));
+            var<const_infer>(reduced, intrin<vredmin, build[infix=base::in, infix_sep="_vs_", suffix=intrin::single_register_suffix]>(
+              vec,
+              seed,
+              value(vector::runtime_length)
+            ));
+            complete(intrin<__riscv_vmv_x>(reduced));
+          """
+      [ui8, ui16, ui32, ui64]:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(first, call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(vec, 0));
+            var<const_infer>(seed, intrin<vmv_s_x, build[suffix=intrin::single_register_suffix]>(first, 1));
+            var<const_infer>(reduced, intrin<vredminu, build[infix=base::in, infix_sep="_vs_", suffix=intrin::single_register_suffix]>(
+              vec,
+              seed,
+              value(vector::runtime_length)
+            ));
+            complete(intrin<__riscv_vmv_x>(reduced));
+          """
+      f?:
+        requires [v]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(first, call<primitive=extract_value_at[Vec], discharge[lane_index_in_range]>(vec, 0));
+            var<const_infer>(seed, intrin<vfmv_s_f, build[suffix=intrin::single_register_suffix]>(first, 1));
+            var<const_infer>(reduced, intrin<vfredmin, build[infix=base::in, infix_sep="_vs_", suffix=intrin::single_register_suffix]>(
+              vec,
+              seed,
+              value(vector::runtime_length)
+            ));
+            complete(intrin<__riscv_vfmv_f>(reduced));
           """
 
 prim<s:=(m,v)> hadd(mask, vec):

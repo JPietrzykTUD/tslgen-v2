@@ -23,6 +23,7 @@ from tslc.catalog.overloads import (
 )
 from tslc.catalog.preconditions import PrimitivePrecondition
 from tslc.catalog.register_shapes import RegisterMultiplicity
+from tslc.catalog.scalar_types import KNOWN_SCALAR_TYPE_TAGS
 from tslc.catalog.semantics import (
     PrimitiveProviderRequirement,
     PrimitiveSemanticContract,
@@ -740,6 +741,8 @@ class IntrinsicComposition:
 
     prefix_by_backend: Mapping[str, str] = field(default_factory=dict)
     suffix_by_type: Mapping[str, str] = field(default_factory=dict)
+    mask_suffix_by_type: Mapping[str, str] = field(default_factory=dict)
+    single_register_suffix_by_type: Mapping[str, str] = field(default_factory=dict)
     order: IntrinsicNameOrder = IntrinsicNameOrder.BASE_SUFFIX
     require_explicit_suffix: bool = False
 
@@ -753,6 +756,16 @@ class IntrinsicComposition:
             self,
             "suffix_by_type",
             _freeze_mapping(self.suffix_by_type),
+        )
+        object.__setattr__(
+            self,
+            "mask_suffix_by_type",
+            _freeze_mapping(self.mask_suffix_by_type),
+        )
+        object.__setattr__(
+            self,
+            "single_register_suffix_by_type",
+            _freeze_mapping(self.single_register_suffix_by_type),
         )
 
 
@@ -1143,6 +1156,17 @@ class Catalog:
         """Fewer members = more specific (used as the primary selection key)."""
 
         return len(self.type_group_members(type_group))
+
+    def extension_offers_type(self, extension: Extension, type_tag: str) -> bool:
+        """A register-declaring extension offers exactly the scalar element types it
+        has registers for; other tags (free-function placeholders) are not register-bound."""
+
+        if not extension.vector_register_types or type_tag not in KNOWN_SCALAR_TYPE_TAGS:
+            return True
+        return any(
+            self.type_group_contains(group, type_tag)
+            for group in extension.vector_register_types
+        )
 
 
 def _matches_provider_requirement(
