@@ -7,7 +7,7 @@ from collections.abc import Callable
 from hashlib import sha256
 import json
 from pathlib import Path
-from queue import Queue
+from queue import Empty, Queue
 import subprocess
 import threading
 from time import perf_counter
@@ -16,6 +16,8 @@ from typing import BinaryIO
 
 EDITOR_ROOT = Path(__file__).resolve().parent.parent
 REPOSITORY_ROOT = EDITOR_ROOT.parent.parent
+MESSAGE_TIMEOUT_SECONDS = 60
+SERVER_LOG_METHODS = frozenset({"window/logMessage", "window/showMessage"})
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -115,10 +117,19 @@ def _smoke_lsp(
     )
     assert process.stdin is not None
     assert process.stdout is not None
+    assert process.stderr is not None
     messages: Queue[dict[str, object] | BaseException] = Queue()
+    server_log: list[str] = []
+    stderr_lines: list[bytes] = []
     threading.Thread(
         target=_read_messages,
-        args=(process.stdout, messages),
+        args=(process.stdout, messages, server_log),
+        daemon=True,
+    ).start()
+    # Drained continuously: a server blocked on a full stderr pipe never answers.
+    threading.Thread(
+        target=_collect_lines,
+        args=(process.stderr, stderr_lines),
         daemon=True,
     ).start()
     try:
@@ -224,15 +235,41 @@ def _smoke_lsp(
         if process.wait(timeout=15) != 0:
             raise RuntimeError("bundled LSP exited unsuccessfully")
         return initialize_seconds, diagnostics_seconds
+    except Empty as error:
+        raise RuntimeError(_no_reply_report(process, server_log, stderr_lines)) from error
     finally:
         if process.poll() is None:
             process.kill()
             process.wait(timeout=5)
 
 
+def _no_reply_report(
+    process: subprocess.Popen[bytes],
+    server_log: list[str],
+    stderr_lines: list[bytes],
+) -> str:
+    status = (
+        "still running"
+        if process.poll() is None
+        else f"exited with code {process.returncode}"
+    )
+    stderr = b"".join(stderr_lines).decode("utf-8", errors="replace").strip()
+    return "\n".join(
+        [
+            f"bundled LSP sent no awaited message within {MESSAGE_TIMEOUT_SECONDS} s; "
+            f"the server is {status}",
+            "server log messages:",
+            *(server_log or ["(none)"]),
+            "server stderr (last 4000 characters):",
+            stderr[-4000:] or "(empty)",
+        ]
+    )
+
+
 def _read_messages(
     stream: BinaryIO,
     messages: Queue[dict[str, object] | BaseException],
+    server_log: list[str],
 ) -> None:
     try:
         while True:
@@ -246,9 +283,17 @@ def _read_messages(
                 name, value = line.decode("ascii").split(":", 1)
                 headers[name.lower()] = value.strip()
             length = int(headers["content-length"])
-            messages.put(json.loads(stream.read(length).decode("utf-8")))
+            message = json.loads(stream.read(length).decode("utf-8"))
+            if message.get("method") in SERVER_LOG_METHODS:
+                server_log.append(str(message["params"]["message"]))
+            messages.put(message)
     except BaseException as error:
         messages.put(error)
+
+
+def _collect_lines(stream: BinaryIO, lines: list[bytes]) -> None:
+    for line in stream:
+        lines.append(line)
 
 
 def _send(stream: BinaryIO, message: dict[str, object]) -> None:
@@ -262,7 +307,7 @@ def _wait(
     predicate: Callable[[dict[str, object]], bool],
 ) -> dict[str, object]:
     while True:
-        item = messages.get(timeout=60)
+        item = messages.get(timeout=MESSAGE_TIMEOUT_SECONDS)
         if isinstance(item, BaseException):
             raise item
         if predicate(item):
